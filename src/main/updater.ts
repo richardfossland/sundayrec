@@ -29,9 +29,11 @@ export function init(mainWindow: BrowserWindow): void {
     try { await autoUpdater.checkForUpdates() } catch {}
   })
 
-  ipcMain.handle('install-update', () => {
-    autoUpdater.quitAndInstall(false, true)
-  })
+  // install-update is handled in index.ts so it has access to forceQuit
+}
+
+export function doInstall(): void {
+  autoUpdater.quitAndInstall(false, true)
 }
 
 export function check(): void {

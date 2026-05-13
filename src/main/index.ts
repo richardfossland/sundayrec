@@ -161,6 +161,16 @@ app.on('activate', () => {
 })
 
 function setupIPC(): void {
+  ipcMain.handle('install-update', () => {
+    forceQuit = true
+    ;(app as unknown as { isQuitting?: boolean }).isQuitting = true
+    setImmediate(() => {
+      updater.doInstall()
+      // Fallback: if quitAndInstall hasn't exited in 3s, force relaunch
+      setTimeout(() => { app.relaunch(); app.exit(0) }, 3000)
+    })
+  })
+
   ipcMain.handle('get-settings', () => store.getAll())
 
   ipcMain.handle('save-settings', (_, settings) => {
