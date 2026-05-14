@@ -1,21 +1,29 @@
+import noLocale from '../locales/no.json'
+import enLocale from '../locales/en.json'
+import frLocale from '../locales/fr.json'
+import deLocale from '../locales/de.json'
+import svLocale from '../locales/sv.json'
+import daLocale from '../locales/da.json'
+import plLocale from '../locales/pl.json'
+
 type LocaleData = Record<string, unknown>
 
-const LOCALES: Record<string, LocaleData> = {}
-export let T: LocaleData = {}
+const LOCALE_MAP: Record<string, LocaleData> = {
+  no: noLocale as LocaleData,
+  en: enLocale as LocaleData,
+  fr: frLocale as LocaleData,
+  de: deLocale as LocaleData,
+  sv: svLocale as LocaleData,
+  da: daLocale as LocaleData,
+  pl: plLocale as LocaleData,
+}
+
+export let T: LocaleData = LOCALE_MAP['no']
 export let currentLang = 'no'
 
-export async function loadLocale(lang: string, isFallback = false): Promise<void> {
-  if (!LOCALES[lang]) {
-    try {
-      const r = await fetch(`../locales/${lang}.json`)
-      LOCALES[lang] = await r.json() as LocaleData
-    } catch {
-      if (!isFallback && lang !== 'no') return loadLocale('no', true)
-      return
-    }
-  }
-  T = LOCALES[lang]
-  currentLang = lang
+export function loadLocale(lang: string): void {
+  T = LOCALE_MAP[lang] ?? LOCALE_MAP['no']
+  currentLang = LOCALE_MAP[lang] ? lang : 'no'
   applyTranslations()
 }
 
