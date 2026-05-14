@@ -55,14 +55,7 @@ jobs:
         run: npm ci
 
       - name: Build and sign
-        shell: pwsh
-        run: |
-          if (-not $env:AZURE_ENDPOINT) {
-            $env:CSC_IDENTITY_AUTO_DISCOVERY = "false"
-            npm run build:win -- --publish always --c.win.signingHashAlgorithms=null
-          } else {
-            npm run build:win -- --publish always
-          }
+        run: npm run build:win -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Azure Trusted Signing — account info (non-secret, region endpoint + names)
