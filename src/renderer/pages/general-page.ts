@@ -44,20 +44,24 @@ export function setupGeneralPage(): void {
     await window.api.checkForUpdates()
   })
 
-  document.getElementById('btn-install-update')?.addEventListener('click', () => window.api.installUpdate())
+  document.getElementById('btn-toast-install')?.addEventListener('click', () => window.api.installUpdate())
   document.getElementById('btn-restart-install')?.addEventListener('click', () => window.api.installUpdate())
-  document.getElementById('btn-update-dismiss')?.addEventListener('click', () => {
-    const bar = document.getElementById('update-notify')
-    if (bar) bar.style.display = 'none'
+  document.getElementById('btn-toast-close')?.addEventListener('click', () => {
+    const toast = document.getElementById('update-toast')
+    if (toast) toast.style.display = 'none'
   })
 
   document.getElementById('btn-general-save')?.addEventListener('click', saveGeneralSettings)
   document.getElementById('btn-general-cancel')?.addEventListener('click', () => applyGeneralSettingsToUI())
 
   // Update events from main
-  window.api.on('update-checking',         () => setUpdateStatus('pending', 'Sjekker etter oppdateringer…'))
-  window.api.on('update-not-available',    () => { setUpdateStatus('ok', 'Du er oppdatert'); const b = document.getElementById('update-notify'); if (b) b.style.display = 'none' })
-  window.api.on('update-available',        (info: unknown) => { const v = (info as { version: string }).version; setUpdateStatus('pending', `Ny versjon ${v} — laster ned…`); showUpdateNotify(`Ny versjon ${v} lastes ned…`) })
+  window.api.on('update-checking',          () => setUpdateStatus('pending', 'Sjekker etter oppdateringer…'))
+  window.api.on('update-not-available',     () => { setUpdateStatus('ok', 'Du er oppdatert'); hideToast() })
+  window.api.on('update-available',         (info: unknown) => {
+    const v = (info as { version: string }).version
+    setUpdateStatus('pending', `Ny versjon ${v} — laster ned…`)
+    showUpdateToast('Oppdatering tilgjengelig', `Versjon ${v} lastes ned…`)
+  })
   window.api.on('update-download-progress', (prog: unknown) => {
     const pct  = Math.round((prog as { percent?: number }).percent ?? 0)
     const wrap = document.getElementById('update-progress-wrap')
@@ -65,8 +69,7 @@ export function setupGeneralPage(): void {
     if (wrap) wrap.style.display = 'block'
     if (bar)  bar.style.width   = pct + '%'
     setUpdateStatus('pending', `Laster ned… ${pct}%`)
-    const notifyText = document.getElementById('update-notify-text')
-    if (notifyText) notifyText.textContent = `Laster ned oppdatering… ${pct}%`
+    setToastProgress(pct)
   })
   window.api.on('update-downloaded', (info: unknown) => {
     const v = (info as { version: string }).version
@@ -75,7 +78,7 @@ export function setupGeneralPage(): void {
     const restartBtn = document.getElementById('btn-restart-install')
     if (restartBtn) restartBtn.style.display = 'inline-flex'
     setUpdateStatus('ready', `Versjon ${v} er klar — start på nytt for å installere`)
-    showUpdateNotify(`Versjon ${v} er klar for installasjon`, true)
+    showUpdateToast('Klar for installasjon', `Versjon ${v} er lastet ned`, true)
   })
   window.api.on('update-error', (msg: unknown) => {
     setUpdateStatus('error', 'Kunne ikke sjekke for oppdateringer')
@@ -161,12 +164,28 @@ export function setUpdateStatus(dotCls: string, text: string): void {
   if (txt) txt.textContent = text
 }
 
-function showUpdateNotify(text: string, showInstall = false): void {
-  const bar  = document.getElementById('update-notify')
-  const barT = document.getElementById('update-notify-text')
-  const inst = document.getElementById('btn-install-update')
-  if (!bar || !barT) return
-  bar.style.display  = 'flex'
-  barT.textContent   = text
-  if (inst) inst.style.display = showInstall ? 'inline-flex' : 'none'
+function showUpdateToast(title: string, text: string, showInstall = false): void {
+  const toast   = document.getElementById('update-toast')
+  const titleEl = document.getElementById('update-toast-title')
+  const textEl  = document.getElementById('update-toast-text')
+  const actions = document.getElementById('update-toast-actions')
+  const progEl  = document.getElementById('update-toast-progress')
+  if (!toast) return
+  if (titleEl) titleEl.textContent = title
+  if (textEl)  textEl.textContent  = text
+  if (actions) actions.style.display = showInstall ? 'block' : 'none'
+  if (progEl)  progEl.style.display  = showInstall ? 'none'  : 'block'
+  // Re-trigger animation
+  toast.style.display = 'none'
+  requestAnimationFrame(() => { toast.style.display = 'flex' })
+}
+
+function setToastProgress(pct: number): void {
+  const bar = document.getElementById('update-toast-bar') as HTMLElement | null
+  if (bar) bar.style.width = pct + '%'
+}
+
+function hideToast(): void {
+  const toast = document.getElementById('update-toast')
+  if (toast) toast.style.display = 'none'
 }

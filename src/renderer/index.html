@@ -44,12 +44,20 @@
   <div class="sidebar-version" id="sidebar-version">—</div>
 </nav>
 
-<!-- ── Global update notification ──────────────────────────────── -->
-<div id="update-notify" class="update-notify" style="display:none">
-  <span class="update-notify-icon">↑</span>
-  <span id="update-notify-text"></span>
-  <button id="btn-install-update" class="btn-install-update" style="display:none">Start på nytt og installer</button>
-  <button id="btn-update-dismiss" class="btn-update-dismiss" title="Lukk">×</button>
+<!-- ── Update toast (bottom-right) ─────────────────────────────── -->
+<div id="update-toast" class="update-toast" style="display:none">
+  <div class="update-toast-icon">↑</div>
+  <div class="update-toast-body">
+    <div class="update-toast-title" id="update-toast-title">Oppdatering tilgjengelig</div>
+    <div class="update-toast-text"  id="update-toast-text"></div>
+    <div class="update-toast-progress" id="update-toast-progress" style="display:none">
+      <div class="update-toast-bar" id="update-toast-bar"></div>
+    </div>
+    <div class="update-toast-actions" id="update-toast-actions" style="display:none">
+      <button class="btn-toast-install" id="btn-toast-install">↺ Start på nytt og installer</button>
+    </div>
+  </div>
+  <button class="btn-toast-close" id="btn-toast-close" title="Lukk">×</button>
 </div>
 
 <!-- ── Main ────────────────────────────────────────────────────── -->

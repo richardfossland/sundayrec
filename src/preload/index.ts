@@ -55,7 +55,8 @@ contextBridge.exposeInMainWorld('api', {
   checkForUpdates: ()        => ipcRenderer.invoke('check-for-updates'),
   installUpdate:   ()        => ipcRenderer.invoke('install-update'),
 
-  scheduleOsWakes: ()        => ipcRenderer.invoke('schedule-os-wakes'),
+  scheduleOsWakes:      ()   => ipcRenderer.invoke('schedule-os-wakes'),
+  scheduleOsWakesAdmin: ()   => ipcRenderer.invoke('schedule-os-wakes-admin'),
 
   sendAudioChunk: (buf: ArrayBuffer) => ipcRenderer.send('audio-chunk', buf),
   confirmStart:   (data: unknown)    => ipcRenderer.send('recording-confirmed-start', data),

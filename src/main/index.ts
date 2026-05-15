@@ -131,9 +131,10 @@ let forceQuit = false
 app.on('before-quit', async (e) => {
   if (forceQuit) { (app as unknown as { isQuitting?: boolean }).isQuitting = true; return }
 
+  const lang = store.get('language') ?? 'en'
+
   if (recorder.isActive()) {
     e.preventDefault()
-    const lang = store.get('language') ?? 'en'
     const lbl  = QUIT_LABELS[lang] ?? QUIT_LABELS.en
     const { response } = await dialog.showMessageBox({
       type: 'warning',
@@ -199,7 +200,8 @@ function setupIPC(): void {
     return true
   })
 
-  ipcMain.handle('schedule-os-wakes', () => wake.reschedule(scheduler.getUpcomingDates(), mainWindow))
+  ipcMain.handle('schedule-os-wakes',       () => wake.reschedule(scheduler.getUpcomingDates(), mainWindow, false))
+  ipcMain.handle('schedule-os-wakes-admin', () => wake.reschedule(scheduler.getUpcomingDates(), mainWindow, true))
 
   ipcMain.handle('export-profile', () => store.exportProfile())
   ipcMain.handle('import-profile', (_, json: string) => {
@@ -290,7 +292,7 @@ function cleanupOldRecordings(): void {
   const history = store.getHistory()
   const remaining = history.filter(entry => {
     if (entry.timestamp && entry.timestamp < cutoff && entry.path && entry.status === 'ok') {
-      fs.unlink(entry.path, () => {})
+      fs.unlink(entry.path, err => { if (err) console.error('Failed to delete recording:', err) })
       return false
     }
     return true

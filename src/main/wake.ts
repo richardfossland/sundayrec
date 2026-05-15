@@ -34,7 +34,7 @@ function updateBlocker(upcomingDates: Date[]): void {
   }
 }
 
-function scheduleMac(wakePoints: Date[]): WakeResult {
+function scheduleMac(wakePoints: Date[], allowAdmin: boolean): WakeResult {
   try {
     execFileSync('pmset', ['schedule', 'cancelall'], { stdio: 'pipe', timeout: 3000 })
   } catch {}
@@ -49,6 +49,8 @@ function scheduleMac(wakePoints: Date[]): WakeResult {
     } catch {}
   }
   if (scheduled === wakePoints.length) return { ok: true, count: scheduled }
+
+  if (!allowAdmin) return { ok: false, reason: 'permission' }
 
   try {
     const cmds = wakePoints
@@ -96,7 +98,7 @@ function scheduleWindows(wakePoints: Date[]): WakeResult {
   }
 }
 
-function scheduleOsWakes(upcomingDates: Date[]): WakeResult {
+function scheduleOsWakes(upcomingDates: Date[], allowAdmin: boolean): WakeResult {
   if (!store.get('wakeFromSleep')) return { ok: false, reason: 'disabled' }
 
   const now = new Date()
@@ -104,14 +106,14 @@ function scheduleOsWakes(upcomingDates: Date[]): WakeResult {
     .map(d => new Date(d.getTime() - 8 * 60 * 1000))
     .filter(d => d > now)
 
-  if (process.platform === 'darwin') return scheduleMac(wakePoints)
+  if (process.platform === 'darwin') return scheduleMac(wakePoints, allowAdmin)
   if (process.platform === 'win32')  return scheduleWindows(wakePoints)
   return { ok: false, reason: 'unsupported' }
 }
 
-export function reschedule(upcomingDates: Date[], win?: BrowserWindow): WakeResult {
+export function reschedule(upcomingDates: Date[], win?: BrowserWindow, allowAdmin = false): WakeResult {
   updateBlocker(upcomingDates)
-  const result = scheduleOsWakes(upcomingDates)
+  const result = scheduleOsWakes(upcomingDates, allowAdmin)
   win?.webContents.send('wake-schedule-result', result)
   return result
 }

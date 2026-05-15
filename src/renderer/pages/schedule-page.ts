@@ -23,7 +23,7 @@ export function setupSchedulePage(): void {
     const btn = document.getElementById('btn-schedule-wake') as HTMLButtonElement | null
     if (btn) btn.disabled = true
     try {
-      const result = await window.api.scheduleOsWakes()
+      const result = await window.api.scheduleOsWakesAdmin()
       wakeResultToStatus(result)
     } catch (e) {
       setWakeStatus('error', 'schedule.wakeStatusError', 'Feil: ' + (e as Error).message)

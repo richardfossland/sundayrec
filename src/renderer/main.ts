@@ -35,7 +35,8 @@ declare global {
       revealFile:          (p: string) => Promise<void>
       checkForUpdates:     () => Promise<void>
       installUpdate:       () => void
-      scheduleOsWakes:     () => Promise<unknown>
+      scheduleOsWakes:      () => Promise<unknown>
+      scheduleOsWakesAdmin: () => Promise<unknown>
       sendAudioChunk:      (buf: ArrayBuffer) => void
       confirmStart:        (data: unknown) => void
       chunksDone:          () => void
@@ -124,4 +125,4 @@ async function init(): Promise<void> {
   toggleMp3Quality()
 }
 
-init()
+init().catch(err => console.error('Init failed:', err))

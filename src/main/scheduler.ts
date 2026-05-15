@@ -99,7 +99,7 @@ function triggerStart(slot: ScheduleSlot | SpecialRecording, overrideName?: stri
     scheduledStopTime: scheduledStopTime.toISOString()
   }
 
-  mainWindow.webContents.send('schedule-start-recording', opts)
+  mainWindow?.webContents.send('schedule-start-recording', opts)
 }
 
 function triggerStop(): void {

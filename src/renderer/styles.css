@@ -904,31 +904,53 @@ select.form-input {
 }
 .btn-cancel-sched:hover { background: var(--surface2); color: var(--text2); }
 
-/* ── Global update notification bar ───────────────────────────── */
-.update-notify {
-  position: fixed; top: 0; left: var(--sw); right: 0; z-index: 400;
-  display: flex; align-items: center; gap: 10px;
-  padding: 9px 20px;
-  background: linear-gradient(90deg, rgba(34,197,94,.18), rgba(34,197,94,.08));
-  border-bottom: 1px solid rgba(34,197,94,.25);
-  font-size: 12px; color: var(--green);
+/* ── Update toast (bottom-right floating card) ─────────────────── */
+.update-toast {
+  position: fixed; bottom: 22px; right: 22px; z-index: 400;
+  display: flex; align-items: flex-start; gap: 12px;
+  width: 290px;
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 14px; padding: 15px 14px 15px 15px;
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255,255,255,.05) inset;
+  animation: toast-in .28s cubic-bezier(.22,1,.36,1);
 }
-body.platform-darwin .update-notify { top: 28px; }
-.update-notify-icon { font-size: 14px; font-weight: 700; flex-shrink: 0; }
-#update-notify-text { flex: 1; font-weight: 500; }
-.btn-install-update {
-  padding: 4px 14px; background: var(--green); color: #000;
-  border: none; border-radius: var(--rsm);
-  font-size: 11px; font-weight: 700; cursor: pointer;
-  transition: opacity .15s; flex-shrink: 0;
+@keyframes toast-in {
+  from { transform: translateY(14px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
 }
-.btn-install-update:hover { opacity: .85; }
-.btn-update-dismiss {
-  background: none; border: none; color: rgba(34,197,94,.5);
-  font-size: 18px; line-height: 1; cursor: pointer;
-  padding: 0 2px; flex-shrink: 0; transition: color .15s;
+.update-toast-icon {
+  width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+  background: var(--accent-bg); border: 1px solid var(--accent-border);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent2); font-size: 16px; margin-top: 1px;
 }
-.btn-update-dismiss:hover { color: var(--green); }
+.update-toast-body { flex: 1; min-width: 0; }
+.update-toast-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+.update-toast-text  { font-size: 12px; color: var(--text2); line-height: 1.4; }
+.update-toast-progress {
+  margin-top: 9px; height: 3px; border-radius: 2px;
+  background: var(--surface3); overflow: hidden;
+}
+.update-toast-bar {
+  height: 100%; width: 0%; border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  transition: width .3s;
+}
+.update-toast-actions { margin-top: 10px; }
+.btn-toast-install {
+  width: 100%; padding: 8px 12px; border-radius: var(--rsm);
+  background: var(--accent); color: #fff; border: none;
+  font-size: 12px; font-weight: 700; cursor: pointer; letter-spacing: -.1px;
+  transition: background .15s, transform .1s;
+}
+.btn-toast-install:hover  { background: var(--accent2); }
+.btn-toast-install:active { transform: scale(.98); }
+.btn-toast-close {
+  background: none; border: none; color: var(--text4);
+  font-size: 18px; line-height: 1; cursor: pointer; padding: 0;
+  flex-shrink: 0; transition: color .15s; margin-top: -1px;
+}
+.btn-toast-close:hover { color: var(--text2); }
 
 /* ── Update status in Generelt card ───────────────────────────── */
 .update-status-row { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; font-size: 13px; color: var(--text2); }

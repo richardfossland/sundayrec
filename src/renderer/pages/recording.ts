@@ -32,7 +32,7 @@ export function setupRecording(): void {
     if (isRecording) {
       const protect = settings.protectRecording !== false
       if (protect) {
-        document.getElementById('modal-confirm-stop')!.style.display = 'flex'
+        const m = document.getElementById('modal-confirm-stop'); if (m) m.style.display = 'flex'
       } else {
         doStopRecording()
       }
@@ -43,23 +43,23 @@ export function setupRecording(): void {
 
   document.getElementById('btn-stop-overlay')?.addEventListener('click', () => {
     if (settings.protectRecording !== false) {
-      document.getElementById('modal-confirm-stop')!.style.display = 'flex'
+      const m = document.getElementById('modal-confirm-stop'); if (m) m.style.display = 'flex'
     } else {
       doStopRecording()
     }
   })
 
   document.getElementById('btn-confirm-stop')?.addEventListener('click', () => {
-    document.getElementById('modal-confirm-stop')!.style.display = 'none'
+    const m = document.getElementById('modal-confirm-stop'); if (m) m.style.display = 'none'
     doStopRecording()
   })
 
   document.getElementById('btn-confirm-cancel')?.addEventListener('click', () => {
-    document.getElementById('modal-confirm-stop')!.style.display = 'none'
+    const m = document.getElementById('modal-confirm-stop'); if (m) m.style.display = 'none'
   })
 
   document.getElementById('btn-manual-cancel')?.addEventListener('click', () => {
-    document.getElementById('modal-manual')!.style.display = 'none'
+    const m = document.getElementById('modal-manual'); if (m) m.style.display = 'none'
   })
 
   document.getElementById('btn-manual-start')?.addEventListener('click', handleManualStart)
@@ -137,7 +137,7 @@ async function handleManualStart(): Promise<void> {
     channelL:      devChannels?.channelL ?? 0,
     channelR:      devChannels?.channelR ?? 1
   }
-  document.getElementById('modal-manual')!.style.display = 'none'
+  const mm = document.getElementById('modal-manual'); if (mm) mm.style.display = 'none'
 
   const res = await window.api.startRecordingNow(opts)
   if (res?.ok || res === true) {
