@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  # ── macOS: unsigned by default; signs + notarizes when Developer ID secrets set ──
+  # ── macOS: signs + notarizes when Developer ID secrets are configured ──
   build-mac:
     runs-on: macos-latest
     steps:
@@ -24,18 +24,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build (sign + notarize if Developer ID cert is configured)
+      - name: Build, sign, and notarize
         run: |
           if [ -n "$CSC_LINK" ] && [ -n "$APPLE_TEAM_ID" ]; then
-            # Full signing + notarization path
+            echo "Signed + notarized build"
             npm run build:mac -- --publish always \
-              --config.mac.identity=null \
-              --config.mac.hardenedRuntime=true \
-              --config.mac.entitlements=assets/entitlements.mac.plist \
-              --config.mac.entitlementsInherit=assets/entitlements.mac.plist \
-              --config.mac.notarize.teamId="$APPLE_TEAM_ID"
+              "--config.mac.notarize={\"teamId\":\"$APPLE_TEAM_ID\"}"
           else
-            # Unsigned build — avoids "damaged" Gatekeeper error
+            echo "Unsigned build"
             npm run build:mac -- --publish always
           fi
         env:
