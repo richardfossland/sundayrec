@@ -25,15 +25,7 @@ jobs:
         run: npm ci
 
       - name: Build, sign, and notarize
-        run: |
-          if [ -n "$CSC_LINK" ] && [ -n "$APPLE_TEAM_ID" ]; then
-            echo "Signed + notarized build"
-            npm run build:mac -- --publish always \
-              "--config.mac.notarize={\"teamId\":\"$APPLE_TEAM_ID\"}"
-          else
-            echo "Unsigned build"
-            npm run build:mac -- --publish always
-          fi
+        run: npm run build:mac -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.MAC_CERTS }}
