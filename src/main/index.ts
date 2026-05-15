@@ -97,6 +97,8 @@ app.whenReady().then(async () => {
   if (!store.get('saveFolder')) {
     store.set('saveFolder', path.join(app.getPath('documents'), 'SundayRec'))
   }
+  const saveFolder = store.get('saveFolder') ?? path.join(app.getPath('documents'), 'SundayRec')
+  fs.mkdirSync(saveFolder, { recursive: true })
   if (!store.get('language')) {
     const locale    = app.getLocale() || 'en'
     const lang      = locale.slice(0, 2)

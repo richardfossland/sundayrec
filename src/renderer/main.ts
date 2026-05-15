@@ -125,4 +125,9 @@ async function init(): Promise<void> {
   toggleMp3Quality()
 }
 
+window.addEventListener('unhandledrejection', e => {
+  console.error('Unhandled promise rejection:', e.reason)
+  e.preventDefault()
+})
+
 init().catch(err => console.error('Init failed:', err))

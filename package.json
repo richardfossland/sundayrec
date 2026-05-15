@@ -1,6 +1,6 @@
 {
   "name": "sundayrec",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "author": "Richard Fossland",
   "description": "Automatic church service recorder for Windows and Mac",
   "repository": {
@@ -84,13 +84,8 @@
         }
       ],
       "darkModeSupport": true,
-      "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "entitlements": "assets/entitlements.mac.plist",
-      "entitlementsInherit": "assets/entitlements.mac.plist",
-      "notarize": {
-        "teamId": "${env.APPLE_TEAM_ID}"
-      }
+      "identity": null
     },
     "win": {
       "icon": "assets/icon.ico",
