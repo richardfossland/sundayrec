@@ -14,9 +14,6 @@ let detectedChannelCount = 2
 export function setupAudioPage(): void {
   document.getElementById('input-volume')?.addEventListener('input', updateVolumeLabel)
 
-  document.getElementById('eq-bass')?.addEventListener('input',   () => updateSliderLabel('eq-bass',   'eq-bass-val',   ' dB'))
-  document.getElementById('eq-mid')?.addEventListener('input',    () => updateSliderLabel('eq-mid',    'eq-mid-val',    ' dB'))
-  document.getElementById('eq-treble')?.addEventListener('input', () => updateSliderLabel('eq-treble', 'eq-treble-val', ' dB'))
   document.getElementById('comp-threshold')?.addEventListener('input', () => updateSliderLabel('comp-threshold', 'comp-threshold-val', ' dB'))
   document.getElementById('comp-ratio')?.addEventListener('input', () => {
     const el = document.getElementById('comp-ratio') as HTMLInputElement | null
@@ -34,14 +31,6 @@ export function setupAudioPage(): void {
     await startMonitoring()
   })
 
-  document.getElementById('compat-toggle')?.addEventListener('click', () => {
-    const body    = document.getElementById('compat-body')
-    const chevron = document.getElementById('compat-chevron')
-    const open    = body?.style.display !== 'none'
-    if (body)    body.style.display    = open ? 'none' : 'block'
-    if (chevron) chevron.classList.toggle('open', !open)
-  })
-
   document.getElementById('btn-audio-save')?.addEventListener('click', saveAudioSettings)
   document.getElementById('btn-audio-cancel')?.addEventListener('click', () => applyAudioSettingsToUI())
 }
@@ -51,12 +40,6 @@ export function applyAudioSettingsToUI(): void {
   updateVolumeLabel()
   setRadio('channels', settings.channels ?? 'stereo')
   setVal('sample-rate', settings.sampleRate ?? 48000)
-  setVal('eq-bass',   settings.eqBass   ?? 0)
-  setVal('eq-mid',    settings.eqMid    ?? 0)
-  setVal('eq-treble', settings.eqTreble ?? 0)
-  updateSliderLabel('eq-bass',   'eq-bass-val',   ' dB')
-  updateSliderLabel('eq-mid',    'eq-mid-val',    ' dB')
-  updateSliderLabel('eq-treble', 'eq-treble-val', ' dB')
   const compEl = document.getElementById('opt-compressor') as HTMLInputElement | null
   if (compEl) {
     compEl.checked = !!settings.compEnabled
@@ -96,9 +79,6 @@ async function saveAudioSettings(): Promise<void> {
     inputVolume:    +((document.getElementById('input-volume')    as HTMLInputElement | null)?.value ?? 80),
     channels:       ((document.querySelector('input[name="channels"]:checked') as HTMLInputElement | null)?.value ?? 'stereo') as ChannelMode,
     sampleRate:     +((document.getElementById('sample-rate')    as HTMLInputElement | null)?.value ?? 48000),
-    eqBass:         +((document.getElementById('eq-bass')         as HTMLInputElement | null)?.value ?? 0),
-    eqMid:          +((document.getElementById('eq-mid')          as HTMLInputElement | null)?.value ?? 0),
-    eqTreble:       +((document.getElementById('eq-treble')       as HTMLInputElement | null)?.value ?? 0),
     compEnabled:    !!(document.getElementById('opt-compressor') as HTMLInputElement | null)?.checked,
     compThreshold:  +((document.getElementById('comp-threshold')  as HTMLInputElement | null)?.value ?? -24),
     compRatio:      +((document.getElementById('comp-ratio')      as HTMLInputElement | null)?.value ?? 4),

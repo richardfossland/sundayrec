@@ -100,19 +100,6 @@ export async function startCapture(opts: RecordingOpts): Promise<CaptureSession>
   const gain = audioCtx.createGain()
   gain.gain.value = (opts.inputVolume ?? 80) / 100
 
-  // 3-band EQ
-  const bassEQ = audioCtx.createBiquadFilter()
-  bassEQ.type = 'lowshelf'; bassEQ.frequency.value = 100
-  bassEQ.gain.value = opts.eqBass ?? 0
-
-  const midEQ = audioCtx.createBiquadFilter()
-  midEQ.type = 'peaking'; midEQ.frequency.value = 1000; midEQ.Q.value = 1
-  midEQ.gain.value = opts.eqMid ?? 0
-
-  const trebleEQ = audioCtx.createBiquadFilter()
-  trebleEQ.type = 'highshelf'; trebleEQ.frequency.value = 8000
-  trebleEQ.gain.value = opts.eqTreble ?? 0
-
   // Compressor (bypass when disabled)
   const comp = audioCtx.createDynamicsCompressor()
   if (opts.compEnabled) {
@@ -138,7 +125,7 @@ export async function startCapture(opts: RecordingOpts): Promise<CaptureSession>
   }
 
   const dest = audioCtx.createMediaStreamDestination()
-  inputNode.connect(gain).connect(bassEQ).connect(midEQ).connect(trebleEQ).connect(comp).connect(limiter)
+  inputNode.connect(gain).connect(comp).connect(limiter)
 
   if (isMonoChannel) {
     const splitter = audioCtx.createChannelSplitter(2)

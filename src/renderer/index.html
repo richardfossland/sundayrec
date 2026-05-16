@@ -467,31 +467,13 @@
       <select class="form-input" id="sample-rate">
         <option value="44100">44 100 Hz</option>
         <option value="48000" selected>48 000 Hz</option>
-        <option value="96000">96 000 Hz</option>
       </select>
       <div class="form-hint" data-i18n="audio.sampleRateHint">48 000 Hz er standard for video og kirkelyd</div>
     </div>
 
     <div class="card">
       <div class="card-title" data-i18n="audio.advanced">Avansert lydbehandling</div>
-      <label class="form-label" data-i18n="audio.eq">EQUALIZER</label>
-      <div class="form-row three-col">
-        <div>
-          <label class="form-label" data-i18n="audio.eqBass">BASS</label>
-          <input type="range" id="eq-bass" min="-12" max="12" value="0" class="slider" />
-          <div class="slider-value" id="eq-bass-val">0 dB</div>
-        </div>
-        <div>
-          <label class="form-label" data-i18n="audio.eqMid">MIDTONE</label>
-          <input type="range" id="eq-mid" min="-12" max="12" value="0" class="slider" />
-          <div class="slider-value" id="eq-mid-val">0 dB</div>
-        </div>
-        <div>
-          <label class="form-label" data-i18n="audio.eqTreble">DISKANT</label>
-          <input type="range" id="eq-treble" min="-12" max="12" value="0" class="slider" />
-          <div class="slider-value" id="eq-treble-val">0 dB</div>
-        </div>
-      </div>
+
       <div class="toggle-row mt">
         <div>
           <div class="toggle-title" data-i18n="audio.compressor">Kompressor</div>
@@ -527,111 +509,6 @@
       </div>
     </div>
 
-    <!-- Driver compatibility reference -->
-    <div class="card compat-card">
-      <div class="compat-header" id="compat-toggle">
-        <span class="card-title" style="margin:0" data-i18n="audio.compatibility">Driverkompatibilitet</span>
-        <span class="compat-chevron" id="compat-chevron">›</span>
-      </div>
-      <div id="compat-body" style="display:none">
-        <p class="card-desc" data-i18n="audio.compatDesc">USB-miksere fungerer på Mac uten ekstra driver (Core Audio). På Windows anbefales produsentens driver for tilgang til alle kanaler. <strong>ASIO-modus virker ikke</strong> — bruk WDM eller WASAPI i driverinnstillingene.</p>
-        <table class="compat-table">
-          <thead><tr>
-            <th data-i18n="audio.compatDevice">Enhet</th>
-            <th data-i18n="audio.compatChannels">Kanaler</th>
-            <th>macOS</th>
-            <th>Windows</th>
-          </tr></thead>
-          <tbody>
-            <tr class="compat-group-row"><td colspan="4">Focusrite</td></tr>
-            <tr><td>Scarlett Solo / 2i2 / 4i4</td><td>2 / 4</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Scarlett USB driver</td></tr>
-            <tr><td>Scarlett 8i6 / 18i8 / 18i20</td><td>6–18</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Scarlett USB driver</td></tr>
-            <tr><td>Clarett+ USB</td><td>4–8</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Clarett USB driver</td></tr>
-
-            <tr class="compat-group-row"><td colspan="4">Behringer / Klark Teknik</td></tr>
-            <tr><td>X32 / X32 Compact / X32 Producer</td><td>32</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Klark Teknik X-USB driver</td></tr>
-            <tr><td>XR18 / XR16 / XR12</td><td>18 / 16 / 12</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Klark Teknik USB driver</td></tr>
-            <tr><td>Wing / Wing Rack</td><td>48</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Klark Teknik USB driver</td></tr>
-            <tr><td>UMC series (UMC204HD, UMC404HD)</td><td>2–4</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-ok">✓ Plug &amp; play</td></tr>
-
-            <tr class="compat-group-row"><td colspan="4">Midas</td></tr>
-            <tr><td>M32 / M32C / M32R</td><td>32</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Midas USB driver</td></tr>
-            <tr><td>M16 / M16R</td><td>16</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Midas USB driver</td></tr>
-            <tr><td>MR12 / MR18</td><td>12 / 18</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Midas USB driver</td></tr>
-
-            <tr class="compat-group-row"><td colspan="4">Allen &amp; Heath</td></tr>
-            <tr><td>SQ-5 / SQ-6 / SQ-7</td><td>32</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">A&amp;H USB Audio driver</td></tr>
-            <tr><td>Qu-16 / Qu-24 / Qu-32 / Qu-Pac</td><td>22</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">A&amp;H USB Audio driver</td></tr>
-            <tr><td>GLD-80 / GLD-112</td><td>32</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">A&amp;H USB Audio driver</td></tr>
-            <tr><td>Zed USB series</td><td>2</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-ok">✓ Plug &amp; play</td></tr>
-
-            <tr class="compat-group-row"><td colspan="4">Yamaha</td></tr>
-            <tr><td>TF1 / TF3 / TF5</td><td>32</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Yamaha Steinberg USB driver</td></tr>
-            <tr><td>QL1 / QL5</td><td>32</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Yamaha Steinberg USB driver</td></tr>
-            <tr><td>01V96i / 02R96</td><td>16</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Yamaha Steinberg USB driver</td></tr>
-            <tr><td>MG series XU (USB)</td><td>2</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-ok">✓ Plug &amp; play</td></tr>
-            <tr><td>AG03MK2 / AG06MK2</td><td>2</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-ok">✓ Plug &amp; play</td></tr>
-
-            <tr class="compat-group-row"><td colspan="4">Soundcraft</td></tr>
-            <tr><td>Signature 10 MTK / 12 MTK</td><td>14</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Harman USB Audio driver</td></tr>
-            <tr><td>Signature 22 MTK</td><td>22</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Harman USB Audio driver</td></tr>
-            <tr><td>Expression / Si series</td><td>32</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Harman USB Audio driver</td></tr>
-            <tr><td>Notepad series (USB)</td><td>2</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-ok">✓ Plug &amp; play</td></tr>
-
-            <tr class="compat-group-row"><td colspan="4">PreSonus</td></tr>
-            <tr><td>StudioLive AR8c / AR12c / AR16c</td><td>18</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Universal Control</td></tr>
-            <tr><td>StudioLive 16 / 24 / 32 Series III</td><td>34</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Universal Control</td></tr>
-            <tr><td>Studio 24c / 26c / 68c</td><td>2–6</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-ok">✓ Plug &amp; play</td></tr>
-
-            <tr class="compat-group-row"><td colspan="4">MOTU</td></tr>
-            <tr><td>M2 / M4 / M6</td><td>2–6</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-ok">✓ Plug &amp; play</td></tr>
-            <tr><td>8pre / UltraLite / 828</td><td>8–28</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">MOTU Audio driver</td></tr>
-            <tr><td>16A / 24Ai / 112D</td><td>16–112</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">MOTU Audio driver</td></tr>
-
-            <tr class="compat-group-row"><td colspan="4">QSC</td></tr>
-            <tr><td>TouchMix-8</td><td>10</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">QSC USB Audio driver</td></tr>
-            <tr><td>TouchMix-16 / TouchMix-30 Pro</td><td>18 / 32</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">QSC USB Audio driver</td></tr>
-
-            <tr class="compat-group-row"><td colspan="4">Mackie</td></tr>
-            <tr><td>ProFX6v3 / ProFX10v3</td><td>2</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-ok">✓ Plug &amp; play</td></tr>
-            <tr><td>ProFX12v3 / ProFX16v3 / ProFX22v3</td><td>2</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-ok">✓ Plug &amp; play</td></tr>
-            <tr><td>DL16S / DL32R</td><td>16 / 32</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Mackie USB driver</td></tr>
-
-            <tr class="compat-group-row"><td colspan="4">Zoom</td></tr>
-            <tr><td>LiveTrak L-8 / L-12 / L-20</td><td>10 / 14 / 22</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Zoom USB Audio driver</td></tr>
-            <tr><td>PodTrak P4 / P8</td><td>2–4</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-ok">✓ Plug &amp; play</td></tr>
-            <tr><td>H6 / H8 (USB-modus)</td><td>2–6</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-ok">✓ Plug &amp; play</td></tr>
-
-            <tr class="compat-group-row"><td colspan="4">Tascam</td></tr>
-            <tr><td>Model 12 / Model 16 / Model 24</td><td>12 / 14 / 20</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Tascam USB Audio driver</td></tr>
-            <tr><td>US-4x4HR / US-16x08</td><td>4 / 8</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Tascam USB Audio driver</td></tr>
-
-            <tr class="compat-group-row"><td colspan="4">RME</td></tr>
-            <tr><td>Babyface Pro / Pro FS</td><td>12</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">RME USB driver</td></tr>
-            <tr><td>Fireface UCX / UCX II</td><td>18</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">RME USB driver</td></tr>
-            <tr><td>Fireface 802 / 802 FS</td><td>30</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">RME USB driver</td></tr>
-
-            <tr class="compat-group-row"><td colspan="4">Rode</td></tr>
-            <tr><td>Rodecaster Pro II</td><td>14</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-ok">✓ Plug &amp; play</td></tr>
-            <tr><td>Rodecaster Duo</td><td>4</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-ok">✓ Plug &amp; play</td></tr>
-
-            <tr class="compat-group-row"><td colspan="4">Andre</td></tr>
-            <tr><td>SSL SSL2 / SSL2+</td><td>2 / 4</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-ok">✓ Plug &amp; play</td></tr>
-            <tr><td>Audient iD14 / iD44</td><td>2–20</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Audient USB driver</td></tr>
-            <tr><td>Roland/BOSS USB-miksere</td><td>2–4</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Roland USB Audio driver</td></tr>
-            <tr><td>Steinberg UR series</td><td>2–6</td><td class="compat-ok">✓ Plug &amp; play</td><td class="compat-driver">Yamaha Steinberg USB driver</td></tr>
-          </tbody>
-        </table>
-
-        <div class="compat-asio-box">
-          <div class="compat-asio-title">⚠ ASIO på Windows</div>
-          <p class="compat-asio-desc">ASIO-modus fungerer ikke i SundayRec fordi programmet bruker nettleserens lyd-API (Web Audio / WASAPI). ASIO er et eget lydlag som bypasser Windows-mikseren fullstendig.</p>
-          <p class="compat-asio-desc" style="margin-top:6px"><strong>Har du et ASIO-kort?</strong> Bruk den gratis programvaren <strong>Voicemeeter Banana</strong>: still inn ASIO-kortet som inngang i Voicemeeter, rut lyden til en virtuell WASAPI-enhet, og velg den virtuelle enheten i SundayRec.</p>
-          <p class="compat-asio-desc" style="margin-top:6px"><strong>Nettverk-lyd (Dante / AES50 / AVB)</strong> støttes ikke direkte — bruk en Dante AVIO USB-adapter eller kortets innebygde USB-utgang.</p>
-        </div>
-        <p class="form-hint" style="margin-top:8px" data-i18n="audio.compatAsio">Windows: velg WDM eller WASAPI i driverinnstillingene — ikke ASIO.</p>
-      </div>
-    </div>
 
     <div class="btn-row">
       <button class="btn-primary" id="btn-audio-save" data-i18n="audio.save">Lagre</button>
@@ -673,7 +550,6 @@
         <label><input type="radio" name="format" value="mp3" checked /> MP3</label>
         <label><input type="radio" name="format" value="wav" /> WAV</label>
         <label><input type="radio" name="format" value="flac" /> FLAC</label>
-        <label><input type="radio" name="format" value="aac" /> AAC</label>
       </div>
       <div id="mp3-quality-section">
         <label class="form-label mt" data-i18n="files.quality">KVALITET (MP3)</label>
@@ -723,21 +599,6 @@
       </select>
       <div class="form-hint" data-i18n="general.langHint">Endringen trer i kraft etter at du trykker Lagre.</div>
     </div>
-    <div class="card">
-      <div class="card-title" data-i18n="general.profile">Kirkeprofil</div>
-      <div class="form-row">
-        <label class="form-label" data-i18n="general.church">MENIGHET / KIRKE</label>
-        <input type="text" class="form-input" id="church-name" data-i18n-placeholder="general.churchPlaceholder" />
-      </div>
-      <div class="form-row">
-        <label class="form-label" data-i18n="general.responsible">ANSVARLIG PERSON</label>
-        <input type="text" class="form-input" id="responsible-person" data-i18n-placeholder="general.responsiblePlaceholder" />
-      </div>
-      <div class="btn-row">
-        <button class="btn-secondary" id="btn-export" data-i18n="general.export">Eksporter innstillinger</button>
-        <button class="btn-secondary" id="btn-import" data-i18n="general.import">Importer fra fil</button>
-        <button class="btn-ghost" id="btn-restore" data-i18n="general.restore">Gjenopprett standard</button>
-      </div>
     </div>
     <div class="card">
       <div class="card-title" data-i18n="general.notifications">Varsler</div>
@@ -757,6 +618,10 @@
         <label class="toggle"><input type="checkbox" id="opt-email-error" /><span class="toggle-track"></span></label>
       </div>
       <div id="email-section" style="display:none">
+        <label class="form-label mt" data-i18n="general.church">MENIGHET / KIRKE</label>
+        <input type="text" class="form-input" id="church-name" data-i18n-placeholder="general.churchPlaceholder" />
+        <label class="form-label mt" data-i18n="general.responsible">ANSVARLIG PERSON</label>
+        <input type="text" class="form-input" id="responsible-person" data-i18n-placeholder="general.responsiblePlaceholder" />
         <label class="form-label mt" data-i18n="general.sendTo">SEND TIL</label>
         <input type="email" class="form-input" id="email-address" placeholder="navn@kirke.no" />
         <label class="form-label mt">SMTP SERVER</label>
