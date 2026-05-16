@@ -46,7 +46,7 @@
 
 <!-- ── Update toast (bottom-right) ─────────────────────────────── -->
 <div id="update-toast" class="update-toast" style="display:none">
-  <div class="update-toast-icon">↑</div>
+  <div class="update-toast-icon"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z"/></svg></div>
   <div class="update-toast-body">
     <div class="update-toast-title" id="update-toast-title">Oppdatering tilgjengelig</div>
     <div class="update-toast-text"  id="update-toast-text"></div>
@@ -54,7 +54,7 @@
       <div class="update-toast-bar" id="update-toast-bar"></div>
     </div>
     <div class="update-toast-actions" id="update-toast-actions" style="display:none">
-      <button class="btn-toast-install" id="btn-toast-install">↺ Start på nytt og installer</button>
+      <button class="btn-toast-install" id="btn-toast-install"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/></svg><span>Start på nytt og installer</span></button>
     </div>
   </div>
   <button class="btn-toast-close" id="btn-toast-close" title="Lukk">×</button>
@@ -68,7 +68,7 @@
 
     <!-- Hero: device OK -->
     <div id="hero-ok" class="hero hero-ok">
-      <div class="hero-icon">✓</div>
+      <div class="hero-icon"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg></div>
       <div class="hero-text">
         <div class="hero-label" data-i18n="status.ok">KLAR FOR OPPTAK</div>
         <div class="hero-title" id="hero-ready-title">Alt er klart</div>
@@ -83,7 +83,7 @@
 
     <!-- Hero: device missing -->
     <div id="hero-warn" class="hero hero-warn" style="display:none">
-      <div class="hero-icon">!</div>
+      <div class="hero-icon"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"/></svg></div>
       <div class="hero-text">
         <div class="hero-label" data-i18n="status.warn">KREVER HANDLING</div>
         <div class="hero-title" data-i18n="home.warnTitle">Lydmikseren er ikke tilkoblet</div>
@@ -174,7 +174,7 @@
           <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>
         </div>
         <div class="info-card-body">
-          <div class="info-card-label">LAGRING</div>
+          <div class="info-card-label" data-i18n="home.storage">LAGRING</div>
           <div class="info-card-value" id="home-storage-value">—</div>
           <div class="info-card-sub" id="home-storage-sub"></div>
         </div>
@@ -256,7 +256,7 @@
             </div>
           </div>
           <input type="hidden" id="special-date" />
-          <button class="btn-primary mt" id="btn-add-special" data-i18n="calendar.addRecording">+ Legg til opptak</button>
+          <button class="btn-primary mt" id="btn-add-special"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg><span data-i18n="calendar.addRecording">Legg til opptak</span></button>
         </div>
 
         <!-- Default hint when no day selected -->
@@ -277,7 +277,7 @@
       <div class="card-title" data-i18n="schedule.title">Ukentlig tidsplan</div>
       <p class="card-desc" data-i18n="schedule.subtitle">Faste opptak som gjentas automatisk hver uke.</p>
       <div id="slots-list"></div>
-      <button class="btn-secondary mt" id="btn-add-slot" data-i18n="schedule.addSlot">+ Legg til tidspunkt</button>
+      <button class="btn-secondary mt" id="btn-add-slot"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"/></svg><span data-i18n="schedule.addSlot">Legg til tidspunkt</span></button>
     </div>
 
     <!-- Slot editor (inline) -->
@@ -302,7 +302,7 @@
         </div>
       </div>
       <div class="btn-row">
-        <button class="btn-primary" id="btn-slot-save" data-i18n="schedule.save">💾 Lagre</button>
+        <button class="btn-primary" id="btn-slot-save"><svg viewBox="0 0 20 20"><path d="M15.5 5.5L14 4H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1V5.5zM7 4h4v3H7V4zm-3 8h8v3H4v-3z"/></svg><span data-i18n="schedule.save">Lagre</span></button>
         <button class="btn-ghost" id="btn-slot-cancel" data-i18n="schedule.cancel">Avbryt</button>
       </div>
     </div>
@@ -405,7 +405,7 @@
         </select>
       </div>
       <div class="btn-row">
-        <button class="btn-primary" id="btn-schedule-save" data-i18n="schedule.save">💾 Lagre tidsplan</button>
+        <button class="btn-primary" id="btn-schedule-save"><svg viewBox="0 0 20 20"><path d="M15.5 5.5L14 4H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1V5.5zM7 4h4v3H7V4zm-3 8h8v3H4v-3z"/></svg><span data-i18n="schedule.save">Lagre tidsplan</span></button>
       </div>
     </div>
 
@@ -429,7 +429,7 @@
           <div class="toggle-desc" data-i18n="audio.testDesc">Hør lyden fra valgt kilde i sanntid gjennom høyttalerne.</div>
         </div>
         <button class="btn-secondary" id="btn-test-audio">
-          🎧 <span data-i18n="audio.testBtn">Test lyd</span>
+          <svg viewBox="0 0 20 20"><path d="M18 9a8 8 0 10-16 0v3a2 2 0 002 2h1a1 1 0 001-1v-3a1 1 0 00-1-1H4v-1a6 6 0 1112 0v1h-1a1 1 0 00-1 1v3a1 1 0 001 1h1a2 2 0 002-2V9z"/></svg><span data-i18n="audio.testBtn">Test lyd</span>
         </button>
       </div>
       <div id="test-audio-warn" class="test-warn" style="display:none">
@@ -476,41 +476,41 @@
     </div>
 
     <div class="card">
-      <div class="card-title">Avansert lydbehandling</div>
-      <label class="form-label">EQUALIZER</label>
+      <div class="card-title" data-i18n="audio.advanced">Avansert lydbehandling</div>
+      <label class="form-label" data-i18n="audio.eq">EQUALIZER</label>
       <div class="form-row three-col">
         <div>
-          <label class="form-label">BASS</label>
+          <label class="form-label" data-i18n="audio.eqBass">BASS</label>
           <input type="range" id="eq-bass" min="-12" max="12" value="0" class="slider" />
           <div class="slider-value" id="eq-bass-val">0 dB</div>
         </div>
         <div>
-          <label class="form-label">MIDTONE</label>
+          <label class="form-label" data-i18n="audio.eqMid">MIDTONE</label>
           <input type="range" id="eq-mid" min="-12" max="12" value="0" class="slider" />
           <div class="slider-value" id="eq-mid-val">0 dB</div>
         </div>
         <div>
-          <label class="form-label">DISKANT</label>
+          <label class="form-label" data-i18n="audio.eqTreble">DISKANT</label>
           <input type="range" id="eq-treble" min="-12" max="12" value="0" class="slider" />
           <div class="slider-value" id="eq-treble-val">0 dB</div>
         </div>
       </div>
       <div class="toggle-row mt">
         <div>
-          <div class="toggle-title">Kompressor</div>
-          <div class="toggle-desc">Jevner ut volumvariasjoner i opptaket</div>
+          <div class="toggle-title" data-i18n="audio.compressor">Kompressor</div>
+          <div class="toggle-desc" data-i18n="audio.compressorDesc">Jevner ut volumvariasjoner i opptaket</div>
         </div>
         <label class="toggle"><input type="checkbox" id="opt-compressor" /><span class="toggle-track"></span></label>
       </div>
       <div id="comp-settings" style="display:none;margin-top:8px">
         <div class="form-row two-col">
           <div>
-            <label class="form-label">TERSKEL (dB)</label>
+            <label class="form-label" data-i18n="audio.threshold">TERSKEL (dB)</label>
             <input type="range" id="comp-threshold" min="-60" max="0" value="-24" class="slider" />
             <div class="slider-value" id="comp-threshold-val">−24 dB</div>
           </div>
           <div>
-            <label class="form-label">RATIO</label>
+            <label class="form-label" data-i18n="audio.ratio">RATIO</label>
             <input type="range" id="comp-ratio" min="1" max="20" value="4" class="slider" />
             <div class="slider-value" id="comp-ratio-val">4:1</div>
           </div>
@@ -518,13 +518,13 @@
       </div>
       <div class="toggle-row mt">
         <div>
-          <div class="toggle-title">Limiter</div>
-          <div class="toggle-desc">Hindrer klipping ved for høye lydnivåer (anbefalt)</div>
+          <div class="toggle-title" data-i18n="audio.limiter">Limiter</div>
+          <div class="toggle-desc" data-i18n="audio.limiterDesc">Hindrer klipping ved for høye lydnivåer (anbefalt)</div>
         </div>
         <label class="toggle"><input type="checkbox" id="opt-limiter" checked /><span class="toggle-track"></span></label>
       </div>
       <div id="limiter-settings" style="margin-top:8px">
-        <label class="form-label">TAK (dB)</label>
+        <label class="form-label" data-i18n="audio.ceiling">TAK (dB)</label>
         <input type="range" id="limiter-ceiling" min="-12" max="0" value="-1" class="slider" />
         <div class="slider-value" id="limiter-ceiling-val">−1 dB</div>
       </div>
@@ -637,7 +637,7 @@
     </div>
 
     <div class="btn-row">
-      <button class="btn-primary" id="btn-audio-save" data-i18n="audio.save">💾 Lagre</button>
+      <button class="btn-primary" id="btn-audio-save"><svg viewBox="0 0 20 20"><path d="M15.5 5.5L14 4H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1V5.5zM7 4h4v3H7V4zm-3 8h8v3H4v-3z"/></svg><span data-i18n="audio.save">Lagre</span></button>
       <button class="btn-ghost" id="btn-audio-cancel" data-i18n="audio.cancel">Avbryt</button>
     </div>
   </section>
@@ -653,7 +653,7 @@
       <label class="form-label" data-i18n="files.saveTo">LAGRES I</label>
       <div class="folder-row">
         <input type="text" class="form-input" id="save-folder" readonly />
-        <button class="btn-secondary" id="btn-pick-folder" data-i18n="files.browse">📁 Velg mappe</button>
+        <button class="btn-secondary" id="btn-pick-folder"><svg viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg><span data-i18n="files.browse">Velg mappe</span></button>
       </div>
     </div>
     <div class="card">
@@ -702,7 +702,7 @@
       </div>
     </div>
     <div class="btn-row">
-      <button class="btn-primary" id="btn-files-save" data-i18n="files.save">💾 Lagre</button>
+      <button class="btn-primary" id="btn-files-save"><svg viewBox="0 0 20 20"><path d="M15.5 5.5L14 4H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1V5.5zM7 4h4v3H7V4zm-3 8h8v3H4v-3z"/></svg><span data-i18n="files.save">Lagre</span></button>
       <button class="btn-ghost" id="btn-files-cancel" data-i18n="files.cancel">Avbryt</button>
     </div>
   </section>
@@ -737,9 +737,9 @@
         <input type="text" class="form-input" id="responsible-person" data-i18n-placeholder="general.responsiblePlaceholder" />
       </div>
       <div class="btn-row">
-        <button class="btn-secondary" id="btn-export" data-i18n="general.export">📤 Eksporter</button>
-        <button class="btn-secondary" id="btn-import" data-i18n="general.import">📥 Importer</button>
-        <button class="btn-ghost" id="btn-restore" data-i18n="general.restore">↩ Standard</button>
+        <button class="btn-secondary" id="btn-export"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 17a1 1 0 001-1V8.414l2.293 2.293a1 1 0 001.414-1.414l-4-4a1 1 0 00-1.414 0l-4 4a1 1 0 001.414 1.414L9 8.414V16a1 1 0 001 1zM3 3a1 1 0 011-1h12a1 1 0 010 2H4a1 1 0 01-1-1z"/></svg><span data-i18n="general.export">Eksporter innstillinger</span></button>
+        <button class="btn-secondary" id="btn-import"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v7.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 11.586V4a1 1 0 011-1zM3 17a1 1 0 011-1h12a1 1 0 010 2H4a1 1 0 01-1-1z"/></svg><span data-i18n="general.import">Importer fra fil</span></button>
+        <button class="btn-ghost" id="btn-restore"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/></svg><span data-i18n="general.restore">Gjenopprett standard</span></button>
       </div>
     </div>
     <div class="card">
@@ -813,12 +813,12 @@
         <label class="toggle"><input type="checkbox" id="opt-auto-update" checked /><span class="toggle-track"></span></label>
       </div>
       <div class="btn-row mt">
-        <button class="btn-secondary" id="btn-check-updates" data-i18n="general.checkNow">🔍 Se etter oppdateringer</button>
+        <button class="btn-secondary" id="btn-check-updates"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"/></svg><span data-i18n="general.checkNow">Se etter oppdateringer</span></button>
         <button class="btn-primary" id="btn-restart-install" style="display:none">↺ Start på nytt og installer</button>
       </div>
     </div>
     <div class="btn-row">
-      <button class="btn-primary" id="btn-general-save" data-i18n="general.save">💾 Lagre</button>
+      <button class="btn-primary" id="btn-general-save"><svg viewBox="0 0 20 20"><path d="M15.5 5.5L14 4H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1V5.5zM7 4h4v3H7V4zm-3 8h8v3H4v-3z"/></svg><span data-i18n="general.save">Lagre</span></button>
       <button class="btn-ghost" id="btn-general-cancel" data-i18n="general.cancel">Avbryt</button>
     </div>
   </section>
@@ -837,7 +837,7 @@
     <label class="form-label mt" data-i18n="manual.filename">NAVN PÅ FIL (valgfritt)</label>
     <input type="text" class="form-input" id="manual-filename" placeholder="Gudstjeneste" />
     <div class="btn-row mt">
-      <button class="btn-danger" id="btn-manual-start" data-i18n="manual.start">🔴 Start opptak nå</button>
+      <button class="btn-danger" id="btn-manual-start"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/></svg><span data-i18n="manual.start">Start opptak nå</span></button>
       <button class="btn-ghost" id="btn-manual-cancel" data-i18n="manual.cancel">Avbryt</button>
     </div>
   </div>
@@ -853,7 +853,10 @@
       <div class="rec-vu-header">
         <div class="rec-indicator">
           <div class="rec-dot-big"></div>
-          <div class="rec-live" data-i18n="recording.live">TAR OPP NÅ</div>
+          <div>
+            <div class="rec-live" data-i18n="recording.live">TAR OPP NÅ</div>
+            <div class="rec-device-name" id="rec-device-name"></div>
+          </div>
         </div>
         <div class="rec-sig-status">
           <span class="rec-sig-dot" id="rec-sig-dot"></span>

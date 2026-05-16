@@ -816,6 +816,7 @@ select.form-input {
 }
 @keyframes pdot { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
 .rec-live { font-size: 11px; font-weight: 800; letter-spacing: 2.5px; color: var(--red); text-transform: uppercase; }
+.rec-device-name { font-size: 12px; color: var(--text3); margin-top: 3px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
 
 /* VU section */
 .rec-vu-section { width: 100%; }
@@ -1034,6 +1035,26 @@ select.form-input {
 .compat-asio-box { margin-top: 14px; background: rgba(251,191,36,.07); border: 1px solid rgba(251,191,36,.25); border-radius: var(--rsm); padding: 12px 14px; }
 .compat-asio-title { font-size: 12px; font-weight: 700; color: var(--orange); margin-bottom: 6px; }
 .compat-asio-desc { font-size: 12px; color: var(--text2); line-height: 1.6; margin: 0; }
+
+/* ── SVG icons in buttons ───────────────────────────────────────── */
+.btn-primary svg, .btn-secondary svg, .btn-ghost svg, .btn-danger svg {
+  width: 15px; height: 15px; fill: currentColor; flex-shrink: 0;
+}
+.btn-record svg { width: 11px; height: 11px; fill: #fff; flex-shrink: 0; }
+.hero-icon svg { width: 22px; height: 22px; fill: currentColor; }
+.update-toast-icon svg { width: 18px; height: 18px; fill: currentColor; }
+.btn-toast-install svg { width: 14px; height: 14px; fill: currentColor; flex-shrink: 0; }
+
+/* ── History action icons ───────────────────────────────────────── */
+.hist-action {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 6px;
+  color: var(--text3); text-decoration: none;
+  transition: background .12s, color .12s; cursor: pointer;
+}
+.hist-action:hover { background: var(--surface3); color: var(--text2); }
+.hist-action.hist-del:hover { color: var(--red); }
+.hist-action svg { width: 14px; height: 14px; fill: currentColor; }
 
 /* ── Scrollbar ─────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; }

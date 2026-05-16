@@ -343,6 +343,16 @@ function showOverlay(opts: RecordingOpts): void {
   stopOverridden   = false
   updateScheduledStopUI()
 
+  // Device name
+  const deviceEl = document.getElementById('rec-device-name')
+  if (deviceEl) {
+    deviceEl.textContent = opts.deviceName ?? ''
+    getAudioDevices().then(devices => {
+      const dev = devices.find(d => d.deviceId === (opts.deviceId ?? settings.deviceId))
+      if (deviceEl && dev?.label) deviceEl.textContent = dev.label
+    }).catch(() => {})
+  }
+
   // Save path hint
   const pathEl = document.getElementById('rec-savepath')
   if (pathEl && opts) {

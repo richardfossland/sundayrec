@@ -135,14 +135,18 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
     const tdActions = document.createElement('td'); tdActions.style.cssText = 'white-space:nowrap'
 
     if (showReveal && r.path) {
-      const aReveal = Object.assign(document.createElement('a'), { href: '#', className: 'slot-edit', textContent: '↗' })
-      aReveal.style.marginRight = '10px'
+      const aReveal = document.createElement('a')
+      aReveal.href = '#'; aReveal.className = 'hist-action'
+      aReveal.title = 'Vis i Finder / Utforsker'
+      aReveal.innerHTML = '<svg viewBox="0 0 20 20"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5zM5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"/></svg>'
       aReveal.addEventListener('click', e => { e.preventDefault(); window.api.revealFile(r.path!) })
       tdActions.appendChild(aReveal)
     }
 
-    const aDel = Object.assign(document.createElement('a'), { href: '#', className: 'slot-edit', textContent: '✕' })
-    aDel.style.color = 'var(--text3)'
+    const aDel = document.createElement('a')
+    aDel.href = '#'; aDel.className = 'hist-action hist-del'
+    aDel.title = 'Slett oppføring'
+    aDel.innerHTML = '<svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"/></svg>'
     aDel.addEventListener('click', async e => {
       e.preventDefault()
       await window.api.deleteHistoryEntry(r.timestamp!)
@@ -150,6 +154,7 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
       if (!tbody.querySelector('tr')) renderHistoryRows(tbody, [], false)
     })
     tdActions.appendChild(aDel)
+    tdActions.style.cssText = 'white-space:nowrap;display:flex;align-items:center;gap:2px'
 
     const cells = [r.date ? fmtDate(r.date) : '—', r.startTime ?? '—', r.duration ?? '—', r.filename ?? '—']
     cells.forEach(text => {
