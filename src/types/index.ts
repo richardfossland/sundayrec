@@ -76,7 +76,8 @@ export interface Settings {
   slots: ScheduleSlot[]
   specialRecordings: SpecialRecording[]
   stopOnSilence: boolean
-  splitHourly: boolean
+  splitMinutes: number     // 0 = off; split every N minutes from recording start
+  splitHourly?: boolean    // deprecated — migrated to splitMinutes:60 on first read
 
   // System behaviour
   launchAtLogin: boolean

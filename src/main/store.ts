@@ -32,7 +32,7 @@ const defaults: Settings = {
   slots: [],
   specialRecordings: [],
   stopOnSilence: false,
-  splitHourly: false,
+  splitMinutes: 0,
 
   launchAtLogin: false,
   showOnStartup: false,
@@ -110,8 +110,10 @@ export function set<K extends keyof Settings>(key: K, value: Settings[K]): void 
 
 export function getAll(): Settings {
   const s = store.store
+  const splitMinutes = s.splitMinutes ?? (s.splitHourly ? 60 : 0)
   return {
     ...s,
+    splitMinutes,
     emailSmtpPass: '',
     emailSmtpPassSet: hasSmtpPassword()
   }

@@ -511,6 +511,7 @@ select.form-input {
 }
 .form-hint { font-size: 11px; color: var(--text3); margin-top: 6px; line-height: 1.5; }
 .mt { margin-top: 14px; }
+.split-select { width: auto; min-width: 130px; }
 .pass-row { display: flex; align-items: center; gap: 10px; }
 .pass-row .form-input { flex: 1; }
 .btn-link { background: none; border: none; color: var(--text3); font-size: 12px; cursor: pointer; padding: 0; text-decoration: underline; white-space: nowrap; }

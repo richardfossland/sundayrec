@@ -389,10 +389,17 @@
       </div>
       <div class="toggle-row">
         <div>
-          <div class="toggle-title" data-i18n="schedule.splitTitle">Del opp filer per time</div>
-          <div class="toggle-desc" data-i18n="schedule.splitDesc">Lager ny lydfil for hver time — enklere å redigere etterpå</div>
+          <div class="toggle-title" data-i18n="schedule.splitTitle">Del opp filer automatisk</div>
+          <div class="toggle-desc" data-i18n="schedule.splitDesc">Lager ny lydfil for hvert intervall — enklere å redigere etterpå</div>
         </div>
-        <label class="toggle"><input type="checkbox" id="opt-split" /><span class="toggle-track"></span></label>
+        <select class="form-input split-select" id="opt-split-minutes">
+          <option value="0"  data-i18n="schedule.splitOff">Av</option>
+          <option value="30">30 min</option>
+          <option value="45">45 min</option>
+          <option value="60">60 min (1 t)</option>
+          <option value="90">90 min</option>
+          <option value="120">120 min (2 t)</option>
+        </select>
       </div>
       <div class="btn-row">
         <button class="btn-primary" id="btn-schedule-save" data-i18n="schedule.save">💾 Lagre tidsplan</button>

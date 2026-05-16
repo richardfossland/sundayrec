@@ -232,16 +232,14 @@ async function startMediaRecorder(opts: RecordingOpts): Promise<void> {
     }, 5000)
   }
 
-  // Hourly split — triggers at the next clock-hour boundary (:00)
-  if (opts.splitHourly) {
-    const now = new Date()
-    const msUntilNextHour = (60 - now.getMinutes()) * 60000 - now.getSeconds() * 1000 - now.getMilliseconds()
+  // Interval split — triggers every N minutes from recording start
+  if (opts.splitMinutes && opts.splitMinutes > 0) {
     splitTimer = setTimeout(() => {
       const ts = new Date().toTimeString().slice(0, 5).replace(':', '')
       autoRestartOpts = { ...opts, splitTimestamp: ts }
       splitTimer = null
       doStopRecording()
-    }, msUntilNextHour)
+    }, opts.splitMinutes * 60000)
   }
 
   window.api.notifyStarted({ name: opts.customName ?? opts.overrideName ?? t('recording.defaultName', 'Opptak') })
