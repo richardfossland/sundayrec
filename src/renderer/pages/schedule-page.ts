@@ -1,6 +1,6 @@
 import { t, tArr } from '../i18n'
 import { settings, patchSettings } from '../state'
-import { flashSaved } from '../helpers'
+import { flashSaved, escHtml } from '../helpers'
 import type { ScheduleSlot } from '../../types'
 
 let editingSlotIndex = -1
@@ -44,14 +44,15 @@ export function setupSchedulePage(): void {
     if (winEl) winEl.style.display = isMac ? 'none'  : 'block'
   })
 
-  window.api.on('wake-schedule-result', wakeResultToStatus)
+  const cleanup = window.api.on('wake-schedule-result', wakeResultToStatus)
+  window.addEventListener('beforeunload', () => cleanup?.())
 }
 
 export function applyScheduleSettingsToUI(): void {
   const wakeEl    = document.getElementById('opt-wake')    as HTMLInputElement | null
   const protectEl = document.getElementById('opt-protect') as HTMLInputElement | null
   const silenceEl = document.getElementById('opt-silence') as HTMLInputElement | null
-  const splitEl   = document.getElementById('opt-split')   as HTMLInputElement | null
+  const splitMinSel = document.getElementById('opt-split-minutes') as HTMLSelectElement | null
   if (wakeEl) {
     wakeEl.checked = !!settings.wakeFromSleep
     const wakeRow     = document.getElementById('wake-status-row')
@@ -59,22 +60,22 @@ export function applyScheduleSettingsToUI(): void {
     if (wakeRow)     wakeRow.style.display     = settings.wakeFromSleep ? 'flex'  : 'none'
     if (hibernateEl) hibernateEl.style.display = settings.wakeFromSleep ? 'block' : 'none'
   }
-  if (protectEl) protectEl.checked = settings.protectRecording !== false
-  if (silenceEl) silenceEl.checked = !!settings.stopOnSilence
-  if (splitEl)   splitEl.checked   = !!settings.splitHourly
+  if (protectEl)   protectEl.checked   = settings.protectRecording !== false
+  if (silenceEl)   silenceEl.checked   = !!settings.stopOnSilence
+  if (splitMinSel) splitMinSel.value   = String(settings.splitMinutes ?? 0)
   renderSlotsList()
 }
 
 async function saveScheduleSettings(): Promise<void> {
-  const wakeEl    = document.getElementById('opt-wake')    as HTMLInputElement | null
-  const protectEl = document.getElementById('opt-protect') as HTMLInputElement | null
-  const silenceEl = document.getElementById('opt-silence') as HTMLInputElement | null
-  const splitEl   = document.getElementById('opt-split')   as HTMLInputElement | null
+  const wakeEl      = document.getElementById('opt-wake')          as HTMLInputElement  | null
+  const protectEl   = document.getElementById('opt-protect')       as HTMLInputElement  | null
+  const silenceEl   = document.getElementById('opt-silence')       as HTMLInputElement  | null
+  const splitMinSel = document.getElementById('opt-split-minutes') as HTMLSelectElement | null
   patchSettings({
-    wakeFromSleep:    wakeEl?.checked    ?? false,
+    wakeFromSleep:    wakeEl?.checked ?? false,
     protectRecording: protectEl?.checked ?? true,
     stopOnSilence:    silenceEl?.checked ?? false,
-    splitHourly:      splitEl?.checked   ?? false
+    splitMinutes:     parseInt(splitMinSel?.value ?? '0') || 0
   })
   await window.api.saveSettings(settings)
   flashSaved(document.getElementById('btn-schedule-save'))
@@ -86,7 +87,7 @@ export function renderDayPickers(): void {
   if (!dp) return
   const sel = [...dp.querySelectorAll<HTMLElement>('.day-btn.selected')].map(b => +b.dataset.day!)
   dp.innerHTML = days.map((d, i) =>
-    `<button class="day-btn${sel.includes(i) ? ' selected' : ''}" data-day="${i}">${d}</button>`
+    `<button class="day-btn${sel.includes(i) ? ' selected' : ''}" data-day="${i}">${escHtml(d)}</button>`
   ).join('')
   dp.querySelectorAll('.day-btn').forEach(btn =>
     btn.addEventListener('click', () => btn.classList.toggle('selected'))
@@ -103,11 +104,11 @@ export function renderSlotsList(): void {
     return
   }
   list.innerHTML = slots.map((s, i) => {
-    const dayNames = (s.days ?? []).map(d => days[d] ?? '?').join(', ')
+    const dayNames = (s.days ?? []).map(d => escHtml(days[d] ?? '?')).join(', ')
     return `<div class="slot-row">
       <div class="slot-days">${dayNames || '—'}</div>
-      <div class="slot-time">${s.start} – ${s.stop}</div>
-      <a href="#" class="slot-edit" data-index="${i}">${t('schedule.edit','Rediger')}</a>
+      <div class="slot-time">${escHtml(s.start)} – ${escHtml(s.stop)}</div>
+      <a href="#" class="slot-edit" data-index="${i}">${escHtml(t('schedule.edit','Rediger'))}</a>
       <span class="slot-del" data-index="${i}" title="Slett">×</span>
     </div>`
   }).join('')
@@ -146,7 +147,8 @@ async function saveSlot(): Promise<void> {
   const days  = [...document.querySelectorAll<HTMLElement>('#day-picker .day-btn.selected')].map(b => +b.dataset.day!)
   const start = (document.getElementById('slot-start') as HTMLInputElement | null)?.value ?? ''
   const stop  = (document.getElementById('slot-stop')  as HTMLInputElement | null)?.value ?? ''
-  const maxV  = +(document.getElementById('slot-max')  as HTMLInputElement | null)?.value || null
+  const maxEl = document.getElementById('slot-max') as HTMLInputElement | null
+  const maxV  = maxEl ? (+maxEl.value || null) : null
   if (!days.length) { alert(t('schedule.errNoDays')); return }
   if (!start || !stop || start >= stop) { alert(t('schedule.errTimes')); return }
   const slot: ScheduleSlot = { days, start, stop, ...(maxV ? { max: maxV } : {}) }

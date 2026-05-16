@@ -49,7 +49,17 @@
   },
   "update": {
     "available": "Nouvelle version {v} disponible — téléchargement…",
-    "downloaded": "Version {v} prête — sera installée au prochain redémarrage."
+    "downloaded": "Version {v} prête — sera installée au prochain redémarrage.",
+    "checking": "Vérification des mises à jour…",
+    "upToDate": "Vous êtes à jour",
+    "downloading": "Téléchargement… {pct}%",
+    "readyInstall": "Version {v} prête — redémarrez pour installer",
+    "error": "Impossible de vérifier les mises à jour",
+    "checkHint": "Cliquez sur «Rechercher des mises à jour» pour vérifier",
+    "toastAvailableTitle": "Mise à jour disponible",
+    "toastAvailableText": "La version {v} est en cours de téléchargement…",
+    "toastReadyTitle": "Prêt à installer",
+    "toastReadyText": "La version {v} a été téléchargée"
   },
   "history": {
     "title": "Historique",
@@ -270,7 +280,8 @@
     "unknownError": "erreur inconnue",
     "save": "💾 Enregistrer",
     "cancel": "Annuler",
-    "currentVersion": "Version actuelle :"
+    "currentVersion": "Version actuelle :",
+    "saved": "✓ Enregistré"
   },
   "manual": {
     "title": "Démarrer un enregistrement manuel",
@@ -293,7 +304,12 @@
     "confirmStop": "Oui, arrêter",
     "confirmCancel": "Continuer l'enregistrement",
     "defaultName": "Enregistrement",
-    "savingAs": "Enregistrement sous :"
+    "savingAs": "Enregistrement sous :",
+    "disconnected": "La source audio a été déconnectée pendant l'enregistrement",
+    "sigClipping": "SATURATION",
+    "sigHigh": "ÉLEVÉ",
+    "sigGood": "BON",
+    "sigWeak": "FAIBLE"
   },
   "wizard": {
     "step1": "Source audio",
@@ -312,5 +328,9 @@
     "finish": "✓ Terminé — activer l'application",
     "usbHint": "Connectez la table de mixage USB si elle n'apparaît pas ici",
     "filenameExample": "Exemple de nom de fichier :"
+  },
+  "time": {
+    "yr": "an", "mo": "mois", "wk": "sem", "d": "j", "h": "h", "m": "min", "s": "s",
+    "years": "ans", "months": "mois", "weeks": "semaines", "days": "jours"
   }
 }

@@ -4,11 +4,15 @@ import fs from 'fs'
 import * as store from './store'
 import * as scheduler from './scheduler'
 import * as recorder from './recorder'
+import { NOTIFY_LABELS } from './recorder'
 import * as tray from './tray'
 import * as updater from './updater'
 import * as mailer from './mailer'
 import * as wake from './wake'
-import { execFileSync } from 'child_process'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
+
+const execFileAsync = promisify(execFile)
 
 app.setName('SundayRec')
 
@@ -44,7 +48,6 @@ const QUIT_LABELS: Record<string, [string, string, string, string]> = {
 }
 
 let mainWindow: BrowserWindow
-let appIsQuitting = false
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -56,7 +59,7 @@ function createWindow(): void {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: true
     },
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     backgroundColor: '#0d0d11',
@@ -87,7 +90,7 @@ function createWindow(): void {
   })
 
   mainWindow.on('close', (e) => {
-    if (!appIsQuitting) {
+    if (!quitting) {
       e.preventDefault()
       mainWindow.hide()
     }
@@ -123,7 +126,8 @@ app.whenReady().then(async () => {
   updater.check()
   setupIPC()
   cleanupOldRecordings()
-  wake.reschedule(scheduler.getUpcomingDates(), mainWindow)
+  store.pruneHistory()
+  void wake.reschedule(scheduler.getUpcomingDates(), mainWindow)
 
   if (store.get('launchAtLogin')) {
     app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true })
@@ -131,8 +135,9 @@ app.whenReady().then(async () => {
 })
 
 let forceQuit = false
+let quitting  = false
 app.on('before-quit', async (e) => {
-  if (forceQuit) { appIsQuitting = true; return }
+  if (forceQuit) { quitting = true; return }
 
   const lang = store.get('language') ?? 'en'
 
@@ -146,9 +151,10 @@ app.on('before-quit', async (e) => {
       message: lbl[2], detail: lbl[3]
     })
     if (response === 0) {
+      recorder.onceIdle(() => { forceQuit = true; app.quit() })
       recorder.stopSession()
-      forceQuit = true
-      setTimeout(() => app.quit(), 4000)
+      // Safety fallback if ffmpeg hangs
+      setTimeout(() => { forceQuit = true; app.quit() }, 30000)
     }
     return
   }
@@ -169,7 +175,7 @@ app.on('before-quit', async (e) => {
     })
     if (response === 0) { forceQuit = true; app.quit() }
   } else {
-    appIsQuitting = true
+    quitting = true
   }
 })
 
@@ -185,13 +191,15 @@ app.on('activate', () => {
 function setupIPC(): void {
   ipcMain.handle('install-update', () => {
     forceQuit = true
-    appIsQuitting = true
+    quitting  = true
     setImmediate(() => {
       updater.doInstall()
       // Fallback: if quitAndInstall hasn't exited in 3s, force relaunch
       setTimeout(() => { app.relaunch(); app.exit(0) }, 3000)
     })
   })
+
+  ipcMain.handle('get-app-version', () => app.getVersion())
 
   ipcMain.handle('get-settings', () => store.getAll())
 
@@ -200,7 +208,7 @@ function setupIPC(): void {
     store.setAll(settings)
     scheduler.reschedule()
     app.setLoginItemSettings({ openAtLogin: !!settings.launchAtLogin, openAsHidden: true })
-    wake.reschedule(scheduler.getUpcomingDates(), mainWindow)
+    void wake.reschedule(scheduler.getUpcomingDates(), mainWindow)
     return true
   })
 
@@ -223,6 +231,7 @@ function setupIPC(): void {
   ipcMain.handle('get-history', () => store.getHistory())
   ipcMain.handle('delete-history-entry', (_, ts: number) => store.deleteHistoryEntry(ts))
   ipcMain.handle('clear-history', () => store.clearHistory())
+  ipcMain.handle('prune-history', () => store.pruneHistory())
 
   ipcMain.handle('get-next-recording', () => {
     const next = scheduler.getNextRecording()
@@ -234,20 +243,18 @@ function setupIPC(): void {
       let folder = store.get('saveFolder') ?? app.getPath('documents')
       if (!fs.existsSync(folder)) folder = app.getPath('documents')
       if (process.platform === 'darwin' || process.platform === 'linux') {
-        const raw  = execFileSync('df', ['-Pk', folder]).toString()
-        const cols = raw.trim().split('\n')[1]?.trim().split(/\s+/)
+        const { stdout } = await execFileAsync('df', ['-Pk', folder], { timeout: 5000 })
+        const cols = stdout.trim().split('\n')[1]?.trim().split(/\s+/)
         const free = cols ? parseInt(cols[3]) : NaN
         if (!isNaN(free)) return { freeBytes: free * 1024 }
       }
       if (process.platform === 'win32') {
-        const driveLetter = /^[A-Za-z]/.test(folder) ? folder[0].toUpperCase() : 'C'
-        const out = execFileSync(
-          'powershell',
-          ['-NoProfile', '-NonInteractive', '-Command',
-           `(Get-PSDrive -Name '${driveLetter}' -ErrorAction SilentlyContinue).Free`],
-          { timeout: 5000 }
-        ).toString().trim()
-        const free = parseInt(out)
+        const driveLetter = folder[0].replace(/[^A-Za-z]/, 'C')
+        const { stdout } = await execFileAsync('powershell', [
+          '-NoProfile', '-Command',
+          `(Get-PSDrive -Name '${driveLetter}').Free`
+        ], { timeout: 5000 })
+        const free = parseInt(stdout.trim())
         if (!isNaN(free) && free >= 0) return { freeBytes: free }
       }
     } catch {}
@@ -268,18 +275,18 @@ function setupIPC(): void {
   })
 
   ipcMain.handle('open-folder', (_, p: string) => {
-    if (typeof p !== 'string' || !isSafePath(p)) return
+    if (typeof p !== 'string' || !fs.existsSync(p)) return
     return shell.openPath(p)
   })
   ipcMain.handle('reveal-file', (_, p: string) => {
-    if (typeof p !== 'string' || !isSafePath(p)) return
-    return shell.showItemInFolder(p)
+    if (typeof p !== 'string' || !fs.existsSync(p)) return
+    shell.showItemInFolder(p)
   })
 
   ipcMain.on('recording-started', (_, data: { name: string }) => {
     tray.setRecording(true)
     tray.setError(false)
-    if (store.get('notifyStart') !== false) notify('SundayRec', data.name || 'Opptak startet')
+    if (store.get('notifyStart') !== false) notify('SundayRec', data.name)
   })
 
   ipcMain.on('recording-stopped', () => tray.setRecording(false))
@@ -287,9 +294,16 @@ function setupIPC(): void {
   ipcMain.on('recording-error', (_, data: { error: string }) => {
     tray.setRecording(false)
     tray.setError(true)
-    notify('SundayRec — Feil', data.error)
+    const lang = store.get('language') ?? 'no'
+    const nl   = NOTIFY_LABELS[lang] ?? NOTIFY_LABELS.no
+    notify(nl.err, data.error)
     const settings = store.getAll()
-    if (settings.emailOnError) mailer.sendError(settings, data.error)
+    if (settings.emailOnError) mailer.sendError(settings, store.getSmtpPassword(), data.error)
+  })
+
+  ipcMain.handle('clear-smtp-password', () => {
+    store.setSmtpPassword('')
+    return true
   })
 }
 
@@ -297,24 +311,13 @@ function notify(title: string, body: string): void {
   if (Notification.isSupported()) new Notification({ title, body }).show()
 }
 
-function isSafePath(p: string): boolean {
-  const saveFolder = store.get('saveFolder') ?? path.join(app.getPath('documents'), 'SundayRec')
-  const allowed = [saveFolder, app.getPath('documents'), app.getPath('downloads')]
-  return allowed.some(base => p === base || p.startsWith(base + path.sep))
-}
-
 function cleanupOldRecordings(): void {
   const days = store.get('autoDeleteDays')
   if (!days || days <= 0) return
   const cutoff = Date.now() - days * 86400000
-  const saveFolder = store.get('saveFolder') ?? path.join(app.getPath('documents'), 'SundayRec')
   const history = store.getHistory()
   const remaining = history.filter(entry => {
-    if (
-      entry.timestamp && entry.timestamp < cutoff &&
-      entry.path && entry.status === 'ok' &&
-      entry.path.startsWith(saveFolder + path.sep)
-    ) {
+    if (entry.timestamp && entry.timestamp < cutoff && entry.path && entry.status === 'ok') {
       fs.unlink(entry.path, err => { if (err) console.error('Failed to delete recording:', err) })
       return false
     }

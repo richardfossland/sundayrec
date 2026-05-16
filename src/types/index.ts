@@ -76,7 +76,8 @@ export interface Settings {
   slots: ScheduleSlot[]
   specialRecordings: SpecialRecording[]
   stopOnSilence: boolean
-  splitHourly: boolean
+  splitMinutes: number     // 0 = off; split every N minutes from recording start
+  splitHourly?: boolean    // deprecated — migrated to splitMinutes:60 on first read
 
   // System behaviour
   launchAtLogin: boolean
@@ -93,7 +94,9 @@ export interface Settings {
   emailSmtp: string
   emailSmtpPort: number
   emailSmtpUser: string
-  emailSmtpPass: string
+  emailSmtpPass: string       // runtime only — always '' in store; real value in emailSmtpPassEnc
+  emailSmtpPassSet?: boolean  // populated by main before sending to renderer
+  emailSmtpPassEnc?: string   // internal: base64-encoded safeStorage ciphertext
 
   // Updates
   autoUpdate: boolean
@@ -116,6 +119,8 @@ export interface RecordingOpts extends Partial<Settings> {
   splitTimestamp?: string
   maxMinutes?: number
   scheduledStopTime?: string
+  channelL?: number
+  channelR?: number
 }
 
 export interface DiskInfo {

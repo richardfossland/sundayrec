@@ -185,7 +185,10 @@
     <!-- Historikk section -->
     <div class="section-header">
       <h2 data-i18n="home.recentRecordings">Historikk</h2>
-      <a href="#" class="view-all" id="btn-clear-history" title="Slett alle opptak fra historikken">Slett alle</a>
+      <div style="display:flex;gap:14px;align-items:center">
+        <a href="#" class="view-all" id="btn-prune-history" data-i18n="history.pruneBtn" title="Fjern oppføringer uten tilhørende fil">Rydd opp</a>
+        <a href="#" class="view-all" id="btn-clear-history" title="Slett alle opptak fra historikken" data-i18n="history.clearBtn">Slett alle</a>
+      </div>
     </div>
     <table class="rec-table">
       <thead><tr>
@@ -389,10 +392,17 @@
       </div>
       <div class="toggle-row">
         <div>
-          <div class="toggle-title" data-i18n="schedule.splitTitle">Del opp filer per time</div>
-          <div class="toggle-desc" data-i18n="schedule.splitDesc">Lager ny lydfil for hver time — enklere å redigere etterpå</div>
+          <div class="toggle-title" data-i18n="schedule.splitTitle">Del opp filer automatisk</div>
+          <div class="toggle-desc" data-i18n="schedule.splitDesc">Lager ny lydfil for hvert intervall — enklere å redigere etterpå</div>
         </div>
-        <label class="toggle"><input type="checkbox" id="opt-split" /><span class="toggle-track"></span></label>
+        <select class="form-input split-select" id="opt-split-minutes">
+          <option value="0"  data-i18n="schedule.splitOff">Av</option>
+          <option value="30">30 min</option>
+          <option value="45">45 min</option>
+          <option value="60">60 min (1 t)</option>
+          <option value="90">90 min</option>
+          <option value="120">120 min (2 t)</option>
+        </select>
       </div>
       <div class="btn-row">
         <button class="btn-primary" id="btn-schedule-save" data-i18n="schedule.save">💾 Lagre tidsplan</button>
@@ -759,7 +769,10 @@
           <div><label class="form-label">BRUKERNAVN</label><input type="text" class="form-input" id="email-user" /></div>
         </div>
         <label class="form-label mt">PASSORD</label>
-        <input type="password" class="form-input" id="email-pass" />
+        <div class="pass-row">
+          <input type="password" class="form-input" id="email-pass" />
+          <button type="button" class="btn-link" id="btn-clear-smtp-pass" style="display:none" data-i18n="general.clearPass">Fjern</button>
+        </div>
       </div>
     </div>
     <div class="card">
@@ -914,6 +927,13 @@
       <button class="btn-stop-big" id="btn-stop-overlay" data-i18n="recording.stop">Trykk for å stoppe opptaket</button>
     </div>
 
+  </div>
+
+  <div id="rec-reconnect" class="rec-reconnect" style="display:none">
+    <span class="rec-reconnect-icon">⚠</span>
+    <span class="rec-reconnect-text" data-i18n="recording.reconnecting">Lydkilde frakoblet — kobler til på nytt</span>
+    <span class="rec-reconnect-countdown" id="rec-reconnect-countdown">10</span>
+    <span class="rec-reconnect-unit" data-i18n="recording.reconnectSecs">s</span>
   </div>
 </div>
 

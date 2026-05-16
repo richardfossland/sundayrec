@@ -49,7 +49,17 @@
   },
   "update": {
     "available": "Ny version {v} tillgänglig — laddar ned…",
-    "downloaded": "Version {v} klar — installeras vid nästa omstart."
+    "downloaded": "Version {v} klar — installeras vid nästa omstart.",
+    "checking": "Söker efter uppdateringar…",
+    "upToDate": "Du är uppdaterad",
+    "downloading": "Laddar ned… {pct}%",
+    "readyInstall": "Version {v} klar — starta om för att installera",
+    "error": "Kunde inte söka efter uppdateringar",
+    "checkHint": "Klicka på «Sök efter uppdateringar» för att kontrollera",
+    "toastAvailableTitle": "Uppdatering tillgänglig",
+    "toastAvailableText": "Version {v} laddas ned…",
+    "toastReadyTitle": "Redo att installera",
+    "toastReadyText": "Version {v} har laddats ned"
   },
   "history": {
     "title": "Historik",
@@ -270,7 +280,8 @@
     "unknownError": "okänt fel",
     "save": "💾 Spara",
     "cancel": "Avbryt",
-    "currentVersion": "Aktuell version:"
+    "currentVersion": "Aktuell version:",
+    "saved": "✓ Sparat"
   },
   "manual": {
     "title": "Starta manuell inspelning",
@@ -293,7 +304,12 @@
     "confirmStop": "Ja, stoppa",
     "confirmCancel": "Fortsätt inspelning",
     "defaultName": "Inspelning",
-    "savingAs": "Sparas som:"
+    "savingAs": "Sparas som:",
+    "disconnected": "Ljudkällan kopplades från under inspelningen",
+    "sigClipping": "CLIPPING",
+    "sigHigh": "HÖGT",
+    "sigGood": "BRA",
+    "sigWeak": "SVAG"
   },
   "wizard": {
     "step1": "Ljudkälla",
@@ -312,5 +328,9 @@
     "finish": "✓ Klar — aktivera appen",
     "usbHint": "Anslut USB-mixern om den inte visas här",
     "filenameExample": "Filnamnsexempel:"
+  },
+  "time": {
+    "yr": "år", "mo": "mån", "wk": "v", "d": "d", "h": "h", "m": "m", "s": "s",
+    "years": "år", "months": "månader", "weeks": "veckor", "days": "dagar"
   }
 }

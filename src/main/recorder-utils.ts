@@ -2,29 +2,11 @@ import { churchCalendarName } from '../shared/church-calendar'
 import type { RecordingOpts } from '../types'
 
 export function localDateStr(d: Date): string {
-  const yyyy = d.getFullYear()
-  const mm   = String(d.getMonth() + 1).padStart(2, '0')
-  const dd   = String(d.getDate()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}`
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-export function formatDuration(secs: number): string {
-  const h = Math.floor(secs / 3600)
-  const m = Math.floor((secs % 3600) / 60)
-  return h ? `${h}t ${m}m` : `${m}m`
-}
-
-export function codecFor(format: string): string {
-  switch (format) {
-    case 'mp3':  return 'libmp3lame'
-    case 'flac': return 'flac'
-    case 'aac':  return 'aac'
-    case 'wav':  return 'pcm_s16le'
-    default:     return 'libmp3lame'
-  }
-}
-
-export function buildFilename(settings: RecordingOpts, now = new Date()): string {
+export function buildFilename(settings: RecordingOpts, startMs?: number): string {
+  const now  = startMs ? new Date(startMs) : new Date()
   const date = localDateStr(now)
   const ext  = settings.format ?? 'mp3'
   const ts   = settings.splitTimestamp ? `_${settings.splitTimestamp}` : ''
@@ -48,4 +30,20 @@ export function buildFilename(settings: RecordingOpts, now = new Date()): string
     default:
       return `${date}${ts}.${ext}`
   }
+}
+
+export function codecFor(format: string): string {
+  switch (format) {
+    case 'mp3':  return 'libmp3lame'
+    case 'flac': return 'flac'
+    case 'aac':  return 'aac'
+    case 'wav':  return 'pcm_s16le'
+    default:     return 'libmp3lame'
+  }
+}
+
+export function formatDuration(secs: number): string {
+  const h = Math.floor(secs / 3600)
+  const m = Math.floor((secs % 3600) / 60)
+  return h ? `${h}t ${m}m` : `${m}m`
 }

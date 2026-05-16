@@ -1,4 +1,4 @@
-import { currentLang } from './i18n'
+import { t, currentLang } from './i18n'
 
 export function escHtml(str: unknown): string {
   return String(str ?? '').replace(/[&<>"']/g, m =>
@@ -26,7 +26,7 @@ export function flashSaved(btn: HTMLElement | null): void {
   if (!btn) return
   const orig   = btn.textContent ?? ''
   const origBg = (btn as HTMLElement).style.background
-  btn.textContent = '✓ Lagret'
+  btn.textContent = t('general.saved', '✓ Lagret')
   btn.style.background = 'var(--green)'
   setTimeout(() => { btn.textContent = orig; btn.style.background = origBg }, 1800)
 }
@@ -57,28 +57,42 @@ export function fmtCountdown(ms: number): string {
   const ss = String(s).padStart(2, '0')
   const mm = String(m).padStart(2, '0')
 
+  const uYr = t('time.yr', 'år')
+  const uMo = t('time.mo', 'mnd.')
+  const uWk = t('time.wk', 'u')
+  const uD  = t('time.d',  'd')
+  const uH  = t('time.h',  't')
+  const uM  = t('time.m',  'm')
+  const uS  = t('time.s',  's')
+
   if (d >= 365) {
     const yr  = Math.floor(d / 365)
     const mth = Math.round((d % 365) / 30)
-    return mth > 0 ? `${yr} år ${mth} mnd.` : `${yr} år`
+    return mth > 0 ? `${yr} ${uYr} ${mth} ${uMo}` : `${yr} ${uYr}`
   }
   if (d >= 30) {
     const mth = Math.floor(d / 30); const rem = d % 30
-    return rem > 0 ? `${mth} mnd. ${rem} d` : `${mth} mnd.`
+    return rem > 0 ? `${mth} ${uMo} ${rem} ${uD}` : `${mth} ${uMo}`
   }
-  if (d >= 7)  { const wk = Math.floor(d / 7); const rem = d % 7; return rem > 0 ? `${wk} u ${rem} d` : `${wk} u` }
-  if (d >= 1)  { return h > 0 ? `${d} d ${h}t` : `${d} d` }
-  if (h > 0)   return `${h}t ${mm}m ${ss}s`
-  if (m > 0)   return `${m}m ${ss}s`
-  return `${ss}s`
+  if (d >= 7)  { const wk = Math.floor(d / 7); const rem = d % 7; return rem > 0 ? `${wk} ${uWk} ${rem} ${uD}` : `${wk} ${uWk}` }
+  if (d >= 1)  { return h > 0 ? `${d} ${uD} ${h}${uH}` : `${d} ${uD}` }
+  if (h > 0)   return `${h}${uH} ${mm}${uM} ${ss}${uS}`
+  if (m > 0)   return `${m}${uM} ${ss}${uS}`
+  return `${ss}${uS}`
 }
 
 export function fmtStorageHours(hours: number): string {
-  if (hours >= 8760) { const yr = hours / 8760; return yr >= 10 ? `${Math.round(yr)} år` : `${yr.toFixed(1)} år` }
-  if (hours >= 720)  return `${Math.round(hours / 720)} måneder`
-  if (hours >= 168)  return `${Math.round(hours / 168)} uker`
-  if (hours >= 24)   return `${Math.round(hours / 24)} dager`
-  return `${hours}t`
+  const uH = t('time.h', 't')
+  if (hours >= 8760) {
+    const yr = hours / 8760
+    return yr >= 10
+      ? `${Math.round(yr)} ${t('time.years', 'år')}`
+      : `${yr.toFixed(1)} ${t('time.years', 'år')}`
+  }
+  if (hours >= 720) return `${Math.round(hours / 720)} ${t('time.months', 'måneder')}`
+  if (hours >= 168) return `${Math.round(hours / 168)} ${t('time.weeks', 'uker')}`
+  if (hours >= 24)  return `${Math.round(hours / 24)} ${t('time.days', 'dager')}`
+  return `${hours}${uH}`
 }
 
 export function isoDate(d: Date): string {

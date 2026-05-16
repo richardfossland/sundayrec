@@ -49,7 +49,17 @@
   },
   "update": {
     "available": "New version {v} available — downloading…",
-    "downloaded": "Version {v} ready — installs on next restart."
+    "downloaded": "Version {v} ready — installs on next restart.",
+    "checking": "Checking for updates…",
+    "upToDate": "You are up to date",
+    "downloading": "Downloading… {pct}%",
+    "readyInstall": "Version {v} ready — restart to install",
+    "error": "Could not check for updates",
+    "checkHint": "Click «Check for updates» to check",
+    "toastAvailableTitle": "Update available",
+    "toastAvailableText": "Version {v} is downloading…",
+    "toastReadyTitle": "Ready to install",
+    "toastReadyText": "Version {v} has been downloaded"
   },
   "history": {
     "title": "History",
@@ -270,7 +280,8 @@
     "unknownError": "unknown error",
     "save": "💾 Save",
     "cancel": "Cancel",
-    "currentVersion": "Current version:"
+    "currentVersion": "Current version:",
+    "saved": "✓ Saved"
   },
   "manual": {
     "title": "Start manual recording",
@@ -293,7 +304,12 @@
     "confirmStop": "Yes, stop",
     "confirmCancel": "Continue recording",
     "defaultName": "Recording",
-    "savingAs": "Saving as:"
+    "savingAs": "Saving as:",
+    "disconnected": "Audio source was disconnected during recording",
+    "sigClipping": "CLIPPING",
+    "sigHigh": "HIGH",
+    "sigGood": "GOOD",
+    "sigWeak": "WEAK"
   },
   "wizard": {
     "step1": "Audio source",
@@ -312,5 +328,9 @@
     "finish": "✓ Done — activate the app",
     "usbHint": "Connect the USB mixer if it does not appear here",
     "filenameExample": "Filename example:"
+  },
+  "time": {
+    "yr": "yr", "mo": "mo", "wk": "w", "d": "d", "h": "h", "m": "m", "s": "s",
+    "years": "years", "months": "months", "weeks": "weeks", "days": "days"
   }
 }

@@ -4,10 +4,10 @@
  */
 import { t } from '../i18n'
 import { settings } from '../state'
-import { startCapture, stopCapture, getAudioDevices } from '../audio/capture'
+import { startCapture, stopCapture, getAudioDevices, reconnectStream } from '../audio/capture'
 import type { CaptureSession } from '../audio/capture'
 import { makeVuState, tickVU, stopVuState } from '../audio/vu'
-import { fmtCountdown, flashMsg } from '../helpers'
+import { fmtCountdown, flashMsg, isoDate } from '../helpers'
 import { stopVU as stopHomeVU } from './home-vu'
 import { stopMonitoring } from './audio-page'
 import { loadRecentHistory } from './home'
@@ -80,24 +80,27 @@ export function setupRecording(): void {
     if (s) s.style.display = 'none'
   })
 
-  // IPC from main / scheduler
-  window.api.on('schedule-start-recording', (opts) => startRecordingWithOpts(opts as RecordingOpts))
-  window.api.on('schedule-stop-recording',  () => { if (!stopOverridden) doStopRecording() })
-  window.api.on('stop-media-recorder',      async () => { await stopMediaRecorder(); hideOverlay() })
-  window.api.on('recording-finished', () => {
-    hideOverlay()
-    loadRecentHistory()
-    if (autoRestartOpts) {
-      const opts = autoRestartOpts; autoRestartOpts = null
-      setTimeout(() => startRecordingWithOpts(opts), 1000)
-    }
-  })
-  window.api.on('recording-error', () => {
-    hideOverlay()
-    loadRecentHistory()
-  })
-  window.api.on('tray-start-recording', () => openManualModal())
-  window.api.on('tray-stop-recording',  () => doStopRecording())
+  // IPC from main / scheduler — store cleanup fns so listeners don't stack on hot reload
+  const ipcCleanups = [
+    window.api.on('schedule-start-recording', (opts) => startRecordingWithOpts(opts as RecordingOpts)),
+    window.api.on('schedule-stop-recording',  () => { if (!stopOverridden) doStopRecording() }),
+    window.api.on('stop-media-recorder',      async () => { await stopMediaRecorder(); hideOverlay() }),
+    window.api.on('recording-finished', () => {
+      hideOverlay()
+      loadRecentHistory()
+      if (autoRestartOpts) {
+        const opts = autoRestartOpts; autoRestartOpts = null
+        setTimeout(() => startRecordingWithOpts(opts), 1000)
+      }
+    }),
+    window.api.on('recording-error', () => {
+      hideOverlay()
+      loadRecentHistory()
+    }),
+    window.api.on('tray-start-recording', () => openManualModal()),
+    window.api.on('tray-stop-recording',  () => doStopRecording()),
+  ]
+  window.addEventListener('beforeunload', () => ipcCleanups.forEach(fn => fn?.()))
 }
 
 async function openManualModal(): Promise<void> {
@@ -109,13 +112,12 @@ async function openManualModal(): Promise<void> {
   const devSel  = document.getElementById('manual-device') as HTMLSelectElement | null
   const devices = await getAudioDevices()
   if (devSel) {
-    devSel.innerHTML = ''
-    devices.forEach(d => {
+    devSel.replaceChildren(...devices.map(d => {
       const opt = document.createElement('option')
       opt.value = d.deviceId
       opt.textContent = d.label || d.deviceId
-      devSel.appendChild(opt)
-    })
+      return opt
+    }))
     if (settings.deviceId) {
       devSel.value = settings.deviceId
       if (!devSel.value && devices.length) devSel.selectedIndex = 0
@@ -144,7 +146,7 @@ async function handleManualStart(): Promise<void> {
   const mm = document.getElementById('modal-manual'); if (mm) mm.style.display = 'none'
 
   const res = await window.api.startRecordingNow(opts)
-  if (res?.ok || res === true) {
+  if (res?.ok) {
     showOverlay(opts)
     try { await startMediaRecorder(opts) }
     catch (err) {
@@ -165,7 +167,7 @@ async function handleManualStart(): Promise<void> {
 
 export async function startRecordingWithOpts(opts: RecordingOpts): Promise<void> {
   const res = await window.api.startRecordingNow(opts)
-  if (!res?.ok && res !== true) return
+  if (!res?.ok) return
   showOverlay(opts)
   try { await startMediaRecorder(opts) }
   catch (err) {
@@ -192,15 +194,8 @@ async function startMediaRecorder(opts: RecordingOpts): Promise<void> {
 
   activeSession = await startCapture(resolvedOpts)
 
-  // Detect USB disconnect mid-recording
-  activeSession.stream.getAudioTracks().forEach(track => {
-    track.onended = () => {
-      if (isRecording) {
-        window.api.notifyError({ error: 'Lydkilden ble koblet fra under opptak' })
-        doStopRecording()
-      }
-    }
-  })
+  // Detect USB disconnect mid-recording — retry for 10 seconds before giving up
+  attachDisconnectHandler(activeSession, opts)
 
   // Connect recording VU
   const vuL   = document.getElementById('rec-vu-l')
@@ -243,16 +238,14 @@ async function startMediaRecorder(opts: RecordingOpts): Promise<void> {
     }, 5000)
   }
 
-  // Hourly split — triggers at the next clock-hour boundary (:00)
-  if (opts.splitHourly) {
-    const now = new Date()
-    const msUntilNextHour = (60 - now.getMinutes()) * 60000 - now.getSeconds() * 1000 - now.getMilliseconds()
+  // Interval split — triggers every N minutes from recording start
+  if (opts.splitMinutes && opts.splitMinutes > 0) {
     splitTimer = setTimeout(() => {
       const ts = new Date().toTimeString().slice(0, 5).replace(':', '')
       autoRestartOpts = { ...opts, splitTimestamp: ts }
       splitTimer = null
       doStopRecording()
-    }, msUntilNextHour)
+    }, opts.splitMinutes * 60000)
   }
 
   window.api.notifyStarted({ name: opts.customName ?? opts.overrideName ?? t('recording.defaultName', 'Opptak') })
@@ -273,10 +266,13 @@ async function startMediaRecorder(opts: RecordingOpts): Promise<void> {
 }
 
 async function stopMediaRecorder(): Promise<void> {
-  stopVuState(recVu)
-  if (silenceInterval) { clearInterval(silenceInterval); silenceInterval = null }
-  if (splitTimer)      { clearTimeout(splitTimer);       splitTimer      = null }
-  if (recTimerIval)    { clearInterval(recTimerIval);    recTimerIval    = null }
+  try {
+    stopVuState(recVu)
+  } finally {
+    if (silenceInterval) { clearInterval(silenceInterval); silenceInterval = null }
+    if (splitTimer)      { clearTimeout(splitTimer);       splitTimer      = null }
+    if (recTimerIval)    { clearInterval(recTimerIval);    recTimerIval    = null }
+  }
 
   if (!activeSession) return
   const session = activeSession
@@ -289,6 +285,48 @@ async function stopMediaRecorder(): Promise<void> {
 async function doStopRecording(): Promise<void> {
   await stopMediaRecorder()
   hideOverlay()
+}
+
+function attachDisconnectHandler(session: CaptureSession, opts: RecordingOpts): void {
+  if (!session.stream) return
+  session.stream.getAudioTracks().forEach(track => {
+    track.onended = () => { if (isRecording) handleDisconnect(session, opts) }
+  })
+}
+
+async function handleDisconnect(session: CaptureSession, opts: RecordingOpts): Promise<void> {
+  if (!isRecording) return
+  showReconnectBanner()
+  let reconnected = false
+  for (let remaining = 10; remaining > 0 && isRecording; remaining--) {
+    updateReconnectBanner(remaining)
+    if (await reconnectStream(session)) {
+      reconnected = true
+      attachDisconnectHandler(session, opts)
+      break
+    }
+    await new Promise<void>(r => setTimeout(r, 1000))
+  }
+  hideReconnectBanner()
+  if (!reconnected && isRecording) {
+    window.api.notifyError({ error: t('recording.disconnected', 'Lydkilden ble koblet fra under opptak') })
+    doStopRecording()
+  }
+}
+
+function showReconnectBanner(): void {
+  const el = document.getElementById('rec-reconnect')
+  if (el) el.style.display = 'flex'
+}
+
+function hideReconnectBanner(): void {
+  const el = document.getElementById('rec-reconnect')
+  if (el) el.style.display = 'none'
+}
+
+function updateReconnectBanner(secsLeft: number): void {
+  const el = document.getElementById('rec-reconnect-countdown')
+  if (el) el.textContent = String(secsLeft)
 }
 
 function showOverlay(opts: RecordingOpts): void {
@@ -309,7 +347,7 @@ function showOverlay(opts: RecordingOpts): void {
   const pathEl = document.getElementById('rec-savepath')
   if (pathEl && opts) {
     const folder = opts.saveFolder ?? settings.saveFolder ?? ''
-    const date   = new Date().toISOString().slice(0, 10)
+    const date   = isoDate(new Date())
     const ext    = opts.format ?? 'mp3'
     let name     = date
     if (opts.customName?.trim()) {
@@ -370,10 +408,10 @@ function updateRecSignalStatus(dbL: number, dbR: number): void {
   const lbl = document.getElementById('rec-sig-label')
   if (!dot || !lbl) return
   let cls = '', text = '—'
-  if      (db >= -3)  { cls = 'klipping'; text = 'KLIPPING' }
-  else if (db >= -12) { cls = 'hoyt';     text = 'HØYT'     }
-  else if (db >= -40) { cls = 'god';      text = 'GOD'      }
-  else if (db > -55)  { cls = 'svak';     text = 'SVAK'     }
+  if      (db >= -3)  { cls = 'klipping'; text = t('recording.sigClipping', 'KLIPPING') }
+  else if (db >= -12) { cls = 'hoyt';     text = t('recording.sigHigh',     'HØYT')     }
+  else if (db >= -40) { cls = 'god';      text = t('recording.sigGood',     'GOD')      }
+  else if (db > -55)  { cls = 'svak';     text = t('recording.sigWeak',     'SVAK')     }
   dot.className  = 'rec-sig-dot'   + (cls ? ' ' + cls : '')
   lbl.className  = 'rec-sig-label' + (cls ? ' ' + cls : '')
   lbl.textContent = text

@@ -1,18 +1,15 @@
 import type { Config } from 'jest'
 
 const config: Config = {
-  preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/tests'],
-  moduleNameMapper: {
-    '^@shared/(.*)$': '<rootDir>/src/shared/$1',
-    '^electron$': '<rootDir>/__mocks__/electron.ts',
-    '^electron-store$': '<rootDir>/__mocks__/electron-store.ts',
+  transform: {
+    '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.node.json' }]
   },
-  globals: {
-    'ts-jest': {
-      tsconfig: { esModuleInterop: true }
-    }
+  moduleNameMapper: {
+    '^@shared/(.*)$':    '<rootDir>/src/shared/$1',
+    '^electron$':        '<rootDir>/__mocks__/electron.ts',
+    '^electron-store$':  '<rootDir>/__mocks__/electron-store.ts'
   }
 }
 

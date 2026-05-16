@@ -49,7 +49,17 @@
   },
   "update": {
     "available": "Neue Version {v} verfügbar — wird heruntergeladen…",
-    "downloaded": "Version {v} bereit — wird beim nächsten Neustart installiert."
+    "downloaded": "Version {v} bereit — wird beim nächsten Neustart installiert.",
+    "checking": "Nach Updates suchen…",
+    "upToDate": "Keine Updates verfügbar",
+    "downloading": "Wird heruntergeladen… {pct}%",
+    "readyInstall": "Version {v} bereit — neu starten zum Installieren",
+    "error": "Konnte nicht nach Updates suchen",
+    "checkHint": "Klicken Sie auf «Nach Updates suchen» zum Prüfen",
+    "toastAvailableTitle": "Update verfügbar",
+    "toastAvailableText": "Version {v} wird heruntergeladen…",
+    "toastReadyTitle": "Bereit zur Installation",
+    "toastReadyText": "Version {v} wurde heruntergeladen"
   },
   "history": {
     "title": "Verlauf",
@@ -270,7 +280,8 @@
     "unknownError": "unbekannter Fehler",
     "save": "💾 Speichern",
     "cancel": "Abbrechen",
-    "currentVersion": "Aktuelle Version:"
+    "currentVersion": "Aktuelle Version:",
+    "saved": "✓ Gespeichert"
   },
   "manual": {
     "title": "Manuelle Aufnahme starten",
@@ -293,7 +304,12 @@
     "confirmStop": "Ja, stoppen",
     "confirmCancel": "Aufnahme fortsetzen",
     "defaultName": "Aufnahme",
-    "savingAs": "Gespeichert als:"
+    "savingAs": "Gespeichert als:",
+    "disconnected": "Audioquelle während der Aufnahme getrennt",
+    "sigClipping": "CLIPPING",
+    "sigHigh": "HOCH",
+    "sigGood": "GUT",
+    "sigWeak": "SCHWACH"
   },
   "wizard": {
     "step1": "Audioquelle",
@@ -312,5 +328,9 @@
     "finish": "✓ Fertig — App aktivieren",
     "usbHint": "USB-Mixer anschließen, wenn er hier nicht erscheint",
     "filenameExample": "Dateinamen-Beispiel:"
+  },
+  "time": {
+    "yr": "J", "mo": "Mo", "wk": "W", "d": "T", "h": "h", "m": "m", "s": "s",
+    "years": "Jahre", "months": "Monate", "weeks": "Wochen", "days": "Tage"
   }
 }

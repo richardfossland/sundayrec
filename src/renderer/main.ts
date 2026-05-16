@@ -27,12 +27,15 @@ declare global {
       getHistory:          () => Promise<unknown[]>
       deleteHistoryEntry:  (ts: number) => Promise<void>
       clearHistory:        () => Promise<void>
+      pruneHistory:        () => Promise<number>
       getDiskSpace:        () => Promise<{ freeBytes: number | null }>
-      startRecordingNow:   (opts: unknown) => Promise<{ ok?: boolean; error?: string } | boolean>
+      startRecordingNow:   (opts: unknown) => Promise<{ ok?: boolean; error?: string }>
       stopRecordingNow:    () => Promise<boolean>
       pickFolder:          () => Promise<string | null>
       openFolder:          (p: string) => Promise<void>
       revealFile:          (p: string) => Promise<void>
+      clearSmtpPassword:   () => Promise<boolean>
+      getAppVersion:       () => Promise<string>
       checkForUpdates:     () => Promise<void>
       installUpdate:       () => void
       scheduleOsWakes:      () => Promise<unknown>
@@ -112,6 +115,9 @@ async function init(): Promise<void> {
   setupGeneralPage()
   setupRecording()
   setupClipReset()
+
+  // Fetch app version from main (sandbox-safe — no fs/path in preload)
+  window.appVersion = await window.api.getAppVersion().catch(() => '—')
 
   // Load settings, which triggers locale + UI apply
   await loadSettings()

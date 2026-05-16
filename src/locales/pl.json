@@ -49,7 +49,17 @@
   },
   "update": {
     "available": "Nowa wersja {v} dostępna — pobieranie…",
-    "downloaded": "Wersja {v} gotowa — zostanie zainstalowana przy następnym uruchomieniu."
+    "downloaded": "Wersja {v} gotowa — zostanie zainstalowana przy następnym uruchomieniu.",
+    "checking": "Sprawdzanie aktualizacji…",
+    "upToDate": "Masz najnowszą wersję",
+    "downloading": "Pobieranie… {pct}%",
+    "readyInstall": "Wersja {v} gotowa — uruchom ponownie, aby zainstalować",
+    "error": "Nie można sprawdzić aktualizacji",
+    "checkHint": "Kliknij «Sprawdź aktualizacje», aby sprawdzić",
+    "toastAvailableTitle": "Dostępna aktualizacja",
+    "toastAvailableText": "Wersja {v} jest pobierana…",
+    "toastReadyTitle": "Gotowe do instalacji",
+    "toastReadyText": "Wersja {v} została pobrana"
   },
   "history": {
     "title": "Historia",
@@ -270,7 +280,8 @@
     "unknownError": "nieznany błąd",
     "save": "💾 Zapisz",
     "cancel": "Anuluj",
-    "currentVersion": "Aktualna wersja:"
+    "currentVersion": "Aktualna wersja:",
+    "saved": "✓ Zapisano"
   },
   "manual": {
     "title": "Rozpocznij nagrywanie ręczne",
@@ -293,7 +304,12 @@
     "confirmStop": "Tak, zatrzymaj",
     "confirmCancel": "Kontynuuj nagrywanie",
     "defaultName": "Nagranie",
-    "savingAs": "Zapisywanie jako:"
+    "savingAs": "Zapisywanie jako:",
+    "disconnected": "Źródło dźwięku zostało odłączone podczas nagrywania",
+    "sigClipping": "CLIPPING",
+    "sigHigh": "WYSOKIE",
+    "sigGood": "DOBRE",
+    "sigWeak": "SŁABE"
   },
   "wizard": {
     "step1": "Źródło dźwięku",
@@ -312,5 +328,9 @@
     "finish": "✓ Gotowe — aktywuj aplikację",
     "usbHint": "Podłącz mikser USB jeśli nie pojawia się tutaj",
     "filenameExample": "Przykład nazwy pliku:"
+  },
+  "time": {
+    "yr": "l", "mo": "mies", "wk": "tyg", "d": "d", "h": "g", "m": "min", "s": "s",
+    "years": "lat", "months": "miesięcy", "weeks": "tygodni", "days": "dni"
   }
 }

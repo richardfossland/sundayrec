@@ -49,7 +49,17 @@
   },
   "update": {
     "available": "Ny versjon {v} er tilgjengelig — laster ned…",
-    "downloaded": "Versjon {v} er klar — installeres ved neste omstart."
+    "downloaded": "Versjon {v} er klar — installeres ved neste omstart.",
+    "checking": "Sjekker etter oppdateringer…",
+    "upToDate": "Du er oppdatert",
+    "downloading": "Laster ned… {pct}%",
+    "readyInstall": "Versjon {v} er klar — start på nytt for å installere",
+    "error": "Kunne ikke sjekke for oppdateringer",
+    "checkHint": "Klikk «Se etter oppdateringer» for å sjekke",
+    "toastAvailableTitle": "Oppdatering tilgjengelig",
+    "toastAvailableText": "Versjon {v} lastes ned…",
+    "toastReadyTitle": "Klar for installasjon",
+    "toastReadyText": "Versjon {v} er lastet ned"
   },
   "history": {
     "title": "Historikk",
@@ -270,7 +280,8 @@
     "unknownError": "ukjent feil",
     "save": "💾 Lagre",
     "cancel": "Avbryt",
-    "currentVersion": "Nåværende versjon:"
+    "currentVersion": "Nåværende versjon:",
+    "saved": "✓ Lagret"
   },
   "manual": {
     "title": "Start manuelt opptak",
@@ -293,7 +304,12 @@
     "confirmStop": "Ja, stopp",
     "confirmCancel": "Fortsett opptak",
     "defaultName": "Opptak",
-    "savingAs": "Lagres som:"
+    "savingAs": "Lagres som:",
+    "disconnected": "Lydkilden ble koblet fra under opptak",
+    "sigClipping": "KLIPPING",
+    "sigHigh": "HØYT",
+    "sigGood": "GOD",
+    "sigWeak": "SVAK"
   },
   "wizard": {
     "step1": "Lydkilde",
@@ -312,5 +328,9 @@
     "finish": "✓ Ferdig — aktiver programmet",
     "usbHint": "Koble til USB-mikseren om den ikke vises her",
     "filenameExample": "Eksempel på filnavn:"
+  },
+  "time": {
+    "yr": "år", "mo": "mnd.", "wk": "u", "d": "d", "h": "t", "m": "m", "s": "s",
+    "years": "år", "months": "måneder", "weeks": "uker", "days": "dager"
   }
 }

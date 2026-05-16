@@ -2,7 +2,7 @@ import { t } from '../i18n'
 import { settings, patchSettings } from '../state'
 import { flashSaved, setVal, setRadio, updateSliderLabel } from '../helpers'
 import { getAudioDevices, detectDeviceChannels, buildInputRouter } from '../audio/capture'
-import type { DeviceChannels } from '../../types'
+import type { DeviceChannels, ChannelMode } from '../../types'
 
 let monitorStream: MediaStream   | null = null
 let monitorCtx:    AudioContext  | null = null
@@ -94,7 +94,7 @@ async function saveAudioSettings(): Promise<void> {
     deviceId,
     deviceChannels,
     inputVolume:    +((document.getElementById('input-volume')    as HTMLInputElement | null)?.value ?? 80),
-    channels:       ((document.querySelector('input[name="channels"]:checked') as HTMLInputElement | null)?.value ?? 'stereo') as any,
+    channels:       ((document.querySelector('input[name="channels"]:checked') as HTMLInputElement | null)?.value ?? 'stereo') as ChannelMode,
     sampleRate:     +((document.getElementById('sample-rate')    as HTMLInputElement | null)?.value ?? 48000),
     eqBass:         +((document.getElementById('eq-bass')         as HTMLInputElement | null)?.value ?? 0),
     eqMid:          +((document.getElementById('eq-mid')          as HTMLInputElement | null)?.value ?? 0),
@@ -165,9 +165,15 @@ function updateChannelSelector(count: number, chL: number, chR: number): void {
   const selL = document.getElementById('channel-select-l') as HTMLSelectElement | null
   const selR = document.getElementById('channel-select-r') as HTMLSelectElement | null
   if (!selL || !selR) return
-  const opts = Array.from({ length: count }, (_, i) =>
-    `<option value="${i}">Kanal ${i + 1}</option>`).join('')
-  selL.innerHTML = opts; selR.innerHTML = opts
+  const makeOpts = (): HTMLOptionElement[] =>
+    Array.from({ length: count }, (_, i) => {
+      const opt = document.createElement('option')
+      opt.value = String(i)
+      opt.textContent = `Kanal ${i + 1}`
+      return opt
+    })
+  selL.replaceChildren(...makeOpts())
+  selR.replaceChildren(...makeOpts())
   selL.value = String(chL); selR.value = String(chR)
 }
 

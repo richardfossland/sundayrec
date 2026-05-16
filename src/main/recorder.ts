@@ -21,8 +21,18 @@ import ffmpeg from 'fluent-ffmpeg'
 import * as store from './store'
 import * as tray from './tray'
 import * as mailer from './mailer'
-import { buildFilename, formatDuration, codecFor, localDateStr } from './recorder-utils'
+import { localDateStr, buildFilename, codecFor, formatDuration } from './recorder-utils'
 import type { RecordingOpts, RecordingEntry, Settings } from '../types'
+
+export const NOTIFY_LABELS: Record<string, { done: string; err: string }> = {
+  no: { done: 'Fullført',      err: 'SundayRec — Feil'    },
+  en: { done: 'Completed',     err: 'SundayRec — Error'   },
+  de: { done: 'Abgeschlossen', err: 'SundayRec — Fehler'  },
+  sv: { done: 'Klar',          err: 'SundayRec — Fel'     },
+  da: { done: 'Fuldført',      err: 'SundayRec — Fejl'    },
+  pl: { done: 'Ukończono',     err: 'SundayRec — Błąd'    },
+  fr: { done: 'Terminé',       err: 'SundayRec — Erreur'  },
+}
 
 let ffmpegPath = ffmpegStatic as string
 if (app.isPackaged) {
@@ -43,7 +53,17 @@ interface Session {
 
 let activeSession: Session | null = null
 let recBlocker: number | null = null
-let stopInProgress = false
+let idleCallback: (() => void) | null = null
+
+export function onceIdle(cb: () => void): void {
+  idleCallback = cb
+}
+
+function notifyIdle(): void {
+  const cb = idleCallback
+  idleCallback = null
+  cb?.()
+}
 
 export function init(): void {
   ipcMain.on('audio-chunk', (_, chunk: ArrayBuffer) => {
@@ -85,19 +105,18 @@ export function startSession(settings: RecordingOpts, win: BrowserWindow): { ok:
 }
 
 export function stopSession(): void {
-  if (!activeSession || stopInProgress) return
-  stopInProgress = true
+  if (!activeSession) return
   const { win, confirmed } = activeSession
 
   if (!confirmed) {
     const session = activeSession
     activeSession = null
-    stopInProgress = false
     if (session.maxTimer) clearTimeout(session.maxTimer)
     session.writeStream.end()
-    setTimeout(() => fs.unlink(session.tempPath, () => {}), 100)
+    setTimeout(() => unlinkTemp(session.tempPath), 100)
     store.set('activeRecovery', null)
     stopRecBlocker()
+    notifyIdle()
     return
   }
 
@@ -115,7 +134,6 @@ function finishSession(): void {
   if (!activeSession) return
   const session = activeSession
   activeSession = null
-  stopInProgress = false
   if (session.maxTimer) clearTimeout(session.maxTimer)
   stopRecBlocker()
   store.set('activeRecovery', null)
@@ -126,17 +144,17 @@ async function uniquePath(p: string): Promise<string> {
   try { await fs.promises.access(p) } catch { return p }
   const ext  = path.extname(p)
   const base = p.slice(0, -ext.length)
-  for (let i = 2; i <= 999; i++) {
+  for (let i = 2; i < 10000; i++) {
     const candidate = `${base}_${i}${ext}`
     try { await fs.promises.access(candidate) } catch { return candidate }
   }
-  throw new Error(`uniquePath: too many files with same base name: ${path.basename(base)}`)
+  return `${base}_${Date.now()}${ext}`
 }
 
 async function convertAndSave(session: Session): Promise<void> {
   const { settings, tempPath, startTime } = session
   const durationSec = startTime ? Math.round((Date.now() - startTime) / 1000) : 0
-  const filename    = buildFilename(settings)
+  const filename    = buildFilename(settings, startTime ?? undefined)
   const outputPath  = await uniquePath(path.join(settings.saveFolder || defaultFolder(), filename))
 
   fs.mkdirSync(path.dirname(outputPath), { recursive: true })
@@ -153,10 +171,11 @@ async function convertAndSave(session: Session): Promise<void> {
   cmd
     .output(outputPath)
     .on('end', () => {
-      fs.unlink(tempPath, () => {})
+      unlinkTemp(tempPath)
+      const recDate = new Date(session.startTime ?? Date.now())
       const entry: RecordingEntry = {
-        date:      new Date(session.startTime ?? Date.now()).toISOString().slice(0, 10),
-        startTime: new Date(session.startTime ?? Date.now()).toTimeString().slice(0, 5),
+        date:      localDateStr(recDate),
+        startTime: recDate.toTimeString().slice(0, 5),
         duration:  formatDuration(durationSec),
         filename:  path.basename(outputPath),
         path:      outputPath,
@@ -165,12 +184,16 @@ async function convertAndSave(session: Session): Promise<void> {
       store.addHistory(entry)
       session.win.webContents.send('recording-finished', entry)
       const allSettings = store.getAll()
-      if (allSettings.notifyStop !== false) notify('SundayRec', `Fullført: ${filename}`)
+      if (allSettings.notifyStop !== false) {
+        const nl = NOTIFY_LABELS[allSettings.language ?? 'no'] ?? NOTIFY_LABELS.no
+        notify('SundayRec', `${nl.done}: ${filename}`)
+      }
+      notifyIdle()
     })
     .on('error', (err) => {
-      fs.unlink(tempPath, () => {})
+      unlinkTemp(tempPath)
       const entry: RecordingEntry = {
-        date:      new Date().toISOString().slice(0, 10),
+        date:      localDateStr(new Date()),
         startTime: new Date(session.startTime ?? Date.now()).toTimeString().slice(0, 5),
         duration:  '—',
         filename:  '—',
@@ -181,9 +204,11 @@ async function convertAndSave(session: Session): Promise<void> {
       session.win.webContents.send('recording-error', { error: err.message })
       tray.setRecording(false)
       tray.setError(true)
-      notify('SundayRec — Feil', err.message)
       const allSettings = store.getAll()
-      if (allSettings.emailOnError) mailer.sendError(allSettings, err.message)
+      const nl = NOTIFY_LABELS[allSettings.language ?? 'no'] ?? NOTIFY_LABELS.no
+      notify(nl.err, err.message)
+      if (allSettings.emailOnError) mailer.sendError(allSettings, store.getSmtpPassword(), err.message)
+      notifyIdle()
     })
     .run()
 }
@@ -198,19 +223,20 @@ export function recoverCrashedSession(): void {
 
   const stat = fs.statSync(recovery.tempPath)
   if (stat.size < 10000) {
-    fs.unlink(recovery.tempPath, () => {})
+    unlinkTemp(recovery.tempPath)
     return
   }
 
   const s = store.getAll()
   const fmt = s.format ?? 'mp3'
   const folder = s.saveFolder ?? defaultFolder()
-  const dateStr = new Date().toISOString().slice(0, 10)
+  const dateStr = localDateStr(new Date())
   let outputPath = path.join(folder, `recovered_${dateStr}.${fmt}`)
-  let suffix = 2
-  while (fs.existsSync(outputPath)) {
+  for (let suffix = 2; fs.existsSync(outputPath) && suffix < 10000; suffix++) {
     outputPath = path.join(folder, `recovered_${dateStr}_${suffix}.${fmt}`)
-    suffix++
+  }
+  if (fs.existsSync(outputPath)) {
+    outputPath = path.join(folder, `recovered_${dateStr}_${Date.now()}.${fmt}`)
   }
   fs.mkdirSync(path.dirname(outputPath), { recursive: true })
 
@@ -227,19 +253,26 @@ export function recoverCrashedSession(): void {
   cmd
     .output(outputPath)
     .on('end', () => {
-      fs.unlink(recovery.tempPath, () => {})
+      unlinkTemp(recovery.tempPath)
       const durationSec = Math.round((Date.now() - recovery.startTime) / 1000)
+      const recDate = new Date(recovery.startTime)
       store.addHistory({
-        date:      new Date(recovery.startTime).toISOString().slice(0, 10),
-        startTime: new Date(recovery.startTime).toTimeString().slice(0, 5),
+        date:      localDateStr(recDate),
+        startTime: recDate.toTimeString().slice(0, 5),
         duration:  formatDuration(durationSec),
         filename:  path.basename(outputPath),
         path:      outputPath,
         status:    'ok'
       })
     })
-    .on('error', () => fs.unlink(recovery.tempPath, () => {}))
+    .on('error', () => unlinkTemp(recovery.tempPath))
     .run()
+}
+
+function unlinkTemp(p: string): void {
+  fs.promises.unlink(p).catch(err => {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') console.error('Failed to delete temp file:', err)
+  })
 }
 
 function notify(title: string, body: string): void {

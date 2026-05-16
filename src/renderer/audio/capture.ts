@@ -16,6 +16,9 @@ export interface CaptureSession {
   recBytes:      number
   vuAnalyserL:   AnalyserNode
   vuAnalyserR:   AnalyserNode
+  inputRouter:   AudioNode   // exposed for USB hot-swap
+  gain:          GainNode    // exposed for USB hot-swap
+  opts:          RecordingOpts
 }
 
 export function buildInputRouter(
@@ -161,13 +164,48 @@ export async function startCapture(opts: RecordingOpts): Promise<CaptureSession>
   mediaRecorder.ondataavailable = (e) => {
     if (e.data.size > 0) {
       recBytes += e.data.size
-      e.data.arrayBuffer().then(buf => window.api.sendAudioChunk(buf))
+      e.data.arrayBuffer()
+        .then(buf => window.api.sendAudioChunk(buf))
+        .catch(err => console.error('audio chunk dropped:', err))
     }
   }
 
   mediaRecorder.start(1000)
 
-  return { stream, audioCtx, mediaRecorder, recStartTime, recBytes, vuAnalyserL, vuAnalyserR }
+  return { stream, audioCtx, mediaRecorder, recStartTime, recBytes, vuAnalyserL, vuAnalyserR, inputRouter: inputNode, gain, opts }
+}
+
+export async function reconnectStream(session: CaptureSession): Promise<boolean> {
+  const { opts, audioCtx, inputRouter, gain } = session
+  const realDeviceId = opts.deviceId && opts.deviceId !== 'default' && opts.deviceId !== ''
+    ? opts.deviceId : null
+  const chL = opts.channelL ?? 0
+  const chR = opts.channelR ?? 1
+  const isMonoChannel = opts.channels === 'monoL' || opts.channels === 'monoR'
+  const neededCh = Math.max(
+    opts.channels === 'stereo' || isMonoChannel ? 2 : 1,
+    chL + 1, chR + 1
+  )
+  try {
+    const newStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        ...(realDeviceId ? { deviceId: { exact: realDeviceId } } : {}),
+        channelCount: { ideal: neededCh },
+        echoCancellation: false, noiseSuppression: false, autoGainControl: false
+      },
+      video: false
+    })
+    const newSrc    = audioCtx.createMediaStreamSource(newStream)
+    const newRouter = buildInputRouter(audioCtx, newSrc, newStream, chL, chR)
+    inputRouter.disconnect()
+    newRouter.connect(gain)
+    session.stream.getTracks().forEach(t => { t.onended = null; t.stop() })
+    session.stream      = newStream
+    session.inputRouter = newRouter
+    return true
+  } catch {
+    return false
+  }
 }
 
 export async function stopCapture(session: CaptureSession): Promise<void> {

@@ -1,14 +1,4 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import path from 'path'
-import fs from 'fs'
-
-let appVersion = '—'
-try {
-  const pkgPath = path.join(__dirname, '../../package.json')
-  appVersion = JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version || '—'
-} catch {}
-
-contextBridge.exposeInMainWorld('appVersion', appVersion)
 
 const ALLOWED_CHANNELS = [
   'schedule-start-recording',
@@ -42,6 +32,7 @@ contextBridge.exposeInMainWorld('api', {
   getHistory:          ()    => ipcRenderer.invoke('get-history'),
   deleteHistoryEntry:  (ts: number) => ipcRenderer.invoke('delete-history-entry', ts),
   clearHistory:        ()    => ipcRenderer.invoke('clear-history'),
+  pruneHistory:        ()    => ipcRenderer.invoke('prune-history'),
 
   getDiskSpace:   ()         => ipcRenderer.invoke('get-disk-space'),
 
@@ -51,6 +42,9 @@ contextBridge.exposeInMainWorld('api', {
   pickFolder:     ()         => ipcRenderer.invoke('pick-folder'),
   openFolder:     (p: string) => ipcRenderer.invoke('open-folder', p),
   revealFile:     (p: string) => ipcRenderer.invoke('reveal-file', p),
+
+  clearSmtpPassword: ()      => ipcRenderer.invoke('clear-smtp-password'),
+  getAppVersion:    ()       => ipcRenderer.invoke('get-app-version'),
 
   checkForUpdates: ()        => ipcRenderer.invoke('check-for-updates'),
   installUpdate:   ()        => ipcRenderer.invoke('install-update'),

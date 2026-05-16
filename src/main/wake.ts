@@ -1,6 +1,9 @@
 import { powerSaveBlocker } from 'electron'
-import { execFileSync, execSync } from 'child_process'
+import { execFileSync, execFile } from 'child_process'
+import { promisify } from 'util'
 import type { BrowserWindow } from 'electron'
+
+const execFileAsync = promisify(execFile)
 import * as store from './store'
 import type { WakeResult } from '../types'
 
@@ -67,12 +70,12 @@ function scheduleMac(wakePoints: Date[], allowAdmin: boolean): WakeResult {
   }
 }
 
-function scheduleWindows(wakePoints: Date[]): WakeResult {
+async function scheduleWindows(wakePoints: Date[]): Promise<WakeResult> {
   try {
-    execSync(
-      `powershell -NoProfile -Command "Get-ScheduledTask -TaskPath '\\\\SundayRec\\\\*' -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false"`,
-      { stdio: 'pipe', timeout: 10000 }
-    )
+    await execFileAsync('powershell', [
+      '-NoProfile', '-Command',
+      `Get-ScheduledTask -TaskPath '\\SundayRec\\*' -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false`
+    ], { timeout: 10000 })
   } catch {}
 
   if (!wakePoints.length) return { ok: true, count: 0 }
@@ -89,8 +92,8 @@ function scheduleWindows(wakePoints: Date[]): WakeResult {
   }).join('; ')
 
   try {
-    execSync(`powershell -NoProfile -NonInteractive -Command "${taskDefs}"`, {
-      stdio: 'pipe', timeout: 20000
+    await execFileAsync('powershell', ['-NoProfile', '-NonInteractive', '-Command', taskDefs], {
+      timeout: 20000
     })
     return { ok: true, count: wakePoints.length }
   } catch (e) {
@@ -98,7 +101,7 @@ function scheduleWindows(wakePoints: Date[]): WakeResult {
   }
 }
 
-function scheduleOsWakes(upcomingDates: Date[], allowAdmin: boolean): WakeResult {
+async function scheduleOsWakes(upcomingDates: Date[], allowAdmin: boolean): Promise<WakeResult> {
   if (!store.get('wakeFromSleep')) return { ok: false, reason: 'disabled' }
 
   const now = new Date()
@@ -111,9 +114,9 @@ function scheduleOsWakes(upcomingDates: Date[], allowAdmin: boolean): WakeResult
   return { ok: false, reason: 'unsupported' }
 }
 
-export function reschedule(upcomingDates: Date[], win?: BrowserWindow, allowAdmin = false): WakeResult {
+export async function reschedule(upcomingDates: Date[], win?: BrowserWindow, allowAdmin = false): Promise<WakeResult> {
   updateBlocker(upcomingDates)
-  const result = scheduleOsWakes(upcomingDates, allowAdmin)
+  const result = await scheduleOsWakes(upcomingDates, allowAdmin)
   win?.webContents.send('wake-schedule-result', result)
   return result
 }

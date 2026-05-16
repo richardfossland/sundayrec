@@ -49,7 +49,7 @@ export function renderCalendar(): void {
   const lbl      = document.getElementById('cal-month-label')
   if (lbl) lbl.textContent = `${months[calMonth]} ${calYear}`
   const wd = document.getElementById('cal-weekdays')
-  if (wd) wd.innerHTML = weekdays.map(d => `<span>${d}</span>`).join('')
+  if (wd) wd.innerHTML = weekdays.map(d => `<span>${escHtml(d)}</span>`).join('')
 
   const grid = document.getElementById('cal-grid')
   if (!grid) return

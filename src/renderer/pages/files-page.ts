@@ -1,4 +1,5 @@
 import { settings, patchSettings } from '../state'
+import type { FileFormat, FilenamePattern } from '../../types'
 import { flashSaved, setVal, setRadio, isoDate } from '../helpers'
 import { getChurchHolidays } from '../../shared/church-calendar'
 
@@ -72,10 +73,10 @@ async function saveFilesSettings(): Promise<void> {
   const autoDelDays = document.getElementById('auto-delete-days') as HTMLInputElement | null
   patchSettings({
     saveFolder:      (document.getElementById('save-folder') as HTMLInputElement | null)?.value ?? '',
-    filenamePattern: (document.querySelector('input[name="pattern"]:checked') as HTMLInputElement | null)?.value as any ?? 'date',
-    format:          (document.querySelector('input[name="format"]:checked')  as HTMLInputElement | null)?.value as any ?? 'mp3',
+    filenamePattern: ((document.querySelector('input[name="pattern"]:checked') as HTMLInputElement | null)?.value ?? 'date') as FilenamePattern,
+    format:          ((document.querySelector('input[name="format"]:checked')  as HTMLInputElement | null)?.value ?? 'mp3') as FileFormat,
     bitrate:         (document.querySelector('input[name="bitrate"]:checked') as HTMLInputElement | null)?.value ?? '192',
-    autoDeleteDays:  autoDelEl?.checked ? (+autoDelDays?.value || 90) : 0
+    autoDeleteDays:  autoDelEl?.checked ? (+(autoDelDays?.value ?? '') || 90) : 0
   })
   await window.api.saveSettings(settings)
   flashSaved(document.getElementById('btn-files-save'))

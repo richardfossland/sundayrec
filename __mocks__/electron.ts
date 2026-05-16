@@ -1,11 +1,30 @@
-export const app = {
-  getPath: (name: string) => `/mock/home/${name}`,
-  getVersion: () => '3.4.0',
-  isPackaged: false,
+export const safeStorage = {
+  isEncryptionAvailable: jest.fn(() => false),
+  encryptString:  jest.fn((s: string) => Buffer.from(`enc:${s}`)),
+  decryptString:  jest.fn((b: Buffer) => b.toString().replace(/^enc:/, ''))
 }
-export const ipcMain = { handle: jest.fn(), on: jest.fn() }
-export const Notification = class { static isSupported = () => false; show = jest.fn() }
-export const powerSaveBlocker = { start: jest.fn(() => 1), stop: jest.fn(), isStarted: jest.fn(() => false) }
+
+export const app = {
+  getPath:    jest.fn(() => '/tmp/sundayrec-test'),
+  getVersion: jest.fn(() => '3.5.0'),
+  isPackaged: false
+}
+
+export const ipcMain = {
+  handle: jest.fn(),
+  on:     jest.fn()
+}
+
+export const powerSaveBlocker = {
+  start:     jest.fn(() => 1),
+  stop:      jest.fn(),
+  isStarted: jest.fn(() => false)
+}
+
+export const Notification = {
+  isSupported: jest.fn(() => false)
+}
+
 export const BrowserWindow = jest.fn()
 export const dialog = { showMessageBox: jest.fn(), showOpenDialog: jest.fn() }
 export const shell = { openPath: jest.fn(), showItemInFolder: jest.fn() }
