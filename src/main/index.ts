@@ -9,7 +9,7 @@ import * as tray from './tray'
 import * as updater from './updater'
 import * as mailer from './mailer'
 import * as wake from './wake'
-import { execFileSync, execFile } from 'child_process'
+import { execFile } from 'child_process'
 import { promisify } from 'util'
 
 const execFileAsync = promisify(execFile)
@@ -243,8 +243,8 @@ function setupIPC(): void {
       let folder = store.get('saveFolder') ?? app.getPath('documents')
       if (!fs.existsSync(folder)) folder = app.getPath('documents')
       if (process.platform === 'darwin' || process.platform === 'linux') {
-        const raw  = execFileSync('df', ['-Pk', folder]).toString()
-        const cols = raw.trim().split('\n')[1]?.trim().split(/\s+/)
+        const { stdout } = await execFileAsync('df', ['-Pk', folder], { timeout: 5000 })
+        const cols = stdout.trim().split('\n')[1]?.trim().split(/\s+/)
         const free = cols ? parseInt(cols[3]) : NaN
         if (!isNaN(free)) return { freeBytes: free * 1024 }
       }
