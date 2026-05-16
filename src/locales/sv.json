@@ -137,7 +137,11 @@
     "noSlots": "Inga tidsluckor tillagda ännu.",
     "errNoDays": "Välj minst en dag.",
     "errTimes": "Starttid måste vara före stopptid.",
-    "dayLabel": "DAG"
+    "dayLabel": "DAG",
+    "reminderTitle": "Påminnelse innan inspelning",
+    "reminderDesc": "Systemavisering N minuter innan en schemalagd inspelning startar",
+    "manualMaxTitle": "Maxlängd — manuella inspelningar",
+    "manualMaxDesc": "Stoppar automatiskt efter angiven tid — undviker stora filer om du glömmer stoppa"
   },
   "calendar": {
     "title": "Kyrkokalender",

@@ -14,9 +14,10 @@ import { loadRecentHistory } from './home'
 import type { RecordingOpts } from '../../types'
 
 let activeSession: CaptureSession | null = null
-let silenceInterval: ReturnType<typeof setInterval> | null = null
-let splitTimer:      ReturnType<typeof setTimeout>  | null = null
-let recTimerIval:    ReturnType<typeof setInterval> | null = null
+let silenceInterval:   ReturnType<typeof setInterval> | null = null
+let splitTimer:        ReturnType<typeof setTimeout>  | null = null
+let recTimerIval:      ReturnType<typeof setInterval> | null = null
+let signalCheckTimer:  ReturnType<typeof setTimeout>  | null = null
 let autoRestartOpts: RecordingOpts | null = null
 export let isRecording = false
 
@@ -141,7 +142,8 @@ async function handleManualStart(): Promise<void> {
     deviceId,
     customName:    nameEl?.value.trim() ?? '',
     channelL:      devChannels?.channelL ?? 0,
-    channelR:      devChannels?.channelR ?? 1
+    channelR:      devChannels?.channelR ?? 1,
+    maxMinutes:    settings.manualMaxMinutes || undefined
   }
   const mm = document.getElementById('modal-manual'); if (mm) mm.style.display = 'none'
 
@@ -251,6 +253,17 @@ async function startMediaRecorder(opts: RecordingOpts): Promise<void> {
   window.api.notifyStarted({ name: opts.customName ?? opts.overrideName ?? t('recording.defaultName', 'Opptak') })
   window.api.confirmStart({ name: opts.customName ?? t('recording.defaultName', 'Opptak'), startTime: activeSession.recStartTime })
 
+  // Signal check — 15 s after start: if average frequency energy is near zero, the input is likely silent/off
+  const analyserRef = activeSession.vuAnalyserL
+  signalCheckTimer = setTimeout(() => {
+    signalCheckTimer = null
+    if (!isRecording || !analyserRef) return
+    const buf = new Uint8Array(analyserRef.frequencyBinCount)
+    analyserRef.getByteFrequencyData(buf)
+    const avg = buf.reduce((a, b) => a + b, 0) / buf.length
+    if (avg < 3) window.api.notifyWeakSignal()
+  }, 15000)
+
   // Timer display
   recTimerIval = setInterval(() => {
     if (!activeSession) return
@@ -269,9 +282,10 @@ async function stopMediaRecorder(): Promise<void> {
   try {
     stopVuState(recVu)
   } finally {
-    if (silenceInterval) { clearInterval(silenceInterval); silenceInterval = null }
-    if (splitTimer)      { clearTimeout(splitTimer);       splitTimer      = null }
-    if (recTimerIval)    { clearInterval(recTimerIval);    recTimerIval    = null }
+    if (silenceInterval)  { clearInterval(silenceInterval);  silenceInterval  = null }
+    if (splitTimer)       { clearTimeout(splitTimer);        splitTimer       = null }
+    if (recTimerIval)     { clearInterval(recTimerIval);     recTimerIval     = null }
+    if (signalCheckTimer) { clearTimeout(signalCheckTimer);  signalCheckTimer = null }
   }
 
   if (!activeSession) return

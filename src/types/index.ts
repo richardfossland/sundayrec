@@ -78,6 +78,8 @@ export interface Settings {
   stopOnSilence: boolean
   splitMinutes: number     // 0 = off; split every N minutes from recording start
   splitHourly?: boolean    // deprecated — migrated to splitMinutes:60 on first read
+  reminderMinutes: number  // 0 = off; system notification N min before scheduled recording
+  manualMaxMinutes: number // 0 = off; auto-stop manual recordings after N minutes
 
   // System behaviour
   launchAtLogin: boolean

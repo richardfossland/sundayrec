@@ -137,7 +137,11 @@
     "noSlots": "Noch keine Zeitfenster hinzugefügt.",
     "errNoDays": "Mindestens einen Tag auswählen.",
     "errTimes": "Startzeit muss vor Endzeit liegen.",
-    "dayLabel": "TAG"
+    "dayLabel": "TAG",
+    "reminderTitle": "Erinnerung vor Aufnahme",
+    "reminderDesc": "Systembenachrichtigung N Minuten vor Beginn einer geplanten Aufnahme",
+    "manualMaxTitle": "Maximale Dauer — manuelle Aufnahmen",
+    "manualMaxDesc": "Stoppt automatisch nach der eingestellten Zeit — verhindert riesige Dateien"
   },
   "calendar": {
     "title": "Kirchenkalender",

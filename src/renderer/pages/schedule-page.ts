@@ -49,10 +49,12 @@ export function setupSchedulePage(): void {
 }
 
 export function applyScheduleSettingsToUI(): void {
-  const wakeEl    = document.getElementById('opt-wake')    as HTMLInputElement | null
-  const protectEl = document.getElementById('opt-protect') as HTMLInputElement | null
-  const silenceEl = document.getElementById('opt-silence') as HTMLInputElement | null
-  const splitMinSel = document.getElementById('opt-split-minutes') as HTMLSelectElement | null
+  const wakeEl       = document.getElementById('opt-wake')             as HTMLInputElement  | null
+  const protectEl    = document.getElementById('opt-protect')          as HTMLInputElement  | null
+  const silenceEl    = document.getElementById('opt-silence')          as HTMLInputElement  | null
+  const splitMinSel  = document.getElementById('opt-split-minutes')    as HTMLSelectElement | null
+  const reminderSel  = document.getElementById('opt-reminder-minutes') as HTMLSelectElement | null
+  const manualMaxSel = document.getElementById('opt-manual-max')       as HTMLSelectElement | null
   if (wakeEl) {
     wakeEl.checked = !!settings.wakeFromSleep
     const wakeRow     = document.getElementById('wake-status-row')
@@ -60,22 +62,28 @@ export function applyScheduleSettingsToUI(): void {
     if (wakeRow)     wakeRow.style.display     = settings.wakeFromSleep ? 'flex'  : 'none'
     if (hibernateEl) hibernateEl.style.display = settings.wakeFromSleep ? 'block' : 'none'
   }
-  if (protectEl)   protectEl.checked   = settings.protectRecording !== false
-  if (silenceEl)   silenceEl.checked   = !!settings.stopOnSilence
-  if (splitMinSel) splitMinSel.value   = String(settings.splitMinutes ?? 0)
+  if (protectEl)    protectEl.checked   = settings.protectRecording !== false
+  if (silenceEl)    silenceEl.checked   = !!settings.stopOnSilence
+  if (splitMinSel)  splitMinSel.value   = String(settings.splitMinutes   ?? 0)
+  if (reminderSel)  reminderSel.value   = String(settings.reminderMinutes  ?? 0)
+  if (manualMaxSel) manualMaxSel.value  = String(settings.manualMaxMinutes ?? 0)
   renderSlotsList()
 }
 
 async function saveScheduleSettings(): Promise<void> {
-  const wakeEl      = document.getElementById('opt-wake')          as HTMLInputElement  | null
-  const protectEl   = document.getElementById('opt-protect')       as HTMLInputElement  | null
-  const silenceEl   = document.getElementById('opt-silence')       as HTMLInputElement  | null
-  const splitMinSel = document.getElementById('opt-split-minutes') as HTMLSelectElement | null
+  const wakeEl       = document.getElementById('opt-wake')             as HTMLInputElement  | null
+  const protectEl    = document.getElementById('opt-protect')          as HTMLInputElement  | null
+  const silenceEl    = document.getElementById('opt-silence')          as HTMLInputElement  | null
+  const splitMinSel  = document.getElementById('opt-split-minutes')    as HTMLSelectElement | null
+  const reminderSel  = document.getElementById('opt-reminder-minutes') as HTMLSelectElement | null
+  const manualMaxSel = document.getElementById('opt-manual-max')       as HTMLSelectElement | null
   patchSettings({
-    wakeFromSleep:    wakeEl?.checked ?? false,
-    protectRecording: protectEl?.checked ?? true,
-    stopOnSilence:    silenceEl?.checked ?? false,
-    splitMinutes:     parseInt(splitMinSel?.value ?? '0') || 0
+    wakeFromSleep:      wakeEl?.checked ?? false,
+    protectRecording:   protectEl?.checked ?? true,
+    stopOnSilence:      silenceEl?.checked ?? false,
+    splitMinutes:       parseInt(splitMinSel?.value  ?? '0') || 0,
+    reminderMinutes:    parseInt(reminderSel?.value  ?? '0') || 0,
+    manualMaxMinutes:   parseInt(manualMaxSel?.value ?? '0') || 0,
   })
   await window.api.saveSettings(settings)
   flashSaved(document.getElementById('btn-schedule-save'))

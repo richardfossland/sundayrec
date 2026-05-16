@@ -56,9 +56,10 @@ contextBridge.exposeInMainWorld('api', {
   confirmStart:   (data: unknown)    => ipcRenderer.send('recording-confirmed-start', data),
   chunksDone:     ()                 => ipcRenderer.send('recording-chunks-done'),
 
-  notifyStarted: (data: unknown) => ipcRenderer.send('recording-started', data),
-  notifyStopped: (entry: unknown) => ipcRenderer.send('recording-stopped', entry),
-  notifyError:   (data: unknown) => ipcRenderer.send('recording-error', data),
+  notifyStarted:      (data: unknown) => ipcRenderer.send('recording-started', data),
+  notifyStopped:      (entry: unknown) => ipcRenderer.send('recording-stopped', entry),
+  notifyError:        (data: unknown) => ipcRenderer.send('recording-error', data),
+  notifyWeakSignal:   () => ipcRenderer.send('weak-signal'),
 
   on: (channel: string, fn: (...args: unknown[]) => void) => {
     if (!ALLOWED_CHANNELS.includes(channel as AllowedChannel)) return

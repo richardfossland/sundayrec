@@ -1,6 +1,7 @@
 import schedule from 'node-schedule'
-import type { BrowserWindow } from 'electron'
+import { Notification } from 'electron'
 import * as store from './store'
+import type { BrowserWindow } from 'electron'
 import type { ScheduleSlot, SpecialRecording, RecordingOpts } from '../types'
 
 const jobs = new Map<string, schedule.Job>()
@@ -46,6 +47,8 @@ export function reschedule(): void {
   const slots    = store.get('slots')             ?? []
   const specials = store.get('specialRecordings') ?? []
 
+  const reminderMin = store.get('reminderMinutes') ?? 0
+
   slots.forEach((slot, idx) => {
     const [sh, sm] = (slot.start || '11:00').split(':').map(Number)
     const [eh, em] = (slot.stop  || '12:00').split(':').map(Number)
@@ -60,6 +63,17 @@ export function reschedule(): void {
       const stopRule = new schedule.RecurrenceRule()
       stopRule.dayOfWeek = jsDay; stopRule.hour = eh; stopRule.minute = em
       jobs.set(`slot-${idx}-${uiDay}-stop`, schedule.scheduleJob(stopRule, () => triggerStop()))
+
+      if (reminderMin > 0) {
+        const totalMin = sh * 60 + sm - reminderMin
+        const normMin  = ((totalMin % 1440) + 1440) % 1440
+        const remH = Math.floor(normMin / 60)
+        const remM = normMin % 60
+        const remJsDay = totalMin < 0 ? ((jsDay + 6) % 7) : jsDay
+        const remRule = new schedule.RecurrenceRule()
+        remRule.dayOfWeek = remJsDay; remRule.hour = remH; remRule.minute = remM
+        jobs.set(`slot-${idx}-${uiDay}-reminder`, schedule.scheduleJob(remRule, () => triggerReminder(reminderMin)))
+      }
     })
   })
 
@@ -71,6 +85,12 @@ export function reschedule(): void {
     jobs.set(`special-${idx}-stop`, schedule.scheduleJob(stopDate, () => triggerStop()))
     if (startDate >= new Date()) {
       jobs.set(`special-${idx}-start`, schedule.scheduleJob(startDate, () => triggerStart(special, special.name)))
+      if (reminderMin > 0) {
+        const remDate = new Date(startDate.getTime() - reminderMin * 60000)
+        if (remDate > new Date()) {
+          jobs.set(`special-${idx}-reminder`, schedule.scheduleJob(remDate, () => triggerReminder(reminderMin)))
+        }
+      }
     }
   })
 }
@@ -132,6 +152,23 @@ function triggerStart(slot: ScheduleSlot | SpecialRecording, overrideName?: stri
 
 function triggerStop(): void {
   mainWindow?.webContents.send('schedule-stop-recording', {})
+}
+
+const REMINDER_LABELS: Record<string, string> = {
+  no: 'Opptak starter om {min} minutter',
+  en: 'Recording starts in {min} minutes',
+  de: 'Aufnahme beginnt in {min} Minuten',
+  sv: 'Inspelning börjar om {min} minuter',
+  da: 'Optagelse starter om {min} minutter',
+  pl: 'Nagranie rozpocznie się za {min} minut',
+  fr: 'Enregistrement dans {min} minutes',
+}
+
+function triggerReminder(minutesBefore: number): void {
+  const lang = store.get('language') ?? 'no'
+  const tpl  = REMINDER_LABELS[lang] ?? REMINDER_LABELS.no
+  const body = tpl.replace('{min}', String(minutesBefore))
+  if (Notification.isSupported()) new Notification({ title: 'SundayRec', body }).show()
 }
 
 export function getNextRecording(): { key: string; date: Date } | null {

@@ -137,7 +137,11 @@
     "noSlots": "Nie dodano jeszcze żadnych przedziałów.",
     "errNoDays": "Wybierz co najmniej jeden dzień.",
     "errTimes": "Czas rozpoczęcia musi być przed czasem zakończenia.",
-    "dayLabel": "DZIEŃ"
+    "dayLabel": "DZIEŃ",
+    "reminderTitle": "Przypomnienie przed nagraniem",
+    "reminderDesc": "Powiadomienie systemowe N minut przed zaplanowanym nagraniem",
+    "manualMaxTitle": "Maks. czas trwania — nagrania ręczne",
+    "manualMaxDesc": "Zatrzymuje się automatycznie po upływie czasu — zapobiega dużym plikom"
   },
   "calendar": {
     "title": "Kalendarz kościelny",

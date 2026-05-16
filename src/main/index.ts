@@ -309,6 +309,20 @@ function setupIPC(): void {
     if (settings.emailOnError) mailer.sendError(settings, store.getSmtpPassword(), data.error)
   })
 
+  const WEAK_SIGNAL_LABELS: Record<string, string> = {
+    no: 'Signalet er svakt — er mikseren på?',
+    en: 'Signal is weak — is the mixer on?',
+    de: 'Signal schwach — ist das Mischpult eingeschaltet?',
+    sv: 'Signalen är svag — är mixern påslagen?',
+    da: 'Signalet er svagt — er mixeren tændt?',
+    pl: 'Sygnał jest słaby — czy mikser jest włączony?',
+    fr: 'Signal faible — le mixeur est-il allumé ?',
+  }
+  ipcMain.on('weak-signal', () => {
+    const lang = store.get('language') ?? 'no'
+    notify('SundayRec', WEAK_SIGNAL_LABELS[lang] ?? WEAK_SIGNAL_LABELS.no)
+  })
+
   ipcMain.handle('clear-smtp-password', () => {
     store.setSmtpPassword('')
     return true

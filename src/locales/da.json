@@ -137,7 +137,11 @@
     "noSlots": "Ingen tidspunkter tilføjet endnu.",
     "errNoDays": "Vælg mindst én dag.",
     "errTimes": "Starttid skal være før stoptid.",
-    "dayLabel": "DAG"
+    "dayLabel": "DAG",
+    "reminderTitle": "Påmindelse før optagelse",
+    "reminderDesc": "Systembesked N minutter før en planlagt optagelse starter",
+    "manualMaxTitle": "Maks varighed — manuelle optagelser",
+    "manualMaxDesc": "Stopper automatisk efter den angivne tid — undgår store filer ved glemt stop"
   },
   "calendar": {
     "title": "Kirkekalender",

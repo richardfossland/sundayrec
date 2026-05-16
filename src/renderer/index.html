@@ -403,6 +403,33 @@
           <option value="120">120 min (2 t)</option>
         </select>
       </div>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-title" data-i18n="schedule.reminderTitle">Påminnelse før opptak</div>
+          <div class="toggle-desc" data-i18n="schedule.reminderDesc">Systemvarsel N minutter før planlagt opptak starter</div>
+        </div>
+        <select class="form-input split-select" id="opt-reminder-minutes">
+          <option value="0" data-i18n="schedule.splitOff">Av</option>
+          <option value="5">5 min</option>
+          <option value="10">10 min</option>
+          <option value="15">15 min</option>
+          <option value="30">30 min</option>
+        </select>
+      </div>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-title" data-i18n="schedule.manualMaxTitle">Maks varighet — manuelle opptak</div>
+          <div class="toggle-desc" data-i18n="schedule.manualMaxDesc">Stopper automatisk etter angitt tid — unngår enorme filer ved glemt stopp</div>
+        </div>
+        <select class="form-input split-select" id="opt-manual-max">
+          <option value="0" data-i18n="schedule.splitOff">Av</option>
+          <option value="60">1 time</option>
+          <option value="120">2 timer</option>
+          <option value="180">3 timer</option>
+          <option value="240">4 timer</option>
+          <option value="360">6 timer</option>
+        </select>
+      </div>
       <div class="btn-row">
         <button class="btn-primary" id="btn-schedule-save" data-i18n="schedule.save">Lagre tidsplan</button>
       </div>

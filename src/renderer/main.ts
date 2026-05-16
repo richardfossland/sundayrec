@@ -46,6 +46,7 @@ declare global {
       notifyStarted:       (data: unknown) => void
       notifyStopped:       (entry: unknown) => void
       notifyError:         (data: unknown) => void
+      notifyWeakSignal:    () => void
       on:                  (channel: string, fn: (...args: unknown[]) => void) => (() => void) | undefined
     }
     appVersion?: string

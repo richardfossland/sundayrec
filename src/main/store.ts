@@ -34,6 +34,8 @@ const defaults: Settings = {
   specialRecordings: [],
   stopOnSilence: false,
   splitMinutes: 0,
+  reminderMinutes: 0,
+  manualMaxMinutes: 0,
 
   launchAtLogin: false,
   showOnStartup: false,

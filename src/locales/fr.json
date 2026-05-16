@@ -137,7 +137,11 @@
     "noSlots": "Aucun créneau horaire ajouté.",
     "errNoDays": "Sélectionnez au moins un jour.",
     "errTimes": "L'heure de début doit être avant l'heure de fin.",
-    "dayLabel": "JOUR"
+    "dayLabel": "JOUR",
+    "reminderTitle": "Rappel avant enregistrement",
+    "reminderDesc": "Notification système N minutes avant le début d'un enregistrement planifié",
+    "manualMaxTitle": "Durée max — enregistrements manuels",
+    "manualMaxDesc": "S'arrête automatiquement après le délai défini — évite les fichiers énormes"
   },
   "calendar": {
     "title": "Calendrier liturgique",
