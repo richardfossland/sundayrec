@@ -44,7 +44,8 @@ export function setupSchedulePage(): void {
     if (winEl) winEl.style.display = isMac ? 'none'  : 'block'
   })
 
-  window.api.on('wake-schedule-result', wakeResultToStatus)
+  const cleanup = window.api.on('wake-schedule-result', wakeResultToStatus)
+  window.addEventListener('beforeunload', () => cleanup?.())
 }
 
 export function applyScheduleSettingsToUI(): void {

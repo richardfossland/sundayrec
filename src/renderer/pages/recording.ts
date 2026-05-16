@@ -80,24 +80,27 @@ export function setupRecording(): void {
     if (s) s.style.display = 'none'
   })
 
-  // IPC from main / scheduler
-  window.api.on('schedule-start-recording', (opts) => startRecordingWithOpts(opts as RecordingOpts))
-  window.api.on('schedule-stop-recording',  () => { if (!stopOverridden) doStopRecording() })
-  window.api.on('stop-media-recorder',      async () => { await stopMediaRecorder(); hideOverlay() })
-  window.api.on('recording-finished', () => {
-    hideOverlay()
-    loadRecentHistory()
-    if (autoRestartOpts) {
-      const opts = autoRestartOpts; autoRestartOpts = null
-      setTimeout(() => startRecordingWithOpts(opts), 1000)
-    }
-  })
-  window.api.on('recording-error', () => {
-    hideOverlay()
-    loadRecentHistory()
-  })
-  window.api.on('tray-start-recording', () => openManualModal())
-  window.api.on('tray-stop-recording',  () => doStopRecording())
+  // IPC from main / scheduler — store cleanup fns so listeners don't stack on hot reload
+  const ipcCleanups = [
+    window.api.on('schedule-start-recording', (opts) => startRecordingWithOpts(opts as RecordingOpts)),
+    window.api.on('schedule-stop-recording',  () => { if (!stopOverridden) doStopRecording() }),
+    window.api.on('stop-media-recorder',      async () => { await stopMediaRecorder(); hideOverlay() }),
+    window.api.on('recording-finished', () => {
+      hideOverlay()
+      loadRecentHistory()
+      if (autoRestartOpts) {
+        const opts = autoRestartOpts; autoRestartOpts = null
+        setTimeout(() => startRecordingWithOpts(opts), 1000)
+      }
+    }),
+    window.api.on('recording-error', () => {
+      hideOverlay()
+      loadRecentHistory()
+    }),
+    window.api.on('tray-start-recording', () => openManualModal()),
+    window.api.on('tray-stop-recording',  () => doStopRecording()),
+  ]
+  window.addEventListener('beforeunload', () => ipcCleanups.forEach(fn => fn?.()))
 }
 
 async function openManualModal(): Promise<void> {
