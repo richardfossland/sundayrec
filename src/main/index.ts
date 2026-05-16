@@ -145,9 +145,10 @@ app.on('before-quit', async (e) => {
       message: lbl[2], detail: lbl[3]
     })
     if (response === 0) {
+      recorder.onceIdle(() => { forceQuit = true; app.quit() })
       recorder.stopSession()
-      forceQuit = true
-      setTimeout(() => app.quit(), 4000)
+      // Safety fallback if ffmpeg hangs
+      setTimeout(() => { forceQuit = true; app.quit() }, 30000)
     }
     return
   }

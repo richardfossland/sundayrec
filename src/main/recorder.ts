@@ -43,6 +43,17 @@ interface Session {
 
 let activeSession: Session | null = null
 let recBlocker: number | null = null
+let idleCallback: (() => void) | null = null
+
+export function onceIdle(cb: () => void): void {
+  idleCallback = cb
+}
+
+function notifyIdle(): void {
+  const cb = idleCallback
+  idleCallback = null
+  cb?.()
+}
 
 export function init(): void {
   ipcMain.on('audio-chunk', (_, chunk: ArrayBuffer) => {
@@ -95,6 +106,7 @@ export function stopSession(): void {
     setTimeout(() => fs.unlink(session.tempPath, () => {}), 100)
     store.set('activeRecovery', null)
     stopRecBlocker()
+    notifyIdle()
     return
   }
 
@@ -164,6 +176,7 @@ async function convertAndSave(session: Session): Promise<void> {
       session.win.webContents.send('recording-finished', entry)
       const allSettings = store.getAll()
       if (allSettings.notifyStop !== false) notify('SundayRec', `Fullført: ${filename}`)
+      notifyIdle()
     })
     .on('error', (err) => {
       fs.unlink(tempPath, () => {})
@@ -181,7 +194,8 @@ async function convertAndSave(session: Session): Promise<void> {
       tray.setError(true)
       notify('SundayRec — Feil', err.message)
       const allSettings = store.getAll()
-      if (allSettings.emailOnError) mailer.sendError(allSettings, err.message)
+      if (allSettings.emailOnError) mailer.sendError(allSettings, store.getSmtpPassword(), err.message)
+      notifyIdle()
     })
     .run()
 }
