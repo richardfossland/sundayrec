@@ -99,7 +99,11 @@ function createWindow(): void {
 
 app.whenReady().then(async () => {
   if (!store.get('saveFolder')) {
-    store.set('saveFolder', path.join(app.getPath('documents'), 'SundayRec'))
+    const musicPath = app.getPath('music')
+    const defaultFolder = fs.existsSync(musicPath)
+      ? path.join(musicPath, 'SundayRec')
+      : path.join(app.getPath('documents'), 'SundayRec')
+    store.set('saveFolder', defaultFolder)
   }
   const saveFolder = store.get('saveFolder') ?? path.join(app.getPath('documents'), 'SundayRec')
   fs.mkdirSync(saveFolder, { recursive: true })
@@ -223,7 +227,11 @@ function setupIPC(): void {
   })
   ipcMain.handle('reset-settings', () => {
     store.reset()
-    store.set('saveFolder', path.join(app.getPath('documents'), 'SundayRec'))
+    const musicPath = app.getPath('music')
+    const defaultFolder = fs.existsSync(musicPath)
+      ? path.join(musicPath, 'SundayRec')
+      : path.join(app.getPath('documents'), 'SundayRec')
+    store.set('saveFolder', defaultFolder)
     scheduler.reschedule()
     return true
   })

@@ -12,7 +12,6 @@
 <!-- ── Sidebar ─────────────────────────────────────────────────── -->
 <nav id="sidebar">
   <div class="logo">
-    <img src="../../assets/icon-sidebar.png" class="logo-img" alt="" />
     <span class="logo-text">SundayRec</span>
   </div>
   <ul>
@@ -223,7 +222,7 @@
           <span id="cal-month-label" style="font-weight:700;font-size:15px"></span>
           <div class="cal-nav-right">
             <button id="btn-autofill" class="btn-autofill-icon" title="Legg til kirkehøytider automatisk">
-              ✨ <span data-i18n="calendar.autofillShort">Kirkehøytider</span> <span id="autofill-year"></span>
+              <span data-i18n="calendar.autofillShort">Kirkehøytider</span> <span id="autofill-year"></span>
             </button>
             <button id="cal-next">›</button>
           </div>
@@ -256,7 +255,7 @@
             </div>
           </div>
           <input type="hidden" id="special-date" />
-          <button class="btn-primary mt" id="btn-add-special"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg><span data-i18n="calendar.addRecording">Legg til opptak</span></button>
+          <button class="btn-primary mt" id="btn-add-special" data-i18n="calendar.addRecording">Legg til opptak</button>
         </div>
 
         <!-- Default hint when no day selected -->
@@ -277,7 +276,7 @@
       <div class="card-title" data-i18n="schedule.title">Ukentlig tidsplan</div>
       <p class="card-desc" data-i18n="schedule.subtitle">Faste opptak som gjentas automatisk hver uke.</p>
       <div id="slots-list"></div>
-      <button class="btn-secondary mt" id="btn-add-slot"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"/></svg><span data-i18n="schedule.addSlot">Legg til tidspunkt</span></button>
+      <button class="btn-secondary mt" id="btn-add-slot" data-i18n="schedule.addSlot">Legg til tidspunkt</button>
     </div>
 
     <!-- Slot editor (inline) -->
@@ -302,7 +301,7 @@
         </div>
       </div>
       <div class="btn-row">
-        <button class="btn-primary" id="btn-slot-save"><svg viewBox="0 0 20 20"><path d="M15.5 5.5L14 4H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1V5.5zM7 4h4v3H7V4zm-3 8h8v3H4v-3z"/></svg><span data-i18n="schedule.save">Lagre</span></button>
+        <button class="btn-primary" id="btn-slot-save" data-i18n="schedule.save">Lagre</button>
         <button class="btn-ghost" id="btn-slot-cancel" data-i18n="schedule.cancel">Avbryt</button>
       </div>
     </div>
@@ -405,7 +404,7 @@
         </select>
       </div>
       <div class="btn-row">
-        <button class="btn-primary" id="btn-schedule-save"><svg viewBox="0 0 20 20"><path d="M15.5 5.5L14 4H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1V5.5zM7 4h4v3H7V4zm-3 8h8v3H4v-3z"/></svg><span data-i18n="schedule.save">Lagre tidsplan</span></button>
+        <button class="btn-primary" id="btn-schedule-save" data-i18n="schedule.save">Lagre tidsplan</button>
       </div>
     </div>
 
@@ -428,9 +427,7 @@
           <div class="toggle-title" data-i18n="audio.testTitle">Test lydkilde</div>
           <div class="toggle-desc" data-i18n="audio.testDesc">Hør lyden fra valgt kilde i sanntid gjennom høyttalerne.</div>
         </div>
-        <button class="btn-secondary" id="btn-test-audio">
-          <svg viewBox="0 0 20 20"><path d="M18 9a8 8 0 10-16 0v3a2 2 0 002 2h1a1 1 0 001-1v-3a1 1 0 00-1-1H4v-1a6 6 0 1112 0v1h-1a1 1 0 00-1 1v3a1 1 0 001 1h1a2 2 0 002-2V9z"/></svg><span data-i18n="audio.testBtn">Test lyd</span>
-        </button>
+        <button class="btn-secondary" id="btn-test-audio" data-i18n="audio.testBtn">Test lyd</button>
       </div>
       <div id="test-audio-warn" class="test-warn" style="display:none">
         ⚠️ Pass på feedback — hold mikrofonen unna høyttalerne!
@@ -637,7 +634,7 @@
     </div>
 
     <div class="btn-row">
-      <button class="btn-primary" id="btn-audio-save"><svg viewBox="0 0 20 20"><path d="M15.5 5.5L14 4H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1V5.5zM7 4h4v3H7V4zm-3 8h8v3H4v-3z"/></svg><span data-i18n="audio.save">Lagre</span></button>
+      <button class="btn-primary" id="btn-audio-save" data-i18n="audio.save">Lagre</button>
       <button class="btn-ghost" id="btn-audio-cancel" data-i18n="audio.cancel">Avbryt</button>
     </div>
   </section>
@@ -653,7 +650,7 @@
       <label class="form-label" data-i18n="files.saveTo">LAGRES I</label>
       <div class="folder-row">
         <input type="text" class="form-input" id="save-folder" readonly />
-        <button class="btn-secondary" id="btn-pick-folder"><svg viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg><span data-i18n="files.browse">Velg mappe</span></button>
+        <button class="btn-secondary" id="btn-pick-folder" data-i18n="files.browse">Velg mappe</button>
       </div>
     </div>
     <div class="card">
@@ -702,7 +699,7 @@
       </div>
     </div>
     <div class="btn-row">
-      <button class="btn-primary" id="btn-files-save"><svg viewBox="0 0 20 20"><path d="M15.5 5.5L14 4H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1V5.5zM7 4h4v3H7V4zm-3 8h8v3H4v-3z"/></svg><span data-i18n="files.save">Lagre</span></button>
+      <button class="btn-primary" id="btn-files-save" data-i18n="files.save">Lagre</button>
       <button class="btn-ghost" id="btn-files-cancel" data-i18n="files.cancel">Avbryt</button>
     </div>
   </section>
@@ -737,9 +734,9 @@
         <input type="text" class="form-input" id="responsible-person" data-i18n-placeholder="general.responsiblePlaceholder" />
       </div>
       <div class="btn-row">
-        <button class="btn-secondary" id="btn-export"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 17a1 1 0 001-1V8.414l2.293 2.293a1 1 0 001.414-1.414l-4-4a1 1 0 00-1.414 0l-4 4a1 1 0 001.414 1.414L9 8.414V16a1 1 0 001 1zM3 3a1 1 0 011-1h12a1 1 0 010 2H4a1 1 0 01-1-1z"/></svg><span data-i18n="general.export">Eksporter innstillinger</span></button>
-        <button class="btn-secondary" id="btn-import"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v7.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 11.586V4a1 1 0 011-1zM3 17a1 1 0 011-1h12a1 1 0 010 2H4a1 1 0 01-1-1z"/></svg><span data-i18n="general.import">Importer fra fil</span></button>
-        <button class="btn-ghost" id="btn-restore"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/></svg><span data-i18n="general.restore">Gjenopprett standard</span></button>
+        <button class="btn-secondary" id="btn-export" data-i18n="general.export">Eksporter innstillinger</button>
+        <button class="btn-secondary" id="btn-import" data-i18n="general.import">Importer fra fil</button>
+        <button class="btn-ghost" id="btn-restore" data-i18n="general.restore">Gjenopprett standard</button>
       </div>
     </div>
     <div class="card">
@@ -813,12 +810,12 @@
         <label class="toggle"><input type="checkbox" id="opt-auto-update" checked /><span class="toggle-track"></span></label>
       </div>
       <div class="btn-row mt">
-        <button class="btn-secondary" id="btn-check-updates"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"/></svg><span data-i18n="general.checkNow">Se etter oppdateringer</span></button>
+        <button class="btn-secondary" id="btn-check-updates" data-i18n="general.checkNow">Se etter oppdateringer</button>
         <button class="btn-primary" id="btn-restart-install" style="display:none">↺ Start på nytt og installer</button>
       </div>
     </div>
     <div class="btn-row">
-      <button class="btn-primary" id="btn-general-save"><svg viewBox="0 0 20 20"><path d="M15.5 5.5L14 4H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1V5.5zM7 4h4v3H7V4zm-3 8h8v3H4v-3z"/></svg><span data-i18n="general.save">Lagre</span></button>
+      <button class="btn-primary" id="btn-general-save" data-i18n="general.save">Lagre</button>
       <button class="btn-ghost" id="btn-general-cancel" data-i18n="general.cancel">Avbryt</button>
     </div>
   </section>

@@ -68,11 +68,9 @@ body {
 }
 
 .logo {
-  display: flex; align-items: center; gap: 10px;
   padding: 22px 18px 18px;
   margin-bottom: 4px;
 }
-.logo-img { width: 26px; height: 26px; border-radius: 7px; }
 .logo-text { font-size: 15px; font-weight: 700; letter-spacing: -.4px; color: var(--text); }
 
 #sidebar ul { list-style: none; flex: 1; padding: 0 8px; }
