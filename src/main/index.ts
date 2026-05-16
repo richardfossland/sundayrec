@@ -4,6 +4,7 @@ import fs from 'fs'
 import * as store from './store'
 import * as scheduler from './scheduler'
 import * as recorder from './recorder'
+import { NOTIFY_LABELS } from './recorder'
 import * as tray from './tray'
 import * as updater from './updater'
 import * as mailer from './mailer'
@@ -285,7 +286,7 @@ function setupIPC(): void {
   ipcMain.on('recording-started', (_, data: { name: string }) => {
     tray.setRecording(true)
     tray.setError(false)
-    if (store.get('notifyStart') !== false) notify('SundayRec', data.name || 'Opptak startet')
+    if (store.get('notifyStart') !== false) notify('SundayRec', data.name)
   })
 
   ipcMain.on('recording-stopped', () => tray.setRecording(false))
@@ -293,7 +294,9 @@ function setupIPC(): void {
   ipcMain.on('recording-error', (_, data: { error: string }) => {
     tray.setRecording(false)
     tray.setError(true)
-    notify('SundayRec — Feil', data.error)
+    const lang = store.get('language') ?? 'no'
+    const nl   = NOTIFY_LABELS[lang] ?? NOTIFY_LABELS.no
+    notify(nl.err, data.error)
     const settings = store.getAll()
     if (settings.emailOnError) mailer.sendError(settings, store.getSmtpPassword(), data.error)
   })

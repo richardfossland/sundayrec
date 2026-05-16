@@ -24,7 +24,7 @@ import * as mailer from './mailer'
 import { localDateStr, buildFilename, codecFor, formatDuration } from './recorder-utils'
 import type { RecordingOpts, RecordingEntry, Settings } from '../types'
 
-const NOTIFY_LABELS: Record<string, { done: string; err: string }> = {
+export const NOTIFY_LABELS: Record<string, { done: string; err: string }> = {
   no: { done: 'Fullført',      err: 'SundayRec — Feil'    },
   en: { done: 'Completed',     err: 'SundayRec — Error'   },
   de: { done: 'Abgeschlossen', err: 'SundayRec — Fehler'  },
