@@ -8,7 +8,7 @@ import * as tray from './tray'
 import * as updater from './updater'
 import * as mailer from './mailer'
 import * as wake from './wake'
-import { execFileSync, execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 
 app.setName('SundayRec')
 
@@ -240,9 +240,11 @@ function setupIPC(): void {
         if (!isNaN(free)) return { freeBytes: free * 1024 }
       }
       if (process.platform === 'win32') {
-        const drive = folder.slice(0, 2).replace(/[^A-Za-z:]/, '')
-        const out   = execSync(
-          `powershell -NoProfile -Command "(Get-PSDrive -Name '${drive.slice(0,1)}').Free"`,
+        const driveLetter = /^[A-Za-z]/.test(folder) ? folder[0].toUpperCase() : 'C'
+        const out = execFileSync(
+          'powershell',
+          ['-NoProfile', '-NonInteractive', '-Command',
+           `(Get-PSDrive -Name '${driveLetter}' -ErrorAction SilentlyContinue).Free`],
           { timeout: 5000 }
         ).toString().trim()
         const free = parseInt(out)
