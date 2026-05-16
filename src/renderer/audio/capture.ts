@@ -164,7 +164,9 @@ export async function startCapture(opts: RecordingOpts): Promise<CaptureSession>
   mediaRecorder.ondataavailable = (e) => {
     if (e.data.size > 0) {
       recBytes += e.data.size
-      e.data.arrayBuffer().then(buf => window.api.sendAudioChunk(buf))
+      e.data.arrayBuffer()
+        .then(buf => window.api.sendAudioChunk(buf))
+        .catch(err => console.error('audio chunk dropped:', err))
     }
   }
 
