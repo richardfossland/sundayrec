@@ -131,6 +131,48 @@ describe('importProfile', () => {
 
   it('returns false for invalid JSON', () => {
     expect(store.importProfile('not json {')).toBe(false)
+    expect(store.importProfile('')).toBe(false)
+  })
+
+  it('rejects non-object JSON', () => {
+    expect(store.importProfile(JSON.stringify([1, 2, 3]))).toBe(false)
+    expect(store.importProfile(JSON.stringify(42))).toBe(false)
+    expect(store.importProfile(JSON.stringify('string'))).toBe(false)
+    expect(store.importProfile(JSON.stringify(null))).toBe(false)
+  })
+
+  it('rejects saveFolder of wrong type', () => {
+    expect(store.importProfile(JSON.stringify({ saveFolder: 123 }))).toBe(false)
+    expect(store.importProfile(JSON.stringify({ saveFolder: true }))).toBe(false)
+  })
+
+  it('accepts null saveFolder (reset to default)', () => {
+    expect(store.importProfile(JSON.stringify({ saveFolder: null }))).toBe(true)
+  })
+
+  it('rejects emailSmtp of wrong type', () => {
+    expect(store.importProfile(JSON.stringify({ emailSmtp: 587 }))).toBe(false)
+  })
+
+  it('rejects emailAddress of wrong type', () => {
+    expect(store.importProfile(JSON.stringify({ emailAddress: false }))).toBe(false)
+  })
+
+  it('rejects slots of wrong type', () => {
+    expect(store.importProfile(JSON.stringify({ slots: 'not-an-array' }))).toBe(false)
+    expect(store.importProfile(JSON.stringify({ slots: {} }))).toBe(false)
+  })
+
+  it('rejects specialRecordings of wrong type', () => {
+    expect(store.importProfile(JSON.stringify({ specialRecordings: 'bad' }))).toBe(false)
+  })
+
+  it('rejects language of wrong type', () => {
+    expect(store.importProfile(JSON.stringify({ language: 42 }))).toBe(false)
+  })
+
+  it('accepts null language', () => {
+    expect(store.importProfile(JSON.stringify({ language: null }))).toBe(true)
   })
 
   it('strips recordingHistory from imported profile', () => {
@@ -139,7 +181,6 @@ describe('importProfile', () => {
       format: 'wav',
       recordingHistory: [{ filename: 'injected.mp3', duration: 0, status: 'ok' }]
     }))
-    // History must not be replaced by imported data
     const h = store.getHistory()
     expect(h.some(e => e.filename === 'injected.mp3')).toBe(false)
   })

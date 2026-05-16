@@ -166,7 +166,15 @@ export function exportProfile(): Omit<Settings, 'recordingHistory' | 'activeReco
 
 export function importProfile(json: string): boolean {
   try {
-    const profile = JSON.parse(json) as Partial<Settings>
+    const raw = JSON.parse(json)
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false
+    const profile = raw as Partial<Settings>
+    if (profile.saveFolder         !== undefined && profile.saveFolder         !== null && typeof profile.saveFolder         !== 'string') return false
+    if (profile.emailSmtp          !== undefined && typeof profile.emailSmtp          !== 'string') return false
+    if (profile.emailAddress       !== undefined && typeof profile.emailAddress       !== 'string') return false
+    if (profile.slots              !== undefined && !Array.isArray(profile.slots))                  return false
+    if (profile.specialRecordings  !== undefined && !Array.isArray(profile.specialRecordings))      return false
+    if (profile.language           !== undefined && profile.language           !== null && typeof profile.language           !== 'string') return false
     const { recordingHistory, activeRecovery, emailSmtpPassEnc, emailSmtpPassSet, emailSmtpPass, ...safe } = profile
     Object.entries(safe).forEach(([k, v]) => store.set(k as keyof Settings, v as never))
     if (emailSmtpPass) setSmtpPassword(emailSmtpPass)

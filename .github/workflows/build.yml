@@ -2,16 +2,37 @@ name: Build & Release
 
 on:
   push:
+    branches: ['main']
     tags:
       - 'v*'
+  pull_request:
+    branches: ['main']
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  # ── Tests: run on every push and PR, block builds if they fail ──
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
   # ── macOS: signs + notarizes when Developer ID secrets are configured ──
   build-mac:
+    needs: test
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
@@ -36,6 +57,7 @@ jobs:
 
   # ── Windows: unsigned build (Azure Trusted Signing when credentials are set) ──
   build-win:
+    needs: test
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
