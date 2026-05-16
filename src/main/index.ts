@@ -44,6 +44,7 @@ const QUIT_LABELS: Record<string, [string, string, string, string]> = {
 }
 
 let mainWindow: BrowserWindow
+let appIsQuitting = false
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -86,7 +87,7 @@ function createWindow(): void {
   })
 
   mainWindow.on('close', (e) => {
-    if (!(app as unknown as { isQuitting?: boolean }).isQuitting) {
+    if (!appIsQuitting) {
       e.preventDefault()
       mainWindow.hide()
     }
@@ -131,7 +132,7 @@ app.whenReady().then(async () => {
 
 let forceQuit = false
 app.on('before-quit', async (e) => {
-  if (forceQuit) { (app as unknown as { isQuitting?: boolean }).isQuitting = true; return }
+  if (forceQuit) { appIsQuitting = true; return }
 
   const lang = store.get('language') ?? 'en'
 
@@ -168,7 +169,7 @@ app.on('before-quit', async (e) => {
     })
     if (response === 0) { forceQuit = true; app.quit() }
   } else {
-    (app as unknown as { isQuitting?: boolean }).isQuitting = true
+    appIsQuitting = true
   }
 })
 
@@ -184,7 +185,7 @@ app.on('activate', () => {
 function setupIPC(): void {
   ipcMain.handle('install-update', () => {
     forceQuit = true
-    ;(app as unknown as { isQuitting?: boolean }).isQuitting = true
+    appIsQuitting = true
     setImmediate(() => {
       updater.doInstall()
       // Fallback: if quitAndInstall hasn't exited in 3s, force relaunch
@@ -195,6 +196,7 @@ function setupIPC(): void {
   ipcMain.handle('get-settings', () => store.getAll())
 
   ipcMain.handle('save-settings', (_, settings) => {
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return false
     store.setAll(settings)
     scheduler.reschedule()
     app.setLoginItemSettings({ openAtLogin: !!settings.launchAtLogin, openAsHidden: true })
@@ -263,8 +265,14 @@ function setupIPC(): void {
     return result.canceled ? null : result.filePaths[0]
   })
 
-  ipcMain.handle('open-folder', (_, p: string) => shell.openPath(p))
-  ipcMain.handle('reveal-file', (_, p: string) => shell.showItemInFolder(p))
+  ipcMain.handle('open-folder', (_, p: string) => {
+    if (typeof p !== 'string' || !isSafePath(p)) return
+    return shell.openPath(p)
+  })
+  ipcMain.handle('reveal-file', (_, p: string) => {
+    if (typeof p !== 'string' || !isSafePath(p)) return
+    return shell.showItemInFolder(p)
+  })
 
   ipcMain.on('recording-started', (_, data: { name: string }) => {
     tray.setRecording(true)
@@ -287,13 +295,24 @@ function notify(title: string, body: string): void {
   if (Notification.isSupported()) new Notification({ title, body }).show()
 }
 
+function isSafePath(p: string): boolean {
+  const saveFolder = store.get('saveFolder') ?? path.join(app.getPath('documents'), 'SundayRec')
+  const allowed = [saveFolder, app.getPath('documents'), app.getPath('downloads')]
+  return allowed.some(base => p === base || p.startsWith(base + path.sep))
+}
+
 function cleanupOldRecordings(): void {
   const days = store.get('autoDeleteDays')
   if (!days || days <= 0) return
   const cutoff = Date.now() - days * 86400000
+  const saveFolder = store.get('saveFolder') ?? path.join(app.getPath('documents'), 'SundayRec')
   const history = store.getHistory()
   const remaining = history.filter(entry => {
-    if (entry.timestamp && entry.timestamp < cutoff && entry.path && entry.status === 'ok') {
+    if (
+      entry.timestamp && entry.timestamp < cutoff &&
+      entry.path && entry.status === 'ok' &&
+      entry.path.startsWith(saveFolder + path.sep)
+    ) {
       fs.unlink(entry.path, err => { if (err) console.error('Failed to delete recording:', err) })
       return false
     }
