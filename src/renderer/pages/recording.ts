@@ -109,9 +109,13 @@ async function openManualModal(): Promise<void> {
   const devSel  = document.getElementById('manual-device') as HTMLSelectElement | null
   const devices = await getAudioDevices()
   if (devSel) {
-    devSel.innerHTML = devices.map(d =>
-      `<option value="${d.deviceId}">${d.label || d.deviceId}</option>`
-    ).join('')
+    devSel.innerHTML = ''
+    devices.forEach(d => {
+      const opt = document.createElement('option')
+      opt.value = d.deviceId
+      opt.textContent = d.label || d.deviceId
+      devSel.appendChild(opt)
+    })
     if (settings.deviceId) {
       devSel.value = settings.deviceId
       if (!devSel.value && devices.length) devSel.selectedIndex = 0

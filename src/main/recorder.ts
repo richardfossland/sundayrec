@@ -43,6 +43,7 @@ interface Session {
 
 let activeSession: Session | null = null
 let recBlocker: number | null = null
+let stopInProgress = false
 
 export function init(): void {
   ipcMain.on('audio-chunk', (_, chunk: ArrayBuffer) => {
@@ -84,12 +85,14 @@ export function startSession(settings: RecordingOpts, win: BrowserWindow): { ok:
 }
 
 export function stopSession(): void {
-  if (!activeSession) return
+  if (!activeSession || stopInProgress) return
+  stopInProgress = true
   const { win, confirmed } = activeSession
 
   if (!confirmed) {
     const session = activeSession
     activeSession = null
+    stopInProgress = false
     if (session.maxTimer) clearTimeout(session.maxTimer)
     session.writeStream.end()
     setTimeout(() => fs.unlink(session.tempPath, () => {}), 100)
@@ -112,6 +115,7 @@ function finishSession(): void {
   if (!activeSession) return
   const session = activeSession
   activeSession = null
+  stopInProgress = false
   if (session.maxTimer) clearTimeout(session.maxTimer)
   stopRecBlocker()
   store.set('activeRecovery', null)
@@ -122,13 +126,11 @@ async function uniquePath(p: string): Promise<string> {
   try { await fs.promises.access(p) } catch { return p }
   const ext  = path.extname(p)
   const base = p.slice(0, -ext.length)
-  let i = 2
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  for (let i = 2; i <= 999; i++) {
     const candidate = `${base}_${i}${ext}`
     try { await fs.promises.access(candidate) } catch { return candidate }
-    i++
   }
+  throw new Error(`uniquePath: too many files with same base name: ${path.basename(base)}`)
 }
 
 async function convertAndSave(session: Session): Promise<void> {
@@ -151,7 +153,7 @@ async function convertAndSave(session: Session): Promise<void> {
   cmd
     .output(outputPath)
     .on('end', () => {
-      fs.unlinkSync(tempPath)
+      fs.unlink(tempPath, () => {})
       const entry: RecordingEntry = {
         date:      new Date(session.startTime ?? Date.now()).toISOString().slice(0, 10),
         startTime: new Date(session.startTime ?? Date.now()).toTimeString().slice(0, 5),
@@ -244,9 +246,16 @@ function notify(title: string, body: string): void {
   if (Notification.isSupported()) new Notification({ title, body }).show()
 }
 
+function localDateStr(d: Date): string {
+  const yyyy = d.getFullYear()
+  const mm   = String(d.getMonth() + 1).padStart(2, '0')
+  const dd   = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
 function buildFilename(settings: RecordingOpts): string {
   const now  = new Date()
-  const date = now.toISOString().slice(0, 10)
+  const date = localDateStr(now)
   const ext  = settings.format ?? 'mp3'
   const ts   = settings.splitTimestamp ? `_${settings.splitTimestamp}` : ''
 
