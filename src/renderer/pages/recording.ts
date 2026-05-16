@@ -266,10 +266,13 @@ async function startMediaRecorder(opts: RecordingOpts): Promise<void> {
 }
 
 async function stopMediaRecorder(): Promise<void> {
-  stopVuState(recVu)
-  if (silenceInterval) { clearInterval(silenceInterval); silenceInterval = null }
-  if (splitTimer)      { clearTimeout(splitTimer);       splitTimer      = null }
-  if (recTimerIval)    { clearInterval(recTimerIval);    recTimerIval    = null }
+  try {
+    stopVuState(recVu)
+  } finally {
+    if (silenceInterval) { clearInterval(silenceInterval); silenceInterval = null }
+    if (splitTimer)      { clearTimeout(splitTimer);       splitTimer      = null }
+    if (recTimerIval)    { clearInterval(recTimerIval);    recTimerIval    = null }
+  }
 
   if (!activeSession) return
   const session = activeSession
