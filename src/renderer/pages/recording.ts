@@ -11,6 +11,7 @@ import { fmtCountdown, flashMsg, isoDate } from '../helpers'
 import { stopVU as stopHomeVU } from './home-vu'
 import { stopMonitoring } from './audio-page'
 import { loadRecentHistory } from './home'
+import { showEditorPrompt } from './editor-page'
 import type { RecordingOpts } from '../../types'
 
 let activeSession: CaptureSession | null = null
@@ -86,9 +87,13 @@ export function setupRecording(): void {
     window.api.on('schedule-start-recording', (opts) => startRecordingWithOpts(opts as RecordingOpts)),
     window.api.on('schedule-stop-recording',  () => { if (!stopOverridden) doStopRecording() }),
     window.api.on('stop-media-recorder',      async () => { await stopMediaRecorder(); hideOverlay() }),
-    window.api.on('recording-finished', () => {
+    window.api.on('recording-finished', (entry) => {
       hideOverlay()
       loadRecentHistory()
+      const recordingEntry = entry as { path?: string } | undefined
+      if (recordingEntry?.path && settings.askOpenEditor !== false) {
+        showEditorPrompt(recordingEntry.path)
+      }
       if (autoRestartOpts) {
         const opts = autoRestartOpts; autoRestartOpts = null
         setTimeout(() => startRecordingWithOpts(opts), 1000)
@@ -220,19 +225,23 @@ async function startMediaRecorder(opts: RecordingOpts): Promise<void> {
     if (cR && recVu.smR > -0.5) cR.classList.add('clip')
   })
 
-  // Silence detection
+  // Silence detection — float RMS against configurable dB threshold
   if (opts.stopOnSilence && activeSession.audioCtx) {
     const silenceAn = activeSession.audioCtx.createAnalyser()
-    silenceAn.fftSize = 256
+    silenceAn.fftSize = 2048
     activeSession.vuAnalyserL.connect(silenceAn)
+    const threshDb  = opts.silenceThreshold ?? -50
+    const timeoutMs = (opts.silenceTimeoutMinutes ?? 5) * 60000
     let silenceStart: number | null = null
     silenceInterval = setInterval(() => {
       if (!isRecording) { clearInterval(silenceInterval!); silenceInterval = null; return }
-      const buf = new Uint8Array(silenceAn.frequencyBinCount)
-      silenceAn.getByteFrequencyData(buf)
-      if (!buf.some(v => v > 8)) {
+      const buf = new Float32Array(silenceAn.fftSize)
+      silenceAn.getFloatTimeDomainData(buf)
+      const rms = Math.sqrt(buf.reduce((s, v) => s + v * v, 0) / buf.length)
+      const db  = rms > 0 ? 20 * Math.log10(rms) : -Infinity
+      if (db < threshDb) {
         if (!silenceStart) silenceStart = Date.now()
-        else if (Date.now() - silenceStart > 5 * 60000) {
+        else if (Date.now() - silenceStart > timeoutMs) {
           clearInterval(silenceInterval!); silenceInterval = null
           doStopRecording()
         }

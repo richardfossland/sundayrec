@@ -10,7 +10,8 @@
     "calendar": "Kyrkokalender",
     "audio": "Ljudkälla",
     "files": "Filer",
-    "general": "Allmänt"
+    "general": "Allmänt",
+    "editor": "Redigera"
   },
   "status": {
     "ready": "Allt är klart",
@@ -77,7 +78,16 @@
     "confirmClear": "Radera all historik?",
     "pruneBtn": "Städa upp",
     "clearBtn": "Rensa alla",
-    "pruneNone": "Inget att städa"
+    "pruneNone": "Inget att städa",
+    "clearErrors": "Rensa fel",
+    "searchPlaceholder": "Sök i historik…",
+    "totalCount": "inspelningar",
+    "totalDuration": "totalt",
+    "lastRecording": "senast",
+    "addNote": "Lägg till anteckning",
+    "editNote": "Redigera anteckning",
+    "notePlaceholder": "Skriv anteckning…",
+    "confirmDeleteErrors": "Radera alla felposter?"
   },
   "schedule": {
     "title": "Veckoschema",
@@ -160,7 +170,11 @@
     "sleepFixOk": "Åtgärdat — vilolägesinställningar är nu optimala",
     "sleepFixFail": "Automatisk åtgärd misslyckades",
     "sleepFixCancelled": "Avbruten — godkänn behörigheten för att åtgärda",
-    "sleepAlwaysOffNote": "Vill du att datorn alltid ska starta inspelningar? Låt den vara i viloläge (stäng inte av den) och aktivera «Starta med Windows/Mac» under Allmänt."
+    "sleepAlwaysOffNote": "Vill du att datorn alltid ska starta inspelningar? Låt den vara i viloläge (stäng inte av den) och aktivera «Starta med Windows/Mac» under Allmänt.",
+    "silenceThresholdLabel": "GRÄNS (dBFS)",
+    "silenceTimeoutLabel": "VARAKTIGHET FÖRE STOPP",
+    "exportIcal": "Exportera till iCal",
+    "icalFilename": "SundayRec-schema"
   },
   "calendar": {
     "title": "Kyrkokalender",
@@ -254,6 +268,8 @@
     "compressorDesc": "Jämnar ut volymiationer i inspelningen",
     "threshold": "TRÖSKEL (dB)",
     "ratio": "RATIO",
+    "attack": "ATTACK (ms)",
+    "release": "RELEASE (ms)",
     "limiter": "Limiter",
     "limiterDesc": "Förhindrar klippning vid höga ljudnivåer (rekommenderas)",
     "ceiling": "TAK (dB)"
@@ -280,6 +296,8 @@
     "q320": "320 kbps — högsta kvalitet",
     "autoDelete": "Radera automatiskt efter 90 dagar",
     "autoDeleteDesc": "Frigör diskutrymme automatiskt genom att radera gamla inspelningar",
+    "trimSilence": "Trimma tystnad",
+    "trimSilenceDesc": "Tar bort tystnad i början och slutet av filen",
     "save": "Spara",
     "cancel": "Avbryt"
   },
@@ -320,7 +338,35 @@
     "save": "Spara",
     "cancel": "Avbryt",
     "currentVersion": "Aktuell version:",
-    "saved": "✓ Sparat"
+    "saved": "✓ Sparat",
+    "testEmail": "Testa e-post",
+    "testEmailOk": "✓ Testmeddelande skickat",
+    "testEmailFail": "✕ Sändning misslyckades",
+    "testEmailNoConfig": "Fyll i SMTP-inställningarna",
+    "askOpenEditor": "Fråga om redigering efter inspelning",
+    "askOpenEditorDesc": "Visar ett meddelande om att öppna filen i redigeraren när inspelningen är klar"
+  },
+  "editor": {
+    "title": "Redigera ljudfil",
+    "emptyTitle": "Ingen fil öppen",
+    "emptyDesc": "Välj en ljudfil för att börja redigera. Du kan trimma starten och slutet, eller klippa ut delar i mitten.",
+    "openFile": "Öppna ljudfil…",
+    "loading": "Laddar ljudfil…",
+    "dragHint": "Klicka och dra för att markera ett klipp",
+    "cutsTitle": "Klippta regioner",
+    "cutsNone": "Ta bort alla klipp",
+    "deleteCut": "Ta bort klipp",
+    "save": "Spara redigerad fil",
+    "saveNewFile": "Spara som ny fil",
+    "saveReplace": "Ersätt original",
+    "saveTitle": "Spara redigerad fil",
+    "saveConfirm": "Välj om du vill spara som en ny fil bredvid originalet, eller ersätta originalfilen.",
+    "cancel": "Avbryt",
+    "saving": "Sparar…",
+    "saveOk": "✓ Sparat",
+    "saveError": "✕ Fel vid sparning",
+    "promptTitle": "Vill du redigera inspelningen?",
+    "promptOpen": "Öppna i redigeraren"
   },
   "manual": {
     "title": "Starta manuell inspelning",

@@ -47,6 +47,16 @@ export function setupGeneralPage(): void {
     await window.loadSettings()
   })
 
+  document.getElementById('btn-test-email')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-test-email')
+    if (btn) { (btn as HTMLButtonElement).disabled = true }
+    const result = await window.api.testEmail()
+    const msgKey = result.ok ? 'general.testEmailOk' : 'general.testEmailFail'
+    const fallback = result.ok ? '✓ Testmelding sendt' : '✕ Sending feilet'
+    flashMsg(btn, t(msgKey, fallback), result.ok)
+    if (btn) { (btn as HTMLButtonElement).disabled = false }
+  })
+
   document.getElementById('btn-check-updates')?.addEventListener('click', async () => {
     setUpdateStatus('pending', t('update.checking', 'Sjekker etter oppdateringer…'))
     await window.api.checkForUpdates()
@@ -108,9 +118,10 @@ export function applyGeneralSettingsToUI(): void {
   setCheckbox('opt-notify-start',  settings.notifyStart !== false)
   setCheckbox('opt-notify-stop',   settings.notifyStop  !== false)
   setCheckbox('opt-email-error',   !!settings.emailOnError)
-  setCheckbox('opt-autostart',     !!settings.launchAtLogin)
-  setCheckbox('opt-show-on-startup', !!settings.showOnStartup)
-  setCheckbox('opt-auto-update',   settings.autoUpdate !== false)
+  setCheckbox('opt-autostart',        !!settings.launchAtLogin)
+  setCheckbox('opt-show-on-startup',  !!settings.showOnStartup)
+  setCheckbox('opt-auto-update',      settings.autoUpdate !== false)
+  setCheckbox('opt-ask-open-editor',  settings.askOpenEditor !== false)
   setVal('email-address', settings.emailAddress   ?? '')
   setVal('email-smtp',    settings.emailSmtp      ?? '')
   setVal('email-port',    settings.emailSmtpPort  ?? 587)
@@ -158,9 +169,10 @@ async function saveGeneralSettings(): Promise<void> {
     emailSmtpPort:     +((document.getElementById('email-port')      as HTMLInputElement | null)?.value ?? 587),
     emailSmtpUser:     (document.getElementById('email-user')        as HTMLInputElement | null)?.value ?? '',
     emailSmtpPass:     (document.getElementById('email-pass')        as HTMLInputElement | null)?.value ?? '',
-    launchAtLogin:     !!(document.getElementById('opt-autostart')        as HTMLInputElement | null)?.checked,
-    showOnStartup:     !!(document.getElementById('opt-show-on-startup')  as HTMLInputElement | null)?.checked,
-    autoUpdate:        !!(document.getElementById('opt-auto-update')      as HTMLInputElement | null)?.checked
+    launchAtLogin:     !!(document.getElementById('opt-autostart')         as HTMLInputElement | null)?.checked,
+    showOnStartup:     !!(document.getElementById('opt-show-on-startup')   as HTMLInputElement | null)?.checked,
+    autoUpdate:        !!(document.getElementById('opt-auto-update')       as HTMLInputElement | null)?.checked,
+    askOpenEditor:     !!(document.getElementById('opt-ask-open-editor')   as HTMLInputElement | null)?.checked
   })
   await window.api.saveSettings(settings)
   if (newLang !== currentLang) loadLocale(newLang)

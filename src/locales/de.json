@@ -10,7 +10,8 @@
     "calendar": "Kirchenkalender",
     "audio": "Audioquelle",
     "files": "Dateien",
-    "general": "Allgemein"
+    "general": "Allgemein",
+    "editor": "Bearbeiten"
   },
   "status": {
     "ready": "Alles bereit",
@@ -77,7 +78,16 @@
     "confirmClear": "Gesamten Verlauf löschen?",
     "pruneBtn": "Aufräumen",
     "clearBtn": "Alle löschen",
-    "pruneNone": "Nichts zu bereinigen"
+    "pruneNone": "Nichts zu bereinigen",
+    "clearErrors": "Fehler löschen",
+    "searchPlaceholder": "Verlauf durchsuchen…",
+    "totalCount": "Aufnahmen",
+    "totalDuration": "gesamt",
+    "lastRecording": "zuletzt",
+    "addNote": "Notiz hinzufügen",
+    "editNote": "Notiz bearbeiten",
+    "notePlaceholder": "Notiz schreiben…",
+    "confirmDeleteErrors": "Alle Fehlereinträge löschen?"
   },
   "schedule": {
     "title": "Wöchentlicher Zeitplan",
@@ -160,7 +170,11 @@
     "sleepFixOk": "Behoben — Energieeinstellungen sind jetzt optimal",
     "sleepFixFail": "Automatische Behebung fehlgeschlagen",
     "sleepFixCancelled": "Abgebrochen — Erlaubnis genehmigen, um zu beheben",
-    "sleepAlwaysOffNote": "Soll der Rechner immer aufnehmen? Lass ihn im Schlafmodus (nicht ausschalten) und aktiviere «Mit Windows/Mac starten» unter Allgemein."
+    "sleepAlwaysOffNote": "Soll der Rechner immer aufnehmen? Lass ihn im Schlafmodus (nicht ausschalten) und aktiviere «Mit Windows/Mac starten» unter Allgemein.",
+    "silenceThresholdLabel": "SCHWELLE (dBFS)",
+    "silenceTimeoutLabel": "DAUER VOR STOPP",
+    "exportIcal": "Als iCal exportieren",
+    "icalFilename": "SundayRec-Zeitplan"
   },
   "calendar": {
     "title": "Kirchenkalender",
@@ -254,6 +268,8 @@
     "compressorDesc": "Gleicht Lautstärkeschwankungen in der Aufnahme aus",
     "threshold": "SCHWELLE (dB)",
     "ratio": "RATIO",
+    "attack": "ATTACK (ms)",
+    "release": "RELEASE (ms)",
     "limiter": "Limiter",
     "limiterDesc": "Verhindert Übersteuerung bei hohen Lautstärken (empfohlen)",
     "ceiling": "DECKE (dB)"
@@ -280,6 +296,8 @@
     "q320": "320 kbps — höchste Qualität",
     "autoDelete": "Nach 90 Tagen automatisch löschen",
     "autoDeleteDesc": "Gibt automatisch Speicherplatz frei, indem alte Aufnahmen gelöscht werden",
+    "trimSilence": "Stille trimmen",
+    "trimSilenceDesc": "Entfernt Stille am Anfang und Ende der Datei",
     "save": "Speichern",
     "cancel": "Abbrechen"
   },
@@ -320,7 +338,35 @@
     "save": "Speichern",
     "cancel": "Abbrechen",
     "currentVersion": "Aktuelle Version:",
-    "saved": "✓ Gespeichert"
+    "saved": "✓ Gespeichert",
+    "testEmail": "E-Mail testen",
+    "testEmailOk": "✓ Testnachricht gesendet",
+    "testEmailFail": "✕ Senden fehlgeschlagen",
+    "testEmailNoConfig": "Bitte SMTP-Einstellungen ausfüllen",
+    "askOpenEditor": "Nach der Aufnahme nach Bearbeitung fragen",
+    "askOpenEditorDesc": "Zeigt eine Aufforderung, die Datei nach der Aufnahme im Editor zu öffnen"
+  },
+  "editor": {
+    "title": "Audiodatei bearbeiten",
+    "emptyTitle": "Keine Datei geöffnet",
+    "emptyDesc": "Wähle eine Audiodatei zum Bearbeiten. Du kannst den Anfang und das Ende kürzen oder Abschnitte in der Mitte herausschneiden.",
+    "openFile": "Audiodatei öffnen…",
+    "loading": "Audiodatei wird geladen…",
+    "dragHint": "Klicken und ziehen, um einen Schnitt zu markieren",
+    "cutsTitle": "Schnittbereiche",
+    "cutsNone": "Alle Schnitte entfernen",
+    "deleteCut": "Schnitt entfernen",
+    "save": "Bearbeitete Datei speichern",
+    "saveNewFile": "Als neue Datei speichern",
+    "saveReplace": "Original ersetzen",
+    "saveTitle": "Bearbeitete Datei speichern",
+    "saveConfirm": "Wähle, ob du die Datei neben dem Original speichern oder das Original ersetzen möchtest.",
+    "cancel": "Abbrechen",
+    "saving": "Speichern…",
+    "saveOk": "✓ Gespeichert",
+    "saveError": "✕ Fehler beim Speichern",
+    "promptTitle": "Aufnahme bearbeiten?",
+    "promptOpen": "Im Editor öffnen"
   },
   "manual": {
     "title": "Manuelle Aufnahme starten",

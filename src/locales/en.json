@@ -10,7 +10,8 @@
     "calendar": "Church Calendar",
     "audio": "Audio Source",
     "files": "Files",
-    "general": "General"
+    "general": "General",
+    "editor": "Edit"
   },
   "status": {
     "ready": "Everything is ready",
@@ -77,7 +78,16 @@
     "confirmClear": "Delete all history?",
     "pruneBtn": "Clean up",
     "clearBtn": "Clear all",
-    "pruneNone": "Nothing to clean"
+    "pruneNone": "Nothing to clean",
+    "clearErrors": "Clear errors",
+    "searchPlaceholder": "Search history…",
+    "totalCount": "recordings",
+    "totalDuration": "total",
+    "lastRecording": "last",
+    "addNote": "Add note",
+    "editNote": "Edit note",
+    "notePlaceholder": "Write a note…",
+    "confirmDeleteErrors": "Delete all error entries?"
   },
   "schedule": {
     "title": "Weekly schedule",
@@ -160,7 +170,11 @@
     "sleepFixOk": "Fixed — sleep settings are now optimal",
     "sleepFixFail": "Automatic fix failed",
     "sleepFixCancelled": "Cancelled — approve the permission prompt to fix",
-    "sleepAlwaysOffNote": "Want the machine to always start recordings? Keep it in sleep (don't shut it down) and enable «Start with Windows/Mac» under General."
+    "sleepAlwaysOffNote": "Want the machine to always start recordings? Keep it in sleep (don't shut it down) and enable «Start with Windows/Mac» under General.",
+    "silenceThresholdLabel": "THRESHOLD (dBFS)",
+    "silenceTimeoutLabel": "DURATION BEFORE STOP",
+    "exportIcal": "Export to iCal",
+    "icalFilename": "SundayRec-schedule"
   },
   "calendar": {
     "title": "Church Calendar",
@@ -254,6 +268,8 @@
     "compressorDesc": "Evens out volume variations in the recording",
     "threshold": "THRESHOLD (dB)",
     "ratio": "RATIO",
+    "attack": "ATTACK (ms)",
+    "release": "RELEASE (ms)",
     "limiter": "Limiter",
     "limiterDesc": "Prevents clipping at high audio levels (recommended)",
     "ceiling": "CEILING (dB)"
@@ -280,6 +296,8 @@
     "q320": "320 kbps — highest quality",
     "autoDelete": "Delete automatically after 90 days",
     "autoDeleteDesc": "Automatically frees disk space by deleting old recordings",
+    "trimSilence": "Trim silence",
+    "trimSilenceDesc": "Removes silence from the beginning and end of the file",
     "save": "Save",
     "cancel": "Cancel"
   },
@@ -320,7 +338,35 @@
     "save": "Save",
     "cancel": "Cancel",
     "currentVersion": "Current version:",
-    "saved": "✓ Saved"
+    "saved": "✓ Saved",
+    "testEmail": "Test email",
+    "testEmailOk": "✓ Test message sent",
+    "testEmailFail": "✕ Send failed",
+    "testEmailNoConfig": "Please fill in the SMTP settings",
+    "askOpenEditor": "Ask about editing after recording",
+    "askOpenEditorDesc": "Show a prompt to open the file in the Editor after recording is complete"
+  },
+  "editor": {
+    "title": "Edit audio file",
+    "emptyTitle": "No file open",
+    "emptyDesc": "Select an audio file to start editing. You can trim the start and end, or cut out sections in the middle.",
+    "openFile": "Open audio file…",
+    "loading": "Loading audio file…",
+    "dragHint": "Click and drag to mark a cut",
+    "cutsTitle": "Cut regions",
+    "cutsNone": "Remove all cuts",
+    "deleteCut": "Remove cut",
+    "save": "Save edited file",
+    "saveNewFile": "Save as new file",
+    "saveReplace": "Replace original",
+    "saveTitle": "Save edited file",
+    "saveConfirm": "Choose whether to save as a new file alongside the original, or replace the original file.",
+    "cancel": "Cancel",
+    "saving": "Saving…",
+    "saveOk": "✓ Saved",
+    "saveError": "✕ Save failed",
+    "promptTitle": "Do you want to edit the recording?",
+    "promptOpen": "Open in Editor"
   },
   "manual": {
     "title": "Start manual recording",

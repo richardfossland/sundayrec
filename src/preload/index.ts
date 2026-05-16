@@ -44,7 +44,13 @@ contextBridge.exposeInMainWorld('api', {
   revealFile:     (p: string) => ipcRenderer.invoke('reveal-file', p),
 
   clearSmtpPassword: ()      => ipcRenderer.invoke('clear-smtp-password'),
+  testEmail:        ()       => ipcRenderer.invoke('test-email'),
+  updateHistoryNote: (ts: number, note: string) => ipcRenderer.invoke('update-history-note', ts, note),
   getAppVersion:    ()       => ipcRenderer.invoke('get-app-version'),
+
+  editorReadFile: (filePath: string) => ipcRenderer.invoke('editor-read-file', filePath),
+  editorSaveFile: (params: unknown)  => ipcRenderer.invoke('editor-save-file', params),
+  editorPickFile: ()                 => ipcRenderer.invoke('editor-pick-file'),
 
   checkForUpdates: ()        => ipcRenderer.invoke('check-for-updates'),
   installUpdate:   ()        => ipcRenderer.invoke('install-update'),

@@ -5,6 +5,7 @@ import { startVU, stopVU } from './home-vu'
 import { getAudioDevices } from '../audio/capture'
 
 let countdownTimer: ReturnType<typeof setInterval> | null = null
+let fullHistory: RecordingEntry[] = []
 
 export function setupHome(): void {
   document.getElementById('btn-go-audio-page')?.addEventListener('click', e => { e.preventDefault(); window.showPage('audio') })
@@ -23,7 +24,25 @@ export function setupHome(): void {
     e.preventDefault()
     if (!confirm(t('history.confirmClear', 'Slett hele historikken?'))) return
     await window.api.clearHistory()
+    fullHistory = []
     renderHistoryRows(document.getElementById('history-tbody'), [], false)
+    updateHistoryStats([])
+  })
+
+  document.getElementById('btn-delete-errors')?.addEventListener('click', async e => {
+    e.preventDefault()
+    const errors = fullHistory.filter(r => r.status === 'error')
+    if (!errors.length) return
+    if (!confirm(t('history.confirmDeleteErrors', `Slett ${errors.length} feiloppføringer?`).replace('{n}', String(errors.length)))) return
+    for (const r of errors) {
+      if (r.timestamp) await window.api.deleteHistoryEntry(r.timestamp)
+    }
+    await loadRecentHistory()
+  })
+
+  document.getElementById('history-search')?.addEventListener('input', e => {
+    const q = (e.target as HTMLInputElement).value
+    filterAndRenderHistory(q)
   })
 
   const onDeviceChange = (): void => { void checkStatus() }
@@ -119,8 +138,46 @@ async function loadDiskSpace(): Promise<void> {
 }
 
 export async function loadRecentHistory(): Promise<void> {
-  const history = await window.api.getHistory()
-  renderHistoryRows(document.getElementById('history-tbody'), (history ?? []) as RecordingEntry[], true)
+  fullHistory = ((await window.api.getHistory()) ?? []) as RecordingEntry[]
+  const searchEl = document.getElementById('history-search') as HTMLInputElement | null
+  filterAndRenderHistory(searchEl?.value ?? '')
+}
+
+function filterAndRenderHistory(query: string): void {
+  const q = query.toLowerCase().trim()
+  const rows = q
+    ? fullHistory.filter(r =>
+        (r.filename ?? '').toLowerCase().includes(q) ||
+        (r.date ?? '').includes(q) ||
+        (r.note  ?? '').toLowerCase().includes(q))
+    : fullHistory
+  renderHistoryRows(document.getElementById('history-tbody'), rows, true)
+  updateHistoryStats(fullHistory)
+}
+
+function updateHistoryStats(history: RecordingEntry[]): void {
+  const statsEl = document.getElementById('history-stats')
+  if (!statsEl) return
+  const ok = history.filter(r => r.status === 'ok')
+  if (!ok.length) { statsEl.style.display = 'none'; return }
+  statsEl.style.display = 'flex'
+  const countEl    = document.getElementById('stat-count')
+  const durationEl = document.getElementById('stat-duration')
+  const lastEl     = document.getElementById('stat-last')
+  if (countEl) countEl.textContent = `${ok.length} ${t('history.totalCount', 'opptak')}`
+  let totalSec = 0
+  for (const r of ok) {
+    const parts = (r.duration || '0').split(':').map(Number)
+    if (parts.length === 3)      totalSec += parts[0] * 3600 + parts[1] * 60 + parts[2]
+    else if (parts.length === 2) totalSec += parts[0] * 60 + parts[1]
+    else                         totalSec += parts[0]
+  }
+  const th = Math.floor(totalSec / 3600), tm = Math.round((totalSec % 3600) / 60)
+  if (durationEl) durationEl.textContent = th > 0
+    ? `${th} t ${tm} min ${t('history.totalDuration', 'totalt')}`
+    : `${tm} min ${t('history.totalDuration', 'totalt')}`
+  if (lastEl && ok[0]?.date)
+    lastEl.textContent = `${t('history.lastRecording', 'sist')} ${fmtDate(ok[0].date)}`
 }
 
 export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntry[], showReveal: boolean): void {
@@ -150,7 +207,41 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
       aReveal.innerHTML = '<svg viewBox="0 0 20 20"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5zM5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"/></svg>'
       aReveal.addEventListener('click', e => { e.preventDefault(); window.api.revealFile(r.path!) })
       tdActions.appendChild(aReveal)
+
+      const aEdit = document.createElement('a')
+      aEdit.href = '#'; aEdit.className = 'hist-action'
+      aEdit.title = t('editor.title', 'Rediger lydfil')
+      aEdit.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 10h14M3 6h3m11 0h-3M3 14h3m11 0h-3" stroke-linecap="round"/><circle cx="7.5" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="12.5" cy="14" r="1.5" fill="currentColor" stroke="none"/></svg>'
+      aEdit.addEventListener('click', e => { e.preventDefault(); window.openEditorWithFile(r.path!) })
+      tdActions.appendChild(aEdit)
     }
+
+    const aNote = document.createElement('a')
+    aNote.href = '#'; aNote.className = 'hist-action'
+    aNote.title = r.note ? t('history.editNote', 'Rediger notat') : t('history.addNote', 'Legg til notat')
+    aNote.innerHTML = r.note
+      ? '<svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>'
+      : '<svg viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>'
+    aNote.addEventListener('click', async e => {
+      e.preventDefault()
+      const newNote = prompt(t('history.notePlaceholder', 'Skriv notat…'), r.note ?? '')
+      if (newNote === null) return
+      r.note = newNote.trim() || undefined
+      await window.api.updateHistoryNote(r.timestamp!, newNote.trim())
+      const fileCell = tr.cells[3]
+      const existing = fileCell.querySelector('.hist-note')
+      if (existing) existing.remove()
+      if (r.note) {
+        const noteEl = Object.assign(document.createElement('div'), { className: 'hist-note', textContent: r.note })
+        noteEl.style.cssText = 'font-size:11px;color:var(--text3);white-space:normal;margin-top:2px'
+        fileCell.appendChild(noteEl)
+      }
+      aNote.title = r.note ? t('history.editNote', 'Rediger notat') : t('history.addNote', 'Legg til notat')
+      aNote.innerHTML = r.note
+        ? '<svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>'
+        : '<svg viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>'
+    })
+    tdActions.appendChild(aNote)
 
     const aDel = document.createElement('a')
     aDel.href = '#'; aDel.className = 'hist-action hist-del'
@@ -159,8 +250,11 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
     aDel.addEventListener('click', async e => {
       e.preventDefault()
       await window.api.deleteHistoryEntry(r.timestamp!)
+      const idx = fullHistory.findIndex(h => h.timestamp === r.timestamp)
+      if (idx >= 0) fullHistory.splice(idx, 1)
       tr.remove()
       if (!tbody.querySelector('tr')) renderHistoryRows(tbody, [], false)
+      updateHistoryStats(fullHistory)
     })
     tdActions.appendChild(aDel)
     tdActions.style.cssText = 'white-space:nowrap;display:flex;align-items:center;gap:2px'
@@ -169,7 +263,14 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
     cells.forEach((text, i) => {
       const td = document.createElement('td')
       td.textContent = text
-      if (i === 3 && r.path) td.title = r.path
+      if (i === 3) {
+        if (r.path) td.title = r.path
+        if (r.note) {
+          const noteEl = Object.assign(document.createElement('div'), { className: 'hist-note', textContent: r.note })
+          noteEl.style.cssText = 'font-size:11px;color:var(--text3);white-space:normal;margin-top:2px'
+          td.appendChild(noteEl)
+        }
+      }
       tr.appendChild(td)
     })
     tr.appendChild(tdStatus); tr.appendChild(tdActions)

@@ -330,6 +330,40 @@ function setupIPC(): void {
     store.setSmtpPassword('')
     return true
   })
+
+  ipcMain.handle('test-email', async () => {
+    try {
+      const s = store.getAll()
+      await mailer.sendTest(s, store.getSmtpPassword())
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
+
+  ipcMain.handle('update-history-note', (_, ts: number, note: string) => {
+    if (typeof ts !== 'number' || typeof note !== 'string') return
+    store.updateHistoryNote(ts, note)
+  })
+
+  ipcMain.handle('editor-read-file', async (_, filePath: string) => {
+    if (typeof filePath !== 'string') return null
+    try { return await fs.promises.readFile(filePath) } catch { return null }
+  })
+
+  ipcMain.handle('editor-save-file', async (_, params) => {
+    const { saveEdited } = await import('./editor')
+    return saveEdited(params)
+  })
+
+  ipcMain.handle('editor-pick-file', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender) ?? mainWindow
+    const r = await dialog.showOpenDialog(win!, {
+      properties: ['openFile'],
+      filters: [{ name: 'Audio', extensions: ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'webm'] }]
+    })
+    return r.canceled ? null : r.filePaths[0]
+  })
 }
 
 function notify(title: string, body: string): void {

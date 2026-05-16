@@ -35,6 +35,10 @@
       <svg viewBox="0 0 20 20"><path d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z"/></svg>
       <span data-i18n="nav.general">Generelt</span>
     </a></li>
+    <li><a href="#" class="nav-link" data-page="editor">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 10h14M3 6h3m11 0h-3M3 14h3m11 0h-3" stroke-linecap="round"/><circle cx="7.5" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="12.5" cy="14" r="1.5" fill="currentColor" stroke="none"/></svg>
+      <span data-i18n="nav.editor">Rediger</span>
+    </a></li>
   </ul>
   <div class="sidebar-status">
     <span class="status-dot" id="status-dot"></span>
@@ -185,9 +189,18 @@
     <div class="section-header">
       <h2 data-i18n="home.recentRecordings">Historikk</h2>
       <div style="display:flex;gap:14px;align-items:center">
+        <a href="#" class="view-all" id="btn-delete-errors" data-i18n="history.clearErrors">Slett feil</a>
         <a href="#" class="view-all" id="btn-prune-history" data-i18n="history.pruneBtn" title="Fjern oppføringer uten tilhørende fil">Rydd opp</a>
         <a href="#" class="view-all" id="btn-clear-history" title="Slett alle opptak fra historikken" data-i18n="history.clearBtn">Slett alle</a>
       </div>
+    </div>
+    <div style="margin-bottom:8px">
+      <input type="search" id="history-search" class="form-input" data-i18n-placeholder="history.searchPlaceholder" placeholder="Søk i historikk…" style="max-width:300px;font-size:13px;padding:6px 10px" />
+    </div>
+    <div id="history-stats" style="display:none;gap:16px;font-size:12px;color:var(--text3);margin-bottom:8px;flex-wrap:wrap">
+      <span id="stat-count"></span>
+      <span id="stat-duration"></span>
+      <span id="stat-last"></span>
     </div>
     <table class="rec-table">
       <thead><tr>
@@ -355,6 +368,28 @@
         </div>
         <label class="toggle"><input type="checkbox" id="opt-silence" /><span class="toggle-track"></span></label>
       </div>
+      <div id="silence-config" style="display:none;margin:4px 0 8px;padding:8px;background:var(--surface2,rgba(255,255,255,.04));border-radius:6px">
+        <div class="form-row two-col">
+          <div>
+            <label class="form-label" data-i18n="schedule.silenceThresholdLabel">GRENSE (dBFS)</label>
+            <select class="form-input" id="opt-silence-threshold">
+              <option value="-40">-40 dB</option>
+              <option value="-50" selected>-50 dB</option>
+              <option value="-60">-60 dB</option>
+              <option value="-70">-70 dB</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label" data-i18n="schedule.silenceTimeoutLabel">VARIGHET FØR STOPP</label>
+            <select class="form-input" id="opt-silence-timeout">
+              <option value="2">2 min</option>
+              <option value="5" selected>5 min</option>
+              <option value="10">10 min</option>
+              <option value="15">15 min</option>
+            </select>
+          </div>
+        </div>
+      </div>
       <div class="toggle-row">
         <div>
           <div class="toggle-title" data-i18n="schedule.splitTitle">Del opp filer automatisk</div>
@@ -398,6 +433,7 @@
       </div>
       <div class="btn-row">
         <button class="btn-primary" id="btn-schedule-save" data-i18n="schedule.save">Lagre tidsplan</button>
+        <button class="btn-secondary" id="btn-export-ical" data-i18n="schedule.exportIcal">Eksporter til iCal</button>
       </div>
     </div>
 
@@ -424,6 +460,18 @@
       </div>
       <div id="test-audio-warn" class="test-warn" style="display:none">
         ⚠️ Pass på feedback — hold mikrofonen unna høyttalerne!
+      </div>
+      <div id="test-vu-section" style="display:none;margin-top:8px">
+        <div class="vu-bar-group">
+          <div class="vu-bar-row">
+            <span class="vu-bar-lbl">L</span>
+            <div class="vu-bar-track"><div class="vu-bar-fill" id="test-vu-l"></div></div>
+          </div>
+          <div class="vu-bar-row">
+            <span class="vu-bar-lbl">R</span>
+            <div class="vu-bar-track"><div class="vu-bar-fill" id="test-vu-r"></div></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -486,6 +534,18 @@
             <label class="form-label" data-i18n="audio.ratio">RATIO</label>
             <input type="range" id="comp-ratio" min="1" max="20" value="4" class="slider" />
             <div class="slider-value" id="comp-ratio-val">4:1</div>
+          </div>
+        </div>
+        <div class="form-row two-col" style="margin-top:8px">
+          <div>
+            <label class="form-label" data-i18n="audio.attack">ATTACK (ms)</label>
+            <input type="range" id="comp-attack" min="1" max="200" value="10" class="slider" />
+            <div class="slider-value" id="comp-attack-val">10 ms</div>
+          </div>
+          <div>
+            <label class="form-label" data-i18n="audio.release">RELEASE (ms)</label>
+            <input type="range" id="comp-release" min="10" max="2000" value="200" class="slider" />
+            <div class="slider-value" id="comp-release-val">200 ms</div>
           </div>
         </div>
       </div>
@@ -567,6 +627,13 @@
           <span style="font-size:13px;color:var(--text2)">dager</span>
         </div>
       </div>
+      <div class="toggle-row mt">
+        <div>
+          <div class="toggle-title" data-i18n="files.trimSilence">Trim stillhet</div>
+          <div class="toggle-desc" data-i18n="files.trimSilenceDesc">Fjerner stillhet i begynnelsen og slutten av filen (ffmpeg silenceremove)</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="opt-trim-silence" /><span class="toggle-track"></span></label>
+      </div>
     </div>
     <div class="btn-row">
       <button class="btn-primary" id="btn-files-save" data-i18n="files.save">Lagre</button>
@@ -629,6 +696,7 @@
           <input type="password" class="form-input" id="email-pass" />
           <button type="button" class="btn-link" id="btn-clear-smtp-pass" style="display:none" data-i18n="general.clearPass">Fjern</button>
         </div>
+        <button type="button" class="btn-secondary" id="btn-test-email" style="margin-top:8px" data-i18n="general.testEmail">Test e-post</button>
       </div>
     </div>
     <div class="card">
@@ -646,6 +714,13 @@
           <div class="toggle-desc" data-i18n="general.showOnStartupDesc">Åpner vinduet automatisk når programmet starter. Ellers starter det diskret i systemfeltet.</div>
         </div>
         <label class="toggle"><input type="checkbox" id="opt-show-on-startup" /><span class="toggle-track"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-title" data-i18n="general.askOpenEditor">Spør om redigering etter opptak</div>
+          <div class="toggle-desc" data-i18n="general.askOpenEditorDesc">Vis varsel om å åpne filen i Rediger etter at opptaket er fullført</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="opt-ask-open-editor" checked /><span class="toggle-track"></span></label>
       </div>
     </div>
     <div class="card">
@@ -679,7 +754,127 @@
     </div>
   </section>
 
+  <!-- ══ REDIGER ═════════════════════════════════════════════════ -->
+  <section id="page-editor" class="page">
+
+    <!-- Empty state -->
+    <div id="editor-empty" class="editor-empty">
+      <div class="editor-empty-icon">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="4" y="16" width="40" height="16" rx="3" stroke-opacity=".3"/>
+          <path d="M4 24h40" stroke-opacity=".3"/>
+          <path d="M12 20v8M20 18v12M28 21v6M36 19v10" stroke-linecap="round"/>
+          <path d="M8 34l4-4m0 0l4 4m-4-4v8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".5"/>
+        </svg>
+      </div>
+      <div class="editor-empty-title" data-i18n="editor.emptyTitle">Ingen fil åpen</div>
+      <div class="editor-empty-desc" data-i18n="editor.emptyDesc">Velg en lydfil for å begynne å redigere. Du kan trimme starten og slutten, eller klippe ut deler fra midten.</div>
+      <button class="btn-primary" id="btn-editor-open" data-i18n="editor.openFile">Åpne lydfil…</button>
+    </div>
+
+    <!-- Loading state -->
+    <div id="editor-loading" class="editor-loading" style="display:none">
+      <div class="editor-loading-spin"></div>
+      <div data-i18n="editor.loading">Laster inn lydfil…</div>
+    </div>
+
+    <!-- Workspace -->
+    <div id="editor-workspace" style="display:none">
+
+      <!-- File + transport header -->
+      <div class="editor-header">
+        <div class="editor-file-row">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor" style="flex-shrink:0;opacity:.6"><path d="M4 4a2 2 0 012-2h4l2 2h4a2 2 0 012 2v9a2 2 0 01-2 2H6a2 2 0 01-2-2z"/></svg>
+          <span id="editor-filename" class="editor-filename"></span>
+          <button class="btn-ghost btn-sm" id="btn-editor-change" data-i18n="editor.openFile">Åpne annen fil…</button>
+        </div>
+        <div class="editor-transport">
+          <button class="btn-editor-play" id="btn-editor-play" title="Spill av">
+            <svg id="editor-play-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M6.3 4.6a1 1 0 011.4 0l6 5a1 1 0 010 1.6l-6 5A1 1 0 016 15.4V4.6z"/></svg>
+          </button>
+          <button class="btn-editor-play btn-editor-preview" id="btn-editor-preview" title="Spill forhåndsvisning (hopper over kuttede deler)">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 4l6 6-6 6V4z" fill="currentColor" stroke="none"/><path d="M14 4v12" stroke-linecap="round"/></svg>
+          </button>
+          <div class="editor-time">
+            <span class="editor-time-cur" id="editor-time-cur">0:00:00</span>
+            <span class="editor-time-sep">/</span>
+            <span class="editor-time-tot" id="editor-time-tot">0:00:00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Minimap -->
+      <div class="editor-minimap-wrap">
+        <canvas id="editor-minimap" class="editor-minimap" height="44"></canvas>
+        <div id="editor-minimap-vp" class="editor-minimap-vp"></div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="editor-toolbar">
+        <div class="editor-zoom-group">
+          <button class="btn-editor-tool" id="btn-zoom-in" title="Zoom inn">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8zm6-2a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1H6a1 1 0 110-2h1V7a1 1 0 011-1z"/></svg>
+          </button>
+          <button class="btn-editor-tool" id="btn-zoom-out" title="Zoom ut">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8zm3 1a1 1 0 011-1h4a1 1 0 110 2H6a1 1 0 01-1-1z"/></svg>
+          </button>
+          <button class="btn-editor-tool" id="btn-zoom-fit" title="Vis hele filen">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a1 1 0 000 2h14a1 1 0 100-2H3zm0 5a1 1 0 000 2h14a1 1 0 100-2H3zm0 5a1 1 0 000 2h14a1 1 0 100-2H3z"/></svg>
+          </button>
+        </div>
+        <div class="editor-drag-hint" data-i18n="editor.dragHint">Klikk og dra for å markere et kutt</div>
+        <button class="btn-ghost btn-sm" id="btn-editor-undo-all" data-i18n="editor.cutsNone" style="display:none">Fjern alle kutt</button>
+      </div>
+
+      <!-- Main waveform canvas -->
+      <div class="editor-canvas-wrap" id="editor-canvas-wrap">
+        <canvas id="editor-canvas" class="editor-canvas"></canvas>
+      </div>
+
+      <!-- Cut list -->
+      <div class="editor-cuts-panel" id="editor-cuts-panel" style="display:none">
+        <div class="editor-cuts-header" data-i18n="editor.cutsTitle">Kuttede regioner</div>
+        <div id="editor-cuts-list"></div>
+      </div>
+
+      <!-- Save bar -->
+      <div class="editor-save-bar">
+        <div id="editor-result-row" class="editor-result-row" style="display:none">
+          <svg viewBox="0 0 20 20" fill="currentColor" style="color:var(--green)"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>
+          <span id="editor-result-text"></span>
+        </div>
+        <button class="btn-primary" id="btn-editor-save" data-i18n="editor.save">Lagre redigert fil</button>
+      </div>
+
+    </div><!-- /workspace -->
+
+  </section>
+
 </main>
+
+<!-- Editor prompt toast (post-recording) -->
+<div id="editor-prompt-toast" class="editor-prompt-toast" style="display:none">
+  <div class="update-toast-body">
+    <div class="update-toast-title" data-i18n="editor.promptTitle">Vil du redigere opptaket?</div>
+    <div class="update-toast-actions" style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn-toast-install" id="btn-editor-prompt-open" data-i18n="editor.promptOpen">Åpne i Rediger</button>
+      <button class="btn-ghost btn-sm" id="btn-editor-prompt-dismiss">✕</button>
+    </div>
+  </div>
+</div>
+
+<!-- Editor save modal -->
+<div id="editor-save-modal" class="modal-backdrop" style="display:none">
+  <div class="modal modal-sm">
+    <h2 data-i18n="editor.saveTitle">Lagre redigert fil</h2>
+    <p data-i18n="editor.saveConfirm">Velg om du vil lagre som en ny fil ved siden av originalen, eller erstatte originalfilen.</p>
+    <div class="btn-row mt">
+      <button class="btn-primary" id="btn-save-new" data-i18n="editor.saveNewFile">Lagre som ny fil</button>
+      <button class="btn-secondary" id="btn-save-replace" data-i18n="editor.saveReplace">Erstatt original</button>
+      <button class="btn-ghost" id="btn-save-cancel" data-i18n="editor.cancel">Avbryt</button>
+    </div>
+  </div>
+</div>
 
 <!-- ══ MODALS ════════════════════════════════════════════════════ -->
 

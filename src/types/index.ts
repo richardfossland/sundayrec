@@ -23,6 +23,11 @@ export interface SpecialRecording {
   deviceId?: string
 }
 
+export interface CutRegion {
+  start: number  // seconds
+  end: number    // seconds
+}
+
 export interface RecordingEntry {
   date: string
   startTime: string
@@ -31,6 +36,7 @@ export interface RecordingEntry {
   path?: string
   status: 'ok' | 'error' | 'scheduled'
   error?: string
+  note?: string
   timestamp?: number
 }
 
@@ -76,8 +82,10 @@ export interface Settings {
   slots: ScheduleSlot[]
   specialRecordings: SpecialRecording[]
   stopOnSilence: boolean
+  silenceThreshold?: number        // dBFS threshold, default -50
+  silenceTimeoutMinutes?: number   // minutes of silence before stop, default 5
   splitMinutes: number     // 0 = off; split every N minutes from recording start
-  splitHourly?: boolean    // deprecated — migrated to splitMinutes:60 on first read
+  trimSilence?: boolean    // run ffmpeg silenceremove on output
   reminderMinutes: number  // 0 = off; system notification N min before scheduled recording
   manualMaxMinutes: number // 0 = off; auto-stop manual recordings after N minutes
 
@@ -99,6 +107,9 @@ export interface Settings {
   emailSmtpPass: string       // runtime only — always '' in store; real value in emailSmtpPassEnc
   emailSmtpPassSet?: boolean  // populated by main before sending to renderer
   emailSmtpPassEnc?: string   // internal: base64-encoded safeStorage ciphertext
+
+  // Editor
+  askOpenEditor?: boolean
 
   // Updates
   autoUpdate: boolean

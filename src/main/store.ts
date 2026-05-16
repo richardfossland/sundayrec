@@ -5,6 +5,7 @@ import type { Settings, RecordingEntry } from '../types'
 
 const defaults: Settings = {
   language: null,
+  hasLaunched: false,
 
   deviceId: null,
   deviceName: null,
@@ -53,6 +54,7 @@ const defaults: Settings = {
   emailSmtpPass: '',
 
   autoUpdate: true,
+  askOpenEditor: true,
 
   churchName: '',
   responsiblePerson: '',
@@ -113,10 +115,8 @@ export function set<K extends keyof Settings>(key: K, value: Settings[K]): void 
 
 export function getAll(): Settings {
   const s = store.store
-  const splitMinutes = s.splitMinutes ?? (s.splitHourly ? 60 : 0)
   return {
     ...s,
-    splitMinutes,
     emailSmtpPass: '',
     emailSmtpPassSet: hasSmtpPassword()
   }
@@ -147,6 +147,15 @@ export function deleteHistoryEntry(timestamp: number): void {
 
 export function clearHistory(): void {
   store.set('recordingHistory', [])
+}
+
+export function updateHistoryNote(timestamp: number, note: string): void {
+  const history = getHistory()
+  const entry = history.find(e => e.timestamp === timestamp)
+  if (entry) {
+    entry.note = note.trim() || undefined
+    store.set('recordingHistory', history)
+  }
 }
 
 export function pruneHistory(): number {

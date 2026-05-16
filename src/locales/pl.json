@@ -10,7 +10,8 @@
     "calendar": "Kalendarz kościelny",
     "audio": "Źródło dźwięku",
     "files": "Pliki",
-    "general": "Ogólne"
+    "general": "Ogólne",
+    "editor": "Edycja"
   },
   "status": {
     "ready": "Wszystko gotowe",
@@ -77,7 +78,16 @@
     "confirmClear": "Usunąć całą historię?",
     "pruneBtn": "Wyczyść",
     "clearBtn": "Wyczyść wszystko",
-    "pruneNone": "Nic do czyszczenia"
+    "pruneNone": "Nic do czyszczenia",
+    "clearErrors": "Wyczyść błędy",
+    "searchPlaceholder": "Szukaj w historii…",
+    "totalCount": "nagrań",
+    "totalDuration": "łącznie",
+    "lastRecording": "ostatnie",
+    "addNote": "Dodaj notatkę",
+    "editNote": "Edytuj notatkę",
+    "notePlaceholder": "Napisz notatkę…",
+    "confirmDeleteErrors": "Usunąć wszystkie wpisy błędów?"
   },
   "schedule": {
     "title": "Tygodniowy harmonogram",
@@ -160,7 +170,11 @@
     "sleepFixOk": "Naprawiono — ustawienia uśpienia są teraz optymalne",
     "sleepFixFail": "Automatyczna naprawa nie powiodła się",
     "sleepFixCancelled": "Anulowano — zatwierdź uprawnienie, aby naprawić",
-    "sleepAlwaysOffNote": "Chcesz, aby komputer zawsze uruchamiał nagrywanie? Pozostaw go w trybie uśpienia (nie wyłączaj) i aktywuj «Uruchamiaj z Windows/Mac» w ustawieniach Ogólnych."
+    "sleepAlwaysOffNote": "Chcesz, aby komputer zawsze uruchamiał nagrywanie? Pozostaw go w trybie uśpienia (nie wyłączaj) i aktywuj «Uruchamiaj z Windows/Mac» w ustawieniach Ogólnych.",
+    "silenceThresholdLabel": "PRÓG (dBFS)",
+    "silenceTimeoutLabel": "CZAS PRZED ZATRZYMANIEM",
+    "exportIcal": "Eksportuj do iCal",
+    "icalFilename": "SundayRec-harmonogram"
   },
   "calendar": {
     "title": "Kalendarz kościelny",
@@ -254,6 +268,8 @@
     "compressorDesc": "Wyrównuje wahania głośności w nagraniu",
     "threshold": "PRÓG (dB)",
     "ratio": "RATIO",
+    "attack": "ATTACK (ms)",
+    "release": "RELEASE (ms)",
     "limiter": "Limiter",
     "limiterDesc": "Zapobiega przesterowaniu przy wysokich poziomach dźwięku (zalecane)",
     "ceiling": "PUŁAP (dB)"
@@ -280,6 +296,8 @@
     "q320": "320 kbps — najwyższa jakość",
     "autoDelete": "Usuń automatycznie po 90 dniach",
     "autoDeleteDesc": "Automatycznie zwalnia miejsce na dysku usuwając stare nagrania",
+    "trimSilence": "Przytnij ciszę",
+    "trimSilenceDesc": "Usuwa ciszę z początku i końca pliku",
     "save": "Zapisz",
     "cancel": "Anuluj"
   },
@@ -320,7 +338,35 @@
     "save": "Zapisz",
     "cancel": "Anuluj",
     "currentVersion": "Aktualna wersja:",
-    "saved": "✓ Zapisano"
+    "saved": "✓ Zapisano",
+    "testEmail": "Test e-mail",
+    "testEmailOk": "✓ Testowa wiadomość wysłana",
+    "testEmailFail": "✕ Wysyłanie nieudane",
+    "testEmailNoConfig": "Wypełnij ustawienia SMTP",
+    "askOpenEditor": "Pytaj o edycję po nagraniu",
+    "askOpenEditorDesc": "Pokazuje monit o otwarcie pliku w edytorze po zakończeniu nagrywania"
+  },
+  "editor": {
+    "title": "Edytuj plik audio",
+    "emptyTitle": "Brak otwartego pliku",
+    "emptyDesc": "Wybierz plik audio, aby rozpocząć edycję. Możesz przyciąć początek i koniec lub wyciąć fragmenty ze środka.",
+    "openFile": "Otwórz plik audio…",
+    "loading": "Ładowanie pliku audio…",
+    "dragHint": "Kliknij i przeciągnij, aby zaznaczyć cięcie",
+    "cutsTitle": "Obszary cięć",
+    "cutsNone": "Usuń wszystkie cięcia",
+    "deleteCut": "Usuń cięcie",
+    "save": "Zapisz edytowany plik",
+    "saveNewFile": "Zapisz jako nowy plik",
+    "saveReplace": "Zastąp oryginał",
+    "saveTitle": "Zapisz edytowany plik",
+    "saveConfirm": "Wybierz, czy zapisać jako nowy plik obok oryginału, czy zastąpić oryginalny plik.",
+    "cancel": "Anuluj",
+    "saving": "Zapisuję…",
+    "saveOk": "✓ Zapisano",
+    "saveError": "✕ Błąd podczas zapisywania",
+    "promptTitle": "Czy chcesz edytować nagranie?",
+    "promptOpen": "Otwórz w edytorze"
   },
   "manual": {
     "title": "Rozpocznij nagrywanie ręczne",

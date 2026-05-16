@@ -10,7 +10,8 @@
     "calendar": "Kirkekalender",
     "audio": "Lydkilde",
     "files": "Filer",
-    "general": "Generelt"
+    "general": "Generelt",
+    "editor": "Rediger"
   },
   "status": {
     "ready": "Alt er klart",
@@ -77,7 +78,16 @@
     "confirmClear": "Slett hele historikken?",
     "pruneBtn": "Rydd opp",
     "clearBtn": "Slett alle",
-    "pruneNone": "Ingen å rydde"
+    "pruneNone": "Ingen å rydde",
+    "clearErrors": "Slett feil",
+    "searchPlaceholder": "Søk i historikk…",
+    "totalCount": "opptak",
+    "totalDuration": "totalt",
+    "lastRecording": "sist",
+    "addNote": "Legg til notat",
+    "editNote": "Rediger notat",
+    "notePlaceholder": "Skriv notat…",
+    "confirmDeleteErrors": "Slett alle feiloppføringer?"
   },
   "schedule": {
     "title": "Ukentlig tidsplan",
@@ -160,7 +170,11 @@
     "sleepFixOk": "Fikset — dvaleinnstillinger er nå optimale",
     "sleepFixFail": "Automatisk fiks mislyktes",
     "sleepFixCancelled": "Avbrutt — godkjenn tillatelsen for å fikse",
-    "sleepAlwaysOffNote": "Vil du at maskinen alltid skal starte opptak? La den stå i dvale (ikke slå den av) og aktiver «Start med Windows/Mac» under Generelt."
+    "sleepAlwaysOffNote": "Vil du at maskinen alltid skal starte opptak? La den stå i dvale (ikke slå den av) og aktiver «Start med Windows/Mac» under Generelt.",
+    "silenceThresholdLabel": "GRENSE (dBFS)",
+    "silenceTimeoutLabel": "VARIGHET FØR STOPP",
+    "exportIcal": "Eksporter til iCal",
+    "icalFilename": "SundayRec-timeplan"
   },
   "calendar": {
     "title": "Kirkekalender",
@@ -254,6 +268,8 @@
     "compressorDesc": "Jevner ut volumvariasjoner i opptaket",
     "threshold": "TERSKEL (dB)",
     "ratio": "RATIO",
+    "attack": "ATTACK (ms)",
+    "release": "RELEASE (ms)",
     "limiter": "Limiter",
     "limiterDesc": "Hindrer klipping ved for høye lydnivåer (anbefalt)",
     "ceiling": "TAK (dB)"
@@ -280,6 +296,8 @@
     "q320": "320 kbps — høyeste kvalitet",
     "autoDelete": "Slett automatisk etter 90 dager",
     "autoDeleteDesc": "Frigjør diskplass automatisk ved å slette gamle opptak",
+    "trimSilence": "Trim stillhet",
+    "trimSilenceDesc": "Fjerner stillhet i begynnelsen og slutten av filen",
     "save": "Lagre",
     "cancel": "Avbryt"
   },
@@ -320,7 +338,35 @@
     "save": "Lagre",
     "cancel": "Avbryt",
     "currentVersion": "Nåværende versjon:",
-    "saved": "✓ Lagret"
+    "saved": "✓ Lagret",
+    "testEmail": "Test e-post",
+    "testEmailOk": "✓ Testmelding sendt",
+    "testEmailFail": "✕ Sending feilet",
+    "testEmailNoConfig": "Fyll inn SMTP-innstillinger",
+    "askOpenEditor": "Spør om redigering etter opptak",
+    "askOpenEditorDesc": "Vis varsel om å åpne filen i Rediger etter at opptaket er fullført"
+  },
+  "editor": {
+    "title": "Rediger lydfil",
+    "emptyTitle": "Ingen fil åpen",
+    "emptyDesc": "Velg en lydfil for å begynne å redigere. Du kan trimme starten og slutten, eller klippe ut deler fra midten.",
+    "openFile": "Åpne lydfil…",
+    "loading": "Laster inn lydfil…",
+    "dragHint": "Klikk og dra for å markere et kutt",
+    "cutsTitle": "Kuttede regioner",
+    "cutsNone": "Fjern alle kutt",
+    "deleteCut": "Fjern kutt",
+    "save": "Lagre redigert fil",
+    "saveNewFile": "Lagre som ny fil",
+    "saveReplace": "Erstatt original",
+    "saveTitle": "Lagre redigert fil",
+    "saveConfirm": "Velg om du vil lagre som en ny fil ved siden av originalen, eller erstatte originalfilen.",
+    "cancel": "Avbryt",
+    "saving": "Lagrer…",
+    "saveOk": "✓ Lagret",
+    "saveError": "✕ Feil ved lagring",
+    "promptTitle": "Vil du redigere opptaket?",
+    "promptOpen": "Åpne i Rediger"
   },
   "manual": {
     "title": "Start manuelt opptak",

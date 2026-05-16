@@ -10,7 +10,8 @@
     "calendar": "Calendrier liturgique",
     "audio": "Source audio",
     "files": "Fichiers",
-    "general": "Général"
+    "general": "Général",
+    "editor": "Éditeur"
   },
   "status": {
     "ready": "Tout est prêt",
@@ -77,7 +78,16 @@
     "confirmClear": "Supprimer tout l'historique ?",
     "pruneBtn": "Nettoyer",
     "clearBtn": "Tout effacer",
-    "pruneNone": "Rien à nettoyer"
+    "pruneNone": "Rien à nettoyer",
+    "clearErrors": "Effacer les erreurs",
+    "searchPlaceholder": "Rechercher dans l'historique…",
+    "totalCount": "enregistrements",
+    "totalDuration": "total",
+    "lastRecording": "dernier",
+    "addNote": "Ajouter une note",
+    "editNote": "Modifier la note",
+    "notePlaceholder": "Écrire une note…",
+    "confirmDeleteErrors": "Supprimer toutes les entrées d'erreur ?"
   },
   "schedule": {
     "title": "Planning hebdomadaire",
@@ -160,7 +170,11 @@
     "sleepFixOk": "Corrigé — les paramètres de veille sont maintenant optimaux",
     "sleepFixFail": "La correction automatique a échoué",
     "sleepFixCancelled": "Annulé — approuvez l'autorisation pour corriger",
-    "sleepAlwaysOffNote": "Vous voulez que la machine démarre toujours les enregistrements ? Laissez-la en veille (ne l'éteignez pas) et activez «Démarrer avec Windows/Mac» sous Général."
+    "sleepAlwaysOffNote": "Vous voulez que la machine démarre toujours les enregistrements ? Laissez-la en veille (ne l'éteignez pas) et activez «Démarrer avec Windows/Mac» sous Général.",
+    "silenceThresholdLabel": "SEUIL (dBFS)",
+    "silenceTimeoutLabel": "DURÉE AVANT ARRÊT",
+    "exportIcal": "Exporter vers iCal",
+    "icalFilename": "SundayRec-planning"
   },
   "calendar": {
     "title": "Calendrier liturgique",
@@ -254,6 +268,8 @@
     "compressorDesc": "Atténue les variations de volume dans l'enregistrement",
     "threshold": "SEUIL (dB)",
     "ratio": "RATIO",
+    "attack": "ATTACK (ms)",
+    "release": "RELEASE (ms)",
     "limiter": "Limiteur",
     "limiterDesc": "Empêche l'écrêtage à des niveaux audio élevés (recommandé)",
     "ceiling": "PLAFOND (dB)"
@@ -280,6 +296,8 @@
     "q320": "320 kbps — qualité maximale",
     "autoDelete": "Supprimer automatiquement après 90 jours",
     "autoDeleteDesc": "Libère automatiquement de l'espace disque en supprimant les anciens enregistrements",
+    "trimSilence": "Supprimer les silences",
+    "trimSilenceDesc": "Supprime les silences au début et à la fin du fichier",
     "save": "Enregistrer",
     "cancel": "Annuler"
   },
@@ -320,7 +338,35 @@
     "save": "Enregistrer",
     "cancel": "Annuler",
     "currentVersion": "Version actuelle :",
-    "saved": "✓ Enregistré"
+    "saved": "✓ Enregistré",
+    "testEmail": "Tester l'e-mail",
+    "testEmailOk": "✓ Message de test envoyé",
+    "testEmailFail": "✕ Envoi échoué",
+    "testEmailNoConfig": "Veuillez remplir les paramètres SMTP",
+    "askOpenEditor": "Demander l'édition après l'enregistrement",
+    "askOpenEditorDesc": "Affiche une invite pour ouvrir le fichier dans l'éditeur après la fin de l'enregistrement"
+  },
+  "editor": {
+    "title": "Éditer le fichier audio",
+    "emptyTitle": "Aucun fichier ouvert",
+    "emptyDesc": "Sélectionnez un fichier audio pour commencer à éditer. Vous pouvez rogner le début et la fin, ou couper des sections au milieu.",
+    "openFile": "Ouvrir un fichier audio…",
+    "loading": "Chargement du fichier audio…",
+    "dragHint": "Cliquer et glisser pour marquer une coupe",
+    "cutsTitle": "Régions coupées",
+    "cutsNone": "Supprimer toutes les coupes",
+    "deleteCut": "Supprimer la coupe",
+    "save": "Enregistrer le fichier édité",
+    "saveNewFile": "Enregistrer comme nouveau fichier",
+    "saveReplace": "Remplacer l'original",
+    "saveTitle": "Enregistrer le fichier édité",
+    "saveConfirm": "Choisissez si vous souhaitez enregistrer comme nouveau fichier ou remplacer le fichier original.",
+    "cancel": "Annuler",
+    "saving": "Enregistrement…",
+    "saveOk": "✓ Enregistré",
+    "saveError": "✕ Erreur lors de l'enregistrement",
+    "promptTitle": "Voulez-vous éditer l'enregistrement ?",
+    "promptOpen": "Ouvrir dans l'éditeur"
   },
   "manual": {
     "title": "Démarrer un enregistrement manuel",

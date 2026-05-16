@@ -10,7 +10,8 @@
     "calendar": "Kirkekalender",
     "audio": "Lydkilde",
     "files": "Filer",
-    "general": "Generelt"
+    "general": "Generelt",
+    "editor": "Rediger"
   },
   "status": {
     "ready": "Alt er klar",
@@ -77,7 +78,16 @@
     "confirmClear": "Slet al historik?",
     "pruneBtn": "Ryd op",
     "clearBtn": "Slet alle",
-    "pruneNone": "Intet at rydde"
+    "pruneNone": "Intet at rydde",
+    "clearErrors": "Slet fejl",
+    "searchPlaceholder": "Søg i historik…",
+    "totalCount": "optagelser",
+    "totalDuration": "totalt",
+    "lastRecording": "sidst",
+    "addNote": "Tilføj note",
+    "editNote": "Rediger note",
+    "notePlaceholder": "Skriv en note…",
+    "confirmDeleteErrors": "Slet alle fejlposter?"
   },
   "schedule": {
     "title": "Ugentlig tidsplan",
@@ -160,7 +170,11 @@
     "sleepFixOk": "Rettet — dvalindstillinger er nu optimale",
     "sleepFixFail": "Automatisk rettelse mislykkedes",
     "sleepFixCancelled": "Annulleret — godkend tilladelsen for at rette",
-    "sleepAlwaysOffNote": "Vil du have maskinen til altid at starte optagelser? Lad den være i dvale (sluk den ikke) og aktivér «Start med Windows/Mac» under Generelt."
+    "sleepAlwaysOffNote": "Vil du have maskinen til altid at starte optagelser? Lad den være i dvale (sluk den ikke) og aktivér «Start med Windows/Mac» under Generelt.",
+    "silenceThresholdLabel": "GRÆNSE (dBFS)",
+    "silenceTimeoutLabel": "VARIGHED FØR STOP",
+    "exportIcal": "Eksportér til iCal",
+    "icalFilename": "SundayRec-tidsplan"
   },
   "calendar": {
     "title": "Kirkekalender",
@@ -254,6 +268,8 @@
     "compressorDesc": "Udjævner volumenvariationer i optagelsen",
     "threshold": "TÆRSKEL (dB)",
     "ratio": "RATIO",
+    "attack": "ATTACK (ms)",
+    "release": "RELEASE (ms)",
     "limiter": "Limiter",
     "limiterDesc": "Forhindrer klipning ved høje lydniveauer (anbefalet)",
     "ceiling": "LOFT (dB)"
@@ -280,6 +296,8 @@
     "q320": "320 kbps — højeste kvalitet",
     "autoDelete": "Slet automatisk efter 90 dage",
     "autoDeleteDesc": "Frigiver diskplads automatisk ved at slette gamle optagelser",
+    "trimSilence": "Trim stilhed",
+    "trimSilenceDesc": "Fjerner stilhed i begyndelsen og slutningen af filen",
     "save": "Gem",
     "cancel": "Annuller"
   },
@@ -320,7 +338,35 @@
     "save": "Gem",
     "cancel": "Annuller",
     "currentVersion": "Nuværende version:",
-    "saved": "✓ Gemt"
+    "saved": "✓ Gemt",
+    "testEmail": "Test e-mail",
+    "testEmailOk": "✓ Testbesked sendt",
+    "testEmailFail": "✕ Afsendelse mislykkedes",
+    "testEmailNoConfig": "Udfyld SMTP-indstillinger",
+    "askOpenEditor": "Spørg om redigering efter optagelse",
+    "askOpenEditorDesc": "Vis en besked om at åbne filen i Rediger, når optagelsen er fuldført"
+  },
+  "editor": {
+    "title": "Rediger lydfil",
+    "emptyTitle": "Ingen fil åben",
+    "emptyDesc": "Vælg en lydfil for at begynde at redigere. Du kan klippe starten og slutningen eller fjerne dele fra midten.",
+    "openFile": "Åbn lydfil…",
+    "loading": "Indlæser lydfil…",
+    "dragHint": "Klik og træk for at markere et klip",
+    "cutsTitle": "Klippede regioner",
+    "cutsNone": "Fjern alle klip",
+    "deleteCut": "Fjern klip",
+    "save": "Gem redigeret fil",
+    "saveNewFile": "Gem som ny fil",
+    "saveReplace": "Erstat original",
+    "saveTitle": "Gem redigeret fil",
+    "saveConfirm": "Vælg om du vil gemme som en ny fil ved siden af originalen, eller erstatte originalfilen.",
+    "cancel": "Annuller",
+    "saving": "Gemmer…",
+    "saveOk": "✓ Gemt",
+    "saveError": "✕ Fejl ved gem",
+    "promptTitle": "Vil du redigere optagelsen?",
+    "promptOpen": "Åbn i Rediger"
   },
   "manual": {
     "title": "Start manuel optagelse",

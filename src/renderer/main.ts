@@ -10,6 +10,7 @@ import { setupCalendarPage, renderCalendar, renderPlannedList } from './pages/ca
 import { setupFilesPage, applyFilesSettingsToUI, updateFilenamePreview, toggleMp3Quality } from './pages/files-page'
 import { setupGeneralPage, applyGeneralSettingsToUI } from './pages/general-page'
 import { setupRecording } from './pages/recording'
+import { setupEditorPage, openEditorWithFile, deactivateEditor } from './pages/editor-page'
 
 // Expose globals that sub-modules need
 declare global {
@@ -17,6 +18,7 @@ declare global {
     showPage: (id: string) => void
     loadSettings: () => Promise<void>
     __isRecording: boolean
+    openEditorWithFile: (filePath: string) => void
     api: {
       getSettings:         () => Promise<Settings>
       saveSettings:        (s: Settings) => Promise<boolean>
@@ -35,6 +37,8 @@ declare global {
       openFolder:          (p: string) => Promise<void>
       revealFile:          (p: string) => Promise<void>
       clearSmtpPassword:   () => Promise<boolean>
+      testEmail:           () => Promise<{ ok: boolean; error?: string }>
+      updateHistoryNote:   (ts: number, note: string) => Promise<void>
       getAppVersion:       () => Promise<string>
       checkForUpdates:     () => Promise<void>
       installUpdate:       () => void
@@ -51,6 +55,9 @@ declare global {
       notifyError:         (data: unknown) => void
       notifyWeakSignal:    () => void
       on:                  (channel: string, fn: (...args: unknown[]) => void) => (() => void) | undefined
+      editorReadFile: (filePath: string) => Promise<unknown>
+      editorSaveFile: (params: unknown) => Promise<{ ok: boolean; outputPath?: string; error?: string }>
+      editorPickFile: () => Promise<string | null>
     }
     appVersion?: string
   }
@@ -76,6 +83,7 @@ function applyAllSettingsToUI(s: Settings): void {
 
 function showPage(id: string): void {
   if (id !== 'home') stopVU()
+  if (id !== 'editor') deactivateEditor()
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'))
   document.querySelectorAll('.nav-link').forEach(a => a.classList.remove('active'))
   document.getElementById(`page-${id}`)?.classList.add('active')
@@ -118,7 +126,10 @@ async function init(): Promise<void> {
   setupFilesPage()
   setupGeneralPage()
   setupRecording()
+  setupEditorPage()
   setupClipReset()
+
+  window.openEditorWithFile = openEditorWithFile
 
   // Fetch app version from main (sandbox-safe — no fs/path in preload)
   window.appVersion = await window.api.getAppVersion().catch(() => '—')
