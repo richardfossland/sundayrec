@@ -97,8 +97,6 @@ export function reschedule(): void {
 
 function triggerStart(slot: ScheduleSlot | SpecialRecording, overrideName?: string): void {
   if (!mainWindow) return
-  if (!mainWindow.isVisible()) mainWindow.show()
-  mainWindow.focus()
 
   const s = store.getAll()
   const deviceId = (slot as SpecialRecording).deviceId || s.deviceId

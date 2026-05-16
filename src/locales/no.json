@@ -141,7 +141,19 @@
     "reminderTitle": "Påminnelse før opptak",
     "reminderDesc": "Systemvarsel N minutter før planlagt opptak starter",
     "manualMaxTitle": "Maks varighet — manuelle opptak",
-    "manualMaxDesc": "Stopper automatisk etter angitt tid — unngår enorme filer ved glemt stopp"
+    "manualMaxDesc": "Stopper automatisk etter angitt tid — unngår enorme filer ved glemt stopp",
+    "sleepChecking": "Sjekker dvaleinnstillinger…",
+    "sleepStatusOk": "Dvaleinnstillinger er OK — oppvåkning fungerer",
+    "sleepStatusMacWarn": "Autopoweroff er aktivert — Mac kan slå seg av under dvale",
+    "sleepStatusWinWarn": "Vekketimer er ikke aktivert — oppvåkning kan feile",
+    "sleepStatusUnknown": "Kunne ikke lese dvaleinnstillinger",
+    "sleepStatusUnsupported": "Ikke støttet på denne plattformen",
+    "sleepFixBtn": "Fiks automatisk",
+    "sleepFixing": "Fikser…",
+    "sleepFixOk": "Fikset — dvaleinnstillinger er nå optimale",
+    "sleepFixFail": "Automatisk fiks mislyktes",
+    "sleepFixCancelled": "Avbrutt — godkjenn tillatelsen for å fikse",
+    "sleepAlwaysOffNote": "Vil du at maskinen alltid skal starte opptak? La den stå i dvale (ikke slå den av) og aktiver «Start med Windows/Mac» under Generelt."
   },
   "calendar": {
     "title": "Kirkekalender",

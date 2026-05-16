@@ -218,6 +218,9 @@ function setupIPC(): void {
 
   ipcMain.handle('schedule-os-wakes',       () => wake.reschedule(scheduler.getUpcomingDates(), mainWindow, false))
   ipcMain.handle('schedule-os-wakes-admin', () => wake.reschedule(scheduler.getUpcomingDates(), mainWindow, true))
+  ipcMain.handle('get-sleep-config',        () => wake.getSleepConfig())
+  ipcMain.handle('fix-mac-sleep',           () => wake.fixMacSleep())
+  ipcMain.handle('fix-win-wake-timers',     () => wake.fixWinWakeTimers())
 
   ipcMain.handle('export-profile', () => store.exportProfile())
   ipcMain.handle('import-profile', (_, json: string) => {

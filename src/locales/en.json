@@ -141,7 +141,19 @@
     "reminderTitle": "Reminder before recording",
     "reminderDesc": "System notification N minutes before a scheduled recording starts",
     "manualMaxTitle": "Max duration — manual recordings",
-    "manualMaxDesc": "Stops automatically after the set time — prevents huge files if you forget to stop"
+    "manualMaxDesc": "Stops automatically after the set time — prevents huge files if you forget to stop",
+    "sleepChecking": "Checking sleep settings…",
+    "sleepStatusOk": "Sleep settings are OK — wake-up will work",
+    "sleepStatusMacWarn": "Autopoweroff is enabled — Mac may shut down during sleep",
+    "sleepStatusWinWarn": "Wake timers are not enabled — wake-up may fail",
+    "sleepStatusUnknown": "Could not read sleep settings",
+    "sleepStatusUnsupported": "Not supported on this platform",
+    "sleepFixBtn": "Fix automatically",
+    "sleepFixing": "Fixing…",
+    "sleepFixOk": "Fixed — sleep settings are now optimal",
+    "sleepFixFail": "Automatic fix failed",
+    "sleepFixCancelled": "Cancelled — approve the permission prompt to fix",
+    "sleepAlwaysOffNote": "Want the machine to always start recordings? Keep it in sleep (don't shut it down) and enable «Start with Windows/Mac» under General."
   },
   "calendar": {
     "title": "Church Calendar",

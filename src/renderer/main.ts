@@ -40,6 +40,9 @@ declare global {
       installUpdate:       () => void
       scheduleOsWakes:      () => Promise<unknown>
       scheduleOsWakesAdmin: () => Promise<unknown>
+      getSleepConfig:       () => Promise<unknown>
+      fixMacSleep:          () => Promise<{ ok: boolean; message?: string }>
+      fixWinWakeTimers:     () => Promise<{ ok: boolean; message?: string }>
       sendAudioChunk:      (buf: ArrayBuffer) => void
       confirmStart:        (data: unknown) => void
       chunksDone:          () => void

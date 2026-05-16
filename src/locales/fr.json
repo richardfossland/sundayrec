@@ -141,7 +141,19 @@
     "reminderTitle": "Rappel avant enregistrement",
     "reminderDesc": "Notification système N minutes avant le début d'un enregistrement planifié",
     "manualMaxTitle": "Durée max — enregistrements manuels",
-    "manualMaxDesc": "S'arrête automatiquement après le délai défini — évite les fichiers énormes"
+    "manualMaxDesc": "S'arrête automatiquement après le délai défini — évite les fichiers énormes",
+    "sleepChecking": "Vérification des paramètres de veille…",
+    "sleepStatusOk": "Paramètres de veille OK — le réveil fonctionne",
+    "sleepStatusMacWarn": "Autopoweroff est activé — le Mac peut s'éteindre en veille",
+    "sleepStatusWinWarn": "Les minuteries de réveil ne sont pas activées — le réveil peut échouer",
+    "sleepStatusUnknown": "Impossible de lire les paramètres de veille",
+    "sleepStatusUnsupported": "Non pris en charge sur cette plateforme",
+    "sleepFixBtn": "Corriger automatiquement",
+    "sleepFixing": "Correction en cours…",
+    "sleepFixOk": "Corrigé — les paramètres de veille sont maintenant optimaux",
+    "sleepFixFail": "La correction automatique a échoué",
+    "sleepFixCancelled": "Annulé — approuvez l'autorisation pour corriger",
+    "sleepAlwaysOffNote": "Vous voulez que la machine démarre toujours les enregistrements ? Laissez-la en veille (ne l'éteignez pas) et activez «Démarrer avec Windows/Mac» sous Général."
   },
   "calendar": {
     "title": "Calendrier liturgique",

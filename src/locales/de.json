@@ -141,7 +141,19 @@
     "reminderTitle": "Erinnerung vor Aufnahme",
     "reminderDesc": "Systembenachrichtigung N Minuten vor Beginn einer geplanten Aufnahme",
     "manualMaxTitle": "Maximale Dauer — manuelle Aufnahmen",
-    "manualMaxDesc": "Stoppt automatisch nach der eingestellten Zeit — verhindert riesige Dateien"
+    "manualMaxDesc": "Stoppt automatisch nach der eingestellten Zeit — verhindert riesige Dateien",
+    "sleepChecking": "Energieeinstellungen werden geprüft…",
+    "sleepStatusOk": "Energieeinstellungen sind OK — Aufwecken funktioniert",
+    "sleepStatusMacWarn": "Autopoweroff ist aktiviert — Mac kann sich im Schlafmodus ausschalten",
+    "sleepStatusWinWarn": "Wake-Timer sind nicht aktiviert — Aufwecken schlägt möglicherweise fehl",
+    "sleepStatusUnknown": "Energieeinstellungen konnten nicht gelesen werden",
+    "sleepStatusUnsupported": "Auf dieser Plattform nicht unterstützt",
+    "sleepFixBtn": "Automatisch beheben",
+    "sleepFixing": "Wird behoben…",
+    "sleepFixOk": "Behoben — Energieeinstellungen sind jetzt optimal",
+    "sleepFixFail": "Automatische Behebung fehlgeschlagen",
+    "sleepFixCancelled": "Abgebrochen — Erlaubnis genehmigen, um zu beheben",
+    "sleepAlwaysOffNote": "Soll der Rechner immer aufnehmen? Lass ihn im Schlafmodus (nicht ausschalten) und aktiviere «Mit Windows/Mac starten» unter Allgemein."
   },
   "calendar": {
     "title": "Kirchenkalender",

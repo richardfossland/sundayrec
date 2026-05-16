@@ -132,6 +132,7 @@ export interface DiskInfo {
 export interface WakeResult {
   ok: boolean
   count?: number
+  nextWake?: string | null   // ISO string of next scheduled wake point
   reason?: 'disabled' | 'cancelled' | 'permission' | 'unsupported' | 'error'
   message?: string
 }

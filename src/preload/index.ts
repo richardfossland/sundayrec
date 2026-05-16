@@ -51,6 +51,9 @@ contextBridge.exposeInMainWorld('api', {
 
   scheduleOsWakes:      ()   => ipcRenderer.invoke('schedule-os-wakes'),
   scheduleOsWakesAdmin: ()   => ipcRenderer.invoke('schedule-os-wakes-admin'),
+  getSleepConfig:       ()   => ipcRenderer.invoke('get-sleep-config'),
+  fixMacSleep:          ()   => ipcRenderer.invoke('fix-mac-sleep'),
+  fixWinWakeTimers:     ()   => ipcRenderer.invoke('fix-win-wake-timers'),
 
   sendAudioChunk: (buf: ArrayBuffer) => ipcRenderer.send('audio-chunk', buf),
   confirmStart:   (data: unknown)    => ipcRenderer.send('recording-confirmed-start', data),

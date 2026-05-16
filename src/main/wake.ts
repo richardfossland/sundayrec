@@ -7,6 +7,8 @@ const execFileAsync = promisify(execFile)
 import * as store from './store'
 import type { WakeResult } from '../types'
 
+const LEAD_MINUTES = 10   // wake machine this many minutes before recording
+
 let blocker: number | null = null
 
 function padN(n: number): string {
@@ -42,7 +44,7 @@ function scheduleMac(wakePoints: Date[], allowAdmin: boolean): WakeResult {
     execFileSync('pmset', ['schedule', 'cancelall'], { stdio: 'pipe', timeout: 3000 })
   } catch {}
 
-  if (!wakePoints.length) return { ok: true, count: 0 }
+  if (!wakePoints.length) return { ok: true, count: 0, nextWake: null }
 
   let scheduled = 0
   for (const d of wakePoints) {
@@ -51,7 +53,7 @@ function scheduleMac(wakePoints: Date[], allowAdmin: boolean): WakeResult {
       scheduled++
     } catch {}
   }
-  if (scheduled === wakePoints.length) return { ok: true, count: scheduled }
+  if (scheduled === wakePoints.length) return { ok: true, count: scheduled, nextWake: wakePoints[0].toISOString() }
 
   if (!allowAdmin) return { ok: false, reason: 'permission' }
 
@@ -62,7 +64,7 @@ function scheduleMac(wakePoints: Date[], allowAdmin: boolean): WakeResult {
     execFileSync('osascript', ['-e', `do shell script "${cmds}" with administrator privileges`], {
       stdio: 'pipe', timeout: 30000
     })
-    return { ok: true, count: wakePoints.length }
+    return { ok: true, count: wakePoints.length, nextWake: wakePoints[0].toISOString() }
   } catch (e) {
     const msg = (e as Error).message || ''
     if (msg.includes('User canceled')) return { ok: false, reason: 'cancelled' }
@@ -78,7 +80,7 @@ async function scheduleWindows(wakePoints: Date[]): Promise<WakeResult> {
     ], { timeout: 10000 })
   } catch {}
 
-  if (!wakePoints.length) return { ok: true, count: 0 }
+  if (!wakePoints.length) return { ok: true, count: 0, nextWake: null }
 
   const taskDefs = wakePoints.map((d, i) => {
     const dt = formatWinDateTime(d)
@@ -95,7 +97,7 @@ async function scheduleWindows(wakePoints: Date[]): Promise<WakeResult> {
     await execFileAsync('powershell', ['-NoProfile', '-NonInteractive', '-Command', taskDefs], {
       timeout: 20000
     })
-    return { ok: true, count: wakePoints.length }
+    return { ok: true, count: wakePoints.length, nextWake: wakePoints[0].toISOString() }
   } catch (e) {
     return { ok: false, reason: 'permission', message: (e as Error).message }
   }
@@ -106,7 +108,7 @@ async function scheduleOsWakes(upcomingDates: Date[], allowAdmin: boolean): Prom
 
   const now = new Date()
   const wakePoints = upcomingDates
-    .map(d => new Date(d.getTime() - 8 * 60 * 1000))
+    .map(d => new Date(d.getTime() - LEAD_MINUTES * 60 * 1000))
     .filter(d => d > now)
 
   if (process.platform === 'darwin') return scheduleMac(wakePoints, allowAdmin)
@@ -119,4 +121,90 @@ export async function reschedule(upcomingDates: Date[], win?: BrowserWindow, all
   const result = await scheduleOsWakes(upcomingDates, allowAdmin)
   win?.webContents.send('wake-schedule-result', result)
   return result
+}
+
+export interface SleepConfig {
+  platform: 'darwin' | 'win32' | 'other'
+  // Mac
+  autopoweroff?: boolean
+  autopoweroffDelay?: number   // seconds
+  standby?: boolean
+  standbyDelay?: number        // seconds
+  hibernateMode?: number       // 0=no disk, 3=safe sleep, 25=hibernate
+  // Windows
+  wakeTimersEnabled?: boolean  // null = could not determine
+  // Common
+  error?: string
+}
+
+export async function getSleepConfig(): Promise<SleepConfig> {
+  if (process.platform === 'darwin') {
+    try {
+      const { stdout } = await execFileAsync('pmset', ['-g'], { timeout: 5000 })
+      const parse = (key: string): string | null => {
+        const m = stdout.match(new RegExp(`\\b${key}\\s+(\\d+)`))
+        return m?.[1] ?? null
+      }
+      return {
+        platform: 'darwin',
+        autopoweroff:      parse('autopoweroff') === '1',
+        autopoweroffDelay: parseInt(parse('autopoweroffdelay') ?? '0'),
+        standby:           parse('standby') === '1',
+        standbyDelay:      parseInt(parse('standbydelay') ?? '0'),
+        hibernateMode:     parseInt(parse('hibernatemode') ?? '3'),
+      }
+    } catch (e) {
+      return { platform: 'darwin', error: (e as Error).message }
+    }
+  }
+
+  if (process.platform === 'win32') {
+    try {
+      const { stdout } = await execFileAsync('powershell', [
+        '-NoProfile', '-Command',
+        // Query "Allow wake timers" (AC) in the active power scheme
+        `$s = (powercfg /getactivescheme) -replace '.*GUID: ([\\w-]+).*','$1'; ` +
+        `powercfg /query $s 238C9FA8-0AAD-41ED-83F4-97BE242C8F20 BD3B718A-0680-4D9D-8AB2-E1D2B4AC806D`
+      ], { timeout: 10000 })
+      // AC Power Setting Index 0x00000000 = disabled, 0x00000001 or 0x00000002 = enabled
+      const m = stdout.match(/Current AC Power Setting Index:\s+(0x[0-9a-f]+)/i)
+      const val = m ? parseInt(m[1], 16) : null
+      return { platform: 'win32', wakeTimersEnabled: val !== null ? val > 0 : undefined }
+    } catch (e) {
+      return { platform: 'win32', error: (e as Error).message }
+    }
+  }
+
+  return { platform: 'other' }
+}
+
+export async function fixMacSleep(): Promise<{ ok: boolean; message?: string }> {
+  // Disable autopoweroff and increase standby delay so Mac stays in sleep (not powered off)
+  const cmd = 'pmset -a autopoweroff 0; pmset -a standbydelay 86400'
+  try {
+    execFileSync('osascript', ['-e', `do shell script "${cmd}" with administrator privileges`], {
+      stdio: 'pipe', timeout: 30000
+    })
+    return { ok: true }
+  } catch (e) {
+    const msg = (e as Error).message || ''
+    if (msg.includes('User canceled')) return { ok: false, message: 'cancelled' }
+    return { ok: false, message: msg }
+  }
+}
+
+export async function fixWinWakeTimers(): Promise<{ ok: boolean; message?: string }> {
+  try {
+    await execFileAsync('powershell', [
+      '-NoProfile', '-NonInteractive', '-Command',
+      // Enable wake timers for both AC and DC in the active power scheme
+      `$s = (powercfg /getactivescheme) -replace '.*GUID: ([\\w-]+).*','$1'; ` +
+      `powercfg /setacvalueindex $s 238C9FA8-0AAD-41ED-83F4-97BE242C8F20 BD3B718A-0680-4D9D-8AB2-E1D2B4AC806D 1; ` +
+      `powercfg /setdcvalueindex $s 238C9FA8-0AAD-41ED-83F4-97BE242C8F20 BD3B718A-0680-4D9D-8AB2-E1D2B4AC806D 1; ` +
+      `powercfg /setactive $s`
+    ], { timeout: 15000 })
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, message: (e as Error).message }
+  }
 }

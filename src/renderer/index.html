@@ -321,58 +321,21 @@
         <span id="wake-status-text" class="wake-status-text"></span>
         <button id="btn-schedule-wake" class="btn-ghost btn-sm" data-i18n="schedule.wakeBtn">Planlegg oppvåkning</button>
       </div>
-      <!-- Hibernate instructions — shown when wake is enabled -->
-      <div id="wake-hibernate-info" class="wake-hibernate-info" style="display:none">
-        <div class="wake-hibernate-header" id="wake-hibernate-toggle">
-          <span class="wake-hibernate-icon">💤</span>
-          <span data-i18n="schedule.hibernateTitle">Vil du bruke dypere dvale (hibernate)?</span>
-          <span class="wake-hibernate-chevron" id="wake-hibernate-chevron">›</span>
+      <!-- Sleep config status — shown when wake is enabled -->
+      <div id="sleep-config-panel" class="sleep-config-panel" style="display:none">
+        <div id="sleep-config-loading" class="sleep-config-loading">
+          <span data-i18n="schedule.sleepChecking">Sjekker dvaleinnstillinger…</span>
         </div>
-        <div class="wake-hibernate-body" id="wake-hibernate-body" style="display:none">
-          <div class="wake-sleep-grid">
-            <div class="wake-sleep-mode wake-sleep-ok">
-              <div class="wake-sleep-mode-icon">😴</div>
-              <div class="wake-sleep-mode-title" data-i18n="schedule.sleepNormal">Vanlig dvale</div>
-              <div class="wake-sleep-mode-desc" data-i18n="schedule.sleepNormalDesc">Fungerer automatisk — ingen endringer nødvendig</div>
-              <div class="wake-sleep-badge wake-sleep-badge-ok" data-i18n="schedule.sleepWorks">✓ Fungerer</div>
-            </div>
-            <div class="wake-sleep-mode wake-sleep-warn">
-              <div class="wake-sleep-mode-icon">💤</div>
-              <div class="wake-sleep-mode-title" data-i18n="schedule.sleepHibernate">Dypere dvale / Hibernate</div>
-              <div class="wake-sleep-mode-desc" data-i18n="schedule.sleepHibernateDesc">Krever en innstilling i systemet</div>
-              <div class="wake-sleep-badge wake-sleep-badge-warn" data-i18n="schedule.sleepManual">⚙ Krever innstilling</div>
-            </div>
-            <div class="wake-sleep-mode wake-sleep-no">
-              <div class="wake-sleep-mode-icon">⛔</div>
-              <div class="wake-sleep-mode-title" data-i18n="schedule.sleepOff">Helt avslått</div>
-              <div class="wake-sleep-mode-desc" data-i18n="schedule.sleepOffDesc">Ikke mulig å vekke via programvare</div>
-              <div class="wake-sleep-badge wake-sleep-badge-no" data-i18n="schedule.sleepNotPossible">✗ Ikke mulig</div>
-            </div>
+        <div id="sleep-config-result" style="display:none">
+          <div class="wake-status-row" style="margin-top:0;padding-top:0;border-top:none">
+            <span id="sleep-config-dot" class="wake-status-dot"></span>
+            <span id="sleep-config-text" class="wake-status-text" style="flex:1"></span>
+            <button id="btn-fix-sleep" class="btn-ghost btn-sm" style="display:none" data-i18n="schedule.sleepFixBtn">Fiks automatisk</button>
           </div>
-
-          <!-- macOS instructions -->
-          <div class="wake-platform-section" id="wake-instructions-mac">
-            <div class="wake-platform-title">🍎 macOS — aktivere oppvåkning fra hibernate</div>
-            <ol class="wake-steps">
-              <li data-i18n="schedule.macStep1">Åpne <strong>Terminal</strong> (søk i Spotlight)</li>
-              <li data-i18n="schedule.macStep2">Lim inn denne kommandoen og trykk Enter:</li>
-            </ol>
-            <div class="wake-code-block">sudo pmset -a standbydelay 86400 && sudo pmset -a autopoweroff 0</div>
-            <p class="wake-step-note" data-i18n="schedule.macStep3">Dette forhindrer Mac fra å slå seg helt av etter dvale. Skriv inn admin-passord når det spørres.</p>
-          </div>
-
-          <!-- Windows instructions -->
-          <div class="wake-platform-section" id="wake-instructions-win">
-            <div class="wake-platform-title">🪟 Windows — aktivere oppvåkning fra hibernate</div>
-            <ol class="wake-steps">
-              <li data-i18n="schedule.winStep1">Åpne <strong>Kontrollpanel → Strømalternativer</strong></li>
-              <li data-i18n="schedule.winStep2">Klikk <strong>Endre planinnstillinger</strong> → <strong>Endre avanserte strøminnstillinger</strong></li>
-              <li data-i18n="schedule.winStep3">Under <strong>Dvale</strong> → sett <strong>Dvalemodus etter</strong> til <em>Aldri</em> (bruk kun Hvile)</li>
-              <li data-i18n="schedule.winStep4">Alternativt: åpne PowerShell som administrator og kjør:</li>
-            </ol>
-            <div class="wake-code-block">powercfg /hibernate off</div>
-            <p class="wake-step-note" data-i18n="schedule.winStep5">Dette deaktiverer hibernate og beholder vanlig dvale (S3) som alltid kan vekkes.</p>
-          </div>
+          <div id="sleep-config-detail" class="sleep-config-detail" style="display:none"></div>
+        </div>
+        <div id="sleep-always-off-note" class="sleep-config-detail" style="margin-top:8px" data-i18n="schedule.sleepAlwaysOffNote">
+          Vil du at maskinen alltid skal starte opptak? La den stå i dvale (ikke slå den av) og aktiver «Oppstart med Windows/Mac» i Generelt-siden.
         </div>
       </div>
       <div class="toggle-row">

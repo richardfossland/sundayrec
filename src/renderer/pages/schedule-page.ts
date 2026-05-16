@@ -14,10 +14,11 @@ export function setupSchedulePage(): void {
   })
   document.getElementById('btn-schedule-save')?.addEventListener('click', saveScheduleSettings)
   document.getElementById('opt-wake')?.addEventListener('change', function (this: HTMLInputElement) {
-    const wakeRow     = document.getElementById('wake-status-row')
-    const hibernateEl = document.getElementById('wake-hibernate-info')
-    if (wakeRow)     wakeRow.style.display     = this.checked ? 'flex'  : 'none'
-    if (hibernateEl) hibernateEl.style.display = this.checked ? 'block' : 'none'
+    const wakeRow   = document.getElementById('wake-status-row')
+    const sleepPanel = document.getElementById('sleep-config-panel')
+    if (wakeRow)    wakeRow.style.display    = this.checked ? 'flex'  : 'none'
+    if (sleepPanel) sleepPanel.style.display = this.checked ? 'block' : 'none'
+    if (this.checked) void loadSleepConfig()
   })
   document.getElementById('btn-schedule-wake')?.addEventListener('click', async () => {
     const btn = document.getElementById('btn-schedule-wake') as HTMLButtonElement | null
@@ -31,17 +32,27 @@ export function setupSchedulePage(): void {
       if (btn) btn.disabled = false
     }
   })
-  document.getElementById('wake-hibernate-toggle')?.addEventListener('click', () => {
-    const body    = document.getElementById('wake-hibernate-body')
-    const chevron = document.getElementById('wake-hibernate-chevron')
-    const isOpen  = body && body.style.display !== 'none'
-    if (body)    body.style.display    = isOpen ? 'none' : 'block'
-    if (chevron) chevron.classList.toggle('open', !isOpen)
-    const isMac = navigator.platform.toLowerCase().includes('mac')
-    const macEl = document.getElementById('wake-instructions-mac')
-    const winEl = document.getElementById('wake-instructions-win')
-    if (macEl) macEl.style.display = isMac ? 'block' : 'none'
-    if (winEl) winEl.style.display = isMac ? 'none'  : 'block'
+  document.getElementById('btn-fix-sleep')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-fix-sleep') as HTMLButtonElement | null
+    if (btn) { btn.disabled = true; btn.textContent = t('schedule.sleepFixing') || 'Fikser…' }
+    try {
+      const isMac = navigator.platform.toLowerCase().includes('mac')
+      const result = isMac
+        ? await window.api.fixMacSleep()
+        : await window.api.fixWinWakeTimers()
+      if (result.ok) {
+        setSleepConfigStatus('ok', 'schedule.sleepFixOk', 'Fikset — oppvåkning bør nå fungere')
+      } else {
+        const msg = result.message?.includes('cancelled')
+          ? (t('schedule.sleepFixCancelled') || 'Avbrutt — godkjenn tillatelsen for å fikse')
+          : (t('schedule.sleepFixFail') || 'Automatisk fiks mislyktes')
+        setSleepConfigStatus('error', '', msg)
+      }
+    } catch {
+      setSleepConfigStatus('error', 'schedule.sleepFixFail', 'Automatisk fiks mislyktes')
+    } finally {
+      if (btn) btn.disabled = false
+    }
   })
 
   const cleanup = window.api.on('wake-schedule-result', wakeResultToStatus)
@@ -57,10 +68,11 @@ export function applyScheduleSettingsToUI(): void {
   const manualMaxSel = document.getElementById('opt-manual-max')       as HTMLSelectElement | null
   if (wakeEl) {
     wakeEl.checked = !!settings.wakeFromSleep
-    const wakeRow     = document.getElementById('wake-status-row')
-    const hibernateEl = document.getElementById('wake-hibernate-info')
-    if (wakeRow)     wakeRow.style.display     = settings.wakeFromSleep ? 'flex'  : 'none'
-    if (hibernateEl) hibernateEl.style.display = settings.wakeFromSleep ? 'block' : 'none'
+    const wakeRow    = document.getElementById('wake-status-row')
+    const sleepPanel = document.getElementById('sleep-config-panel')
+    if (wakeRow)    wakeRow.style.display    = settings.wakeFromSleep ? 'flex'  : 'none'
+    if (sleepPanel) sleepPanel.style.display = settings.wakeFromSleep ? 'block' : 'none'
+    if (settings.wakeFromSleep) void loadSleepConfig()
   }
   if (protectEl)    protectEl.checked   = settings.protectRecording !== false
   if (silenceEl)    silenceEl.checked   = !!settings.stopOnSilence
@@ -169,7 +181,7 @@ async function saveSlot(): Promise<void> {
   renderSlotsList()
 }
 
-function setWakeStatus(cls: string, key: string, fallback: string, count?: number): void {
+function setWakeStatus(cls: string, key: string, fallback: string, count?: number, nextWake?: string | null): void {
   const dot  = document.getElementById('wake-status-dot')
   const txt  = document.getElementById('wake-status-text')
   const row  = document.getElementById('wake-status-row')
@@ -177,18 +189,85 @@ function setWakeStatus(cls: string, key: string, fallback: string, count?: numbe
   dot.className = `wake-status-dot ${cls}`
   let text = t(key) || fallback
   if (count != null) text = text.replace('{n}', String(count))
+  if (nextWake) {
+    const d = new Date(nextWake)
+    const dateStr = d.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    text += ` — ${dateStr}`
+  }
   txt.textContent = text
   row.style.display = 'flex'
 }
 
 function wakeResultToStatus(result: unknown): void {
-  const r = result as { ok: boolean; count?: number; reason?: string } | null
+  const r = result as { ok: boolean; count?: number; reason?: string; nextWake?: string | null } | null
   if (!r) return
-  if (r.ok && (r.count ?? 0) > 0)  setWakeStatus('ok',    'schedule.wakeStatusOk',          `${r.count} oppvåkning planlagt`, r.count)
-  else if (r.ok)                    setWakeStatus('ok',    'schedule.wakeStatusNone',         'Ingen kommende opptak')
-  else if (r.reason === 'disabled') setWakeStatus('off',   'schedule.wakeStatusOff',          'Oppvåkning er slått av')
-  else if (r.reason === 'cancelled')setWakeStatus('error', 'schedule.wakeStatusCancelled',    'Avvist — prøv igjen og godkjenn')
-  else if (r.reason === 'permission')setWakeStatus('error','schedule.wakeStatusPermission',   'Mangler tillatelse — klikk Planlegg og godkjenn')
-  else if (r.reason === 'unsupported')setWakeStatus('off', 'schedule.wakeStatusUnsupported',  'Ikke støttet på denne plattformen')
-  else                               setWakeStatus('error', 'schedule.wakeStatusError',       'Feil ved planlegging')
+  if (r.ok && (r.count ?? 0) > 0)    setWakeStatus('ok',    'schedule.wakeStatusOk',          `${r.count} oppvåkning planlagt`, r.count, r.nextWake)
+  else if (r.ok)                      setWakeStatus('ok',    'schedule.wakeStatusNone',         'Ingen kommende opptak')
+  else if (r.reason === 'disabled')   setWakeStatus('off',   'schedule.wakeStatusOff',          'Oppvåkning er slått av')
+  else if (r.reason === 'cancelled')  setWakeStatus('error', 'schedule.wakeStatusCancelled',    'Avvist — prøv igjen og godkjenn')
+  else if (r.reason === 'permission') setWakeStatus('error', 'schedule.wakeStatusPermission',   'Mangler tillatelse — klikk Planlegg og godkjenn')
+  else if (r.reason === 'unsupported')setWakeStatus('off',   'schedule.wakeStatusUnsupported',  'Ikke støttet på denne plattformen')
+  else                                setWakeStatus('error', 'schedule.wakeStatusError',         'Feil ved planlegging')
+}
+
+function setSleepConfigStatus(cls: string, key: string, fallback: string, showFix = false): void {
+  const loading = document.getElementById('sleep-config-loading')
+  const result  = document.getElementById('sleep-config-result')
+  const dot     = document.getElementById('sleep-config-dot')
+  const txt     = document.getElementById('sleep-config-text')
+  const fixBtn  = document.getElementById('btn-fix-sleep')
+  if (loading) loading.style.display = 'none'
+  if (result)  result.style.display  = 'block'
+  if (dot)     dot.className = `wake-status-dot ${cls}`
+  if (txt)     txt.textContent = t(key) || fallback
+  if (fixBtn)  fixBtn.style.display = showFix ? '' : 'none'
+}
+
+async function loadSleepConfig(): Promise<void> {
+  const loading = document.getElementById('sleep-config-loading')
+  const result  = document.getElementById('sleep-config-result')
+  if (loading) loading.style.display = 'block'
+  if (result)  result.style.display  = 'none'
+
+  try {
+    const cfg = await window.api.getSleepConfig() as {
+      platform: string
+      autopoweroff?: boolean
+      autopoweroffDelay?: number
+      standby?: boolean
+      standbyDelay?: number
+      hibernateMode?: number
+      wakeTimersEnabled?: boolean
+      error?: string
+    }
+
+    if (cfg.platform === 'darwin') {
+      if (cfg.error) {
+        setSleepConfigStatus('error', 'schedule.sleepStatusUnknown', 'Kunne ikke lese dvaleinnstillinger')
+        return
+      }
+      const isRisky = cfg.autopoweroff === true || (cfg.standby === true && (cfg.standbyDelay ?? 86400) < 3600)
+      if (isRisky) {
+        setSleepConfigStatus('error', 'schedule.sleepStatusMacWarn', 'Autopoweroff kan hindre oppvåkning — klikk Fiks', true)
+      } else {
+        setSleepConfigStatus('ok', 'schedule.sleepStatusOk', 'Dvaleinnstillinger er OK — oppvåkning fungerer')
+      }
+    } else if (cfg.platform === 'win32') {
+      if (cfg.error) {
+        setSleepConfigStatus('error', 'schedule.sleepStatusUnknown', 'Kunne ikke lese dvaleinnstillinger')
+        return
+      }
+      if (cfg.wakeTimersEnabled === false) {
+        setSleepConfigStatus('error', 'schedule.sleepStatusWinWarn', 'Vekketimer er ikke aktivert — klikk Fiks', true)
+      } else if (cfg.wakeTimersEnabled === true) {
+        setSleepConfigStatus('ok', 'schedule.sleepStatusOk', 'Dvaleinnstillinger er OK — oppvåkning fungerer')
+      } else {
+        setSleepConfigStatus('off', 'schedule.sleepStatusUnknown', 'Kunne ikke lese dvaleinnstillinger')
+      }
+    } else {
+      setSleepConfigStatus('off', 'schedule.sleepStatusUnsupported', 'Ikke støttet på denne plattformen')
+    }
+  } catch {
+    setSleepConfigStatus('error', 'schedule.sleepStatusUnknown', 'Kunne ikke lese dvaleinnstillinger')
+  }
 }

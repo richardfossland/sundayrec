@@ -141,7 +141,19 @@
     "reminderTitle": "Påminnelse innan inspelning",
     "reminderDesc": "Systemavisering N minuter innan en schemalagd inspelning startar",
     "manualMaxTitle": "Maxlängd — manuella inspelningar",
-    "manualMaxDesc": "Stoppar automatiskt efter angiven tid — undviker stora filer om du glömmer stoppa"
+    "manualMaxDesc": "Stoppar automatiskt efter angiven tid — undviker stora filer om du glömmer stoppa",
+    "sleepChecking": "Kontrollerar vilolägesinställningar…",
+    "sleepStatusOk": "Vilolägesinställningar är OK — uppvakning fungerar",
+    "sleepStatusMacWarn": "Autopoweroff är aktiverat — Mac kan stängas av under viloläget",
+    "sleepStatusWinWarn": "Väckningstimers är inte aktiverade — uppvakning kan misslyckas",
+    "sleepStatusUnknown": "Kunde inte läsa vilolägesinställningar",
+    "sleepStatusUnsupported": "Stöds inte på den här plattformen",
+    "sleepFixBtn": "Åtgärda automatiskt",
+    "sleepFixing": "Åtgärdar…",
+    "sleepFixOk": "Åtgärdat — vilolägesinställningar är nu optimala",
+    "sleepFixFail": "Automatisk åtgärd misslyckades",
+    "sleepFixCancelled": "Avbruten — godkänn behörigheten för att åtgärda",
+    "sleepAlwaysOffNote": "Vill du att datorn alltid ska starta inspelningar? Låt den vara i viloläge (stäng inte av den) och aktivera «Starta med Windows/Mac» under Allmänt."
   },
   "calendar": {
     "title": "Kyrkokalender",

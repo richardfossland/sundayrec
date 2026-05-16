@@ -141,7 +141,19 @@
     "reminderTitle": "Przypomnienie przed nagraniem",
     "reminderDesc": "Powiadomienie systemowe N minut przed zaplanowanym nagraniem",
     "manualMaxTitle": "Maks. czas trwania — nagrania ręczne",
-    "manualMaxDesc": "Zatrzymuje się automatycznie po upływie czasu — zapobiega dużym plikom"
+    "manualMaxDesc": "Zatrzymuje się automatycznie po upływie czasu — zapobiega dużym plikom",
+    "sleepChecking": "Sprawdzanie ustawień uśpienia…",
+    "sleepStatusOk": "Ustawienia uśpienia są OK — wybudzenie działa",
+    "sleepStatusMacWarn": "Autopoweroff jest włączony — Mac może się wyłączyć podczas uśpienia",
+    "sleepStatusWinWarn": "Timery wybudzania nie są włączone — wybudzenie może się nie powieść",
+    "sleepStatusUnknown": "Nie można odczytać ustawień uśpienia",
+    "sleepStatusUnsupported": "Nieobsługiwane na tej platformie",
+    "sleepFixBtn": "Napraw automatycznie",
+    "sleepFixing": "Naprawianie…",
+    "sleepFixOk": "Naprawiono — ustawienia uśpienia są teraz optymalne",
+    "sleepFixFail": "Automatyczna naprawa nie powiodła się",
+    "sleepFixCancelled": "Anulowano — zatwierdź uprawnienie, aby naprawić",
+    "sleepAlwaysOffNote": "Chcesz, aby komputer zawsze uruchamiał nagrywanie? Pozostaw go w trybie uśpienia (nie wyłączaj) i aktywuj «Uruchamiaj z Windows/Mac» w ustawieniach Ogólnych."
   },
   "calendar": {
     "title": "Kalendarz kościelny",
