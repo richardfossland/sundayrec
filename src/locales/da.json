@@ -49,7 +49,17 @@
   },
   "update": {
     "available": "Ny version {v} tilgængelig — henter…",
-    "downloaded": "Version {v} klar — installeres ved næste genstart."
+    "downloaded": "Version {v} klar — installeres ved næste genstart.",
+    "checking": "Søger efter opdateringer…",
+    "upToDate": "Du er opdateret",
+    "downloading": "Henter… {pct}%",
+    "readyInstall": "Version {v} klar — genstart for at installere",
+    "error": "Kunne ikke søge efter opdateringer",
+    "checkHint": "Klik på «Søg efter opdateringer» for at kontrollere",
+    "toastAvailableTitle": "Opdatering tilgængelig",
+    "toastAvailableText": "Version {v} hentes…",
+    "toastReadyTitle": "Klar til installation",
+    "toastReadyText": "Version {v} er hentet"
   },
   "history": {
     "title": "Historik",

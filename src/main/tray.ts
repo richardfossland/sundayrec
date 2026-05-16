@@ -1,11 +1,33 @@
 import { Tray, Menu, nativeImage, app } from 'electron'
 import type { BrowserWindow } from 'electron'
 import path from 'path'
+import * as store from './store'
 
 let tray: Tray | null = null
 let win: BrowserWindow | null = null
 let isRecording = false
 let hasError    = false
+
+const TRAY_LABELS: Record<string, [string, string, string, string, string, string, string]> = {
+  //                  recording          error                    ready       open          stop          start         quit
+  no: ['🔴 Tar opp…', '⚠️ Feil — klikk for detaljer', '✅ Klar', 'Åpne SundayRec', 'Stopp opptak', 'Start opptak nå', 'Avslutt'],
+  en: ['🔴 Recording…', '⚠️ Error — click for details', '✅ Ready', 'Open SundayRec', 'Stop recording', 'Start recording now', 'Quit'],
+  de: ['🔴 Aufnahme…', '⚠️ Fehler — klicken für Details', '✅ Bereit', 'SundayRec öffnen', 'Aufnahme stoppen', 'Aufnahme starten', 'Beenden'],
+  sv: ['🔴 Spelar in…', '⚠️ Fel — klicka för detaljer', '✅ Klar', 'Öppna SundayRec', 'Stoppa inspelning', 'Starta inspelning nu', 'Avsluta'],
+  da: ['🔴 Optager…', '⚠️ Fejl — klik for detaljer', '✅ Klar', 'Åbn SundayRec', 'Stop optagelse', 'Start optagelse nu', 'Afslut'],
+  pl: ['🔴 Nagrywa…', '⚠️ Błąd — kliknij po szczegóły', '✅ Gotowy', 'Otwórz SundayRec', 'Zatrzymaj nagrywanie', 'Rozpocznij nagrywanie', 'Wyjdź'],
+  fr: ['🔴 Enregistrement…', '⚠️ Erreur — cliquez pour détails', '✅ Prêt', 'Ouvrir SundayRec', "Arrêter l'enregistrement", 'Démarrer un enregistrement', 'Quitter']
+}
+
+const TOOLTIP: Record<string, string> = {
+  no: 'SundayRec — kjører i bakgrunnen',
+  en: 'SundayRec — running in background',
+  de: 'SundayRec — läuft im Hintergrund',
+  sv: 'SundayRec — körs i bakgrunden',
+  da: 'SundayRec — kører i baggrunden',
+  pl: 'SundayRec — działa w tle',
+  fr: "SundayRec — s'exécute en arrière-plan"
+}
 
 export function create(mainWindow: BrowserWindow): void {
   win = mainWindow
@@ -15,7 +37,9 @@ export function create(mainWindow: BrowserWindow): void {
   let icon = nativeImage.createFromPath(iconPath)
   if (process.platform === 'darwin') icon = icon.resize({ width: 18, height: 18 })
   tray = new Tray(icon)
-  tray.setToolTip('SundayRec — kjører i bakgrunnen')
+
+  const lang = store.get('language') ?? 'no'
+  tray.setToolTip(TOOLTIP[lang] ?? TOOLTIP.no)
 
   tray.on('click', () => {
     if (!win) return
@@ -29,22 +53,22 @@ export function create(mainWindow: BrowserWindow): void {
 function updateMenu(): void {
   if (!tray) return
 
-  const label = isRecording
-    ? '🔴 Tar opp…'
-    : hasError
-    ? '⚠️ Feil — klikk for detaljer'
-    : '✅ Klar'
+  const lang = store.get('language') ?? 'no'
+  const lbl  = TRAY_LABELS[lang] ?? TRAY_LABELS.no
+  const [recLbl, errLbl, readyLbl, openLbl, stopLbl, startLbl, quitLbl] = lbl
+
+  const statusLabel = isRecording ? recLbl : hasError ? errLbl : readyLbl
 
   const menu = Menu.buildFromTemplate([
-    { label, enabled: false },
+    { label: statusLabel, enabled: false },
     { type: 'separator' },
     {
-      label: 'Åpne SundayRec',
+      label: openLbl,
       click: () => { win?.show(); win?.focus() }
     },
     { type: 'separator' },
     {
-      label: isRecording ? 'Stopp opptak' : 'Start opptak nå',
+      label: isRecording ? stopLbl : startLbl,
       click: () => {
         if (!win) return
         if (isRecording) {
@@ -56,7 +80,7 @@ function updateMenu(): void {
       }
     },
     { type: 'separator' },
-    { label: 'Avslutt', click: () => app.quit() }
+    { label: quitLbl, click: () => app.quit() }
   ])
 
   tray.setContextMenu(menu)

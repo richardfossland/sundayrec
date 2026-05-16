@@ -203,6 +203,7 @@ function setupIPC(): void {
   ipcMain.handle('get-settings', () => store.getAll())
 
   ipcMain.handle('save-settings', (_, settings) => {
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return false
     store.setAll(settings)
     scheduler.reschedule()
     app.setLoginItemSettings({ openAtLogin: !!settings.launchAtLogin, openAsHidden: true })
@@ -272,8 +273,14 @@ function setupIPC(): void {
     return result.canceled ? null : result.filePaths[0]
   })
 
-  ipcMain.handle('open-folder', (_, p: string) => shell.openPath(p))
-  ipcMain.handle('reveal-file', (_, p: string) => shell.showItemInFolder(p))
+  ipcMain.handle('open-folder', (_, p: string) => {
+    if (typeof p !== 'string' || !fs.existsSync(p)) return
+    return shell.openPath(p)
+  })
+  ipcMain.handle('reveal-file', (_, p: string) => {
+    if (typeof p !== 'string' || !fs.existsSync(p)) return
+    shell.showItemInFolder(p)
+  })
 
   ipcMain.on('recording-started', (_, data: { name: string }) => {
     tray.setRecording(true)

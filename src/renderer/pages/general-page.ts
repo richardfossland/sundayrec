@@ -48,7 +48,7 @@ export function setupGeneralPage(): void {
   })
 
   document.getElementById('btn-check-updates')?.addEventListener('click', async () => {
-    setUpdateStatus('pending', 'Sjekker etter oppdateringer…')
+    setUpdateStatus('pending', t('update.checking', 'Sjekker etter oppdateringer…'))
     await window.api.checkForUpdates()
   })
 
@@ -63,12 +63,15 @@ export function setupGeneralPage(): void {
   document.getElementById('btn-general-cancel')?.addEventListener('click', () => applyGeneralSettingsToUI())
 
   // Update events from main
-  window.api.on('update-checking',          () => setUpdateStatus('pending', 'Sjekker etter oppdateringer…'))
-  window.api.on('update-not-available',     () => { setUpdateStatus('ok', 'Du er oppdatert'); hideToast() })
+  window.api.on('update-checking',          () => setUpdateStatus('pending', t('update.checking', 'Sjekker etter oppdateringer…')))
+  window.api.on('update-not-available',     () => { setUpdateStatus('ok', t('update.upToDate', 'Du er oppdatert')); hideToast() })
   window.api.on('update-available',         (info: unknown) => {
     const v = (info as { version: string }).version
-    setUpdateStatus('pending', `Ny versjon ${v} — laster ned…`)
-    showUpdateToast('Oppdatering tilgjengelig', `Versjon ${v} lastes ned…`)
+    setUpdateStatus('pending', t('update.available', 'Ny versjon {v} er tilgjengelig — laster ned…').replace('{v}', v))
+    showUpdateToast(
+      t('update.toastAvailableTitle', 'Oppdatering tilgjengelig'),
+      t('update.toastAvailableText', 'Versjon {v} lastes ned…').replace('{v}', v)
+    )
   })
   window.api.on('update-download-progress', (prog: unknown) => {
     const pct  = Math.round((prog as { percent?: number }).percent ?? 0)
@@ -76,7 +79,7 @@ export function setupGeneralPage(): void {
     const bar  = document.getElementById('update-progress-bar') as HTMLElement | null
     if (wrap) wrap.style.display = 'block'
     if (bar)  bar.style.width   = pct + '%'
-    setUpdateStatus('pending', `Laster ned… ${pct}%`)
+    setUpdateStatus('pending', t('update.downloading', 'Laster ned… {pct}%').replace('{pct}', String(pct)))
     setToastProgress(pct)
   })
   window.api.on('update-downloaded', (info: unknown) => {
@@ -85,11 +88,15 @@ export function setupGeneralPage(): void {
     if (wrap) wrap.style.display = 'none'
     const restartBtn = document.getElementById('btn-restart-install')
     if (restartBtn) restartBtn.style.display = 'inline-flex'
-    setUpdateStatus('ready', `Versjon ${v} er klar — start på nytt for å installere`)
-    showUpdateToast('Klar for installasjon', `Versjon ${v} er lastet ned`, true)
+    setUpdateStatus('ready', t('update.readyInstall', 'Versjon {v} er klar — start på nytt for å installere').replace('{v}', v))
+    showUpdateToast(
+      t('update.toastReadyTitle', 'Klar for installasjon'),
+      t('update.toastReadyText', 'Versjon {v} er lastet ned').replace('{v}', v),
+      true
+    )
   })
   window.api.on('update-error', (msg: unknown) => {
-    setUpdateStatus('error', 'Kunne ikke sjekke for oppdateringer')
+    setUpdateStatus('error', t('update.error', 'Kunne ikke sjekke for oppdateringer'))
     console.warn('Update error:', msg)
   })
 }
@@ -134,7 +141,7 @@ export function applyGeneralSettingsToUI(): void {
     if (el) el.textContent = displayVersion
   })
 
-  setUpdateStatus('', 'Klikk «Se etter oppdateringer» for å sjekke')
+  setUpdateStatus('', t('update.checkHint', 'Klikk «Se etter oppdateringer» for å sjekke'))
 }
 
 async function saveGeneralSettings(): Promise<void> {

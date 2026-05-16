@@ -49,7 +49,17 @@
   },
   "update": {
     "available": "Neue Version {v} verfügbar — wird heruntergeladen…",
-    "downloaded": "Version {v} bereit — wird beim nächsten Neustart installiert."
+    "downloaded": "Version {v} bereit — wird beim nächsten Neustart installiert.",
+    "checking": "Nach Updates suchen…",
+    "upToDate": "Keine Updates verfügbar",
+    "downloading": "Wird heruntergeladen… {pct}%",
+    "readyInstall": "Version {v} bereit — neu starten zum Installieren",
+    "error": "Konnte nicht nach Updates suchen",
+    "checkHint": "Klicken Sie auf «Nach Updates suchen» zum Prüfen",
+    "toastAvailableTitle": "Update verfügbar",
+    "toastAvailableText": "Version {v} wird heruntergeladen…",
+    "toastReadyTitle": "Bereit zur Installation",
+    "toastReadyText": "Version {v} wurde heruntergeladen"
   },
   "history": {
     "title": "Verlauf",

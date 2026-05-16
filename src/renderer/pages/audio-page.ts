@@ -165,9 +165,15 @@ function updateChannelSelector(count: number, chL: number, chR: number): void {
   const selL = document.getElementById('channel-select-l') as HTMLSelectElement | null
   const selR = document.getElementById('channel-select-r') as HTMLSelectElement | null
   if (!selL || !selR) return
-  const opts = Array.from({ length: count }, (_, i) =>
-    `<option value="${i}">Kanal ${i + 1}</option>`).join('')
-  selL.innerHTML = opts; selR.innerHTML = opts
+  const makeOpts = (): HTMLOptionElement[] =>
+    Array.from({ length: count }, (_, i) => {
+      const opt = document.createElement('option')
+      opt.value = String(i)
+      opt.textContent = `Kanal ${i + 1}`
+      return opt
+    })
+  selL.replaceChildren(...makeOpts())
+  selR.replaceChildren(...makeOpts())
   selL.value = String(chL); selR.value = String(chR)
 }
 

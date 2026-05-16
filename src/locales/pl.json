@@ -49,7 +49,17 @@
   },
   "update": {
     "available": "Nowa wersja {v} dostępna — pobieranie…",
-    "downloaded": "Wersja {v} gotowa — zostanie zainstalowana przy następnym uruchomieniu."
+    "downloaded": "Wersja {v} gotowa — zostanie zainstalowana przy następnym uruchomieniu.",
+    "checking": "Sprawdzanie aktualizacji…",
+    "upToDate": "Masz najnowszą wersję",
+    "downloading": "Pobieranie… {pct}%",
+    "readyInstall": "Wersja {v} gotowa — uruchom ponownie, aby zainstalować",
+    "error": "Nie można sprawdzić aktualizacji",
+    "checkHint": "Kliknij «Sprawdź aktualizacje», aby sprawdzić",
+    "toastAvailableTitle": "Dostępna aktualizacja",
+    "toastAvailableText": "Wersja {v} jest pobierana…",
+    "toastReadyTitle": "Gotowe do instalacji",
+    "toastReadyText": "Wersja {v} została pobrana"
   },
   "history": {
     "title": "Historia",

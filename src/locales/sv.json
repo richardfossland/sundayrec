@@ -49,7 +49,17 @@
   },
   "update": {
     "available": "Ny version {v} tillgänglig — laddar ned…",
-    "downloaded": "Version {v} klar — installeras vid nästa omstart."
+    "downloaded": "Version {v} klar — installeras vid nästa omstart.",
+    "checking": "Söker efter uppdateringar…",
+    "upToDate": "Du är uppdaterad",
+    "downloading": "Laddar ned… {pct}%",
+    "readyInstall": "Version {v} klar — starta om för att installera",
+    "error": "Kunde inte söka efter uppdateringar",
+    "checkHint": "Klicka på «Sök efter uppdateringar» för att kontrollera",
+    "toastAvailableTitle": "Uppdatering tillgänglig",
+    "toastAvailableText": "Version {v} laddas ned…",
+    "toastReadyTitle": "Redo att installera",
+    "toastReadyText": "Version {v} har laddats ned"
   },
   "history": {
     "title": "Historik",
