@@ -6,6 +6,34 @@ import type { ScheduleSlot, SpecialRecording, RecordingOpts } from '../types'
 const jobs = new Map<string, schedule.Job>()
 let mainWindow: BrowserWindow | null = null
 
+export function uiDayToJsDay(uiDay: number): number {
+  return (uiDay + 1) % 7  // UI: 0=Mon…6=Sun → node-schedule: 0=Sun…6=Sat
+}
+
+export function slotActiveNow(
+  start: string, stop: string, days: number[], now: Date, windowMs = 5 * 60000
+): boolean {
+  const [sh, sm] = (start || '11:00').split(':').map(Number)
+  const [eh, em] = (stop  || '12:00').split(':').map(Number)
+  for (const uiDay of days) {
+    if (now.getDay() !== uiDayToJsDay(uiDay)) continue
+    const startT = new Date(now); startT.setHours(sh, sm, 0, 0)
+    const stopT  = new Date(now); stopT.setHours(eh, em, 0, 0)
+    const late   = now.getTime() - startT.getTime()
+    if (late >= 0 && late <= windowMs && now < stopT) return true
+  }
+  return false
+}
+
+export function specialActiveNow(
+  date: string, start: string, stop: string, now: Date, windowMs = 5 * 60000
+): boolean {
+  const startDate = new Date(`${date}T${start || '11:00'}`)
+  const stopDate  = new Date(`${date}T${stop  || '12:00'}`)
+  const late = now.getTime() - startDate.getTime()
+  return late >= 0 && late <= windowMs && now < stopDate
+}
+
 export function init(win: BrowserWindow): void {
   mainWindow = win
   reschedule()
@@ -23,7 +51,7 @@ export function reschedule(): void {
     const [eh, em] = (slot.stop  || '12:00').split(':').map(Number)
 
     ;(slot.days ?? []).forEach(uiDay => {
-      const jsDay = (uiDay + 1) % 7   // 0=Mon→1=Sun in node-schedule
+      const jsDay = uiDayToJsDay(uiDay)
 
       const startRule = new schedule.RecurrenceRule()
       startRule.dayOfWeek = jsDay; startRule.hour = sh; startRule.minute = sm
@@ -139,25 +167,12 @@ export function checkMissedRecordings(): void {
   const slots    = store.get('slots')             ?? []
   const specials = store.get('specialRecordings') ?? []
   const now      = new Date()
-  const WINDOW   = 5 * 60000
 
   slots.forEach(slot => {
-    const [sh, sm] = (slot.start || '11:00').split(':').map(Number)
-    const [eh, em] = (slot.stop  || '12:00').split(':').map(Number)
-    ;(slot.days ?? []).forEach(uiDay => {
-      const jsDay = (uiDay + 1) % 7
-      if (now.getDay() !== jsDay) return
-      const startT = new Date(now); startT.setHours(sh, sm, 0, 0)
-      const stopT  = new Date(now); stopT.setHours(eh, em, 0, 0)
-      const late   = now.getTime() - startT.getTime()
-      if (late >= 0 && late <= WINDOW && now < stopT) triggerStart(slot)
-    })
+    if (slotActiveNow(slot.start, slot.stop, slot.days ?? [], now)) triggerStart(slot)
   })
 
   specials.forEach(special => {
-    const startDate = new Date(`${special.date}T${special.start || '11:00'}`)
-    const stopDate  = new Date(`${special.date}T${special.stop  || '12:00'}`)
-    const late = now.getTime() - startDate.getTime()
-    if (late >= 0 && late <= WINDOW && now < stopDate) triggerStart(special, special.name)
+    if (specialActiveNow(special.date, special.start, special.stop, now)) triggerStart(special, special.name)
   })
 }
