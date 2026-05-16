@@ -17,7 +17,8 @@
     "warning": "Aufmerksamkeit erforderlich",
     "recording": "Aufnahme läuft",
     "ok": "BEREIT ZUR AUFNAHME",
-    "warn": "AKTION ERFORDERLICH"
+    "warn": "AKTION ERFORDERLICH",
+    "noSchedule": "Keine Aufnahme geplant"
   },
   "home": {
     "greeting": "Guten Tag",
@@ -136,7 +137,13 @@
     "cancel": "Abbrechen",
     "noSlots": "Noch keine Zeitfenster hinzugefügt.",
     "errNoDays": "Mindestens einen Tag auswählen.",
-    "errTimes": "Startzeit muss vor Endzeit liegen.",
+    "errTimes": "Start- und Endzeit dürfen nicht gleich sein.",
+    "durationPrefix": "Dauer",
+    "crossesMidnight": "Überschreitet Mitternacht",
+    "checkTimes": "Zeiten prüfen",
+    "hourAbbr": "Std",
+    "confirmDeleteSlot": "Dieses Zeitfenster löschen?",
+    "deleteSlotTitle": "Löschen",
     "dayLabel": "TAG",
     "reminderTitle": "Erinnerung vor Aufnahme",
     "reminderDesc": "Systembenachrichtigung N Minuten vor Beginn einer geplanten Aufnahme",
@@ -212,6 +219,7 @@
     "notRecommended": "Nicht empfohlen",
     "volume": "Lautstärke",
     "inputVolume": "EINGANGSVOLUMEN",
+    "inputVolumeHint": "100% = keine Änderung des Signals. Besser das Volumen am Mischpult anpassen für beste Klangqualität.",
     "channels": "KANÄLE",
     "stereo": "Stereo (empfohlen)",
     "monoL": "Mono — links",

@@ -8,6 +8,11 @@ let editingSlotIndex = -1
 export function setupSchedulePage(): void {
   document.getElementById('btn-add-slot')?.addEventListener('click', () => openSlotEditor(-1))
   document.getElementById('btn-slot-save')?.addEventListener('click', saveSlot)
+  document.getElementById('slot-start')?.addEventListener('change', () => {
+    if (editingSlotIndex < 0) autoSetStopTime()
+    else updateSlotDurationDisplay()
+  })
+  document.getElementById('slot-stop')?.addEventListener('change', updateSlotDurationDisplay)
   document.getElementById('btn-slot-cancel')?.addEventListener('click', () => {
     const editor = document.getElementById('slot-editor')
     if (editor) editor.style.display = 'none'
@@ -125,11 +130,12 @@ export function renderSlotsList(): void {
   }
   list.innerHTML = slots.map((s, i) => {
     const dayNames = (s.days ?? []).map(d => escHtml(days[d] ?? '?')).join(', ')
+    const maxStr   = s.max ? ` · max ${s.max} min` : ''
     return `<div class="slot-row">
       <div class="slot-days">${dayNames || '—'}</div>
-      <div class="slot-time">${escHtml(s.start)} – ${escHtml(s.stop)}</div>
+      <div class="slot-time">${escHtml(s.start)} – ${escHtml(s.stop)}${maxStr}</div>
       <a href="#" class="slot-edit" data-index="${i}">${escHtml(t('schedule.edit','Rediger'))}</a>
-      <span class="slot-del" data-index="${i}" title="Slett">×</span>
+      <span class="slot-del" data-index="${i}" title="${escHtml(t('schedule.deleteSlotTitle','Slett'))}">×</span>
     </div>`
   }).join('')
   list.querySelectorAll('.slot-edit').forEach(a =>
@@ -137,6 +143,7 @@ export function renderSlotsList(): void {
   )
   list.querySelectorAll('.slot-del').forEach(s =>
     s.addEventListener('click', async () => {
+      if (!confirm(t('schedule.confirmDeleteSlot', 'Slett dette tidspunktet?'))) return
       settings.slots!.splice(+(s as HTMLElement).dataset.index!, 1)
       await window.api.saveSettings(settings)
       renderSlotsList()
@@ -161,6 +168,7 @@ function openSlotEditor(index: number): void {
   )
   const editor = document.getElementById('slot-editor')
   if (editor) editor.style.display = 'block'
+  updateSlotDurationDisplay()
 }
 
 async function saveSlot(): Promise<void> {
@@ -170,7 +178,7 @@ async function saveSlot(): Promise<void> {
   const maxEl = document.getElementById('slot-max') as HTMLInputElement | null
   const maxV  = maxEl ? (+maxEl.value || null) : null
   if (!days.length) { alert(t('schedule.errNoDays')); return }
-  if (!start || !stop || start >= stop) { alert(t('schedule.errTimes')); return }
+  if (!start || !stop || start === stop) { alert(t('schedule.errTimes')); return }
   const slot: ScheduleSlot = { days, start, stop, ...(maxV ? { max: maxV } : {}) }
   if (!settings.slots) settings.slots = []
   if (editingSlotIndex >= 0) settings.slots[editingSlotIndex] = slot
@@ -179,6 +187,45 @@ async function saveSlot(): Promise<void> {
   if (editor) editor.style.display = 'none'
   await window.api.saveSettings(settings)
   renderSlotsList()
+}
+
+function autoSetStopTime(): void {
+  const startEl = document.getElementById('slot-start') as HTMLInputElement | null
+  const stopEl  = document.getElementById('slot-stop')  as HTMLInputElement | null
+  if (!startEl || !stopEl || !startEl.value) return
+  const [sh, sm] = startEl.value.split(':').map(Number)
+  const total = sh * 60 + sm + 60
+  const h = Math.floor(total / 60) % 24
+  const m = total % 60
+  stopEl.value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+  updateSlotDurationDisplay()
+}
+
+function updateSlotDurationDisplay(): void {
+  const startEl = document.getElementById('slot-start') as HTMLInputElement | null
+  const stopEl  = document.getElementById('slot-stop')  as HTMLInputElement | null
+  const durEl   = document.getElementById('slot-duration-display')
+  if (!startEl || !stopEl || !durEl || !startEl.value || !stopEl.value) {
+    if (durEl) durEl.style.display = 'none'
+    return
+  }
+  const [sh, sm] = startEl.value.split(':').map(Number)
+  const [eh, em] = stopEl.value.split(':').map(Number)
+  const startMin = sh * 60 + sm
+  const stopMin  = eh * 60 + em
+  const minutes  = stopMin > startMin ? stopMin - startMin : 1440 - startMin + stopMin
+  const crossesMidnight = stopMin <= startMin
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  const hAbbr = t('schedule.hourAbbr', 't')
+  const dur = h > 0 && m > 0 ? `${h} ${hAbbr} ${m} min` : h > 0 ? `${h} ${hAbbr}` : `${m} min`
+  const warn = minutes > 240 || crossesMidnight
+  const checkSuffix = ` — ${t('schedule.checkTimes', 'sjekk tidspunktene')}`
+  durEl.textContent = crossesMidnight
+    ? `${t('schedule.crossesMidnight', 'Krysser midnatt')} — ${dur}${checkSuffix}`
+    : `${t('schedule.durationPrefix', 'Varighet')}: ${dur}${warn ? checkSuffix : ''}`
+  durEl.style.display = 'block'
+  durEl.style.color = warn ? 'var(--red, #f87171)' : 'var(--text3)'
 }
 
 function setWakeStatus(cls: string, key: string, fallback: string, count?: number, nextWake?: string | null): void {

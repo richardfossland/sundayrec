@@ -36,7 +36,7 @@ export function setupAudioPage(): void {
 }
 
 export function applyAudioSettingsToUI(): void {
-  setVal('input-volume', settings.inputVolume ?? 80)
+  setVal('input-volume', settings.inputVolume ?? 100)
   updateVolumeLabel()
   setRadio('channels', settings.channels ?? 'stereo')
   setVal('sample-rate', settings.sampleRate ?? 48000)
@@ -76,7 +76,7 @@ async function saveAudioSettings(): Promise<void> {
   const patch = {
     deviceId,
     deviceChannels,
-    inputVolume:    +((document.getElementById('input-volume')    as HTMLInputElement | null)?.value ?? 80),
+    inputVolume:    +((document.getElementById('input-volume')    as HTMLInputElement | null)?.value ?? 100),
     channels:       ((document.querySelector('input[name="channels"]:checked') as HTMLInputElement | null)?.value ?? 'stereo') as ChannelMode,
     sampleRate:     +((document.getElementById('sample-rate')    as HTMLInputElement | null)?.value ?? 48000),
     compEnabled:    !!(document.getElementById('opt-compressor') as HTMLInputElement | null)?.checked,

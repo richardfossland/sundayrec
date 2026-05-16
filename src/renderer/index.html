@@ -286,7 +286,7 @@
         <label class="form-label" data-i18n="schedule.dayLabel">DAG</label>
         <div class="day-picker" id="day-picker"></div>
       </div>
-      <div class="form-row three-col">
+      <div class="form-row two-col">
         <div>
           <label class="form-label" data-i18n="schedule.starts">STARTER</label>
           <input type="time" class="form-input" id="slot-start" value="11:00" />
@@ -295,9 +295,12 @@
           <label class="form-label" data-i18n="schedule.stops">STOPPER</label>
           <input type="time" class="form-input" id="slot-stop" value="12:00" />
         </div>
+      </div>
+      <div id="slot-duration-display" style="display:none;font-size:12px;padding:2px 0 6px;color:var(--text3)"></div>
+      <div class="form-row" style="margin-top:4px">
         <div>
-          <label class="form-label" data-i18n="schedule.max">MAKS (min)</label>
-          <input type="number" class="form-input" id="slot-max" placeholder="—" min="0" max="480" />
+          <label class="form-label" data-i18n="schedule.max">MAKS VARIGHET (min, valgfritt)</label>
+          <input type="number" class="form-input" id="slot-max" placeholder="—" min="0" max="480" style="max-width:120px" />
         </div>
       </div>
       <div class="btn-row">
@@ -444,8 +447,9 @@
     <div class="card">
       <div class="card-title" data-i18n="audio.volume">Volum og kanaler</div>
       <label class="form-label" data-i18n="audio.inputVolume">INNGANGSVOLUM</label>
-      <input type="range" id="input-volume" min="0" max="100" value="80" class="slider" />
-      <div class="slider-value" id="volume-value">80%</div>
+      <input type="range" id="input-volume" min="0" max="100" value="100" class="slider" />
+      <div class="slider-value" id="volume-value">100%</div>
+      <div class="form-hint" data-i18n="audio.inputVolumeHint">100% = ingen endring av signalet. Juster heller volumet på mikseren for best lydkvalitet.</div>
       <label class="form-label mt" data-i18n="audio.channels">KANALER</label>
       <div class="radio-group" id="channels-group">
         <label><input type="radio" name="channels" value="stereo" checked /> <span data-i18n="audio.stereo">Stereo (anbefalt)</span></label>

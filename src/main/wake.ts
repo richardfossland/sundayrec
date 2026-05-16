@@ -41,7 +41,7 @@ function updateBlocker(upcomingDates: Date[]): void {
 
 function scheduleMac(wakePoints: Date[], allowAdmin: boolean): WakeResult {
   try {
-    execFileSync('pmset', ['schedule', 'cancelall'], { stdio: 'pipe', timeout: 3000 })
+    execFileSync('pmset', ['schedule', 'cancelall', 'SundayRec'], { stdio: 'pipe', timeout: 3000 })
   } catch {}
 
   if (!wakePoints.length) return { ok: true, count: 0, nextWake: null }
@@ -49,7 +49,7 @@ function scheduleMac(wakePoints: Date[], allowAdmin: boolean): WakeResult {
   let scheduled = 0
   for (const d of wakePoints) {
     try {
-      execFileSync('pmset', ['schedule', 'wake', formatPmsetDate(d)], { stdio: 'pipe', timeout: 5000 })
+      execFileSync('pmset', ['schedule', 'wake', formatPmsetDate(d), 'SundayRec'], { stdio: 'pipe', timeout: 5000 })
       scheduled++
     } catch {}
   }
@@ -59,7 +59,7 @@ function scheduleMac(wakePoints: Date[], allowAdmin: boolean): WakeResult {
 
   try {
     const cmds = wakePoints
-      .map(d => `pmset schedule wake \\"${formatPmsetDate(d)}\\"`)
+      .map(d => `pmset schedule wake \\"${formatPmsetDate(d)}\\" SundayRec`)
       .join(' && ')
     execFileSync('osascript', ['-e', `do shell script "${cmds}" with administrator privileges`], {
       stdio: 'pipe', timeout: 30000

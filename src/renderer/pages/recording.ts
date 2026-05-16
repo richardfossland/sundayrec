@@ -345,6 +345,7 @@ function updateReconnectBanner(secsLeft: number): void {
 
 function showOverlay(opts: RecordingOpts): void {
   isRecording = true
+  window.__isRecording = true
   const overlay = document.getElementById('recording-overlay')
   if (overlay) overlay.style.display = 'flex'
   const dot = document.getElementById('status-dot')
@@ -389,6 +390,7 @@ function showOverlay(opts: RecordingOpts): void {
 
 function hideOverlay(): void {
   isRecording = false
+  window.__isRecording = false
   const overlay = document.getElementById('recording-overlay')
   if (overlay) overlay.style.display = 'none'
   scheduledStop    = null

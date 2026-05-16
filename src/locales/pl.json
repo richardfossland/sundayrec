@@ -17,7 +17,8 @@
     "warning": "Wymaga uwagi",
     "recording": "Trwa nagrywanie",
     "ok": "GOTOWY DO NAGRANIA",
-    "warn": "WYMAGANA AKCJA"
+    "warn": "WYMAGANA AKCJA",
+    "noSchedule": "Brak zaplanowanego nagrania"
   },
   "home": {
     "greeting": "Dzień dobry",
@@ -136,7 +137,13 @@
     "cancel": "Anuluj",
     "noSlots": "Nie dodano jeszcze żadnych przedziałów.",
     "errNoDays": "Wybierz co najmniej jeden dzień.",
-    "errTimes": "Czas rozpoczęcia musi być przed czasem zakończenia.",
+    "errTimes": "Czas rozpoczęcia i zakończenia nie mogą być takie same.",
+    "durationPrefix": "Czas trwania",
+    "crossesMidnight": "Przekracza północ",
+    "checkTimes": "sprawdź godziny",
+    "hourAbbr": "g",
+    "confirmDeleteSlot": "Usunąć ten przedział czasowy?",
+    "deleteSlotTitle": "Usuń",
     "dayLabel": "DZIEŃ",
     "reminderTitle": "Przypomnienie przed nagraniem",
     "reminderDesc": "Powiadomienie systemowe N minut przed zaplanowanym nagraniem",
@@ -212,6 +219,7 @@
     "notRecommended": "Niezalecane",
     "volume": "Głośność",
     "inputVolume": "GŁOŚNOŚĆ WEJŚCIOWA",
+    "inputVolumeHint": "100% = brak zmiany sygnału. Lepiej wyregulować głośność na mikserze, aby uzyskać najlepszą jakość dźwięku.",
     "channels": "KANAŁY",
     "stereo": "Stereo (zalecane)",
     "monoL": "Mono — lewy",

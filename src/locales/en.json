@@ -17,7 +17,8 @@
     "warning": "Needs attention",
     "recording": "Recording now",
     "ok": "READY TO RECORD",
-    "warn": "ACTION REQUIRED"
+    "warn": "ACTION REQUIRED",
+    "noSchedule": "No recording scheduled"
   },
   "home": {
     "greeting": "Good day",
@@ -136,7 +137,13 @@
     "cancel": "Cancel",
     "noSlots": "No time slots added yet.",
     "errNoDays": "Select at least one day.",
-    "errTimes": "Start time must be before end time.",
+    "errTimes": "Start and end time cannot be the same.",
+    "durationPrefix": "Duration",
+    "crossesMidnight": "Crosses midnight",
+    "checkTimes": "check times",
+    "hourAbbr": "h",
+    "confirmDeleteSlot": "Delete this time slot?",
+    "deleteSlotTitle": "Delete",
     "dayLabel": "DAY",
     "reminderTitle": "Reminder before recording",
     "reminderDesc": "System notification N minutes before a scheduled recording starts",
@@ -212,6 +219,7 @@
     "notRecommended": "Not recommended",
     "volume": "Volume",
     "inputVolume": "INPUT VOLUME",
+    "inputVolumeHint": "100% = no change to the signal. Adjust the volume on the mixer instead for best audio quality.",
     "channels": "CHANNELS",
     "stereo": "Stereo (recommended)",
     "monoL": "Mono — left",

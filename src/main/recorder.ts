@@ -24,14 +24,14 @@ import * as mailer from './mailer'
 import { localDateStr, buildFilename, codecFor, formatDuration } from './recorder-utils'
 import type { RecordingOpts, RecordingEntry, Settings } from '../types'
 
-export const NOTIFY_LABELS: Record<string, { done: string; err: string }> = {
-  no: { done: 'Fullført',      err: 'SundayRec — Feil'    },
-  en: { done: 'Completed',     err: 'SundayRec — Error'   },
-  de: { done: 'Abgeschlossen', err: 'SundayRec — Fehler'  },
-  sv: { done: 'Klar',          err: 'SundayRec — Fel'     },
-  da: { done: 'Fuldført',      err: 'SundayRec — Fejl'    },
-  pl: { done: 'Ukończono',     err: 'SundayRec — Błąd'    },
-  fr: { done: 'Terminé',       err: 'SundayRec — Erreur'  },
+export const NOTIFY_LABELS: Record<string, { done: string; err: string; recovered: string }> = {
+  no: { done: 'Fullført',      err: 'SundayRec — Feil',    recovered: 'Opptak gjenopprettet: {file}' },
+  en: { done: 'Completed',     err: 'SundayRec — Error',   recovered: 'Recording recovered: {file}'  },
+  de: { done: 'Abgeschlossen', err: 'SundayRec — Fehler',  recovered: 'Aufnahme wiederhergestellt: {file}' },
+  sv: { done: 'Klar',          err: 'SundayRec — Fel',     recovered: 'Inspelning återställd: {file}' },
+  da: { done: 'Fuldført',      err: 'SundayRec — Fejl',    recovered: 'Optagelse gendannet: {file}'  },
+  pl: { done: 'Ukończono',     err: 'SundayRec — Błąd',    recovered: 'Nagranie odzyskane: {file}'   },
+  fr: { done: 'Terminé',       err: 'SundayRec — Erreur',  recovered: 'Enregistrement récupéré : {file}' },
 }
 
 let ffmpegPath = ffmpegStatic as string
@@ -264,6 +264,9 @@ export function recoverCrashedSession(): void {
         path:      outputPath,
         status:    'ok'
       })
+      const lang = store.getAll().language ?? 'no'
+      const nl = NOTIFY_LABELS[lang] ?? NOTIFY_LABELS.no
+      notify('SundayRec', nl.recovered.replace('{file}', path.basename(outputPath)))
     })
     .on('error', () => unlinkTemp(recovery.tempPath))
     .run()

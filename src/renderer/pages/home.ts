@@ -25,16 +25,22 @@ export function setupHome(): void {
     await window.api.clearHistory()
     renderHistoryRows(document.getElementById('history-tbody'), [], false)
   })
+
+  const onDeviceChange = (): void => { void checkStatus() }
+  navigator.mediaDevices.addEventListener('devicechange', onDeviceChange)
+  window.addEventListener('beforeunload', () =>
+    navigator.mediaDevices.removeEventListener('devicechange', onDeviceChange))
 }
 
 export async function refreshHome(): Promise<void> {
-  await Promise.all([loadNextRecording(), loadDiskSpace(), loadRecentHistory(), checkStatus(), loadHomeInfoStrip()])
+  const next = await window.api.getNextRecording()
+  await Promise.all([loadNextRecording(next), loadDiskSpace(), loadRecentHistory(), checkStatus(next), loadHomeInfoStrip()])
   startVU()
 }
 
-async function loadNextRecording(): Promise<void> {
+async function loadNextRecording(prefetchedNext?: { date: string } | null): Promise<void> {
   if (countdownTimer) clearInterval(countdownTimer)
-  const next    = await window.api.getNextRecording()
+  const next    = prefetchedNext !== undefined ? prefetchedNext : await window.api.getNextRecording()
   const dateEl  = document.getElementById('next-date')
   const cntEl   = document.getElementById('next-countdown')
   const titleEl = document.getElementById('hero-ready-title')
@@ -83,7 +89,7 @@ async function loadDiskSpace(): Promise<void> {
   }
 
   if (!disk?.freeBytes) {
-    if (storageVal) storageVal.textContent = '—'
+    if (storageVal) { storageVal.textContent = '—'; storageVal.style.color = '' }
     if (storageSub) storageSub.textContent = folderShort
     return
   }
@@ -102,7 +108,10 @@ async function loadDiskSpace(): Promise<void> {
   }
   const hours  = Math.floor(disk.freeBytes / (kbps * 125 * 3600))
   const recEst = fmtStorageHours(hours)
-  if (storageVal) storageVal.textContent = `${gb.toFixed(1)} GB ${t('home.storageFree', 'ledig')}`
+  if (storageVal) {
+    storageVal.textContent = `${gb.toFixed(1)} GB ${t('home.storageFree', 'ledig')}`
+    storageVal.style.color = gb < 1 ? 'var(--red)' : gb < 5 ? 'var(--yellow, #fbbf24)' : ''
+  }
   if (storageSub) storageSub.textContent = `${folderShort} · ca. ${recEst}`
 
   const diskMetaEl = document.getElementById('rec-disk')
@@ -157,15 +166,18 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
     tdActions.style.cssText = 'white-space:nowrap;display:flex;align-items:center;gap:2px'
 
     const cells = [r.date ? fmtDate(r.date) : '—', r.startTime ?? '—', r.duration ?? '—', r.filename ?? '—']
-    cells.forEach(text => {
-      const td = document.createElement('td'); td.textContent = text; tr.appendChild(td)
+    cells.forEach((text, i) => {
+      const td = document.createElement('td')
+      td.textContent = text
+      if (i === 3 && r.path) td.title = r.path
+      tr.appendChild(td)
     })
     tr.appendChild(tdStatus); tr.appendChild(tdActions)
     tbody.appendChild(tr)
   })
 }
 
-async function checkStatus(): Promise<void> {
+async function checkStatus(prefetchedNext?: { date: string } | null): Promise<void> {
   const devices   = await getAudioDevices()
   const connected = !settings.deviceId || devices.some(d => d.deviceId === settings.deviceId)
   const isRec     = window.__isRecording ?? false
@@ -178,7 +190,23 @@ async function checkStatus(): Promise<void> {
   const dot = document.getElementById('status-dot')
   const lbl = document.getElementById('status-label')
   if (dot) dot.className = 'status-dot' + (isRec ? ' recording' : connected ? '' : ' warn')
-  if (lbl) lbl.textContent = t(isRec ? 'status.recording' : connected ? 'status.ready' : 'status.warning')
+  if (lbl) {
+    if (isRec) {
+      lbl.textContent = t('status.recording', 'Tar opp nå')
+    } else if (!connected) {
+      lbl.textContent = t('status.warning', 'Lydkilde mangler')
+    } else {
+      const next = prefetchedNext !== undefined ? prefetchedNext : await window.api.getNextRecording()
+      if (next) {
+        const d = new Date(next.date)
+        const locale = currentLang === 'no' ? 'nb-NO' : currentLang
+        const dateStr = d.toLocaleString(locale, { weekday: 'short', hour: '2-digit', minute: '2-digit' })
+        lbl.textContent = dateStr
+      } else {
+        lbl.textContent = t('status.noSchedule', 'Ingen opptak planlagt')
+      }
+    }
+  }
 }
 
 async function loadHomeInfoStrip(): Promise<void> {

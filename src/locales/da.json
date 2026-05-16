@@ -17,7 +17,8 @@
     "warning": "Kræver opmærksomhed",
     "recording": "Optager nu",
     "ok": "KLAR TIL OPTAGELSE",
-    "warn": "HANDLING PÅKRÆVET"
+    "warn": "HANDLING PÅKRÆVET",
+    "noSchedule": "Ingen optagelse planlagt"
   },
   "home": {
     "greeting": "God dag",
@@ -136,7 +137,13 @@
     "cancel": "Annuller",
     "noSlots": "Ingen tidspunkter tilføjet endnu.",
     "errNoDays": "Vælg mindst én dag.",
-    "errTimes": "Starttid skal være før stoptid.",
+    "errTimes": "Start- og stoptid kan ikke være ens.",
+    "durationPrefix": "Varighed",
+    "crossesMidnight": "Krydser midnat",
+    "checkTimes": "tjek tidspunkterne",
+    "hourAbbr": "t",
+    "confirmDeleteSlot": "Slet dette tidspunkt?",
+    "deleteSlotTitle": "Slet",
     "dayLabel": "DAG",
     "reminderTitle": "Påmindelse før optagelse",
     "reminderDesc": "Systembesked N minutter før en planlagt optagelse starter",
@@ -212,6 +219,7 @@
     "notRecommended": "Anbefales ikke",
     "volume": "Volumen",
     "inputVolume": "INDGANGSVOLUMEN",
+    "inputVolumeHint": "100% = ingen ændring af signalet. Juster hellere lydstyrken på mixeren for bedst lydkvalitet.",
     "channels": "KANALER",
     "stereo": "Stereo (anbefalet)",
     "monoL": "Mono — venstre",

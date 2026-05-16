@@ -17,7 +17,8 @@
     "warning": "Behöver uppmärksamhet",
     "recording": "Spelar in nu",
     "ok": "REDO ATT SPELA IN",
-    "warn": "ÅTGÄRD KRÄVS"
+    "warn": "ÅTGÄRD KRÄVS",
+    "noSchedule": "Ingen inspelning planerad"
   },
   "home": {
     "greeting": "God dag",
@@ -136,7 +137,13 @@
     "cancel": "Avbryt",
     "noSlots": "Inga tidsluckor tillagda ännu.",
     "errNoDays": "Välj minst en dag.",
-    "errTimes": "Starttid måste vara före stopptid.",
+    "errTimes": "Start- och stopptid får inte vara desamma.",
+    "durationPrefix": "Varaktighet",
+    "crossesMidnight": "Passerar midnatt",
+    "checkTimes": "kontrollera tiderna",
+    "hourAbbr": "t",
+    "confirmDeleteSlot": "Ta bort denna tidslucka?",
+    "deleteSlotTitle": "Ta bort",
     "dayLabel": "DAG",
     "reminderTitle": "Påminnelse innan inspelning",
     "reminderDesc": "Systemavisering N minuter innan en schemalagd inspelning startar",
@@ -212,6 +219,7 @@
     "notRecommended": "Rekommenderas inte",
     "volume": "Volym",
     "inputVolume": "INGÅNGSVOLYM",
+    "inputVolumeHint": "100% = ingen ändring av signalet. Justera hellre volymen på mixern för bästa ljudkvalitet.",
     "channels": "KANALER",
     "stereo": "Stereo (rekommenderas)",
     "monoL": "Mono — vänster",

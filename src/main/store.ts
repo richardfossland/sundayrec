@@ -12,7 +12,7 @@ const defaults: Settings = {
 
   channels: 'stereo',
   sampleRate: 48000,
-  inputVolume: 85,
+  inputVolume: 100,
   eqBass: 0,
   eqMid: 0,
   eqTreble: 0,
