@@ -158,7 +158,7 @@ async function handleManualStart(): Promise<void> {
     try { await startMediaRecorder(opts) }
     catch (err) {
       await stopMediaRecorder()
-      window.api.notifyError({ error: (err as Error).message })
+      window.api.notifyError({ error: translateAudioError(err as Error) })
       await window.api.stopRecordingNow()
       hideOverlay()
     }
@@ -180,9 +180,24 @@ export async function startRecordingWithOpts(opts: RecordingOpts): Promise<void>
   catch (err) {
     autoRestartOpts = null
     await stopMediaRecorder()
-    window.api.notifyError({ error: (err as Error).message })
+    window.api.notifyError({ error: translateAudioError(err as Error) })
     await window.api.stopRecordingNow()
     hideOverlay()
+  }
+}
+
+function translateAudioError(err: Error): string {
+  switch (err.name) {
+    case 'NotAllowedError':
+      return t('recording.errorPermission', 'Mikrofontilgang nektet — sjekk systeminnstillingene')
+    case 'NotFoundError':
+      return t('recording.errorDeviceNotFound', 'Lydenheten ble ikke funnet — sjekk USB-tilkoblingen')
+    case 'OverconstrainedError':
+      return t('recording.errorOverconstrained', 'Lydenheten støtter ikke valgte innstillinger')
+    case 'NotReadableError':
+      return t('recording.errorNotReadable', 'Lydenheten er i bruk av et annet program')
+    default:
+      return err.message
   }
 }
 
@@ -321,7 +336,8 @@ async function handleDisconnect(session: CaptureSession, opts: RecordingOpts): P
   if (!isRecording) return
   showReconnectBanner()
   let reconnected = false
-  for (let remaining = 10; remaining > 0 && isRecording; remaining--) {
+  // 30 seconds — covers Windows driver reload + USB hub re-enumeration
+  for (let remaining = 30; remaining > 0 && isRecording; remaining--) {
     updateReconnectBanner(remaining)
     if (await reconnectStream(session)) {
       reconnected = true

@@ -46,6 +46,7 @@
     "changeSettings": "Change",
     "deviceConnected": "Connected",
     "deviceMissing": "Not found",
+    "reconnectDevice": "Reconnect {name} via USB",
     "defaultFolder": "Documents/SundayRec",
     "recordingsSaved": "recordings saved"
   },
@@ -252,6 +253,7 @@
     "channelL": "LEFT (L)",
     "channelR": "RIGHT (R)",
     "channelHint": "Tip: to record mono from one channel, select the same channel for L and R, then set Channels to Mono below.",
+    "channelCount": "channels",
     "compatibility": "Driver Compatibility",
     "compatDesc": "USB mixers work on Mac without extra drivers. On Windows, the manufacturer's driver is recommended for multi-channel access. ASIO mode does not work — use WDM/WASAPI.",
     "compatDevice": "Device",
@@ -429,7 +431,11 @@
     "sigClipping": "CLIPPING",
     "sigHigh": "HIGH",
     "sigGood": "GOOD",
-    "sigWeak": "WEAK"
+    "sigWeak": "WEAK",
+    "errorPermission": "Microphone access denied — open System Settings and grant access",
+    "errorDeviceNotFound": "Audio device not found — check USB connection",
+    "errorOverconstrained": "Audio device does not support the selected settings",
+    "errorNotReadable": "Audio device is in use by another application"
   },
   "wizard": {
     "step1": "Audio source",

@@ -47,7 +47,8 @@
     "deviceConnected": "Verbunden",
     "deviceMissing": "Nicht gefunden",
     "defaultFolder": "Dokumente/SundayRec",
-    "recordingsSaved": "Aufnahmen gespeichert"
+    "recordingsSaved": "Aufnahmen gespeichert",
+    "reconnectDevice": "{name} per USB verbinden"
   },
   "update": {
     "available": "Neue Version {v} verfügbar — wird heruntergeladen…",
@@ -252,6 +253,7 @@
     "channelL": "LINKS (L)",
     "channelR": "RECHTS (R)",
     "channelHint": "Tipp: Für Mono-Aufnahme denselben Kanal für L und R wählen.",
+    "channelCount": "Kanäle",
     "compatibility": "Treiberkompatibilität",
     "compatDesc": "USB-Mischpulte funktionieren auf Mac ohne Treiber. Unter Windows wird der Herstellertreiber für Mehrkanal empfohlen. ASIO-Modus ist nicht verfügbar — WDM/WASAPI verwenden.",
     "compatDevice": "Gerät",
@@ -429,7 +431,11 @@
     "sigClipping": "CLIPPING",
     "sigHigh": "HOCH",
     "sigGood": "GUT",
-    "sigWeak": "SCHWACH"
+    "sigWeak": "SCHWACH",
+    "errorPermission": "Mikrofonzugriff verweigert — Systemeinstellungen öffnen und Zugriff gewähren",
+    "errorDeviceNotFound": "Audiogerät nicht gefunden — USB-Verbindung prüfen",
+    "errorOverconstrained": "Audiogerät unterstützt die gewählten Einstellungen nicht",
+    "errorNotReadable": "Audiogerät wird von einem anderen Programm verwendet"
   },
   "wizard": {
     "step1": "Audioquelle",

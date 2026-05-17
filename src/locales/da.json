@@ -47,7 +47,8 @@
     "deviceConnected": "Tilsluttet",
     "deviceMissing": "Ikke fundet",
     "defaultFolder": "Dokumenter/SundayRec",
-    "recordingsSaved": "optagelser gemt"
+    "recordingsSaved": "optagelser gemt",
+    "reconnectDevice": "Tilslut {name} via USB"
   },
   "update": {
     "available": "Ny version {v} tilgængelig — henter…",
@@ -252,6 +253,7 @@
     "channelL": "VENSTRE (L)",
     "channelR": "HØJRE (R)",
     "channelHint": "Tip: for mono, vælg samme kanal for L og R.",
+    "channelCount": "kanaler",
     "compatibility": "Driverkompatibilitet",
     "compatDesc": "USB-mixere fungerer på Mac uden ekstra driver. På Windows anbefales producentens driver for adgang til alle kanaler. ASIO-tilstand virker ikke — brug WDM/WASAPI.",
     "compatDevice": "Enhed",
@@ -429,7 +431,11 @@
     "sigClipping": "CLIPPING",
     "sigHigh": "HØJT",
     "sigGood": "GOD",
-    "sigWeak": "SVAG"
+    "sigWeak": "SVAG",
+    "errorPermission": "Mikrofonadgang nægtet — åbn Systemindstillinger og giv adgang",
+    "errorDeviceNotFound": "Lydenhed ikke fundet — tjek USB-forbindelsen",
+    "errorOverconstrained": "Lydenheden understøtter ikke de valgte indstillinger",
+    "errorNotReadable": "Lydenheden bruges af et andet program"
   },
   "wizard": {
     "step1": "Lydkilde",

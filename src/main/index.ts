@@ -194,6 +194,14 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
+app.on('render-process-gone', (_event, _webContents, details) => {
+  console.error('[SundayRec] Renderer process gone:', details.reason, 'exitCode:', details.exitCode)
+  if (recorder.isActive()) {
+    console.error('[SundayRec] Recording active during renderer crash — attempting emergency stop')
+    recorder.stopSession()
+  }
+})
+
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow()
   else mainWindow.show()

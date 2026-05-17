@@ -47,7 +47,8 @@
     "deviceConnected": "Podłączone",
     "deviceMissing": "Nie znaleziono",
     "defaultFolder": "Dokumenty/SundayRec",
-    "recordingsSaved": "nagrań zapisano"
+    "recordingsSaved": "nagrań zapisano",
+    "reconnectDevice": "Podłącz {name} przez USB"
   },
   "update": {
     "available": "Nowa wersja {v} dostępna — pobieranie…",
@@ -252,6 +253,7 @@
     "channelL": "LEWY (L)",
     "channelR": "PRAWY (R)",
     "channelHint": "Wskazówka: dla mono wybierz ten sam kanał dla L i R.",
+    "channelCount": "kanały",
     "compatibility": "Zgodność sterowników",
     "compatDesc": "Miksery USB działają na Macu bez dodatkowych sterowników. W Windows zalecany jest sterownik producenta dla dostępu do wszystkich kanałów. Tryb ASIO nie działa — użyj WDM/WASAPI.",
     "compatDevice": "Urządzenie",
@@ -429,7 +431,11 @@
     "sigClipping": "CLIPPING",
     "sigHigh": "WYSOKIE",
     "sigGood": "DOBRE",
-    "sigWeak": "SŁABE"
+    "sigWeak": "SŁABE",
+    "errorPermission": "Odmowa dostępu do mikrofonu — otwórz Ustawienia systemu i udziel dostępu",
+    "errorDeviceNotFound": "Urządzenie audio nie zostało znalezione — sprawdź podłączenie USB",
+    "errorOverconstrained": "Urządzenie audio nie obsługuje wybranych ustawień",
+    "errorNotReadable": "Urządzenie audio jest używane przez inną aplikację"
   },
   "wizard": {
     "step1": "Źródło dźwięku",

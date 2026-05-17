@@ -1,5 +1,5 @@
 import { t, currentLang } from '../i18n'
-import { settings } from '../state'
+import { settings, patchSettings } from '../state'
 import { fmtCountdown, fmtStorageHours, fmtDate, escHtml, flashMsg } from '../helpers'
 import { startVU, stopVU } from './home-vu'
 import { getAudioDevices } from '../audio/capture'
@@ -282,14 +282,37 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
 }
 
 async function checkStatus(prefetchedNext?: { date: string } | null): Promise<void> {
-  const devices   = await getAudioDevices()
-  const connected = !settings.deviceId || devices.some(d => d.deviceId === settings.deviceId)
-  const isRec     = window.__isRecording ?? false
+  const devices = await getAudioDevices()
+  let connected = !settings.deviceId || devices.some(d => d.deviceId === settings.deviceId)
+
+  // Auto-heal: Windows often reassigns device IDs after reboot or driver update.
+  // If the stored ID is gone but a device with the same label exists, silently update.
+  if (!connected && settings.deviceId && settings.deviceName) {
+    const byLabel = devices.find(d =>
+      d.label && d.label.toLowerCase() === (settings.deviceName ?? '').toLowerCase()
+    )
+    if (byLabel) {
+      patchSettings({ deviceId: byLabel.deviceId })
+      await window.api.saveSettings({ ...settings })
+      connected = true
+    }
+  }
+
+  const isRec = window.__isRecording ?? false
 
   const heroOk   = document.getElementById('hero-ok')
   const heroWarn = document.getElementById('hero-warn')
   if (heroOk)   heroOk.style.display   = connected ? 'flex' : 'none'
   if (heroWarn) heroWarn.style.display = connected ? 'none' : 'flex'
+
+  // Update hero-warn detail with device name so user knows what to reconnect
+  if (!connected && settings.deviceName) {
+    const warnDetail = document.getElementById('hero-warn-detail')
+    if (warnDetail) {
+      warnDetail.textContent = t('home.reconnectDevice', 'Koble til {name} via USB')
+        .replace('{name}', settings.deviceName)
+    }
+  }
 
   const dot = document.getElementById('status-dot')
   const lbl = document.getElementById('status-label')
@@ -298,7 +321,8 @@ async function checkStatus(prefetchedNext?: { date: string } | null): Promise<vo
     if (isRec) {
       lbl.textContent = t('status.recording', 'Tar opp nå')
     } else if (!connected) {
-      lbl.textContent = t('status.warning', 'Lydkilde mangler')
+      const name = settings.deviceName ? `: ${settings.deviceName}` : ''
+      lbl.textContent = t('status.warning', 'Lydkilde mangler') + name
     } else {
       const next = prefetchedNext !== undefined ? prefetchedNext : await window.api.getNextRecording()
       if (next) {

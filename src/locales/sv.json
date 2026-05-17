@@ -47,7 +47,8 @@
     "deviceConnected": "Ansluten",
     "deviceMissing": "Hittades inte",
     "defaultFolder": "Dokument/SundayRec",
-    "recordingsSaved": "inspelningar sparade"
+    "recordingsSaved": "inspelningar sparade",
+    "reconnectDevice": "Anslut {name} via USB"
   },
   "update": {
     "available": "Ny version {v} tillgänglig — laddar ned…",
@@ -252,6 +253,7 @@
     "channelL": "VÄNSTER (L)",
     "channelR": "HÖGER (R)",
     "channelHint": "Tips: för mono, välj samma kanal för L och R.",
+    "channelCount": "kanaler",
     "compatibility": "Driverkompatibilitet",
     "compatDesc": "USB-mixrar fungerar på Mac utan extra driver. På Windows rekommenderas tillverkarens driver för flerkanalig åtkomst. ASIO-läge fungerar inte — använd WDM/WASAPI.",
     "compatDevice": "Enhet",
@@ -429,7 +431,11 @@
     "sigClipping": "CLIPPING",
     "sigHigh": "HÖGT",
     "sigGood": "BRA",
-    "sigWeak": "SVAG"
+    "sigWeak": "SVAG",
+    "errorPermission": "Mikrofonåtkomst nekad — öppna Systeminställningar och ge åtkomst",
+    "errorDeviceNotFound": "Ljudenhet hittades inte — kontrollera USB-anslutningen",
+    "errorOverconstrained": "Ljudenheten stödjer inte de valda inställningarna",
+    "errorNotReadable": "Ljudenheten används av ett annat program"
   },
   "wizard": {
     "step1": "Ljudkälla",

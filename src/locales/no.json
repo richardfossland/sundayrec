@@ -47,7 +47,8 @@
     "deviceConnected": "Tilkoblet",
     "deviceMissing": "Ikke funnet",
     "defaultFolder": "Dokumenter/SundayRec",
-    "recordingsSaved": "opptak lagret"
+    "recordingsSaved": "opptak lagret",
+    "reconnectDevice": "Koble til {name} via USB"
   },
   "update": {
     "available": "Ny versjon {v} er tilgjengelig — laster ned…",
@@ -252,6 +253,7 @@
     "channelL": "VENSTRE (L)",
     "channelR": "HØYRE (R)",
     "channelHint": "Tips: vil du ta opp mono fra én kanal, velg samme for L og R og sett Kanaler til Mono nedenfor.",
+    "channelCount": "kanaler",
     "compatibility": "Driverkompatibilitet",
     "compatDesc": "USB-miksere fungerer på Mac uten ekstra driver. På Windows anbefales produsentens driver for tilgang til alle kanaler. ASIO-modus virker ikke — bruk WDM/WASAPI.",
     "compatDevice": "Enhet",
@@ -429,7 +431,11 @@
     "sigClipping": "KLIPPING",
     "sigHigh": "HØYT",
     "sigGood": "GOD",
-    "sigWeak": "SVAK"
+    "sigWeak": "SVAK",
+    "errorPermission": "Mikrofontilgang nektet — åpne Systeminnstillinger og gi tilgang",
+    "errorDeviceNotFound": "Lydenheten ble ikke funnet — sjekk USB-tilkoblingen",
+    "errorOverconstrained": "Lydenheten støtter ikke valgte innstillinger",
+    "errorNotReadable": "Lydenheten er i bruk av et annet program"
   },
   "wizard": {
     "step1": "Lydkilde",

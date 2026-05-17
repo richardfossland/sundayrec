@@ -47,7 +47,8 @@
     "deviceConnected": "Connecté",
     "deviceMissing": "Introuvable",
     "defaultFolder": "Documents/SundayRec",
-    "recordingsSaved": "enregistrements sauvegardés"
+    "recordingsSaved": "enregistrements sauvegardés",
+    "reconnectDevice": "Connecter {name} via USB"
   },
   "update": {
     "available": "Nouvelle version {v} disponible — téléchargement…",
@@ -252,6 +253,7 @@
     "channelL": "GAUCHE (L)",
     "channelR": "DROITE (R)",
     "channelHint": "Astuce : pour le mono, sélectionnez le même canal pour L et R.",
+    "channelCount": "canaux",
     "compatibility": "Compatibilité des pilotes",
     "compatDesc": "Les mixeurs USB fonctionnent sur Mac sans pilote supplémentaire. Sur Windows, le pilote du fabricant est recommandé pour accéder à tous les canaux. Le mode ASIO ne fonctionne pas — utilisez WDM/WASAPI.",
     "compatDevice": "Appareil",
@@ -429,7 +431,11 @@
     "sigClipping": "SATURATION",
     "sigHigh": "ÉLEVÉ",
     "sigGood": "BON",
-    "sigWeak": "FAIBLE"
+    "sigWeak": "FAIBLE",
+    "errorPermission": "Accès au microphone refusé — ouvrez Réglages Système et accordez l'accès",
+    "errorDeviceNotFound": "Périphérique audio introuvable — vérifiez la connexion USB",
+    "errorOverconstrained": "Le périphérique audio ne supporte pas les paramètres sélectionnés",
+    "errorNotReadable": "Le périphérique audio est utilisé par une autre application"
   },
   "wizard": {
     "step1": "Source audio",

@@ -73,7 +73,9 @@ function updateVolumeLabel(): void {
 }
 
 async function saveAudioSettings(): Promise<void> {
-  const deviceId = (document.querySelector('.device-card.selected') as HTMLElement | null)?.dataset.deviceId ?? settings.deviceId ?? null
+  const selectedCard = document.querySelector('.device-card.selected') as HTMLElement | null
+  const deviceId   = selectedCard?.dataset.deviceId   ?? settings.deviceId   ?? null
+  const deviceName = selectedCard?.dataset.deviceLabel ?? settings.deviceName ?? null
   const chL      = +((document.getElementById('channel-select-l') as HTMLInputElement | null)?.value ?? 0)
   const chR      = +((document.getElementById('channel-select-r') as HTMLInputElement | null)?.value ?? 1)
 
@@ -83,6 +85,7 @@ async function saveAudioSettings(): Promise<void> {
 
   const patch = {
     deviceId,
+    deviceName,
     deviceChannels,
     inputVolume:    +((document.getElementById('input-volume')    as HTMLInputElement | null)?.value ?? 100),
     channels:       ((document.querySelector('input[name="channels"]:checked') as HTMLInputElement | null)?.value ?? 'stereo') as ChannelMode,
@@ -114,21 +117,26 @@ export async function renderDeviceList(containerId: string): Promise<void> {
     const builtIn  = /built-in|innebygd|default/i.test(d.label)
     const selected = d.deviceId === (settings.deviceId ?? 'default')
     const card     = document.createElement('div')
-    card.className          = 'device-card' + (selected ? ' selected' : '')
-    card.dataset.deviceId   = d.deviceId
+    card.className            = 'device-card' + (selected ? ' selected' : '')
+    card.dataset.deviceId     = d.deviceId
+    card.dataset.deviceLabel  = d.label
+    const subBase = builtIn ? t('audio.internal','Innebygd') : 'USB / Ekstern'
     card.innerHTML = `
       <div class="device-icon">${builtIn ? '🎙️' : '🎛️'}</div>
       <div>
         <div class="device-name">${escHtml(d.label || 'Ukjent enhet')}</div>
-        <div class="device-sub">${builtIn ? t('audio.internal','Innebygd') : 'USB / Ekstern'}</div>
+        <div class="device-sub" data-sub-base="${escHtml(subBase)}">${escHtml(subBase)}</div>
       </div>
       <span class="device-badge ${builtIn ? 'warn' : 'ok'}">${builtIn ? t('audio.notRecommended') : t('audio.connected','Tilkoblet ✓')}</span>`
     card.addEventListener('click', async () => {
       container.querySelectorAll('.device-card').forEach(c => c.classList.remove('selected'))
       card.classList.add('selected')
-      patchSettings({ deviceId: d.deviceId })
+      patchSettings({ deviceId: d.deviceId, deviceName: d.label })
       const count = await detectDeviceChannels(d.deviceId)
       detectedChannelCount = count
+      // Update sub-label with detected channel count
+      const subEl = card.querySelector('.device-sub') as HTMLElement | null
+      if (subEl) subEl.textContent = `${subBase} · ${count} ${t('audio.channelCount', 'kanaler')}`
       // Reset to stored channel values for this device, or defaults
       const stored = settings.deviceChannels?.[d.deviceId]
       updateChannelSelector(count, stored?.channelL ?? 0, stored?.channelR ?? 1)
@@ -136,13 +144,20 @@ export async function renderDeviceList(containerId: string): Promise<void> {
     container.appendChild(card)
   })
 
-  // Probe current device for channel count
+  // Probe current device for channel count and show in selected card
   const devId = settings.deviceId ?? (devices[0]?.deviceId ?? null)
   if (devId) {
     detectDeviceChannels(devId).then(count => {
       detectedChannelCount = count
       const stored = settings.deviceChannels?.[devId]
       updateChannelSelector(count, stored?.channelL ?? 0, stored?.channelR ?? 1)
+      // Update selected card sub-label
+      const selCard = container.querySelector('.device-card.selected') as HTMLElement | null
+      const subEl   = selCard?.querySelector('.device-sub') as HTMLElement | null
+      if (subEl) {
+        const base = subEl.dataset.subBase ?? ''
+        subEl.textContent = `${base} · ${count} ${t('audio.channelCount', 'kanaler')}`
+      }
     })
   }
 }
@@ -180,7 +195,7 @@ async function startMonitoring(): Promise<void> {
         channelCount: { ideal: need }, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       video: false
     })
-    monitorCtx = new AudioContext()
+    monitorCtx = new AudioContext({ sampleRate: settings.sampleRate ?? 48000 })
     monitorSrc = monitorCtx.createMediaStreamSource(monitorStream)
 
     const inputNode = buildInputRouter(monitorCtx, monitorSrc, monitorStream, chL, chR)

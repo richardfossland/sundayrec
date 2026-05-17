@@ -1,6 +1,9 @@
 /**
  * Audio capture pipeline.
  *
+ * Device robustness: getUserMedia uses exact→ideal→default fallback chain so
+ * scheduled recordings survive Windows device-ID reassignment after reboot.
+ *
  * PCM fix: for lossless formats (WAV/FLAC) we request audio/webm;codecs=pcm
  * from MediaRecorder to avoid Opus→WAV transcoding artifacts. Falls back to
  * audio/webm;codecs=opus for lossy formats.
@@ -39,11 +42,45 @@ export function buildInputRouter(
   return merger
 }
 
+/**
+ * getUserMedia with fallback chain:
+ *   1. exact deviceId        — fastest, fails if ID changed (Windows reboot)
+ *   2. ideal deviceId        — OS picks best match, allows reconnect after ID change
+ *   3. any available device  — last resort, warns in console
+ */
+async function getUserMediaWithFallback(
+  deviceId: string | null,
+  baseConstraints: MediaTrackConstraints
+): Promise<MediaStream> {
+  if (deviceId) {
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        audio: { ...baseConstraints, deviceId: { exact: deviceId } },
+        video: false
+      })
+    } catch { /* fall through */ }
+
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        audio: { ...baseConstraints, deviceId: { ideal: deviceId } },
+        video: false
+      })
+    } catch { /* fall through */ }
+
+    console.warn('[capture] Stored deviceId not available, falling back to default device')
+  }
+
+  return await navigator.mediaDevices.getUserMedia({
+    audio: baseConstraints,
+    video: false
+  })
+}
+
 export async function detectDeviceChannels(deviceId: string | null | undefined): Promise<number> {
   if (!deviceId || deviceId === 'default' || deviceId === '') return 2
   try {
     const s = await navigator.mediaDevices.getUserMedia({
-      audio: { deviceId: { exact: deviceId }, channelCount: { ideal: 32 } },
+      audio: { deviceId: { ideal: deviceId }, channelCount: { ideal: 32 } },
       video: false
     })
     const ch = s.getAudioTracks()[0]?.getSettings().channelCount ?? 2
@@ -65,8 +102,12 @@ function chooseMime(format: string): string {
   if (isLossless && MediaRecorder.isTypeSupported('audio/webm;codecs=pcm')) {
     return 'audio/webm;codecs=pcm'
   }
-  if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) return 'audio/webm;codecs=opus'
-  return 'audio/webm'
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/ogg;codecs=opus',
+    'audio/webm',
+  ]
+  return candidates.find(m => MediaRecorder.isTypeSupported(m)) ?? 'audio/webm'
 }
 
 export async function startCapture(opts: RecordingOpts): Promise<CaptureSession> {
@@ -81,18 +122,22 @@ export async function startCapture(opts: RecordingOpts): Promise<CaptureSession>
     chL + 1, chR + 1
   )
 
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      ...(realDeviceId ? { deviceId: { exact: realDeviceId } } : {}),
-      channelCount:     { ideal: neededCh },
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl:  false
-    },
-    video: false
-  })
+  const baseConstraints: MediaTrackConstraints = {
+    channelCount:     { ideal: neededCh },
+    echoCancellation: false,
+    noiseSuppression: false,
+    autoGainControl:  false
+  }
 
-  const audioCtx = new AudioContext()
+  const stream = await getUserMediaWithFallback(realDeviceId, baseConstraints)
+
+  // Request the user's preferred sample rate for best fidelity.
+  // latencyHint 'playback' prioritises buffer stability over low latency —
+  // critical for hour-long church recordings.
+  const audioCtx = new AudioContext({
+    latencyHint: 'playback',
+    sampleRate: opts.sampleRate ?? 48000
+  })
   const src      = audioCtx.createMediaStreamSource(stream)
   const inputNode = buildInputRouter(audioCtx, src, stream, chL, chR)
 
@@ -173,12 +218,16 @@ export async function reconnectStream(session: CaptureSession): Promise<boolean>
     opts.channels === 'stereo' || isMonoChannel ? 2 : 1,
     chL + 1, chR + 1
   )
+  const baseConstraints: MediaTrackConstraints = {
+    channelCount: { ideal: neededCh },
+    echoCancellation: false, noiseSuppression: false, autoGainControl: false
+  }
   try {
+    // Use ideal (not exact) so reconnect survives Windows device-ID reassignment
     const newStream = await navigator.mediaDevices.getUserMedia({
       audio: {
-        ...(realDeviceId ? { deviceId: { exact: realDeviceId } } : {}),
-        channelCount: { ideal: neededCh },
-        echoCancellation: false, noiseSuppression: false, autoGainControl: false
+        ...(realDeviceId ? { deviceId: { ideal: realDeviceId } } : {}),
+        ...baseConstraints
       },
       video: false
     })
