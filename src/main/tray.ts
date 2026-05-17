@@ -1,4 +1,4 @@
-import { Tray, Menu, nativeImage, app } from 'electron'
+import { Tray, Menu, nativeImage, app, nativeTheme } from 'electron'
 import type { BrowserWindow } from 'electron'
 import path from 'path'
 import * as store from './store'
@@ -47,6 +47,11 @@ export function create(mainWindow: BrowserWindow): void {
     else { win.show(); win.focus() }
   })
 
+  // Update tray icon when Windows dark/light mode changes
+  if (process.platform === 'win32') {
+    nativeTheme.on('updated', () => updateMenu())
+  }
+
   updateMenu()
 }
 
@@ -85,10 +90,21 @@ function updateMenu(): void {
 
   tray.setContextMenu(menu)
 
-  const suffix = process.platform === 'darwin' ? 'Template.png' : '.png'
-  const base   = isRecording ? 'tray-recording' : hasError ? 'tray-error' : 'tray-idle'
+  const base = isRecording ? 'tray-recording' : hasError ? 'tray-error' : 'tray-idle'
   try {
-    let icon = nativeImage.createFromPath(path.join(__dirname, '../../assets', base + suffix))
+    let iconFile: string
+    if (process.platform === 'darwin') {
+      iconFile = base + 'Template.png'
+    } else if (process.platform === 'win32' && nativeTheme.shouldUseDarkColors) {
+      iconFile = base + '-dark.png'
+    } else {
+      iconFile = base + '.png'
+    }
+    let icon = nativeImage.createFromPath(path.join(__dirname, '../../assets', iconFile))
+    // Fall back to default icon if dark variant doesn't exist
+    if (icon.isEmpty() && process.platform === 'win32') {
+      icon = nativeImage.createFromPath(path.join(__dirname, '../../assets', base + '.png'))
+    }
     if (process.platform === 'darwin') icon = icon.resize({ width: 18, height: 18 })
     tray.setImage(icon)
   } catch {}

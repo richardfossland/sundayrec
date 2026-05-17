@@ -1,6 +1,17 @@
 import { churchCalendarName } from '../shared/church-calendar'
 import type { RecordingOpts } from '../types'
 
+const WIN_RESERVED = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i
+
+export function sanitizeFilename(name: string): string {
+  let safe = name.replace(/[/\\:*?"<>|]/g, '_').trim()
+  // Strip trailing dots/spaces (Windows disallows them)
+  safe = safe.replace(/[. ]+$/, '')
+  // Replace Windows reserved device names
+  if (WIN_RESERVED.test(safe)) safe = `_${safe}`
+  return safe || 'opptak'
+}
+
 export function localDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
@@ -12,7 +23,7 @@ export function buildFilename(settings: RecordingOpts, startMs?: number): string
   const ts   = settings.splitTimestamp ? `_${settings.splitTimestamp}` : ''
 
   if (settings.customName?.trim()) {
-    const safe = settings.customName.trim().replace(/[/\\:*?"<>|]/g, '_')
+    const safe = sanitizeFilename(settings.customName.trim())
     return `${safe}${ts}_${date}.${ext}`
   }
 

@@ -72,6 +72,27 @@ function scheduleMac(wakePoints: Date[], allowAdmin: boolean): WakeResult {
   }
 }
 
+function buildWinTaskDefs(wakePoints: Date[], elevated: boolean): string {
+  return wakePoints.map((d, i) => {
+    const dt = formatWinDateTime(d)
+    const runLevel = elevated ? '-RunLevel Highest ' : ''
+    return [
+      `$t${i} = New-ScheduledTaskTrigger -Once -At '${dt}'`,
+      `$s${i} = New-ScheduledTaskSettingsSet -WakeToRun -ExecutionTimeLimit (New-TimeSpan -Minutes 1)`,
+      `$a${i} = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument '/c exit'`,
+      `Register-ScheduledTask -TaskName 'SundayRec-Wake-${i + 1}' -TaskPath '\\SundayRec' ` +
+        `-Action $a${i} -Trigger $t${i} -Settings $s${i} ${runLevel}-Force | Out-Null`
+    ].join('; ')
+  }).join('; ')
+}
+
+function classifyWinError(msg: string): string {
+  if (/access.?denied|unauthorized|privilege/i.test(msg)) return 'permission'
+  if (/not.?found|cannot find/i.test(msg))                 return 'not_found'
+  if (/invalid|format/i.test(msg))                         return 'invalid_format'
+  return 'permission'
+}
+
 async function scheduleWindows(wakePoints: Date[]): Promise<WakeResult> {
   try {
     await execFileAsync('powershell', [
@@ -82,25 +103,21 @@ async function scheduleWindows(wakePoints: Date[]): Promise<WakeResult> {
 
   if (!wakePoints.length) return { ok: true, count: 0, nextWake: null }
 
-  const taskDefs = wakePoints.map((d, i) => {
-    const dt = formatWinDateTime(d)
-    return [
-      `$t${i} = New-ScheduledTaskTrigger -Once -At '${dt}'`,
-      `$s${i} = New-ScheduledTaskSettingsSet -WakeToRun -ExecutionTimeLimit (New-TimeSpan -Minutes 1)`,
-      `$a${i} = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument '/c exit'`,
-      `Register-ScheduledTask -TaskName 'SundayRec-Wake-${i + 1}' -TaskPath '\\SundayRec' ` +
-        `-Action $a${i} -Trigger $t${i} -Settings $s${i} -RunLevel Highest -Force | Out-Null`
-    ].join('; ')
-  }).join('; ')
-
-  try {
-    await execFileAsync('powershell', ['-NoProfile', '-NonInteractive', '-Command', taskDefs], {
-      timeout: 20000
-    })
-    return { ok: true, count: wakePoints.length, nextWake: wakePoints[0].toISOString() }
-  } catch (e) {
-    return { ok: false, reason: 'permission', message: (e as Error).message }
+  // Try with elevated privileges first; fall back to standard user on permission error
+  for (const elevated of [true, false]) {
+    try {
+      await execFileAsync('powershell', [
+        '-NoProfile', '-NonInteractive', '-Command', buildWinTaskDefs(wakePoints, elevated)
+      ], { timeout: 20000 })
+      return { ok: true, count: wakePoints.length, nextWake: wakePoints[0].toISOString() }
+    } catch (e) {
+      const msg = (e as Error & { stderr?: string }).stderr ?? (e as Error).message ?? ''
+      const reason = classifyWinError(msg)
+      if (reason === 'permission' && elevated) continue  // retry without elevation
+      return { ok: false, reason, message: msg }
+    }
   }
+  return { ok: false, reason: 'permission' }
 }
 
 async function scheduleOsWakes(upcomingDates: Date[], allowAdmin: boolean): Promise<WakeResult> {

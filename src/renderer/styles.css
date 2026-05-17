@@ -124,6 +124,12 @@ body {
 body.platform-darwin #main    { padding-top: 42px; }
 body.platform-darwin #sidebar { padding-top: 28px; }
 
+/* Windows: no traffic-light buttons — no extra top padding needed.
+   Use Segoe UI variable font weight for sharper rendering on ClearType. */
+body.platform-win32 { font-weight: 400; -webkit-font-smoothing: auto; }
+body.platform-win32 ::-webkit-scrollbar { width: 8px; }
+body.platform-win32 ::-webkit-scrollbar-thumb { border-radius: 4px; }
+
 .page { display: none; }
 .page.active { display: block; }
 

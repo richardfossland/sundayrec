@@ -87,11 +87,12 @@ function createWindow(): void {
   })
 
   mainWindow.once('ready-to-show', () => {
-    const isFirst = !store.get('hasLaunched')
+    const isFirst    = !store.get('hasLaunched')
+    const launchHide = process.argv.includes('--hidden')
     if (isFirst) {
       store.set('hasLaunched', true)
       mainWindow.show()
-    } else if (store.get('showOnStartup')) {
+    } else if (!launchHide && store.get('showOnStartup')) {
       mainWindow.show()
     }
   })
@@ -141,7 +142,12 @@ app.whenReady().then(async () => {
   void wake.reschedule(scheduler.getUpcomingDates(), mainWindow)
 
   if (store.get('launchAtLogin')) {
-    app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true })
+    if (process.platform === 'win32') {
+      // openAsHidden is ignored on Windows — pass --hidden arg instead
+      app.setLoginItemSettings({ openAtLogin: true, path: process.execPath, args: ['--hidden'] })
+    } else {
+      app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true })
+    }
   }
 })
 
@@ -275,13 +281,24 @@ function setupIPC(): void {
         if (!isNaN(free)) return { freeBytes: free * 1024 }
       }
       if (process.platform === 'win32') {
-        const driveLetter = folder[0].replace(/[^A-Za-z]/, 'C')
+        // Use WMI to get free bytes by path — works for drive letters and UNC paths
+        const escapedFolder = folder.replace(/'/g, "''")
         const { stdout } = await execFileAsync('powershell', [
           '-NoProfile', '-Command',
-          `(Get-PSDrive -Name '${driveLetter}').Free`
+          `(Get-Item -LiteralPath '${escapedFolder}' -ErrorAction SilentlyContinue | ` +
+          `Select-Object -ExpandProperty PSDrive -ErrorAction SilentlyContinue).Free`
         ], { timeout: 5000 })
         const free = parseInt(stdout.trim())
         if (!isNaN(free) && free >= 0) return { freeBytes: free }
+        // Fallback: parse drive letter for local drives
+        const m = folder.match(/^([A-Za-z]):/)
+        if (m) {
+          const { stdout: fb } = await execFileAsync('powershell', [
+            '-NoProfile', '-Command', `(Get-PSDrive -Name '${m[1]}').Free`
+          ], { timeout: 5000 })
+          const free2 = parseInt(fb.trim())
+          if (!isNaN(free2) && free2 >= 0) return { freeBytes: free2 }
+        }
       }
     } catch {}
     return { freeBytes: null }

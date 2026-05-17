@@ -36,7 +36,22 @@ export const NOTIFY_LABELS: Record<string, { done: string; err: string; recovere
 
 let ffmpegPath = ffmpegStatic as string
 if (app.isPackaged) {
-  ffmpegPath = ffmpegPath.replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep)
+  // Normalize to forward slashes before replacing so Windows paths work reliably
+  const normalized = ffmpegPath.replace(/\\/g, '/')
+  const asarIdx = normalized.indexOf('app.asar/')
+  if (asarIdx !== -1) {
+    ffmpegPath = path.join(
+      normalized.slice(0, asarIdx).replace(/\//g, path.sep),
+      'app.asar.unpacked',
+      normalized.slice(asarIdx + 'app.asar/'.length).replace(/\//g, path.sep)
+    )
+  } else {
+    ffmpegPath = ffmpegPath.replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep)
+  }
+  if (!fs.existsSync(ffmpegPath)) {
+    console.error('[ffmpeg] Unpacked binary not found at', ffmpegPath, '— falling back to system PATH')
+    ffmpegPath = 'ffmpeg'
+  }
 }
 ffmpeg.setFfmpegPath(ffmpegPath)
 
@@ -282,7 +297,16 @@ export function recoverCrashedSession(): void {
 
 function unlinkTemp(p: string): void {
   fs.promises.unlink(p).catch(err => {
-    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') console.error('Failed to delete temp file:', err)
+    const code = (err as NodeJS.ErrnoException).code
+    if (code === 'ENOENT') return
+    if (process.platform === 'win32' && (code === 'EPERM' || code === 'EACCES')) {
+      // File may be locked by antivirus scan — retry after a short delay
+      setTimeout(() => {
+        fs.promises.unlink(p).catch(() => {/* give up silently */})
+      }, 5000)
+      return
+    }
+    console.error('Failed to delete temp file:', err)
   })
 }
 

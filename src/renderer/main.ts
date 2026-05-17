@@ -101,8 +101,11 @@ async function init(): Promise<void> {
   window.loadSettings = loadSettings
   window.__isRecording = false
 
-  if (navigator.userAgent.toLowerCase().includes('mac')) {
+  const ua = navigator.userAgent.toLowerCase()
+  if (ua.includes('mac')) {
     document.body.classList.add('platform-darwin')
+  } else if (ua.includes('windows')) {
+    document.body.classList.add('platform-win32')
   }
 
   // Hook i18n to re-run calendar/schedule renderers after locale load

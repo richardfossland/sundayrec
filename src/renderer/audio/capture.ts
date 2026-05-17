@@ -134,10 +134,14 @@ export async function startCapture(opts: RecordingOpts): Promise<CaptureSession>
   // Request the user's preferred sample rate for best fidelity.
   // latencyHint 'playback' prioritises buffer stability over low latency —
   // critical for hour-long church recordings.
+  const requestedRate = opts.sampleRate ?? 48000
   const audioCtx = new AudioContext({
     latencyHint: 'playback',
-    sampleRate: opts.sampleRate ?? 48000
+    sampleRate: requestedRate
   })
+  if (audioCtx.sampleRate !== requestedRate) {
+    console.warn(`[capture] Requested ${requestedRate}Hz but audio device delivered ${audioCtx.sampleRate}Hz — Windows driver may not support the requested rate`)
+  }
   const src      = audioCtx.createMediaStreamSource(stream)
   const inputNode = buildInputRouter(audioCtx, src, stream, chL, chR)
 

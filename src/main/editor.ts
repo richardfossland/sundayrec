@@ -8,7 +8,21 @@ import * as store from './store'
 
 let ffmpegPath = ffmpegStatic as string
 if (app.isPackaged) {
-  ffmpegPath = ffmpegPath.replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep)
+  const normalized = ffmpegPath.replace(/\\/g, '/')
+  const asarIdx = normalized.indexOf('app.asar/')
+  if (asarIdx !== -1) {
+    ffmpegPath = path.join(
+      normalized.slice(0, asarIdx).replace(/\//g, path.sep),
+      'app.asar.unpacked',
+      normalized.slice(asarIdx + 'app.asar/'.length).replace(/\//g, path.sep)
+    )
+  } else {
+    ffmpegPath = ffmpegPath.replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep)
+  }
+  if (!fs.existsSync(ffmpegPath)) {
+    console.error('[ffmpeg] Unpacked binary not found at', ffmpegPath, '— falling back to system PATH')
+    ffmpegPath = 'ffmpeg'
+  }
 }
 ffmpeg.setFfmpegPath(ffmpegPath)
 
