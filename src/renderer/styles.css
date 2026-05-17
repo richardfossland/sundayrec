@@ -1081,8 +1081,13 @@ select.form-input {
 .btn-editor-play svg      { width: 18px; height: 18px; fill: #fff; }
 .btn-editor-preview {
   background: var(--surface3); border: 1px solid var(--border2);
+  transition: opacity .12s, transform .1s, background .15s, border-color .15s;
 }
 .btn-editor-preview svg   { fill: var(--text2); }
+.btn-editor-preview.is-playing {
+  background: var(--accent-bg); border-color: var(--accent-border);
+}
+.btn-editor-preview.is-playing svg { fill: var(--accent2); }
 .editor-time { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text2); }
 .editor-time-sep { opacity: .4; margin: 0 2px; }
 .editor-time-cur { color: var(--text1); font-weight: 600; }
@@ -1158,6 +1163,136 @@ select.form-input {
   border-radius: 12px; padding: 14px 18px; width: 260px;
   box-shadow: 0 8px 32px rgba(0,0,0,.5);
   display: flex; align-items: flex-start; gap: 12px;
-  animation: slideUp .2s ease;
+  animation: slideUp .28s cubic-bezier(.22,1,.36,1);
+  transition: opacity .2s, transform .2s;
 }
+.editor-prompt-toast.toast-dismissing {
+  opacity: 0;
+  transform: translateY(10px);
+}
+@keyframes slideUp {
+  from { transform: translateY(14px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* ── Page transition ─────────────────────────────────────────────── */
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(7px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page.active {
+  display: block;
+  animation: pageEnter .22s cubic-bezier(.22,1,.36,1);
+}
+
+/* ── Card hover lift ─────────────────────────────────────────────── */
+.card {
+  transition: box-shadow .2s, border-color .2s, transform .2s;
+}
+.card:hover {
+  box-shadow: var(--shadow);
+  border-color: var(--border2);
+  transform: translateY(-1px);
+}
+
+/* ── Button micro-interactions ───────────────────────────────────── */
+.btn-secondary:active { transform: scale(.97); }
+.btn-ghost:active     { transform: scale(.97); }
+.btn-sm:active        { transform: scale(.97); }
+.btn-editor-tool:active { transform: scale(.93); }
+
+/* ── History row fade-in stagger ─────────────────────────────────── */
+@keyframes fadeInRow {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.hist-row {
+  animation: fadeInRow .2s cubic-bezier(.22,1,.36,1) both;
+}
+
+/* ── Cut list slide-in ───────────────────────────────────────────── */
+@keyframes cutSlideIn {
+  from { opacity: 0; transform: translateX(10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.editor-cut-row {
+  animation: cutSlideIn .2s cubic-bezier(.22,1,.36,1) both;
+}
+
+/* ── Canvas playing glow ─────────────────────────────────────────── */
+.editor-canvas-wrap {
+  transition: box-shadow .3s;
+}
+.editor-canvas-wrap.is-playing {
+  box-shadow: 0 0 0 2px rgba(124,109,255,.35), 0 0 24px rgba(124,109,255,.18);
+}
+
+/* ── Modal entrance ──────────────────────────────────────────────── */
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(.96) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.modal-backdrop .modal {
+  animation: modalIn .22s cubic-bezier(.22,1,.36,1);
+}
+
+/* ── Drop zone overlay ───────────────────────────────────────────── */
+.editor-drop-overlay {
+  position: absolute; inset: 0; z-index: 50;
+  background: rgba(124,109,255,.12);
+  border: 2px dashed var(--accent);
+  border-radius: var(--r);
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 12px;
+  opacity: 0; pointer-events: none;
+  transition: opacity .18s;
+  backdrop-filter: blur(2px);
+}
+.editor-drop-overlay.active {
+  opacity: 1; pointer-events: all;
+}
+.editor-drop-overlay-icon svg {
+  width: 52px; height: 52px; stroke: var(--accent2); opacity: .8;
+}
+.editor-drop-overlay-text {
+  font-size: 16px; font-weight: 700; color: var(--accent2);
+}
+
+/* ── Editor page position context for overlay ───────────────────── */
+#page-editor { position: relative; }
+
+/* ── Editor remaining duration display ──────────────────────────── */
+.editor-remaining {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: var(--rsm);
+  background: rgba(34,197,94,.07); border: 1px solid rgba(34,197,94,.18);
+  font-size: 12px; color: var(--text2); margin-top: 8px;
+}
+.editor-remaining svg { width: 14px; height: 14px; fill: var(--green); flex-shrink: 0; }
+.editor-remaining-label { color: var(--text3); }
+.editor-remaining-dur   { font-weight: 700; color: var(--green); font-variant-numeric: tabular-nums; }
+.editor-remaining.has-cuts { background: rgba(239,68,68,.07); border-color: rgba(239,68,68,.2); }
+.editor-remaining.has-cuts svg { fill: var(--red); }
+.editor-remaining.has-cuts .editor-remaining-dur { color: var(--red); }
+
+/* ── Minimap drag cursor ─────────────────────────────────────────── */
+.editor-minimap-wrap { cursor: ew-resize; }
+
+/* ── Keyboard shortcut hint strip ───────────────────────────────── */
+.editor-kbd-hints {
+  display: flex; flex-wrap: wrap; gap: 6px 14px;
+  padding: 5px 0 2px; margin-top: 2px;
+}
+.editor-kbd-hint { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text3); }
+.kbd {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 18px; padding: 0 5px;
+  background: var(--surface3); border: 1px solid var(--border2);
+  border-radius: 4px; font-size: 10px; font-weight: 700;
+  color: var(--text2); letter-spacing: .02em; line-height: 1;
+  box-shadow: 0 1px 0 var(--border2);
+}
+
+/* ── Editor workspace scroll ─────────────────────────────────────── */
+#editor-workspace { padding-bottom: 20px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text3); }

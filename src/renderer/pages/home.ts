@@ -193,8 +193,10 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
     tr.appendChild(td); tbody.appendChild(tr)
     return
   }
-  rows.forEach(r => {
+  rows.forEach((r, idx) => {
     const tr = document.createElement('tr')
+    tr.className = 'hist-row'
+    tr.style.animationDelay = `${idx * 0.04}s`
     const badgeCls = r.status === 'ok' || r.status === 'complete' ? 'ok' : r.status === 'error' ? 'error' : 'sched'
     const badge    = Object.assign(document.createElement('span'), { className: `badge badge-${badgeCls}`, textContent: t(`history.${r.status}`, r.status) })
     const tdStatus = document.createElement('td'); tdStatus.appendChild(badge)

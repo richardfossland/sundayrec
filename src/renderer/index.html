@@ -757,6 +757,17 @@
   <!-- ══ REDIGER ═════════════════════════════════════════════════ -->
   <section id="page-editor" class="page">
 
+    <!-- Drag-and-drop file overlay -->
+    <div id="editor-drop-overlay" class="editor-drop-overlay">
+      <div class="editor-drop-overlay-icon">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M24 32V16M24 16l-6 6M24 16l6 6" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="6" y="30" width="36" height="12" rx="3" opacity=".35"/>
+        </svg>
+      </div>
+      <div class="editor-drop-overlay-text" data-i18n="editor.dropFile">Slipp lydfil her</div>
+    </div>
+
     <!-- Empty state -->
     <div id="editor-empty" class="editor-empty">
       <div class="editor-empty-icon">
@@ -826,6 +837,16 @@
         <button class="btn-ghost btn-sm" id="btn-editor-undo-all" data-i18n="editor.cutsNone" style="display:none">Fjern alle kutt</button>
       </div>
 
+      <!-- Keyboard shortcut hints -->
+      <div class="editor-kbd-hints">
+        <span class="editor-kbd-hint"><span class="kbd">Space</span> Spill/pause</span>
+        <span class="editor-kbd-hint"><span class="kbd">←</span><span class="kbd">→</span> Spol 5s</span>
+        <span class="editor-kbd-hint"><span class="kbd">+</span><span class="kbd">−</span> Zoom</span>
+        <span class="editor-kbd-hint"><span class="kbd">F</span> Fit</span>
+        <span class="editor-kbd-hint"><span class="kbd">⌘Z</span> Angre</span>
+        <span class="editor-kbd-hint"><span class="kbd">Esc</span> Stopp</span>
+      </div>
+
       <!-- Main waveform canvas -->
       <div class="editor-canvas-wrap" id="editor-canvas-wrap">
         <canvas id="editor-canvas" class="editor-canvas"></canvas>
@@ -835,6 +856,13 @@
       <div class="editor-cuts-panel" id="editor-cuts-panel" style="display:none">
         <div class="editor-cuts-header" data-i18n="editor.cutsTitle">Kuttede regioner</div>
         <div id="editor-cuts-list"></div>
+      </div>
+
+      <!-- Remaining duration after cuts -->
+      <div id="editor-remaining" class="editor-remaining" style="display:none">
+        <svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"/></svg>
+        <span class="editor-remaining-label" data-i18n="editor.remainingLabel">Resultat:</span>
+        <span class="editor-remaining-dur" id="editor-remaining-dur">—</span>
       </div>
 
       <!-- Save bar -->
