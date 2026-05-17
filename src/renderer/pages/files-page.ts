@@ -11,9 +11,7 @@ export function setupFilesPage(): void {
       patchSettings({ saveFolder: folder })
     }
   })
-  document.querySelectorAll('input[name="pattern"]').forEach(r =>
-    r.addEventListener('change', updateFilenamePreview)
-  )
+  document.getElementById('pattern-select')?.addEventListener('change', updateFilenamePreview)
   document.querySelectorAll('input[name="format"]').forEach(r =>
     r.addEventListener('change', () => { toggleMp3Quality(); updateFilenamePreview() })
   )
@@ -28,7 +26,8 @@ export function setupFilesPage(): void {
 
 export function applyFilesSettingsToUI(): void {
   setVal('save-folder', settings.saveFolder ?? '')
-  setRadio('pattern', settings.filenamePattern ?? 'date')
+  const patternEl = document.getElementById('pattern-select') as HTMLSelectElement | null
+  if (patternEl) patternEl.value = settings.filenamePattern ?? 'date'
   setRadio('format',  settings.format          ?? 'mp3')
   setRadio('bitrate', String(settings.bitrate  ?? '192'))
   const autoDelEl = document.getElementById('opt-auto-delete') as HTMLInputElement | null
@@ -52,7 +51,7 @@ export function toggleMp3Quality(): void {
 }
 
 export function updateFilenamePreview(): void {
-  const pattern = (document.querySelector('input[name="pattern"]:checked') as HTMLInputElement | null)?.value ?? 'date'
+  const pattern = (document.getElementById('pattern-select') as HTMLSelectElement | null)?.value ?? 'date'
   const format  = (document.querySelector('input[name="format"]:checked')  as HTMLInputElement | null)?.value ?? 'mp3'
   const today   = new Date()
   const ds      = isoDate(today)
@@ -76,7 +75,7 @@ async function saveFilesSettings(): Promise<void> {
   const autoDelDays = document.getElementById('auto-delete-days') as HTMLInputElement | null
   patchSettings({
     saveFolder:      (document.getElementById('save-folder') as HTMLInputElement | null)?.value ?? '',
-    filenamePattern: ((document.querySelector('input[name="pattern"]:checked') as HTMLInputElement | null)?.value ?? 'date') as FilenamePattern,
+    filenamePattern: ((document.getElementById('pattern-select') as HTMLSelectElement | null)?.value ?? 'date') as FilenamePattern,
     format:          ((document.querySelector('input[name="format"]:checked')  as HTMLInputElement | null)?.value ?? 'mp3') as FileFormat,
     bitrate:         (document.querySelector('input[name="bitrate"]:checked') as HTMLInputElement | null)?.value ?? '192',
     autoDeleteDays:  autoDelEl?.checked ? (+(autoDelDays?.value ?? '') || 90) : 0,

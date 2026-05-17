@@ -11,40 +11,39 @@
 
 <!-- ── Sidebar ─────────────────────────────────────────────────── -->
 <nav id="sidebar">
-  <div class="logo">
-    <span class="logo-text">SundayRec</span>
+  <div class="sidebar-top">
+    <div class="logo">
+      <span class="logo-text">SundayRec</span>
+    </div>
+    <button id="btn-sidebar-toggle" class="btn-sidebar-toggle" title="Skjul meny">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+    </button>
   </div>
   <ul>
     <li><a href="#" class="nav-link active" data-page="home">
       <svg viewBox="0 0 20 20"><path d="M10 2L2 8v10h6v-6h4v6h6V8z"/></svg>
       <span data-i18n="nav.home">Hjem</span>
     </a></li>
-    <li><a href="#" class="nav-link" data-page="audio">
-      <svg viewBox="0 0 20 20"><path d="M10 2a3 3 0 00-3 3v5a3 3 0 006 0V5a3 3 0 00-3-3zm-5 8a5 5 0 0010 0h2a7 7 0 01-14 0zm5 6h4v2h-4z"/></svg>
-      <span data-i18n="nav.audio">Lydkilde</span>
-    </a></li>
     <li><a href="#" class="nav-link" data-page="schedule">
       <svg viewBox="0 0 20 20"><path d="M6 2v2H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-2V2h-2v2H8V2zm8 6H6v2h8zm0 4H6v2h8z"/></svg>
       <span data-i18n="nav.schedule">Tidsplan</span>
-    </a></li>
-    <li><a href="#" class="nav-link" data-page="files">
-      <svg viewBox="0 0 20 20"><path d="M4 4a2 2 0 012-2h4l2 2h4a2 2 0 012 2v9a2 2 0 01-2 2H6a2 2 0 01-2-2z"/></svg>
-      <span data-i18n="nav.files">Filer</span>
-    </a></li>
-    <li><a href="#" class="nav-link" data-page="general">
-      <svg viewBox="0 0 20 20"><path d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z"/></svg>
-      <span data-i18n="nav.general">Generelt</span>
     </a></li>
     <li><a href="#" class="nav-link" data-page="editor">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 10h14M3 6h3m11 0h-3M3 14h3m11 0h-3" stroke-linecap="round"/><circle cx="7.5" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="12.5" cy="14" r="1.5" fill="currentColor" stroke="none"/></svg>
       <span data-i18n="nav.editor">Rediger</span>
     </a></li>
   </ul>
-  <div class="sidebar-status">
-    <span class="status-dot" id="status-dot"></span>
-    <span id="status-label" data-i18n="status.ready">Alt er klart</span>
+  <div class="sidebar-bottom">
+    <a href="#" class="nav-link" data-page="settings">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg>
+      <span data-i18n="nav.settings">Innstillinger</span>
+    </a>
+    <div class="sidebar-status">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-label" data-i18n="status.ready">Alt er klart</span>
+    </div>
+    <div class="sidebar-version" id="sidebar-version">—</div>
   </div>
-  <div class="sidebar-version" id="sidebar-version">—</div>
 </nav>
 
 <!-- ── Update toast (bottom-right) ─────────────────────────────── -->
@@ -434,324 +433,314 @@
 
   </section>
 
-  <!-- ══ LYDKILDE ═══════════════════════════════════════════════ -->
-  <section id="page-audio" class="page">
-    <div class="page-header">
-      <h1 data-i18n="nav.audio">Lydkilde</h1>
-      <p class="subtitle" data-i18n="audio.subtitle">Velg lydkilde, juster volum og test signalet før opptak.</p>
+  <!-- ══ INNSTILLINGER ════════════════════════════════════════════ -->
+  <section id="page-settings" class="page">
+    <div class="inner-tabs" id="settings-tabs">
+      <button class="inner-tab active" data-tab="settings-audio" data-i18n="nav.audio">Lydkilde</button>
+      <button class="inner-tab" data-tab="settings-files" data-i18n="nav.files">Filer</button>
+      <button class="inner-tab" data-tab="settings-general" data-i18n="nav.general">Generelt</button>
     </div>
 
-    <div class="card">
-      <div class="card-title" data-i18n="audio.available">Tilgjengelige enheter</div>
-      <div id="device-list"></div>
-
-      <!-- Windows ASIO note -->
-      <p class="form-hint" style="margin-top:12px;margin-bottom:0" data-i18n="audio.compatAsio">Windows: ASIO-modus er ikke tilgjengelig via nettleser-API. Velg WDM eller WASAPI i driverinnstillingene.</p>
-
-      <!-- Audio test section -->
-      <div class="audio-test-section">
-        <div class="audio-test-info">
-          <div class="toggle-title" data-i18n="audio.testTitle">Test lydkilde</div>
-          <div class="toggle-desc" data-i18n="audio.testDesc">Hør lyden fra valgt kilde i sanntid gjennom høyttalerne.</div>
-        </div>
-        <button class="btn-secondary" id="btn-test-audio" data-i18n="audio.testBtn">Test lyd</button>
-      </div>
-      <div id="test-audio-warn" class="test-warn" style="display:none">
-        ⚠️ Pass på feedback — hold mikrofonen unna høyttalerne!
-      </div>
-      <div id="test-vu-section" style="display:none;margin-top:8px">
-        <div class="vu-bar-group">
-          <div class="vu-bar-row">
-            <span class="vu-bar-lbl">L</span>
-            <div class="vu-bar-track"><div class="vu-bar-fill" id="test-vu-l"></div></div>
+    <!-- ── Lydkilde ────────────────────────────────────────────── -->
+    <div id="settings-audio" class="inner-page active">
+      <div class="card">
+        <div class="card-title" data-i18n="audio.available">Tilgjengelige enheter</div>
+        <div id="device-list"></div>
+        <p class="form-hint" style="margin-top:12px;margin-bottom:0" data-i18n="audio.compatAsio">Windows: ASIO-modus er ikke tilgjengelig via nettleser-API. Velg WDM eller WASAPI i driverinnstillingene.</p>
+        <div class="audio-test-section">
+          <div class="audio-test-info">
+            <div class="toggle-title" data-i18n="audio.testTitle">Test lydkilde</div>
+            <div class="toggle-desc" data-i18n="audio.testDesc">Hør lyden fra valgt kilde i sanntid gjennom høyttalerne.</div>
           </div>
-          <div class="vu-bar-row">
-            <span class="vu-bar-lbl">R</span>
-            <div class="vu-bar-track"><div class="vu-bar-fill" id="test-vu-r"></div></div>
+          <button class="btn-secondary" id="btn-test-audio" data-i18n="audio.testBtn">Test lyd</button>
+        </div>
+        <div id="test-audio-warn" class="test-warn" style="display:none">
+          ⚠️ Pass på feedback — hold mikrofonen unna høyttalerne!
+        </div>
+        <div id="test-vu-section" style="display:none;margin-top:8px">
+          <div class="vu-bar-group">
+            <div class="vu-bar-row">
+              <span class="vu-bar-lbl">L</span>
+              <div class="vu-bar-track"><div class="vu-bar-fill" id="test-vu-l"></div></div>
+            </div>
+            <div class="vu-bar-row">
+              <span class="vu-bar-lbl">R</span>
+              <div class="vu-bar-track"><div class="vu-bar-fill" id="test-vu-r"></div></div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Channel selection — shown only for multi-channel interfaces -->
-    <div class="card" id="channel-select-card" style="display:none">
-      <div class="card-title" data-i18n="audio.inputChannels">Inngangkanaler</div>
-      <p class="card-desc" data-i18n="audio.inputChannelsDesc">Velg hvilke kanaler fra lydkortet som brukes til opptak. Relevant for miksebord med mange kanaler (X32, SQ, TF osv.).</p>
-      <div class="form-row two-col">
-        <div>
-          <label class="form-label" data-i18n="audio.channelL">VENSTRE (L)</label>
-          <select class="form-input" id="channel-select-l"></select>
-        </div>
-        <div>
-          <label class="form-label" data-i18n="audio.channelR">HØYRE (R)</label>
-          <select class="form-input" id="channel-select-r"></select>
-        </div>
-      </div>
-      <p class="form-hint" data-i18n="audio.channelHint">Tip: vil du ta opp mono fra én kanal, velg samme kanal for L og R og sett Kanaler til Mono nedenfor.</p>
-    </div>
-
-    <div class="card">
-      <div class="card-title" data-i18n="audio.volume">Volum og kanaler</div>
-      <label class="form-label" data-i18n="audio.inputVolume">INNGANGSVOLUM</label>
-      <input type="range" id="input-volume" min="0" max="100" value="100" class="slider" />
-      <div class="slider-value" id="volume-value">100%</div>
-      <div class="form-hint" data-i18n="audio.inputVolumeHint">100% = ingen endring av signalet. Juster heller volumet på mikseren for best lydkvalitet.</div>
-      <label class="form-label mt" data-i18n="audio.channels">KANALER</label>
-      <div class="radio-group" id="channels-group">
-        <label><input type="radio" name="channels" value="stereo" checked /> <span data-i18n="audio.stereo">Stereo (anbefalt)</span></label>
-        <label><input type="radio" name="channels" value="monoL" /> <span data-i18n="audio.monoL">Mono — venstre</span></label>
-        <label><input type="radio" name="channels" value="monoR" /> <span data-i18n="audio.monoR">Mono — høyre</span></label>
-        <label><input type="radio" name="channels" value="monoMix" /> <span data-i18n="audio.monoMix">Mono — miks av begge</span></label>
-      </div>
-      <label class="form-label mt" data-i18n="audio.sampleRate">SAMPLINGSRATE</label>
-      <select class="form-input" id="sample-rate">
-        <option value="44100">44 100 Hz</option>
-        <option value="48000" selected>48 000 Hz</option>
-      </select>
-      <div class="form-hint" data-i18n="audio.sampleRateHint">48 000 Hz er standard for video og kirkelyd</div>
-    </div>
-
-    <div class="card">
-      <div class="card-title" data-i18n="audio.advanced">Avansert lydbehandling</div>
-
-      <div class="toggle-row mt">
-        <div>
-          <div class="toggle-title" data-i18n="audio.compressor">Kompressor</div>
-          <div class="toggle-desc" data-i18n="audio.compressorDesc">Jevner ut volumvariasjoner i opptaket</div>
-        </div>
-        <label class="toggle"><input type="checkbox" id="opt-compressor" /><span class="toggle-track"></span></label>
-      </div>
-      <div id="comp-settings" style="display:none;margin-top:8px">
+      <div class="card" id="channel-select-card" style="display:none">
+        <div class="card-title" data-i18n="audio.inputChannels">Inngangkanaler</div>
+        <p class="card-desc" data-i18n="audio.inputChannelsDesc">Velg hvilke kanaler fra lydkortet som brukes til opptak. Relevant for miksebord med mange kanaler (X32, SQ, TF osv.).</p>
         <div class="form-row two-col">
           <div>
-            <label class="form-label" data-i18n="audio.threshold">TERSKEL (dB)</label>
-            <input type="range" id="comp-threshold" min="-60" max="0" value="-24" class="slider" />
-            <div class="slider-value" id="comp-threshold-val">−24 dB</div>
+            <label class="form-label" data-i18n="audio.channelL">VENSTRE (L)</label>
+            <select class="form-input" id="channel-select-l"></select>
           </div>
           <div>
-            <label class="form-label" data-i18n="audio.ratio">RATIO</label>
-            <input type="range" id="comp-ratio" min="1" max="20" value="4" class="slider" />
-            <div class="slider-value" id="comp-ratio-val">4:1</div>
+            <label class="form-label" data-i18n="audio.channelR">HØYRE (R)</label>
+            <select class="form-input" id="channel-select-r"></select>
           </div>
         </div>
-        <div class="form-row two-col" style="margin-top:8px">
+        <p class="form-hint" data-i18n="audio.channelHint">Tip: vil du ta opp mono fra én kanal, velg samme kanal for L og R og sett Kanaler til Mono nedenfor.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title" data-i18n="audio.volume">Volum og kanaler</div>
+        <label class="form-label" data-i18n="audio.inputVolume">INNGANGSVOLUM</label>
+        <input type="range" id="input-volume" min="0" max="100" value="100" class="slider" />
+        <div class="slider-value" id="volume-value">100%</div>
+        <div class="form-hint" data-i18n="audio.inputVolumeHint">100% = ingen endring av signalet. Juster heller volumet på mikseren for best lydkvalitet.</div>
+        <label class="form-label mt" data-i18n="audio.channels">KANALER</label>
+        <div class="radio-group" id="channels-group">
+          <label><input type="radio" name="channels" value="stereo" checked /> <span data-i18n="audio.stereo">Stereo (anbefalt)</span></label>
+          <label><input type="radio" name="channels" value="monoL" /> <span data-i18n="audio.monoL">Mono — venstre</span></label>
+          <label><input type="radio" name="channels" value="monoR" /> <span data-i18n="audio.monoR">Mono — høyre</span></label>
+          <label><input type="radio" name="channels" value="monoMix" /> <span data-i18n="audio.monoMix">Mono — miks av begge</span></label>
+        </div>
+        <label class="form-label mt" data-i18n="audio.sampleRate">SAMPLINGSRATE</label>
+        <select class="form-input" id="sample-rate">
+          <option value="44100">44 100 Hz</option>
+          <option value="48000" selected>48 000 Hz</option>
+        </select>
+        <div class="form-hint" data-i18n="audio.sampleRateHint">48 000 Hz er standard for video og kirkelyd</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" data-i18n="audio.advanced">Avansert lydbehandling</div>
+        <div class="toggle-row mt">
           <div>
-            <label class="form-label" data-i18n="audio.attack">ATTACK (ms)</label>
-            <input type="range" id="comp-attack" min="1" max="200" value="10" class="slider" />
-            <div class="slider-value" id="comp-attack-val">10 ms</div>
+            <div class="toggle-title" data-i18n="audio.compressor">Kompressor</div>
+            <div class="toggle-desc" data-i18n="audio.compressorDesc">Jevner ut volumvariasjoner i opptaket</div>
           </div>
+          <label class="toggle"><input type="checkbox" id="opt-compressor" /><span class="toggle-track"></span></label>
+        </div>
+        <div id="comp-settings" style="display:none;margin-top:8px">
+          <div class="form-row two-col">
+            <div>
+              <label class="form-label" data-i18n="audio.threshold">TERSKEL (dB)</label>
+              <input type="range" id="comp-threshold" min="-60" max="0" value="-24" class="slider" />
+              <div class="slider-value" id="comp-threshold-val">−24 dB</div>
+            </div>
+            <div>
+              <label class="form-label" data-i18n="audio.ratio">RATIO</label>
+              <input type="range" id="comp-ratio" min="1" max="20" value="4" class="slider" />
+              <div class="slider-value" id="comp-ratio-val">4:1</div>
+            </div>
+          </div>
+          <div class="form-row two-col" style="margin-top:8px">
+            <div>
+              <label class="form-label" data-i18n="audio.attack">ATTACK (ms)</label>
+              <input type="range" id="comp-attack" min="1" max="200" value="10" class="slider" />
+              <div class="slider-value" id="comp-attack-val">10 ms</div>
+            </div>
+            <div>
+              <label class="form-label" data-i18n="audio.release">RELEASE (ms)</label>
+              <input type="range" id="comp-release" min="10" max="2000" value="200" class="slider" />
+              <div class="slider-value" id="comp-release-val">200 ms</div>
+            </div>
+          </div>
+        </div>
+        <div class="toggle-row mt">
           <div>
-            <label class="form-label" data-i18n="audio.release">RELEASE (ms)</label>
-            <input type="range" id="comp-release" min="10" max="2000" value="200" class="slider" />
-            <div class="slider-value" id="comp-release-val">200 ms</div>
+            <div class="toggle-title" data-i18n="audio.limiter">Limiter</div>
+            <div class="toggle-desc" data-i18n="audio.limiterDesc">Hindrer klipping ved for høye lydnivåer (anbefalt)</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-limiter" checked /><span class="toggle-track"></span></label>
+        </div>
+        <div id="limiter-settings" style="margin-top:8px">
+          <label class="form-label" data-i18n="audio.ceiling">TAK (dB)</label>
+          <input type="range" id="limiter-ceiling" min="-12" max="0" value="-1" class="slider" />
+          <div class="slider-value" id="limiter-ceiling-val">−1 dB</div>
+        </div>
+      </div>
+
+      <div class="page-footer">
+        <button class="btn-primary" id="btn-audio-save" data-i18n="audio.save">Lagre</button>
+        <button class="btn-ghost" id="btn-audio-cancel" data-i18n="audio.cancel">Avbryt</button>
+      </div>
+    </div>
+
+    <!-- ── Filer ───────────────────────────────────────────────── -->
+    <div id="settings-files" class="inner-page">
+      <div class="card">
+        <div class="card-title" data-i18n="files.saveFolder">Lagringsmappe</div>
+        <label class="form-label" data-i18n="files.saveTo">LAGRES I</label>
+        <div class="folder-row">
+          <input type="text" class="form-input" id="save-folder" readonly />
+          <button class="btn-secondary" id="btn-pick-folder" data-i18n="files.browse">Velg mappe</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title" data-i18n="files.pattern">Filnavn</div>
+        <p class="card-desc" data-i18n="files.smartNameDesc">Programmet gjenkjenner kirkelige høytider og kan bruke det riktige norske navnet automatisk.</p>
+        <label class="form-label">NAVNMØNSTER</label>
+        <select class="form-input" id="pattern-select" style="max-width:360px">
+          <option value="date" data-i18n="files.patternDate">Dato (standard)</option>
+          <option value="church" data-i18n="files.patternChurch">Kirkelig navn + dato</option>
+          <option value="plain" data-i18n="files.patternPlain">Gudstjeneste + dato</option>
+          <option value="datetime" data-i18n="files.patternDatetime">Dato + klokkeslett</option>
+        </select>
+        <label class="form-label mt" data-i18n="files.preview">FORHÅNDSVISNING</label>
+        <div class="preview-box" id="filename-preview">2025-11-02.mp3</div>
+      </div>
+      <div class="card">
+        <div class="card-title" data-i18n="files.format">Format &amp; Kvalitet</div>
+        <label class="form-label" data-i18n="files.fileFormat">FILFORMAT</label>
+        <div class="radio-group" id="format-group">
+          <label><input type="radio" name="format" value="mp3" checked /> MP3</label>
+          <label><input type="radio" name="format" value="wav" /> WAV</label>
+          <label><input type="radio" name="format" value="flac" /> FLAC</label>
+        </div>
+        <div id="mp3-quality-section">
+          <label class="form-label mt" data-i18n="files.quality">KVALITET (MP3)</label>
+          <div class="radio-group">
+            <label><input type="radio" name="bitrate" value="128" /> <span data-i18n="files.q128">128 kbps — liten fil, OK kvalitet</span></label>
+            <label><input type="radio" name="bitrate" value="192" checked /> <span data-i18n="files.q192">192 kbps — god kvalitet (anbefalt)</span></label>
+            <label><input type="radio" name="bitrate" value="320" /> <span data-i18n="files.q320">320 kbps — høyeste kvalitet</span></label>
           </div>
         </div>
-      </div>
-      <div class="toggle-row mt">
-        <div>
-          <div class="toggle-title" data-i18n="audio.limiter">Limiter</div>
-          <div class="toggle-desc" data-i18n="audio.limiterDesc">Hindrer klipping ved for høye lydnivåer (anbefalt)</div>
+        <div class="toggle-row mt">
+          <div>
+            <div class="toggle-title" data-i18n="files.autoDelete">Slett automatisk</div>
+            <div class="toggle-desc" data-i18n="files.autoDeleteDesc">Frigjør diskplass automatisk ved å slette gamle opptak</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-auto-delete" /><span class="toggle-track"></span></label>
         </div>
-        <label class="toggle"><input type="checkbox" id="opt-limiter" checked /><span class="toggle-track"></span></label>
+        <div id="auto-delete-days-row" style="display:none">
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+            <span style="font-size:13px;color:var(--text2)">Slett etter</span>
+            <input type="number" class="form-input" id="auto-delete-days" value="90" min="1" max="3650" style="max-width:80px" />
+            <span style="font-size:13px;color:var(--text2)">dager</span>
+          </div>
+        </div>
+        <div class="toggle-row mt">
+          <div>
+            <div class="toggle-title" data-i18n="files.trimSilence">Trim stillhet</div>
+            <div class="toggle-desc" data-i18n="files.trimSilenceDesc">Fjerner stillhet i begynnelsen og slutten av filen (ffmpeg silenceremove)</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-trim-silence" /><span class="toggle-track"></span></label>
+        </div>
       </div>
-      <div id="limiter-settings" style="margin-top:8px">
-        <label class="form-label" data-i18n="audio.ceiling">TAK (dB)</label>
-        <input type="range" id="limiter-ceiling" min="-12" max="0" value="-1" class="slider" />
-        <div class="slider-value" id="limiter-ceiling-val">−1 dB</div>
+      <div class="page-footer">
+        <button class="btn-primary" id="btn-files-save" data-i18n="files.save">Lagre</button>
+        <button class="btn-ghost" id="btn-files-cancel" data-i18n="files.cancel">Avbryt</button>
       </div>
     </div>
 
-
-    <div class="page-footer">
-      <button class="btn-primary" id="btn-audio-save" data-i18n="audio.save">Lagre</button>
-      <button class="btn-ghost" id="btn-audio-cancel" data-i18n="audio.cancel">Avbryt</button>
-    </div>
-  </section>
-
-  <!-- ══ FILER ══════════════════════════════════════════════════ -->
-  <section id="page-files" class="page">
-    <div class="page-header">
-      <h1 data-i18n="files.title">Filer &amp; Format</h1>
-      <p class="subtitle" data-i18n="files.subtitle">Velg hvor og hvordan opptakene lagres</p>
-    </div>
-    <div class="card">
-      <div class="card-title" data-i18n="files.saveFolder">Lagringsmappe</div>
-      <label class="form-label" data-i18n="files.saveTo">LAGRES I</label>
-      <div class="folder-row">
-        <input type="text" class="form-input" id="save-folder" readonly />
-        <button class="btn-secondary" id="btn-pick-folder" data-i18n="files.browse">Velg mappe</button>
+    <!-- ── Generelt ────────────────────────────────────────────── -->
+    <div id="settings-general" class="inner-page">
+      <div class="card">
+        <div class="card-title" data-i18n="general.language">Språk</div>
+        <label class="form-label" data-i18n="general.appLanguage">APPSPRÅK</label>
+        <select class="form-input" id="language-select">
+          <option value="no">🇳🇴 Norsk</option>
+          <option value="en">🇬🇧 English</option>
+          <option value="de">🇩🇪 Deutsch</option>
+          <option value="sv">🇸🇪 Svenska</option>
+          <option value="da">🇩🇰 Dansk</option>
+          <option value="pl">🇵🇱 Polski</option>
+          <option value="fr">🇫🇷 Français</option>
+        </select>
+        <div class="form-hint" data-i18n="general.langHint">Endringen trer i kraft etter at du trykker Lagre.</div>
       </div>
-    </div>
-    <div class="card">
-      <div class="card-title" data-i18n="files.pattern">Filnavn</div>
-      <p class="card-desc" data-i18n="files.smartNameDesc">Programmet gjenkjenner kirkelige høytider og kan bruke det riktige norske navnet automatisk.</p>
-      <label class="form-label">NAVNMØNSTER</label>
-      <div class="radio-group">
-        <label><input type="radio" name="pattern" value="date" checked /> <span data-i18n="files.patternDate">Dato (standard) — <code>2025-11-02.mp3</code></span></label>
-        <label><input type="radio" name="pattern" value="church" /> <span data-i18n="files.patternChurch">Kirkelig navn + dato — <code>Allehelgensdag_2025-11-02.mp3</code></span></label>
-        <label><input type="radio" name="pattern" value="plain" /> <span data-i18n="files.patternPlain">Gudstjeneste + dato — <code>Gudstjeneste_2025-11-02.mp3</code></span></label>
-        <label><input type="radio" name="pattern" value="datetime" /> <span data-i18n="files.patternDatetime">Dato + klokkeslett — <code>2025-11-02_1100.mp3</code></span></label>
+      <div class="card">
+        <div class="card-title" data-i18n="general.profile">Kirkeprofil</div>
+        <p class="card-desc" style="margin-bottom:12px">Brukes i filnavn og e-postvarsler.</p>
+        <label class="form-label" data-i18n="general.church">MENIGHET / KIRKE</label>
+        <input type="text" class="form-input" id="church-name" data-i18n-placeholder="general.churchPlaceholder" placeholder="Alta Frikirke" />
+        <label class="form-label mt" data-i18n="general.responsible">ANSVARLIG PERSON</label>
+        <input type="text" class="form-input" id="responsible-person" data-i18n-placeholder="general.responsiblePlaceholder" placeholder="Navn" />
       </div>
-      <label class="form-label mt" data-i18n="files.preview">FORHÅNDSVISNING</label>
-      <div class="preview-box" id="filename-preview">2025-11-02.mp3</div>
-    </div>
-    <div class="card">
-      <div class="card-title" data-i18n="files.format">Format &amp; Kvalitet</div>
-      <label class="form-label" data-i18n="files.fileFormat">FILFORMAT</label>
-      <div class="radio-group" id="format-group">
-        <label><input type="radio" name="format" value="mp3" checked /> MP3</label>
-        <label><input type="radio" name="format" value="wav" /> WAV</label>
-        <label><input type="radio" name="format" value="flac" /> FLAC</label>
-      </div>
-      <div id="mp3-quality-section">
-        <label class="form-label mt" data-i18n="files.quality">KVALITET (MP3)</label>
-        <div class="radio-group">
-          <label><input type="radio" name="bitrate" value="128" /> <span data-i18n="files.q128">128 kbps — liten fil, OK kvalitet</span></label>
-          <label><input type="radio" name="bitrate" value="192" checked /> <span data-i18n="files.q192">192 kbps — god kvalitet (anbefalt)</span></label>
-          <label><input type="radio" name="bitrate" value="320" /> <span data-i18n="files.q320">320 kbps — høyeste kvalitet</span></label>
+      <div class="card">
+        <div class="card-title" data-i18n="general.notifications">Varsler</div>
+        <div class="toggle-row">
+          <span data-i18n="general.notifyStart">Varsel på PC når opptak starter</span>
+          <label class="toggle"><input type="checkbox" id="opt-notify-start" checked /><span class="toggle-track"></span></label>
+        </div>
+        <div class="toggle-row">
+          <span data-i18n="general.notifyStop">Varsel på PC når opptak avsluttes</span>
+          <label class="toggle"><input type="checkbox" id="opt-notify-stop" checked /><span class="toggle-track"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="general.emailError">Send e-post ved feil</div>
+            <div class="toggle-desc" data-i18n="general.emailErrorDesc">Sender e-post til ansvarlig hvis opptaket mislykkes</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-email-error" /><span class="toggle-track"></span></label>
+        </div>
+        <div id="email-section" style="display:none">
+          <label class="form-label mt" data-i18n="general.sendTo">SEND TIL</label>
+          <input type="email" class="form-input" id="email-address" placeholder="navn@kirke.no" />
+          <label class="form-label mt">SMTP SERVER</label>
+          <input type="text" class="form-input" id="email-smtp" placeholder="smtp.gmail.com" />
+          <div class="form-row two-col mt">
+            <div><label class="form-label">PORT</label><input type="number" class="form-input" id="email-port" value="587" /></div>
+            <div><label class="form-label">BRUKERNAVN</label><input type="text" class="form-input" id="email-user" /></div>
+          </div>
+          <label class="form-label mt">PASSORD</label>
+          <div class="pass-row">
+            <input type="password" class="form-input" id="email-pass" />
+            <button type="button" class="btn-link" id="btn-clear-smtp-pass" style="display:none" data-i18n="general.clearPass">Fjern</button>
+          </div>
+          <button type="button" class="btn-secondary" id="btn-test-email" style="margin-top:8px" data-i18n="general.testEmail">Test e-post</button>
         </div>
       </div>
-      <div class="toggle-row mt">
-        <div>
-          <div class="toggle-title" data-i18n="files.autoDelete">Slett automatisk</div>
-          <div class="toggle-desc" data-i18n="files.autoDeleteDesc">Frigjør diskplass automatisk ved å slette gamle opptak</div>
+      <div class="card">
+        <div class="card-title" data-i18n="general.system">System</div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="general.autoStart">Start automatisk med Windows/Mac</div>
+            <div class="toggle-desc" data-i18n="general.autoStartDesc">Kjører stille i bakgrunnen — ingen handling nødvendig</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-autostart" /><span class="toggle-track"></span></label>
         </div>
-        <label class="toggle"><input type="checkbox" id="opt-auto-delete" /><span class="toggle-track"></span></label>
-      </div>
-      <div id="auto-delete-days-row" style="display:none">
-        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
-          <span style="font-size:13px;color:var(--text2)">Slett etter</span>
-          <input type="number" class="form-input" id="auto-delete-days" value="90" min="1" max="3650" style="max-width:80px" />
-          <span style="font-size:13px;color:var(--text2)">dager</span>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="general.showOnStartup">Vis vindu ved oppstart</div>
+            <div class="toggle-desc" data-i18n="general.showOnStartupDesc">Åpner vinduet automatisk når programmet starter. Ellers starter det diskret i systemfeltet.</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-show-on-startup" /><span class="toggle-track"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="general.askOpenEditor">Spør om redigering etter opptak</div>
+            <div class="toggle-desc" data-i18n="general.askOpenEditorDesc">Vis varsel om å åpne filen i Rediger etter at opptaket er fullført</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-ask-open-editor" checked /><span class="toggle-track"></span></label>
         </div>
       </div>
-      <div class="toggle-row mt">
-        <div>
-          <div class="toggle-title" data-i18n="files.trimSilence">Trim stillhet</div>
-          <div class="toggle-desc" data-i18n="files.trimSilenceDesc">Fjerner stillhet i begynnelsen og slutten av filen (ffmpeg silenceremove)</div>
+      <div class="card">
+        <div class="card-title" data-i18n="general.updates">Oppdateringer</div>
+        <div class="update-row">
+          <span data-i18n="general.currentVersion">Nåværende versjon:</span>
+          <span id="app-version" class="version-badge">—</span>
         </div>
-        <label class="toggle"><input type="checkbox" id="opt-trim-silence" /><span class="toggle-track"></span></label>
-      </div>
-    </div>
-    <div class="page-footer">
-      <button class="btn-primary" id="btn-files-save" data-i18n="files.save">Lagre</button>
-      <button class="btn-ghost" id="btn-files-cancel" data-i18n="files.cancel">Avbryt</button>
-    </div>
-  </section>
-
-  <!-- ══ GENERELT ══════════════════════════════════════════════ -->
-  <section id="page-general" class="page">
-    <div class="page-header">
-      <h1 data-i18n="general.title">Generelt</h1>
-    </div>
-    <div class="card">
-      <div class="card-title" data-i18n="general.language">Språk</div>
-      <label class="form-label" data-i18n="general.appLanguage">APPSPRÅK</label>
-      <select class="form-input" id="language-select">
-        <option value="no">🇳🇴 Norsk</option>
-        <option value="en">🇬🇧 English</option>
-        <option value="de">🇩🇪 Deutsch</option>
-        <option value="sv">🇸🇪 Svenska</option>
-        <option value="da">🇩🇰 Dansk</option>
-        <option value="pl">🇵🇱 Polski</option>
-        <option value="fr">🇫🇷 Français</option>
-      </select>
-      <div class="form-hint" data-i18n="general.langHint">Endringen trer i kraft etter at du trykker Lagre.</div>
-    </div>
-    <div class="card">
-      <div class="card-title" data-i18n="general.profile">Kirkeprofil</div>
-      <p class="card-desc" style="margin-bottom:12px">Brukes i filnavn og e-postvarsler.</p>
-      <label class="form-label" data-i18n="general.church">MENIGHET / KIRKE</label>
-      <input type="text" class="form-input" id="church-name" data-i18n-placeholder="general.churchPlaceholder" placeholder="Alta Frikirke" />
-      <label class="form-label mt" data-i18n="general.responsible">ANSVARLIG PERSON</label>
-      <input type="text" class="form-input" id="responsible-person" data-i18n-placeholder="general.responsiblePlaceholder" placeholder="Navn" />
-    </div>
-    <div class="card">
-      <div class="card-title" data-i18n="general.notifications">Varsler</div>
-      <div class="toggle-row">
-        <span data-i18n="general.notifyStart">Varsel på PC når opptak starter</span>
-        <label class="toggle"><input type="checkbox" id="opt-notify-start" checked /><span class="toggle-track"></span></label>
-      </div>
-      <div class="toggle-row">
-        <span data-i18n="general.notifyStop">Varsel på PC når opptak avsluttes</span>
-        <label class="toggle"><input type="checkbox" id="opt-notify-stop" checked /><span class="toggle-track"></span></label>
-      </div>
-      <div class="toggle-row">
-        <div>
-          <div class="toggle-title" data-i18n="general.emailError">Send e-post ved feil</div>
-          <div class="toggle-desc" data-i18n="general.emailErrorDesc">Sender e-post til ansvarlig hvis opptaket mislykkes</div>
+        <div id="update-status-row" class="update-status-row">
+          <span class="update-status-dot" id="update-status-dot"></span>
+          <span id="update-status-text" class="update-status-text">—</span>
         </div>
-        <label class="toggle"><input type="checkbox" id="opt-email-error" /><span class="toggle-track"></span></label>
-      </div>
-      <div id="email-section" style="display:none">
-        <label class="form-label mt" data-i18n="general.sendTo">SEND TIL</label>
-        <input type="email" class="form-input" id="email-address" placeholder="navn@kirke.no" />
-        <label class="form-label mt">SMTP SERVER</label>
-        <input type="text" class="form-input" id="email-smtp" placeholder="smtp.gmail.com" />
-        <div class="form-row two-col mt">
-          <div><label class="form-label">PORT</label><input type="number" class="form-input" id="email-port" value="587" /></div>
-          <div><label class="form-label">BRUKERNAVN</label><input type="text" class="form-input" id="email-user" /></div>
+        <div class="update-progress-wrap" id="update-progress-wrap" style="display:none">
+          <div class="update-progress-bar" id="update-progress-bar"></div>
         </div>
-        <label class="form-label mt">PASSORD</label>
-        <div class="pass-row">
-          <input type="password" class="form-input" id="email-pass" />
-          <button type="button" class="btn-link" id="btn-clear-smtp-pass" style="display:none" data-i18n="general.clearPass">Fjern</button>
+        <div class="toggle-row" style="margin-top:8px">
+          <div>
+            <div class="toggle-title" data-i18n="general.autoUpdate">Oppdater automatisk</div>
+            <div class="toggle-desc" data-i18n="general.autoUpdateDesc">Laster ned og installerer nye versjoner stille i bakgrunnen</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-auto-update" checked /><span class="toggle-track"></span></label>
         </div>
-        <button type="button" class="btn-secondary" id="btn-test-email" style="margin-top:8px" data-i18n="general.testEmail">Test e-post</button>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-title" data-i18n="general.system">System</div>
-      <div class="toggle-row">
-        <div>
-          <div class="toggle-title" data-i18n="general.autoStart">Start automatisk med Windows/Mac</div>
-          <div class="toggle-desc" data-i18n="general.autoStartDesc">Kjører stille i bakgrunnen — ingen handling nødvendig</div>
+        <div class="btn-row mt">
+          <button class="btn-secondary" id="btn-check-updates" data-i18n="general.checkNow">Se etter oppdateringer</button>
+          <button class="btn-primary" id="btn-restart-install" style="display:none">↺ Start på nytt og installer</button>
         </div>
-        <label class="toggle"><input type="checkbox" id="opt-autostart" /><span class="toggle-track"></span></label>
       </div>
-      <div class="toggle-row">
-        <div>
-          <div class="toggle-title" data-i18n="general.showOnStartup">Vis vindu ved oppstart</div>
-          <div class="toggle-desc" data-i18n="general.showOnStartupDesc">Åpner vinduet automatisk når programmet starter. Ellers starter det diskret i systemfeltet.</div>
-        </div>
-        <label class="toggle"><input type="checkbox" id="opt-show-on-startup" /><span class="toggle-track"></span></label>
+      <div class="page-footer">
+        <button class="btn-primary" id="btn-general-save" data-i18n="general.save">Lagre</button>
+        <button class="btn-ghost" id="btn-general-cancel" data-i18n="general.cancel">Avbryt</button>
       </div>
-      <div class="toggle-row">
-        <div>
-          <div class="toggle-title" data-i18n="general.askOpenEditor">Spør om redigering etter opptak</div>
-          <div class="toggle-desc" data-i18n="general.askOpenEditorDesc">Vis varsel om å åpne filen i Rediger etter at opptaket er fullført</div>
-        </div>
-        <label class="toggle"><input type="checkbox" id="opt-ask-open-editor" checked /><span class="toggle-track"></span></label>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-title" data-i18n="general.updates">Oppdateringer</div>
-      <div class="update-row">
-        <span data-i18n="general.currentVersion">Nåværende versjon:</span>
-        <span id="app-version" class="version-badge">—</span>
-      </div>
-      <div id="update-status-row" class="update-status-row">
-        <span class="update-status-dot" id="update-status-dot"></span>
-        <span id="update-status-text" class="update-status-text">—</span>
-      </div>
-      <div class="update-progress-wrap" id="update-progress-wrap" style="display:none">
-        <div class="update-progress-bar" id="update-progress-bar"></div>
-      </div>
-      <div class="toggle-row" style="margin-top:8px">
-        <div>
-          <div class="toggle-title" data-i18n="general.autoUpdate">Oppdater automatisk</div>
-          <div class="toggle-desc" data-i18n="general.autoUpdateDesc">Laster ned og installerer nye versjoner stille i bakgrunnen</div>
-        </div>
-        <label class="toggle"><input type="checkbox" id="opt-auto-update" checked /><span class="toggle-track"></span></label>
-      </div>
-      <div class="btn-row mt">
-        <button class="btn-secondary" id="btn-check-updates" data-i18n="general.checkNow">Se etter oppdateringer</button>
-        <button class="btn-primary" id="btn-restart-install" style="display:none">↺ Start på nytt og installer</button>
-      </div>
-    </div>
-    <div class="page-footer">
-      <button class="btn-primary" id="btn-general-save" data-i18n="general.save">Lagre</button>
-      <button class="btn-ghost" id="btn-general-cancel" data-i18n="general.cancel">Avbryt</button>
     </div>
   </section>
 

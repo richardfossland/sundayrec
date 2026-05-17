@@ -8,10 +8,10 @@ let countdownTimer: ReturnType<typeof setInterval> | null = null
 let fullHistory: RecordingEntry[] = []
 
 export function setupHome(): void {
-  document.getElementById('btn-go-audio-page')?.addEventListener('click', e => { e.preventDefault(); window.showPage('audio') })
-  document.getElementById('btn-go-audio-fmt')?.addEventListener('click',  e => { e.preventDefault(); window.showPage('files') })
-  document.getElementById('btn-go-general-page')?.addEventListener('click', e => { e.preventDefault(); window.showPage('general') })
-  document.getElementById('btn-how-to-fix')?.addEventListener('click', () => window.showPage('audio'))
+  document.getElementById('btn-go-audio-page')?.addEventListener('click', e => { e.preventDefault(); window.showPage('settings') })
+  document.getElementById('btn-go-audio-fmt')?.addEventListener('click',  e => { e.preventDefault(); window.showPage('settings') })
+  document.getElementById('btn-go-general-page')?.addEventListener('click', e => { e.preventDefault(); window.showPage('settings') })
+  document.getElementById('btn-how-to-fix')?.addEventListener('click', () => window.showPage('settings'))
 
   document.getElementById('btn-prune-history')?.addEventListener('click', async e => {
     e.preventDefault()

@@ -81,14 +81,31 @@ function applyAllSettingsToUI(s: Settings): void {
 function showPage(id: string): void {
   if (id !== 'home') stopVU()
   if (id !== 'editor') deactivateEditor()
-  if (id !== 'audio') stopMonitoring()
+  if (id !== 'settings') stopMonitoring()
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'))
   document.querySelectorAll('.nav-link').forEach(a => a.classList.remove('active'))
   document.getElementById(`page-${id}`)?.classList.add('active')
   document.querySelector(`.nav-link[data-page="${id}"]`)?.classList.add('active')
   if (id === 'home')     refreshHome()
   if (id === 'schedule') renderCalendar()
-  if (id === 'audio')    renderDeviceList('device-list')
+  if (id === 'settings') {
+    const activeTab = document.querySelector<HTMLElement>('#settings-tabs .inner-tab.active')?.dataset.tab
+    if (!activeTab || activeTab === 'settings-audio') renderDeviceList('device-list')
+  }
+}
+
+function setupSettingsTabs(): void {
+  document.querySelectorAll<HTMLElement>('#settings-tabs .inner-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#settings-tabs .inner-tab').forEach(t => t.classList.remove('active'))
+      btn.classList.add('active')
+      const tabId = btn.dataset.tab ?? ''
+      document.querySelectorAll<HTMLElement>('#page-settings .inner-page').forEach(p => p.classList.remove('active'))
+      document.getElementById(tabId)?.classList.add('active')
+      if (tabId === 'settings-audio') renderDeviceList('device-list')
+      else stopMonitoring()
+    })
+  })
 }
 
 async function init(): Promise<void> {
@@ -129,6 +146,18 @@ async function init(): Promise<void> {
   setupRecording()
   setupEditorPage()
   setupClipReset()
+  setupSettingsTabs()
+
+  // Sidebar collapse toggle
+  const sidebar = document.getElementById('sidebar')
+  const toggleBtn = document.getElementById('btn-sidebar-toggle')
+  if (sidebar && toggleBtn) {
+    if (localStorage.getItem('sidebar-collapsed') === '1') sidebar.classList.add('collapsed')
+    toggleBtn.addEventListener('click', () => {
+      sidebar.classList.toggle('collapsed')
+      localStorage.setItem('sidebar-collapsed', sidebar.classList.contains('collapsed') ? '1' : '0')
+    })
+  }
 
   window.openEditorWithFile = openEditorWithFile
 
