@@ -1,4 +1,9 @@
 import { t } from '../i18n'
+import {
+  setupProcessingPanel, buildAudioChain, getFFmpegFilters,
+  analyzeAndComputeNormGain, analyzeBuffer, hasAnyProcessing,
+  getProcessingState, setNormEnabled, getGainReduction
+} from './editor-processing'
 
 interface Cut { start: number; end: number }
 
@@ -29,6 +34,9 @@ let dragEndSec       = -1
 let isDragging       = false
 let hoverSec         = -1        // ghost cursor position
 let minimapDragging  = false
+
+// Export state
+let exportOutputFolder = ''
 
 // ── DOM refs ──────────────────────────────────────────────────────────────
 const $ = (id: string) => document.getElementById(id)
@@ -64,10 +72,66 @@ export function setupEditorPage(): void {
     drawMinimap()
   })
 
-  $('btn-editor-save')?.addEventListener('click',    () => openSaveModal())
-  $('btn-save-new')?.addEventListener('click',      () => confirmSave('new'))
-  $('btn-save-replace')?.addEventListener('click',  () => confirmSave('replace'))
-  $('btn-save-cancel')?.addEventListener('click',   () => closeSaveModal())
+  $('btn-editor-save')?.addEventListener('click',    () => openExportModal())
+  $('btn-export-cancel')?.addEventListener('click',  () => closeExportModal())
+  $('btn-export-confirm')?.addEventListener('click', () => runExport())
+
+  // Format picker pills
+  document.querySelectorAll<HTMLElement>('.export-fmt-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.export-fmt-btn').forEach(b => b.classList.remove('active'))
+      btn.classList.add('active')
+      updateExportFormatUI(btn.dataset.fmt ?? 'mp3')
+    })
+  })
+
+  // Destination picker
+  document.querySelectorAll<HTMLElement>('.export-dest-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      document.querySelectorAll('.export-dest-btn').forEach(b => b.classList.remove('active'))
+      btn.classList.add('active')
+      if (btn.dataset.dest === 'folder') {
+        const folder = await window.api.editorPickOutputFolder()
+        if (folder) {
+          ($('export-folder-path') as HTMLElement).textContent = folder
+          exportOutputFolder = folder
+        } else {
+          // Revert to same if cancelled
+          document.querySelectorAll('.export-dest-btn').forEach(b => b.classList.remove('active'))
+          document.querySelector<HTMLElement>('.export-dest-btn[data-dest="same"]')?.classList.add('active')
+        }
+      }
+    })
+  })
+
+  // Processing panel toggle
+  $('btn-proc-toggle')?.addEventListener('click', () => {
+    const panel = $('editor-proc-panel')
+    if (!panel) return
+    const open = panel.style.display === 'none' || panel.style.display === ''
+    panel.style.display = open ? '' : 'none'
+    $('btn-proc-toggle')?.classList.toggle('active', open)
+  })
+
+  // Normalization analysis request from processing panel
+  document.addEventListener('proc-analyze-request', async () => {
+    if (!audioBuffer) return
+    const gain = analyzeAndComputeNormGain(audioBuffer)
+    const normResult = $('proc-norm-result')
+    if (normResult) {
+      const { peakDb, lufs } = analyzeBuffer(audioBuffer)
+      normResult.textContent = `Peak: ${peakDb.toFixed(1)} dBFS · LUFS: ${lufs.toFixed(1)} · Gain: ${gain >= 0 ? '+' : ''}${gain.toFixed(1)} dB`
+    }
+    setNormEnabled(true)
+    const toggle = $('proc-norm-enable') as HTMLInputElement | null
+    if (toggle) toggle.checked = true
+  })
+
+  setupProcessingPanel(() => {
+    // called when any processing toggle changes — redraw waveform indicator
+    const badge = $('proc-active-badge')
+    if (badge) badge.style.display = hasAnyProcessing() ? '' : 'none'
+  })
 
   $('btn-editor-prompt-open')?.addEventListener('click', () => {
     const fp = ($('editor-prompt-toast') as HTMLElement).dataset.path ?? ''
@@ -846,8 +910,8 @@ function startPlay(preview: boolean): void {
   if (!audioBuffer || !audioCtx) return
   isPreview = preview
 
-  const allSegs   = preview ? getKeepSegs() : [{ start: 0, end: duration }]
-  const segments  = allSegs.filter(s => s.end > playStartSec)
+  const allSegs  = preview ? getKeepSegs() : [{ start: 0, end: duration }]
+  const segments = allSegs.filter(s => s.end > playStartSec)
   if (segments.length === 0) return
 
   isPlaying        = true
@@ -856,6 +920,10 @@ function startPlay(preview: boolean): void {
   let when = audioCtx.currentTime
   const nodes: AudioBufferSourceNode[] = []
   let firstSec = -1
+
+  // Intermediate gain node to connect multiple sources through the processing chain
+  const mixGain = audioCtx.createGain()
+  buildAudioChain(audioCtx, mixGain, audioCtx.destination)
 
   for (let i = 0; i < segments.length; i++) {
     const seg    = segments[i]
@@ -867,7 +935,7 @@ function startPlay(preview: boolean): void {
 
     const node = audioCtx.createBufferSource()
     node.buffer = audioBuffer
-    node.connect(audioCtx.destination)
+    node.connect(mixGain)
     node.start(when, seg.start + offset, dur)
     when += dur
     nodes.push(node)
@@ -903,7 +971,17 @@ function animate(): void {
   updateTimecode(curSec)
   autoScrollToPlayhead(curSec)
   drawWaveform()
+  updateGRMeter()
   rafId = requestAnimationFrame(animate)
+}
+
+function updateGRMeter(): void {
+  const reduction = getGainReduction()
+  const bar = document.getElementById('proc-gr-bar')
+  const val = document.getElementById('proc-gr-val')
+  const pct = Math.min(100, Math.max(0, -reduction * 100 / 20))
+  if (bar) bar.style.width = pct + '%'
+  if (val) val.textContent = reduction.toFixed(1) + ' dB'
 }
 
 function updatePlayIcon(): void {
@@ -926,23 +1004,54 @@ function updatePlayIcon(): void {
   }
 }
 
-// ── Save flow ─────────────────────────────────────────────────────────────
-function openSaveModal(): void {
-  $('editor-save-modal')!.style.display = 'flex'
+// ── Export flow ────────────────────────────────────────────────────────────
+function openExportModal(): void {
+  if (!filePath) return
+  // Update processing summary
+  const summary = $('export-proc-summary')
+  if (summary) {
+    const active = []
+    const ps = getProcessingState()
+    if (ps.normalize.enabled)  active.push('Normalisering')
+    if (ps.compressor.enabled) active.push('Kompressor')
+    if (ps.eq.enabled)         active.push('Grafisk EQ')
+    if (ps.limiter.enabled)    active.push('Limiter')
+    summary.textContent = active.length ? active.join(' · ') : 'Ingen lydbehandling'
+  }
+  $('editor-export-modal')!.style.display = 'flex'
 }
 
-function closeSaveModal(): void {
-  $('editor-save-modal')!.style.display = 'none'
+function closeExportModal(): void {
+  $('editor-export-modal')!.style.display = 'none'
 }
 
-async function confirmSave(mode: 'new' | 'replace'): Promise<void> {
-  closeSaveModal()
+async function runExport(): Promise<void> {
+  closeExportModal()
   const btn = $('btn-editor-save') as HTMLButtonElement
-  if (btn) { btn.disabled = true; btn.textContent = t('editor.saving') || 'Lagrer…' }
+  if (btn) { btn.disabled = true; btn.textContent = t('editor.exportExporting') || 'Eksporterer…' }
 
-  const result = await window.api.editorSaveFile({ inputPath: filePath, cutRegions: cuts, duration, mode })
+  const fmt = (document.querySelector<HTMLElement>('.export-fmt-btn.active')?.dataset.fmt ?? 'mp3') as 'mp3'|'wav'|'flac'|'aac'
+  const dest = document.querySelector<HTMLElement>('.export-dest-btn.active')?.dataset.dest ?? 'same'
+  const bitrate   = parseInt((($('export-bitrate')    as HTMLSelectElement)?.value  ?? '192'))
+  const bitDepth  = parseInt((($('export-bitdepth')   as HTMLSelectElement)?.value  ?? '16')) as 16|24
 
-  if (btn) { btn.disabled = false; btn.textContent = t('editor.save') || 'Lagre redigert fil' }
+  const mode: 'new' | 'replace' | 'folder' =
+    dest === 'replace' ? 'replace' :
+    dest === 'folder'  ? 'folder'  : 'new'
+
+  const result = await window.api.editorExportFile({
+    inputPath:    filePath,
+    cutRegions:   cuts,
+    duration,
+    mode,
+    outputFolder: exportOutputFolder || undefined,
+    outputFormat: fmt,
+    outputBitrate:  bitrate,
+    outputBitDepth: bitDepth,
+    processing: { ffmpegFilters: getFFmpegFilters() }
+  })
+
+  if (btn) { btn.disabled = false; btn.textContent = t('editor.save') || 'Eksporter' }
 
   const row  = $('editor-result-row')!
   const text = $('editor-result-text')!
@@ -950,12 +1059,21 @@ async function confirmSave(mode: 'new' | 'replace'): Promise<void> {
 
   if (result.ok) {
     const fname = (result.outputPath ?? '').split(/[/\\]/).pop() ?? ''
-    text.textContent = (t('editor.saveOk') || '✓ Lagret') + (fname ? ' — ' + fname : '')
+    text.textContent = (t('editor.saveOk') || '✓ Eksportert') + (fname ? ' — ' + fname : '')
     row.setAttribute('data-ok', 'true')
   } else {
     text.textContent = (t('editor.saveError') || '✕ Feil') + (result.error ? ': ' + result.error : '')
     row.removeAttribute('data-ok')
   }
+}
+
+function updateExportFormatUI(fmt: string): void {
+  const mp3  = $('export-mp3-opts')
+  const wav  = $('export-wav-opts')
+  const aac  = $('export-aac-opts')
+  if (mp3) mp3.style.display = fmt === 'mp3' ? '' : 'none'
+  if (wav) wav.style.display = fmt === 'wav' ? '' : 'none'
+  if (aac) aac.style.display = fmt === 'aac' ? '' : 'none'
 }
 
 // ── Editor prompt toast ───────────────────────────────────────────────────

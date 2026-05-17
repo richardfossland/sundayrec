@@ -55,9 +55,11 @@ declare global {
       notifyError:         (data: unknown) => void
       notifyWeakSignal:    () => void
       on:                  (channel: string, fn: (...args: unknown[]) => void) => (() => void) | undefined
-      editorReadFile: (filePath: string) => Promise<unknown>
-      editorSaveFile: (params: unknown) => Promise<{ ok: boolean; outputPath?: string; error?: string }>
-      editorPickFile: () => Promise<string | null>
+      editorReadFile:         (filePath: string) => Promise<unknown>
+      editorSaveFile:         (params: unknown)  => Promise<{ ok: boolean; outputPath?: string; error?: string }>
+      editorPickFile:         ()                 => Promise<string | null>
+      editorExportFile:       (params: unknown)  => Promise<{ ok: boolean; outputPath?: string; error?: string }>
+      editorPickOutputFolder: ()                 => Promise<string | null>
     }
     appVersion?: string
   }

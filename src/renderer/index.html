@@ -834,6 +834,11 @@
           </button>
         </div>
         <div class="editor-drag-hint" data-i18n="editor.dragHint">Klikk og dra for å markere et kutt</div>
+        <button class="btn-editor-tool" id="btn-proc-toggle" title="Lydbehandling" style="width:auto;padding:0 10px;gap:6px;font-size:12px;font-weight:600">
+          <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path d="M3 5a1 1 0 011-1h1.586A2 2 0 017 3.586L7.414 3H10a1 1 0 110 2H8.414L8 5.414V7a2 2 0 01-.586 1.414L6 9.828V17a1 1 0 11-2 0V9.828L2.586 8.414A2 2 0 012 7V5.414L1.586 5H1a1 1 0 110-2h1.414L3 3.414V5zm8 0a1 1 0 011-1h1.586L14 3.414V1a1 1 0 112 0v2.414L16.414 4H18a1 1 0 110 2h-1.414L16 6.414V7a2 2 0 01-.586 1.414L14 9.828V17a1 1 0 11-2 0V9.828l-1.414-1.414A2 2 0 0110 7V6.414L9.586 6H9a1 1 0 110-2h.586L10 3.414z"/></svg>
+          <span data-i18n="editor.processing">Lydbehandling</span>
+          <span id="proc-active-badge" class="proc-badge" style="display:none">●</span>
+        </button>
         <button class="btn-ghost btn-sm" id="btn-editor-undo-all" data-i18n="editor.cutsNone" style="display:none">Fjern alle kutt</button>
       </div>
 
@@ -850,6 +855,138 @@
       <!-- Main waveform canvas -->
       <div class="editor-canvas-wrap" id="editor-canvas-wrap">
         <canvas id="editor-canvas" class="editor-canvas"></canvas>
+      </div>
+
+      <!-- Processing panel -->
+      <div id="editor-proc-panel" class="editor-proc-panel" style="display:none">
+        <div class="proc-tabs">
+          <button class="proc-tab active" data-tab="normalize" data-i18n="editor.procNormalize">Normalisering</button>
+          <button class="proc-tab" data-tab="compressor" data-i18n="editor.procCompressor">Kompressor</button>
+          <button class="proc-tab" data-tab="eq" data-i18n="editor.procEQ">Grafisk EQ</button>
+          <button class="proc-tab" data-tab="limiter" data-i18n="editor.procLimiter">Limiter</button>
+        </div>
+
+        <!-- Normalize tab -->
+        <div class="proc-body" id="proc-body-normalize">
+          <div class="proc-row">
+            <label class="proc-toggle-label">
+              <input type="checkbox" id="proc-norm-enable" class="proc-toggle-input">
+              <span class="proc-toggle-track"></span>
+              <span data-i18n="editor.procNormalize">Normalisering</span>
+            </label>
+          </div>
+          <div class="proc-row proc-row-cols">
+            <label class="proc-radio-label">
+              <input type="radio" name="proc-norm-mode" id="proc-norm-peak" checked>
+              <span data-i18n="editor.procNormPeak">Toppverdi (Peak)</span>
+            </label>
+            <label class="proc-radio-label">
+              <input type="radio" name="proc-norm-mode" id="proc-norm-lufs">
+              <span data-i18n="editor.procNormLufs">Loudness (LUFS)</span>
+            </label>
+          </div>
+          <div class="proc-param-row">
+            <span class="proc-param-label" data-i18n="editor.procNormTarget">Mål</span>
+            <input type="range" class="proc-slider" id="proc-norm-target" min="-24" max="0" step="0.5" value="-1">
+            <span class="proc-param-val" id="proc-norm-target-val">-1.0 dBFS</span>
+          </div>
+          <div class="proc-row proc-row-cols">
+            <button class="btn-ghost btn-sm" id="btn-proc-norm-analyze" data-i18n="editor.procAnalyze">Analyser fil</button>
+            <span class="proc-norm-result" id="proc-norm-result"></span>
+          </div>
+        </div>
+
+        <!-- Compressor tab -->
+        <div class="proc-body" id="proc-body-compressor" style="display:none">
+          <div class="proc-row">
+            <label class="proc-toggle-label">
+              <input type="checkbox" id="proc-comp-enable" class="proc-toggle-input">
+              <span class="proc-toggle-track"></span>
+              <span data-i18n="editor.procCompressor">Kompressor</span>
+            </label>
+            <select class="proc-select" id="proc-comp-preset">
+              <option value="church"    data-i18n="editor.procPresetChurch">Kirke</option>
+              <option value="podcast"   data-i18n="editor.procPresetPodcast">Podcast</option>
+              <option value="music"     data-i18n="editor.procPresetMusic">Musikk</option>
+              <option value="broadcast" data-i18n="editor.procPresetBroadcast">Kringkasting</option>
+              <option value="custom"    data-i18n="editor.procPresetCustom">Egendefinert</option>
+            </select>
+          </div>
+          <div class="proc-params-grid">
+            <div class="proc-param-row">
+              <span class="proc-param-label" data-i18n="editor.procThreshold">Terskel</span>
+              <input type="range" class="proc-slider" id="proc-comp-threshold" min="-60" max="0" step="1" value="-24">
+              <span class="proc-param-val" id="proc-comp-threshold-val">-24 dBFS</span>
+            </div>
+            <div class="proc-param-row">
+              <span class="proc-param-label" data-i18n="editor.procRatio">Ratio</span>
+              <input type="range" class="proc-slider" id="proc-comp-ratio" min="1" max="20" step="0.5" value="2.5">
+              <span class="proc-param-val" id="proc-comp-ratio-val">2.5:1</span>
+            </div>
+            <div class="proc-param-row">
+              <span class="proc-param-label" data-i18n="editor.procAttack">Anslag</span>
+              <input type="range" class="proc-slider" id="proc-comp-attack" min="1" max="200" step="1" value="30">
+              <span class="proc-param-val" id="proc-comp-attack-val">30 ms</span>
+            </div>
+            <div class="proc-param-row">
+              <span class="proc-param-label" data-i18n="editor.procRelease">Slipp</span>
+              <input type="range" class="proc-slider" id="proc-comp-release" min="10" max="2000" step="10" value="250">
+              <span class="proc-param-val" id="proc-comp-release-val">250 ms</span>
+            </div>
+            <div class="proc-param-row">
+              <span class="proc-param-label" data-i18n="editor.procMakeup">Makeup</span>
+              <input type="range" class="proc-slider" id="proc-comp-makeup" min="0" max="24" step="0.5" value="4">
+              <span class="proc-param-val" id="proc-comp-makeup-val">4.0 dB</span>
+            </div>
+          </div>
+          <div class="proc-gr-row">
+            <span class="proc-param-label" data-i18n="editor.procGainReduction">Gain reduction</span>
+            <div class="proc-gr-track"><div class="proc-gr-bar" id="proc-gr-bar"></div></div>
+            <span class="proc-gr-val" id="proc-gr-val">0 dB</span>
+          </div>
+        </div>
+
+        <!-- EQ tab -->
+        <div class="proc-body" id="proc-body-eq" style="display:none">
+          <div class="proc-row">
+            <label class="proc-toggle-label">
+              <input type="checkbox" id="proc-eq-enable" class="proc-toggle-input">
+              <span class="proc-toggle-track"></span>
+              <span data-i18n="editor.procEQ">Grafisk EQ</span>
+            </label>
+            <button class="btn-ghost btn-sm" id="btn-proc-eq-reset" data-i18n="editor.procEQReset">Nullstill</button>
+          </div>
+          <canvas class="proc-eq-canvas" id="proc-eq-canvas" height="80"></canvas>
+          <div class="proc-eq-sliders">
+            <div class="proc-eq-band"><input type="range" class="proc-eq-slider" id="proc-eq-0" min="-12" max="12" step="0.5" value="0" orient="vertical"><span class="proc-eq-val" id="proc-eq-val-0">0.0</span><span class="proc-eq-freq">31</span></div>
+            <div class="proc-eq-band"><input type="range" class="proc-eq-slider" id="proc-eq-1" min="-12" max="12" step="0.5" value="0" orient="vertical"><span class="proc-eq-val" id="proc-eq-val-1">0.0</span><span class="proc-eq-freq">63</span></div>
+            <div class="proc-eq-band"><input type="range" class="proc-eq-slider" id="proc-eq-2" min="-12" max="12" step="0.5" value="0" orient="vertical"><span class="proc-eq-val" id="proc-eq-val-2">0.0</span><span class="proc-eq-freq">125</span></div>
+            <div class="proc-eq-band"><input type="range" class="proc-eq-slider" id="proc-eq-3" min="-12" max="12" step="0.5" value="0" orient="vertical"><span class="proc-eq-val" id="proc-eq-val-3">0.0</span><span class="proc-eq-freq">250</span></div>
+            <div class="proc-eq-band"><input type="range" class="proc-eq-slider" id="proc-eq-4" min="-12" max="12" step="0.5" value="0" orient="vertical"><span class="proc-eq-val" id="proc-eq-val-4">0.0</span><span class="proc-eq-freq">500</span></div>
+            <div class="proc-eq-band"><input type="range" class="proc-eq-slider" id="proc-eq-5" min="-12" max="12" step="0.5" value="0" orient="vertical"><span class="proc-eq-val" id="proc-eq-val-5">0.0</span><span class="proc-eq-freq">1k</span></div>
+            <div class="proc-eq-band"><input type="range" class="proc-eq-slider" id="proc-eq-6" min="-12" max="12" step="0.5" value="0" orient="vertical"><span class="proc-eq-val" id="proc-eq-val-6">0.0</span><span class="proc-eq-freq">2k</span></div>
+            <div class="proc-eq-band"><input type="range" class="proc-eq-slider" id="proc-eq-7" min="-12" max="12" step="0.5" value="0" orient="vertical"><span class="proc-eq-val" id="proc-eq-val-7">0.0</span><span class="proc-eq-freq">4k</span></div>
+            <div class="proc-eq-band"><input type="range" class="proc-eq-slider" id="proc-eq-8" min="-12" max="12" step="0.5" value="0" orient="vertical"><span class="proc-eq-val" id="proc-eq-val-8">0.0</span><span class="proc-eq-freq">8k</span></div>
+            <div class="proc-eq-band"><input type="range" class="proc-eq-slider" id="proc-eq-9" min="-12" max="12" step="0.5" value="0" orient="vertical"><span class="proc-eq-val" id="proc-eq-val-9">0.0</span><span class="proc-eq-freq">16k</span></div>
+          </div>
+        </div>
+
+        <!-- Limiter tab -->
+        <div class="proc-body" id="proc-body-limiter" style="display:none">
+          <div class="proc-row">
+            <label class="proc-toggle-label">
+              <input type="checkbox" id="proc-limiter-enable" class="proc-toggle-input">
+              <span class="proc-toggle-track"></span>
+              <span data-i18n="editor.procLimiter">Limiter</span>
+            </label>
+          </div>
+          <div class="proc-param-row">
+            <span class="proc-param-label" data-i18n="editor.procLimiterCeiling">Tak</span>
+            <input type="range" class="proc-slider" id="proc-limiter-ceiling" min="-12" max="-0.1" step="0.1" value="-0.3">
+            <span class="proc-param-val" id="proc-limiter-ceiling-val">-0.3 dBFS</span>
+          </div>
+          <p class="proc-desc" data-i18n="editor.procLimiterDesc">Hindrer lyden fra å klippe ved å sette et absolutt maksimalt lydnivå.</p>
+        </div>
       </div>
 
       <!-- Cut list -->
@@ -891,15 +1028,64 @@
   </div>
 </div>
 
-<!-- Editor save modal -->
-<div id="editor-save-modal" class="modal-backdrop" style="display:none">
-  <div class="modal modal-sm">
-    <h2 data-i18n="editor.saveTitle">Lagre redigert fil</h2>
-    <p data-i18n="editor.saveConfirm">Velg om du vil lagre som en ny fil ved siden av originalen, eller erstatte originalfilen.</p>
+<!-- Editor export modal -->
+<div id="editor-export-modal" class="modal-backdrop" style="display:none">
+  <div class="modal export-modal">
+    <h2 data-i18n="editor.exportTitle">Eksporter lydfil</h2>
+
+    <!-- Format picker -->
+    <div class="export-section-label" data-i18n="editor.exportFormat">Format</div>
+    <div class="export-fmt-row">
+      <button class="export-fmt-btn active" data-fmt="mp3">MP3</button>
+      <button class="export-fmt-btn" data-fmt="wav">WAV</button>
+      <button class="export-fmt-btn" data-fmt="flac">FLAC</button>
+      <button class="export-fmt-btn" data-fmt="aac">AAC</button>
+    </div>
+
+    <!-- Format options -->
+    <div id="export-mp3-opts" class="export-fmt-opts">
+      <div class="export-section-label" data-i18n="editor.exportBitrate">Bitrate</div>
+      <select class="form-input form-input-sm" id="export-bitrate">
+        <option value="128">128 kbps</option>
+        <option value="192" selected>192 kbps (standard)</option>
+        <option value="256">256 kbps</option>
+        <option value="320">320 kbps (høy kvalitet)</option>
+      </select>
+    </div>
+    <div id="export-wav-opts" class="export-fmt-opts" style="display:none">
+      <div class="export-section-label" data-i18n="editor.exportBitDepth">Bithybde</div>
+      <select class="form-input form-input-sm" id="export-bitdepth">
+        <option value="16" selected>16-bit (CD-kvalitet)</option>
+        <option value="24">24-bit (studio)</option>
+      </select>
+    </div>
+    <div id="export-aac-opts" class="export-fmt-opts" style="display:none">
+      <div class="export-section-label" data-i18n="editor.exportBitrate">Bitrate</div>
+      <select class="form-input form-input-sm" id="export-aac-bitrate">
+        <option value="128">128 kbps</option>
+        <option value="192" selected>192 kbps</option>
+        <option value="256">256 kbps</option>
+      </select>
+    </div>
+
+    <!-- Destination -->
+    <div class="export-section-label" data-i18n="editor.exportDest">Destinasjon</div>
+    <div class="export-dest-row">
+      <button class="export-dest-btn active" data-dest="same" data-i18n="editor.exportDestSame">Samme mappe</button>
+      <button class="export-dest-btn" data-dest="folder" data-i18n="editor.exportDestFolder">Velg mappe…</button>
+      <button class="export-dest-btn" data-dest="replace" data-i18n="editor.exportDestReplace">Erstatt original</button>
+    </div>
+    <div id="export-folder-path" class="export-folder-path" style="display:none"></div>
+
+    <!-- Processing summary -->
+    <div class="export-proc-row">
+      <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="opacity:.5"><path d="M3 5a1 1 0 011-1h1.586A2 2 0 017 3.586L7.414 3H10a1 1 0 110 2H8.414L8 5.414V7a2 2 0 01-.586 1.414L6 9.828V17a1 1 0 11-2 0V9.828L2.586 8.414A2 2 0 012 7V5.414L1.586 5H1a1 1 0 110-2h1.414L3 3.414V5zm8 0a1 1 0 011-1h1.586L14 3.414V1a1 1 0 112 0v2.414L16.414 4H18a1 1 0 110 2h-1.414L16 6.414V7a2 2 0 01-.586 1.414L14 9.828V17a1 1 0 11-2 0V9.828l-1.414-1.414A2 2 0 0110 7V6.414L9.586 6H9a1 1 0 110-2h.586L10 3.414z"/></svg>
+      <span id="export-proc-summary" class="export-proc-summary">Ingen lydbehandling</span>
+    </div>
+
     <div class="btn-row mt">
-      <button class="btn-primary" id="btn-save-new" data-i18n="editor.saveNewFile">Lagre som ny fil</button>
-      <button class="btn-secondary" id="btn-save-replace" data-i18n="editor.saveReplace">Erstatt original</button>
-      <button class="btn-ghost" id="btn-save-cancel" data-i18n="editor.cancel">Avbryt</button>
+      <button class="btn-primary" id="btn-export-confirm" data-i18n="editor.exportConfirm">Eksporter</button>
+      <button class="btn-ghost" id="btn-export-cancel" data-i18n="editor.cancel">Avbryt</button>
     </div>
   </div>
 </div>

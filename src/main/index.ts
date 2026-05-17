@@ -364,6 +364,17 @@ function setupIPC(): void {
     })
     return r.canceled ? null : r.filePaths[0]
   })
+
+  ipcMain.handle('editor-export-file', async (_, params) => {
+    const { exportEdited } = await import('./editor')
+    return exportEdited(params)
+  })
+
+  ipcMain.handle('editor-pick-output-folder', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender) ?? mainWindow
+    const r = await dialog.showOpenDialog(win!, { properties: ['openDirectory', 'createDirectory'] })
+    return r.canceled ? null : r.filePaths[0]
+  })
 }
 
 function notify(title: string, body: string): void {

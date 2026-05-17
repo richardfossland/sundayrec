@@ -48,9 +48,11 @@ contextBridge.exposeInMainWorld('api', {
   updateHistoryNote: (ts: number, note: string) => ipcRenderer.invoke('update-history-note', ts, note),
   getAppVersion:    ()       => ipcRenderer.invoke('get-app-version'),
 
-  editorReadFile: (filePath: string) => ipcRenderer.invoke('editor-read-file', filePath),
-  editorSaveFile: (params: unknown)  => ipcRenderer.invoke('editor-save-file', params),
-  editorPickFile: ()                 => ipcRenderer.invoke('editor-pick-file'),
+  editorReadFile:         (filePath: string) => ipcRenderer.invoke('editor-read-file', filePath),
+  editorSaveFile:         (params: unknown)  => ipcRenderer.invoke('editor-save-file', params),
+  editorPickFile:         ()                 => ipcRenderer.invoke('editor-pick-file'),
+  editorExportFile:       (params: unknown)  => ipcRenderer.invoke('editor-export-file', params),
+  editorPickOutputFolder: ()                 => ipcRenderer.invoke('editor-pick-output-folder'),
 
   checkForUpdates: ()        => ipcRenderer.invoke('check-for-updates'),
   installUpdate:   ()        => ipcRenderer.invoke('install-update'),
