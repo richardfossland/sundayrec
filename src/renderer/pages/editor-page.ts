@@ -4,6 +4,7 @@ import {
   analyzeAndComputeNormGain, analyzeBuffer, hasAnyProcessing,
   getProcessingState, setNormEnabled, getGainReduction
 } from './editor-processing'
+import { destroyEQCanvas } from './editor-eq-canvas'
 
 interface Cut { start: number; end: number }
 
@@ -166,6 +167,7 @@ export function openEditorWithFile(fp: string): void {
 
 export function deactivateEditor(): void {
   stopPlay()
+  destroyEQCanvas()
 }
 
 // ── File loading ──────────────────────────────────────────────────────────

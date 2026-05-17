@@ -1,6 +1,6 @@
 {
   "name": "sundayrec",
-  "version": "3.12.0",
+  "version": "3.13.0",
   "author": "Richard Fossland",
   "description": "Automatic church service recorder for Windows and Mac",
   "repository": {
@@ -33,7 +33,7 @@
     "@types/node": "^22.19.19",
     "@types/node-schedule": "^2.1.8",
     "@types/nodemailer": "^6.4.23",
-    "electron": "^42.0.1",
+    "electron": "^42.1.0",
     "electron-builder": "^25.0.0",
     "electron-vite": "^5.0.0",
     "jest": "^29.7.0",

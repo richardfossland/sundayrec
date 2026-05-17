@@ -207,6 +207,8 @@ async function startMonitoring(): Promise<void> {
     const warn = document.getElementById('test-audio-warn')
     if (warn) warn.style.display = 'block'
   } catch (err) {
+    monitorStream?.getTracks().forEach(tk => tk.stop()); monitorStream = null
+    monitorCtx?.close(); monitorCtx = null
     alert(t('audio.monitorError', 'Kunne ikke starte lydtest: ') + (err as Error).message)
   }
 }

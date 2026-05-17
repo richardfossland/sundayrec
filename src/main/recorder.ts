@@ -137,7 +137,11 @@ function finishSession(): void {
   if (session.maxTimer) clearTimeout(session.maxTimer)
   stopRecBlocker()
   store.set('activeRecovery', null)
-  session.writeStream.end(() => convertAndSave(session))
+  session.writeStream.end(() => convertAndSave(session).catch(err => {
+    console.error('convertAndSave failed:', err)
+    session.win.webContents.send('recording-error', { error: String(err?.message ?? err) })
+    notifyIdle()
+  }))
 }
 
 async function uniquePath(p: string): Promise<string> {

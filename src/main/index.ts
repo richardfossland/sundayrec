@@ -14,6 +14,13 @@ import { promisify } from 'util'
 
 const execFileAsync = promisify(execFile)
 
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err)
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason)
+})
+
 app.setName('SundayRec')
 
 if (!app.isPackaged && process.platform === 'darwin' && app.dock) {
@@ -352,6 +359,7 @@ function setupIPC(): void {
   })
 
   ipcMain.handle('editor-save-file', async (_, params) => {
+    if (!params || typeof params !== 'object' || Array.isArray(params)) return { ok: false, error: 'invalid_params' }
     const { saveEdited } = await import('./editor')
     return saveEdited(params)
   })
@@ -366,6 +374,7 @@ function setupIPC(): void {
   })
 
   ipcMain.handle('editor-export-file', async (_, params) => {
+    if (!params || typeof params !== 'object' || Array.isArray(params)) return { ok: false, error: 'invalid_params' }
     const { exportEdited } = await import('./editor')
     return exportEdited(params)
   })

@@ -49,6 +49,8 @@ export async function saveEdited(params: EditorSaveParams): Promise<EditorSaveRe
 
   if (typeof inputPath !== 'string') return { ok: false, error: 'invalid_path' }
   if (!fs.existsSync(inputPath))     return { ok: false, error: 'file_not_found' }
+  if (!Array.isArray(cutRegions))    return { ok: false, error: 'invalid_cut_regions' }
+  if (typeof duration !== 'number' || duration <= 0) return { ok: false, error: 'invalid_duration' }
 
   const rawExt = path.extname(inputPath).slice(1).toLowerCase()
   const ext    = ['mp3', 'wav', 'flac', 'aac'].includes(rawExt) ? rawExt : 'mp3'
@@ -139,6 +141,8 @@ export async function exportEdited(params: EditorExportParams): Promise<EditorSa
 
   if (typeof inputPath !== 'string') return { ok: false, error: 'invalid_path' }
   if (!fs.existsSync(inputPath))     return { ok: false, error: 'file_not_found' }
+  if (!Array.isArray(cutRegions))    return { ok: false, error: 'invalid_cut_regions' }
+  if (typeof duration !== 'number' || duration <= 0) return { ok: false, error: 'invalid_duration' }
 
   const fmt = (['mp3', 'wav', 'flac', 'aac'] as const).includes(outputFormat as 'mp3') ? outputFormat : 'mp3'
 

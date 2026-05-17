@@ -202,6 +202,13 @@ export function hasEQActivity(): boolean {
   return bands.some(b => b.enabled)
 }
 
+export function destroyEQCanvas(): void {
+  cancelAnimationFrame(rafId); rafId = 0
+  analyserNode = null; analyserData = null
+  displayCtx?.close(); displayCtx = null; displayNodes = []
+  cvs = null; onChangeCallback = null
+}
+
 // ── Animation ─────────────────────────────────────────────────────────────
 function scheduleRedraw(): void {
   cancelAnimationFrame(rafId)
