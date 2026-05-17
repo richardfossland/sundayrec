@@ -1,141 +1,75 @@
 /**
- * Recorder — main process side.
+ * Recorder — main process orchestration.
  *
- * The actual MediaRecorder lives in the renderer (Chromium) so it has
- * access to getUserMedia. Main orchestrates start/stop, receives audio
- * chunks via IPC, writes a temp file, then runs ffmpeg for conversion.
+ * Architecture (v4.1+): recording is handled entirely in the main process by an
+ * ffmpeg subprocess (native-recorder.ts). The renderer is only used for the VU
+ * meter and UI — it has NO role in the audio capture pipeline. A renderer crash
+ * no longer affects an active recording.
  *
- * Crash recovery: on startSession we persist the temp file path to the
- * store. If the app crashes and restarts, main can find the partial
- * file and attempt to salvage it via ffmpeg.
+ * Flow:
+ *   startSession()  → resolves device, spawns ffmpeg, persists recovery info
+ *   stopSession()   → sends 'q' to ffmpeg stdin; ffmpeg flushes & exits cleanly
+ *   finishSession() → called when ffmpeg exits 0; adds history entry, notifies UI
+ *
+ * Watchdog:
+ *   If ffmpeg dies unexpectedly (USB disconnect, driver crash), the watchdog
+ *   attempts to restart capture for up to 30 seconds. Each reconnect segment
+ *   gets a _r1/_r2 suffix and its own history entry.
+ *
+ * Crash recovery:
+ *   On startSession the output path is written to activeRecovery in the store.
+ *   On next launch, recoverCrashedSession() re-muxes the partial file with
+ *   ffmpeg -c copy to repair the container, then adds it to history.
  */
 
 import path from 'path'
 import fs from 'fs'
-import os from 'os'
-import crypto from 'crypto'
-import { ipcMain, app, Notification, powerSaveBlocker } from 'electron'
+import { app, Notification, powerSaveBlocker } from 'electron'
 import type { BrowserWindow } from 'electron'
-import ffmpegStatic from 'ffmpeg-static'
-import ffmpeg from 'fluent-ffmpeg'
+import crypto from 'crypto'
+import ffmpegLegacy from 'fluent-ffmpeg'
 import * as store from './store'
 import * as tray from './tray'
 import * as mailer from './mailer'
-import { localDateStr, buildFilename, codecFor, formatDuration } from './recorder-utils'
-import type { RecordingOpts, RecordingEntry, Settings } from '../types'
+import { localDateStr, buildFilename, sanitizeFilename, formatDuration } from './recorder-utils'
+import { startCapture, stopCapture, ffmpegBin } from './native-recorder'
+import type { NativeHandle } from './native-recorder'
+import type { RecordingOpts, RecordingEntry } from '../types'
 
-export const NOTIFY_LABELS: Record<string, { done: string; err: string; recovered: string }> = {
-  no: { done: 'Fullført',      err: 'SundayRec — Feil',    recovered: 'Opptak gjenopprettet: {file}' },
-  en: { done: 'Completed',     err: 'SundayRec — Error',   recovered: 'Recording recovered: {file}'  },
-  de: { done: 'Abgeschlossen', err: 'SundayRec — Fehler',  recovered: 'Aufnahme wiederhergestellt: {file}' },
-  sv: { done: 'Klar',          err: 'SundayRec — Fel',     recovered: 'Inspelning återställd: {file}' },
-  da: { done: 'Fuldført',      err: 'SundayRec — Fejl',    recovered: 'Optagelse gendannet: {file}'  },
-  pl: { done: 'Ukończono',     err: 'SundayRec — Błąd',    recovered: 'Nagranie odzyskane: {file}'   },
-  fr: { done: 'Terminé',       err: 'SundayRec — Erreur',  recovered: 'Enregistrement récupéré : {file}' },
+// ── Localised notification labels ───────────────────────────────────────────
+
+export const NOTIFY_LABELS: Record<string, { done: string; err: string; recovered: string; reconnected: string }> = {
+  no: { done: 'Fullført',      err: 'SundayRec — Feil',    recovered: 'Opptak gjenopprettet: {file}', reconnected: 'Tilkobling gjenopprettet — fortsetter opptak' },
+  en: { done: 'Completed',     err: 'SundayRec — Error',   recovered: 'Recording recovered: {file}',  reconnected: 'Connection restored — continuing recording'  },
+  de: { done: 'Abgeschlossen', err: 'SundayRec — Fehler',  recovered: 'Aufnahme wiederhergestellt: {file}', reconnected: 'Verbindung wiederhergestellt' },
+  sv: { done: 'Klar',          err: 'SundayRec — Fel',     recovered: 'Inspelning återställd: {file}', reconnected: 'Anslutning återställd — fortsätter inspelning' },
+  da: { done: 'Fuldført',      err: 'SundayRec — Fejl',    recovered: 'Optagelse gendannet: {file}',   reconnected: 'Forbindelse genoprettet — fortsætter optagelse' },
+  pl: { done: 'Ukończono',     err: 'SundayRec — Błąd',    recovered: 'Nagranie odzyskane: {file}',    reconnected: 'Połączenie przywrócone — kontynuowanie nagrywania' },
+  fr: { done: 'Terminé',       err: 'SundayRec — Erreur',  recovered: 'Enregistrement récupéré : {file}', reconnected: 'Connexion rétablie — enregistrement en cours' },
 }
 
-let ffmpegPath = ffmpegStatic as string
-if (app.isPackaged) {
-  // Normalize to forward slashes before replacing so Windows paths work reliably
-  const normalized = ffmpegPath.replace(/\\/g, '/')
-  const asarIdx = normalized.indexOf('app.asar/')
-  if (asarIdx !== -1) {
-    ffmpegPath = path.join(
-      normalized.slice(0, asarIdx).replace(/\//g, path.sep),
-      'app.asar.unpacked',
-      normalized.slice(asarIdx + 'app.asar/'.length).replace(/\//g, path.sep)
-    )
-  } else {
-    ffmpegPath = ffmpegPath.replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep)
-  }
-  if (!fs.existsSync(ffmpegPath)) {
-    console.error('[ffmpeg] Unpacked binary not found at', ffmpegPath, '— falling back to system PATH')
-    ffmpegPath = 'ffmpeg'
-  }
-}
-ffmpeg.setFfmpegPath(ffmpegPath)
+// ── Session state ────────────────────────────────────────────────────────────
 
 interface Session {
-  settings: RecordingOpts
-  tempPath: string
-  sessionId: string
-  writeStream: fs.WriteStream
-  startTime: number | null
-  confirmed: boolean
-  win: BrowserWindow
-  maxTimer: ReturnType<typeof setTimeout> | null
+  settings:      RecordingOpts
+  outputPath:    string
+  sessionId:     string
+  handle:        NativeHandle
+  startTime:     number
+  win:           BrowserWindow
+  maxTimer:      ReturnType<typeof setTimeout> | null
+  stopping:      boolean       // true once stopSession() has been called
+  reconnectCount: number
 }
 
 let activeSession: Session | null = null
-let recBlocker: number | null = null
-let idleCallback: (() => void) | null = null
+let recBlocker:    number | null  = null
+let idleCallback:  (() => void) | null = null
 
-export function onceIdle(cb: () => void): void {
-  idleCallback = cb
-}
+export function onceIdle(cb: () => void): void { idleCallback = cb }
 
 function notifyIdle(): void {
-  const cb = idleCallback
-  idleCallback = null
-  cb?.()
-}
-
-export function init(): void {
-  ipcMain.on('audio-chunk', (_, chunk: ArrayBuffer) => {
-    activeSession?.writeStream.write(Buffer.from(chunk))
-  })
-
-  ipcMain.on('recording-confirmed-start', (_, data: { startTime: number }) => {
-    if (!activeSession) return
-    activeSession.confirmed = true
-    activeSession.startTime = data.startTime || Date.now()
-  })
-
-  ipcMain.on('recording-chunks-done', () => {
-    if (activeSession) finishSession()
-  })
-}
-
-export function startSession(settings: RecordingOpts, win: BrowserWindow): { ok: true } | { error: string } {
-  if (activeSession) return { error: 'already_recording' }
-
-  const sessionId = crypto.randomUUID()
-  const tempPath  = path.join(os.tmpdir(), `sundayrec-${sessionId}.webm`)
-  const writeStream = fs.createWriteStream(tempPath)
-
-  activeSession = { settings, tempPath, sessionId, writeStream, startTime: null, confirmed: false, win, maxTimer: null }
-
-  // Persist recovery info so a crash restart can find the partial file
-  store.set('activeRecovery', { tempPath, startTime: Date.now(), sessionId })
-
-  if (settings.maxMinutes) {
-    activeSession.maxTimer = setTimeout(() => stopSession(), settings.maxMinutes * 60000)
-  }
-
-  if (recBlocker === null || !powerSaveBlocker.isStarted(recBlocker)) {
-    recBlocker = powerSaveBlocker.start('prevent-app-suspension')
-  }
-
-  return { ok: true }
-}
-
-export function stopSession(): void {
-  if (!activeSession) return
-  const { win, confirmed } = activeSession
-
-  if (!confirmed) {
-    const session = activeSession
-    activeSession = null
-    if (session.maxTimer) clearTimeout(session.maxTimer)
-    session.writeStream.end()
-    setTimeout(() => unlinkTemp(session.tempPath), 100)
-    store.set('activeRecovery', null)
-    stopRecBlocker()
-    notifyIdle()
-    return
-  }
-
-  win.webContents.send('stop-media-recorder')
+  const cb = idleCallback; idleCallback = null; cb?.()
 }
 
 function stopRecBlocker(): void {
@@ -145,179 +79,284 @@ function stopRecBlocker(): void {
   recBlocker = null
 }
 
-function finishSession(): void {
+function getLang(): string { return store.get('language') ?? 'no' }
+function getNL()  { return NOTIFY_LABELS[getLang()] ?? NOTIFY_LABELS.no }
+
+function notify(title: string, body: string): void {
+  if (Notification.isSupported()) new Notification({ title, body }).show()
+}
+
+// ── Public API ───────────────────────────────────────────────────────────────
+
+export function isActive(): boolean {
+  return activeSession !== null && !activeSession.stopping
+}
+
+export async function startSession(
+  settings: RecordingOpts,
+  win: BrowserWindow
+): Promise<{ ok: true } | { error: string }> {
+  if (activeSession) return { error: 'already_recording' }
+
+  const sessionId  = crypto.randomUUID()
+  const filename   = buildFilename(settings)
+  const folder     = settings.saveFolder ?? defaultFolder()
+  const outputPath = await uniquePath(path.join(folder, filename))
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true })
+
+  const result = await startCapture(settings, outputPath)
+  if ('error' in result) return { error: result.error }
+
+  const handle = result
+
+  activeSession = {
+    settings, outputPath, sessionId, handle,
+    startTime: handle.startTime,
+    win, maxTimer: null, stopping: false, reconnectCount: 0
+  }
+
+  // Persist recovery info so a crash restart can salvage the partial file
+  store.set('activeRecovery', { outputPath, startTime: handle.startTime, sessionId })
+
+  // Auto-stop after maxMinutes if set
+  if (settings.maxMinutes) {
+    activeSession.maxTimer = setTimeout(() => stopSession(), settings.maxMinutes * 60000)
+  }
+
+  // Keep system awake during recording
+  if (recBlocker === null || !powerSaveBlocker.isStarted(recBlocker)) {
+    recBlocker = powerSaveBlocker.start('prevent-app-suspension')
+  }
+
+  // Progress → send bytes to renderer for size display
+  handle.onProgress = bytes => {
+    win.webContents.send('recording-progress', { bytes })
+  }
+
+  // Watchdog — handles unexpected ffmpeg exit (USB disconnect, driver crash)
+  handle.onExit = code => {
+    if (!activeSession || activeSession.sessionId !== sessionId) return
+    if (activeSession.stopping) {
+      finishSession(activeSession)
+    } else if (code === 0) {
+      finishSession(activeSession)
+    } else {
+      startWatchdog(activeSession)
+    }
+  }
+
+  // Update tray & send start notification
+  tray.setRecording(true)
+  tray.setError(false)
+  if (store.get('notifyStart') !== false) {
+    const name = settings.customName || settings.overrideName || 'SundayRec'
+    notify('SundayRec', name)
+  }
+
+  return { ok: true }
+}
+
+export function stopSession(): void {
   if (!activeSession) return
   const session = activeSession
-  activeSession = null
+  session.stopping = true
   if (session.maxTimer) clearTimeout(session.maxTimer)
+  stopCapture(session.handle).then(() => {
+    // finishSession will be called via handle.onExit
+  }).catch(err => {
+    console.error('[recorder] stopCapture error:', err)
+    finishSession(session)
+  })
+}
+
+// ── Internal: finish a session after ffmpeg exits ───────────────────────────
+
+function finishSession(session: Session): void {
+  if (activeSession?.sessionId === session.sessionId) activeSession = null
   stopRecBlocker()
   store.set('activeRecovery', null)
-  session.writeStream.end(() => convertAndSave(session).catch(err => {
-    console.error('convertAndSave failed:', err)
-    session.win.webContents.send('recording-error', { error: String(err?.message ?? err) })
+
+  const durationSec = Math.round((Date.now() - session.startTime) / 1000)
+  const recDate     = new Date(session.startTime)
+  const exists      = fs.existsSync(session.outputPath)
+  const size        = exists ? fs.statSync(session.outputPath).size : 0
+
+  if (!exists || size < 1000) {
+    // Nothing was written — don't add to history
+    session.win.webContents.send('recording-error', { error: 'empty_output' })
+    tray.setRecording(false)
     notifyIdle()
-  }))
+    return
+  }
+
+  const entry: RecordingEntry = {
+    date:      localDateStr(recDate),
+    startTime: recDate.toTimeString().slice(0, 5),
+    duration:  formatDuration(durationSec),
+    filename:  path.basename(session.outputPath),
+    path:      session.outputPath,
+    status:    'ok'
+  }
+  store.addHistory(entry)
+  session.win.webContents.send('recording-finished', entry)
+
+  tray.setRecording(false)
+  if (store.get('notifyStop') !== false) {
+    notify('SundayRec', `${getNL().done}: ${path.basename(session.outputPath)}`)
+  }
+  notifyIdle()
 }
+
+// ── Watchdog: reconnect after unexpected ffmpeg death ───────────────────────
+
+const RECONNECT_SECS = 30
+
+function startWatchdog(session: Session): void {
+  session.win.webContents.send('recording-reconnecting', {})
+  console.warn('[recorder] ffmpeg died unexpectedly — starting reconnect watchdog')
+
+  let attempts = 0
+  const tryReconnect = async () => {
+    if (!activeSession || activeSession.sessionId !== session.sessionId) return
+    if (attempts >= RECONNECT_SECS) {
+      failSession(session, 'device_disconnected')
+      return
+    }
+    attempts++
+    console.log(`[recorder] Reconnect attempt ${attempts}/${RECONNECT_SECS}…`)
+
+    // Build a new output path with _r1/_r2 suffix for the reconnected segment
+    session.reconnectCount++
+    const ext      = path.extname(session.outputPath)
+    const base     = session.outputPath.slice(0, -ext.length).replace(/_r\d+$/, '')
+    const newPath  = `${base}_r${session.reconnectCount}${ext}`
+
+    const result = await startCapture(session.settings, newPath)
+    if ('error' in result) {
+      setTimeout(tryReconnect, 1000)
+      return
+    }
+
+    // Reconnect succeeded
+    console.log('[recorder] Reconnected! New segment:', newPath)
+    session.outputPath = newPath
+    session.handle     = result
+    session.startTime  = result.startTime
+    store.set('activeRecovery', { outputPath: newPath, startTime: result.startTime, sessionId: session.sessionId })
+
+    result.onProgress = bytes => {
+      session.win.webContents.send('recording-progress', { bytes })
+    }
+    result.onExit = code => {
+      if (!activeSession || activeSession.sessionId !== session.sessionId) return
+      if (session.stopping || code === 0) finishSession(session)
+      else startWatchdog(session)
+    }
+
+    session.win.webContents.send('recording-reconnected', {})
+    const nl = getNL()
+    notify('SundayRec', nl.reconnected)
+  }
+
+  setTimeout(tryReconnect, 1000)
+}
+
+function failSession(session: Session, reason: string): void {
+  if (activeSession?.sessionId === session.sessionId) activeSession = null
+  stopRecBlocker()
+  store.set('activeRecovery', null)
+
+  const nl = getNL()
+  session.win.webContents.send('recording-error', { error: reason })
+  tray.setRecording(false)
+  tray.setError(true)
+  notify(nl.err, reason)
+
+  const s = store.getAll()
+  if (s.emailOnError) mailer.sendError(s, store.getSmtpPassword(), reason)
+  notifyIdle()
+}
+
+// ── Crash recovery ───────────────────────────────────────────────────────────
+
+export function recoverCrashedSession(): void {
+  const recovery = store.get('activeRecovery')
+  if (!recovery) return
+  store.set('activeRecovery', null)
+
+  // Support both old (tempPath) and new (outputPath) recovery formats
+  const filePath = (recovery as { outputPath?: string; tempPath?: string }).outputPath
+                ?? (recovery as { tempPath?: string }).tempPath
+  if (!filePath || !fs.existsSync(filePath)) return
+
+  const stat = fs.statSync(filePath)
+  if (stat.size < 5000) { unlinkSilent(filePath); return }
+
+  const s      = store.getAll()
+  const fmt    = s.format ?? 'mp3'
+  const folder = s.saveFolder ?? defaultFolder()
+  const date   = localDateStr(new Date())
+  const base   = `recovered_${date}`
+  let   out    = path.join(folder, `${base}.${fmt}`)
+  for (let i = 2; fs.existsSync(out) && i < 9999; i++) out = path.join(folder, `${base}_${i}.${fmt}`)
+  fs.mkdirSync(path.dirname(out), { recursive: true })
+
+  // Use -c copy to remux without re-encoding — fixes container headers in partial files
+  ffmpegLegacy.setFfmpegPath(ffmpegBin)
+  ffmpegLegacy(filePath)
+    .outputOptions(['-c', 'copy', '-y'])
+    .output(out)
+    .on('end', () => {
+      unlinkSilent(filePath)
+      const durationSec = Math.round((Date.now() - recovery.startTime) / 1000)
+      const recDate     = new Date(recovery.startTime)
+      store.addHistory({
+        date:      localDateStr(recDate),
+        startTime: recDate.toTimeString().slice(0, 5),
+        duration:  formatDuration(durationSec),
+        filename:  path.basename(out),
+        path:      out,
+        status:    'ok'
+      })
+      notify('SundayRec', getNL().recovered.replace('{file}', path.basename(out)))
+    })
+    .on('error', () => {
+      // -c copy failed (very corrupt file); try to keep what we have
+      console.error('[recorder] recovery remux failed for', filePath)
+      try {
+        fs.renameSync(filePath, out)
+        notify('SundayRec', getNL().recovered.replace('{file}', path.basename(out)))
+      } catch {}
+    })
+    .run()
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 async function uniquePath(p: string): Promise<string> {
   try { await fs.promises.access(p) } catch { return p }
   const ext  = path.extname(p)
   const base = p.slice(0, -ext.length)
   for (let i = 2; i < 10000; i++) {
-    const candidate = `${base}_${i}${ext}`
-    try { await fs.promises.access(candidate) } catch { return candidate }
+    const c = `${base}_${i}${ext}`
+    try { await fs.promises.access(c) } catch { return c }
   }
   return `${base}_${Date.now()}${ext}`
 }
 
-async function convertAndSave(session: Session): Promise<void> {
-  const { settings, tempPath, startTime } = session
-  const durationSec = startTime ? Math.round((Date.now() - startTime) / 1000) : 0
-  const filename    = buildFilename(settings, startTime ?? undefined)
-  const outputPath  = await uniquePath(path.join(settings.saveFolder || defaultFolder(), filename))
-
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true })
-
-  const cmd = ffmpeg(tempPath)
-    .audioCodec(codecFor(settings.format ?? 'mp3'))
-    .audioChannels(settings.channels === 'stereo' ? 2 : 1)
-    .audioFrequency(settings.sampleRate ?? 48000)
-
-  const bitrateStr = String(settings.bitrate ?? '192').replace(/k$/i, '')
-  if (settings.format === 'mp3') cmd.audioBitrate(bitrateStr + 'k')
-  if (settings.format === 'aac') cmd.audioBitrate(bitrateStr + 'k')
-
-  if (settings.trimSilence) {
-    cmd.audioFilters('silenceremove=start_periods=1:start_duration=0.1:start_threshold=-50dB:stop_periods=-1:stop_duration=1:stop_threshold=-50dB')
-  }
-
-  cmd
-    .output(outputPath)
-    .on('end', () => {
-      unlinkTemp(tempPath)
-      const recDate = new Date(session.startTime ?? Date.now())
-      const entry: RecordingEntry = {
-        date:      localDateStr(recDate),
-        startTime: recDate.toTimeString().slice(0, 5),
-        duration:  formatDuration(durationSec),
-        filename:  path.basename(outputPath),
-        path:      outputPath,
-        status:    'ok'
-      }
-      store.addHistory(entry)
-      session.win.webContents.send('recording-finished', entry)
-      const allSettings = store.getAll()
-      if (allSettings.notifyStop !== false) {
-        const nl = NOTIFY_LABELS[allSettings.language ?? 'no'] ?? NOTIFY_LABELS.no
-        notify('SundayRec', `${nl.done}: ${filename}`)
-      }
-      notifyIdle()
-    })
-    .on('error', (err) => {
-      unlinkTemp(tempPath)
-      const entry: RecordingEntry = {
-        date:      localDateStr(new Date()),
-        startTime: new Date(session.startTime ?? Date.now()).toTimeString().slice(0, 5),
-        duration:  '—',
-        filename:  '—',
-        status:    'error',
-        error:     err.message
-      }
-      store.addHistory(entry)
-      session.win.webContents.send('recording-error', { error: err.message })
-      tray.setRecording(false)
-      tray.setError(true)
-      const allSettings = store.getAll()
-      const nl = NOTIFY_LABELS[allSettings.language ?? 'no'] ?? NOTIFY_LABELS.no
-      notify(nl.err, err.message)
-      if (allSettings.emailOnError) mailer.sendError(allSettings, store.getSmtpPassword(), err.message)
-      notifyIdle()
-    })
-    .run()
-}
-
-export function recoverCrashedSession(): void {
-  const recovery = store.get('activeRecovery')
-  if (!recovery) return
-
-  store.set('activeRecovery', null)
-
-  if (!fs.existsSync(recovery.tempPath)) return
-
-  const stat = fs.statSync(recovery.tempPath)
-  if (stat.size < 10000) {
-    unlinkTemp(recovery.tempPath)
-    return
-  }
-
-  const s = store.getAll()
-  const fmt = s.format ?? 'mp3'
-  const folder = s.saveFolder ?? defaultFolder()
-  const dateStr = localDateStr(new Date())
-  let outputPath = path.join(folder, `recovered_${dateStr}.${fmt}`)
-  for (let suffix = 2; fs.existsSync(outputPath) && suffix < 10000; suffix++) {
-    outputPath = path.join(folder, `recovered_${dateStr}_${suffix}.${fmt}`)
-  }
-  if (fs.existsSync(outputPath)) {
-    outputPath = path.join(folder, `recovered_${dateStr}_${Date.now()}.${fmt}`)
-  }
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true })
-
-  const cmd = ffmpeg(recovery.tempPath)
-    .audioCodec(codecFor(fmt))
-    .audioChannels(s.channels === 'stereo' ? 2 : 1)
-    .audioFrequency(s.sampleRate ?? 48000)
-
-  if (fmt === 'mp3' || fmt === 'aac') {
-    const br = String(s.bitrate ?? '192').replace(/k$/i, '')
-    cmd.audioBitrate(br + 'k')
-  }
-
-  cmd
-    .output(outputPath)
-    .on('end', () => {
-      unlinkTemp(recovery.tempPath)
-      const durationSec = Math.round((Date.now() - recovery.startTime) / 1000)
-      const recDate = new Date(recovery.startTime)
-      store.addHistory({
-        date:      localDateStr(recDate),
-        startTime: recDate.toTimeString().slice(0, 5),
-        duration:  formatDuration(durationSec),
-        filename:  path.basename(outputPath),
-        path:      outputPath,
-        status:    'ok'
-      })
-      const lang = store.getAll().language ?? 'no'
-      const nl = NOTIFY_LABELS[lang] ?? NOTIFY_LABELS.no
-      notify('SundayRec', nl.recovered.replace('{file}', path.basename(outputPath)))
-    })
-    .on('error', () => unlinkTemp(recovery.tempPath))
-    .run()
-}
-
-function unlinkTemp(p: string): void {
+function unlinkSilent(p: string): void {
   fs.promises.unlink(p).catch(err => {
     const code = (err as NodeJS.ErrnoException).code
     if (code === 'ENOENT') return
     if (process.platform === 'win32' && (code === 'EPERM' || code === 'EACCES')) {
-      // File may be locked by antivirus scan — retry after a short delay
-      setTimeout(() => {
-        fs.promises.unlink(p).catch(() => {/* give up silently */})
-      }, 5000)
+      setTimeout(() => fs.promises.unlink(p).catch(() => {}), 5000)
       return
     }
-    console.error('Failed to delete temp file:', err)
+    console.error('[recorder] unlink failed:', err)
   })
-}
-
-function notify(title: string, body: string): void {
-  if (Notification.isSupported()) new Notification({ title, body }).show()
 }
 
 function defaultFolder(): string {
   return path.join(app.getPath('documents'), 'SundayRec')
 }
 
-export function isActive(): boolean {
-  return activeSession !== null && activeSession.confirmed
-}

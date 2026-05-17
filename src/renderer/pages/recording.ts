@@ -1,39 +1,56 @@
 /**
- * Recording session — overlay, MediaRecorder lifecycle, silence detection,
- * hourly split, scheduled stop countdown.
+ * Recording session UI — overlay, VU meter, silence detection, split timer.
+ *
+ * In the v4.1 architecture, recording is handled by ffmpeg in the main process.
+ * This module manages ONLY the UI state and the monitoring stream for VU display.
+ * Audio chunks are no longer sent via IPC.
+ *
+ * Start flow:
+ *   1. window.api.startRecordingNow(opts) → main spawns ffmpeg
+ *   2. showOverlay() → recording UI becomes visible
+ *   3. startMonitoring(opts) → opens a separate getUserMedia stream for VU only
+ *
+ * Stop flow:
+ *   1. window.api.stopRecordingNow() → main sends 'q' to ffmpeg
+ *   2. stopMonitoring() → closes monitoring stream
+ *   3. Main sends 'recording-finished' → renderer hides overlay, shows history
  */
 import { t } from '../i18n'
 import { settings } from '../state'
-import { startCapture, stopCapture, getAudioDevices, reconnectStream } from '../audio/capture'
-import type { CaptureSession } from '../audio/capture'
+import { startMonitorStream, stopMonitorStream, reconnectMonitorStream, getAudioDevices } from '../audio/capture'
+import type { MonitorSession } from '../audio/capture'
 import { makeVuState, tickVU, stopVuState } from '../audio/vu'
 import { fmtCountdown, flashMsg, isoDate } from '../helpers'
 import { stopVU as stopHomeVU } from './home-vu'
-import { stopMonitoring } from './audio-page'
+import { stopMonitoring as stopAudioPageMonitoring } from './audio-page'
 import { loadRecentHistory } from './home'
 import { showEditorPrompt } from './editor-page'
 import type { RecordingOpts } from '../../types'
 
-let activeSession: CaptureSession | null = null
+let monitorSession:    MonitorSession | null = null
 let silenceInterval:   ReturnType<typeof setInterval> | null = null
 let splitTimer:        ReturnType<typeof setTimeout>  | null = null
 let recTimerIval:      ReturnType<typeof setInterval> | null = null
 let signalCheckTimer:  ReturnType<typeof setTimeout>  | null = null
-let autoRestartOpts: RecordingOpts | null = null
+let autoRestartOpts:   RecordingOpts | null = null
 export let isRecording = false
 
-let scheduledStop:   Date | null = null
-let stopOverridden   = false
-let schedStopTimer:  ReturnType<typeof setTimeout>  | null = null
-let schedCntTimer:   ReturnType<typeof setInterval> | null = null
+let recStartTime = 0
+let recBytes     = 0
+
+let scheduledStop:  Date | null = null
+let stopOverridden  = false
+let schedStopTimer: ReturnType<typeof setTimeout>  | null = null
+let schedCntTimer:  ReturnType<typeof setInterval> | null = null
 
 const recVu = makeVuState()
+
+// ── Setup ────────────────────────────────────────────────────────────────────
 
 export function setupRecording(): void {
   document.getElementById('btn-start-recording')?.addEventListener('click', () => {
     if (isRecording) {
-      const protect = settings.protectRecording !== false
-      if (protect) {
+      if (settings.protectRecording !== false) {
         const m = document.getElementById('modal-confirm-stop'); if (m) m.style.display = 'flex'
       } else {
         doStopRecording()
@@ -76,24 +93,19 @@ export function setupRecording(): void {
 
   document.getElementById('btn-cancel-autostop')?.addEventListener('click', () => {
     stopOverridden = true; scheduledStop = null
-    if (schedStopTimer)  { clearTimeout(schedStopTimer);  schedStopTimer  = null }
-    if (schedCntTimer)   { clearInterval(schedCntTimer);  schedCntTimer   = null }
-    const s = document.getElementById('rec-autostop')
-    if (s) s.style.display = 'none'
+    if (schedStopTimer) { clearTimeout(schedStopTimer); schedStopTimer = null }
+    if (schedCntTimer)  { clearInterval(schedCntTimer);  schedCntTimer = null }
+    const s = document.getElementById('rec-autostop'); if (s) s.style.display = 'none'
   })
 
-  // IPC from main / scheduler — store cleanup fns so listeners don't stack on hot reload
   const ipcCleanups = [
     window.api.on('schedule-start-recording', (opts) => startRecordingWithOpts(opts as RecordingOpts)),
     window.api.on('schedule-stop-recording',  () => { if (!stopOverridden) doStopRecording() }),
-    window.api.on('stop-media-recorder',      async () => { await stopMediaRecorder(); hideOverlay() }),
     window.api.on('recording-finished', (entry) => {
       hideOverlay()
       loadRecentHistory()
-      const recordingEntry = entry as { path?: string } | undefined
-      if (recordingEntry?.path && settings.askOpenEditor !== false) {
-        showEditorPrompt(recordingEntry.path)
-      }
+      const rec = entry as { path?: string } | undefined
+      if (rec?.path && settings.askOpenEditor !== false) showEditorPrompt(rec.path)
       if (autoRestartOpts) {
         const opts = autoRestartOpts; autoRestartOpts = null
         setTimeout(() => startRecordingWithOpts(opts), 1000)
@@ -103,11 +115,19 @@ export function setupRecording(): void {
       hideOverlay()
       loadRecentHistory()
     }),
-    window.api.on('tray-start-recording', () => openManualModal()),
-    window.api.on('tray-stop-recording',  () => doStopRecording()),
+    window.api.on('recording-progress', (data) => {
+      const d = data as { bytes?: number } | undefined
+      if (d?.bytes !== undefined) recBytes = d.bytes
+    }),
+    window.api.on('recording-reconnecting', () => showReconnectBanner()),
+    window.api.on('recording-reconnected',  () => hideReconnectBanner()),
+    window.api.on('tray-start-recording',   () => openManualModal()),
+    window.api.on('tray-stop-recording',    () => doStopRecording()),
   ]
   window.addEventListener('beforeunload', () => ipcCleanups.forEach(fn => fn?.()))
 }
+
+// ── Manual recording modal ───────────────────────────────────────────────────
 
 async function openManualModal(): Promise<void> {
   const modal = document.getElementById('modal-manual')
@@ -132,32 +152,34 @@ async function openManualModal(): Promise<void> {
 }
 
 async function handleManualStart(): Promise<void> {
-  const btn = document.getElementById('btn-manual-start') as HTMLButtonElement | null
+  const btn    = document.getElementById('btn-manual-start') as HTMLButtonElement | null
   if (btn) btn.disabled = true
 
-  const devSel  = document.getElementById('manual-device')  as HTMLSelectElement | null
-  const nameEl  = document.getElementById('manual-filename') as HTMLInputElement  | null
+  const devSel   = document.getElementById('manual-device')  as HTMLSelectElement | null
+  const nameEl   = document.getElementById('manual-filename') as HTMLInputElement  | null
   const deviceId = devSel?.value ?? settings.deviceId ?? null
-
-  // Look up per-device channel settings
   const devChannels = deviceId ? (settings.deviceChannels?.[deviceId] ?? null) : null
+
+  // Look up deviceName from the select's selected option text
+  const deviceName = devSel?.options[devSel.selectedIndex]?.textContent ?? settings.deviceName ?? null
 
   const opts: RecordingOpts = {
     ...settings,
     deviceId,
-    customName:    nameEl?.value.trim() ?? '',
-    channelL:      devChannels?.channelL ?? 0,
-    channelR:      devChannels?.channelR ?? 1,
-    maxMinutes:    settings.manualMaxMinutes || undefined
+    deviceName: deviceName ?? undefined,
+    customName:  nameEl?.value.trim() ?? '',
+    channelL:    devChannels?.channelL ?? 0,
+    channelR:    devChannels?.channelR ?? 1,
+    maxMinutes:  settings.manualMaxMinutes || undefined
   }
   const mm = document.getElementById('modal-manual'); if (mm) mm.style.display = 'none'
 
   const res = await window.api.startRecordingNow(opts)
   if (res?.ok) {
     showOverlay(opts)
-    try { await startMediaRecorder(opts) }
+    try { await startMonitoring(opts) }
     catch (err) {
-      await stopMediaRecorder()
+      await stopMonitoring()
       window.api.notifyError({ error: translateAudioError(err as Error) })
       await window.api.stopRecordingNow()
       hideOverlay()
@@ -176,37 +198,35 @@ export async function startRecordingWithOpts(opts: RecordingOpts): Promise<void>
   const res = await window.api.startRecordingNow(opts)
   if (!res?.ok) return
   showOverlay(opts)
-  try { await startMediaRecorder(opts) }
+  try { await startMonitoring(opts) }
   catch (err) {
     autoRestartOpts = null
-    await stopMediaRecorder()
+    await stopMonitoring()
     window.api.notifyError({ error: translateAudioError(err as Error) })
     await window.api.stopRecordingNow()
     hideOverlay()
   }
 }
 
+// ── Audio error translation ──────────────────────────────────────────────────
+
 function translateAudioError(err: Error): string {
   switch (err.name) {
-    case 'NotAllowedError':
-      return t('recording.errorPermission', 'Mikrofontilgang nektet — sjekk systeminnstillingene')
-    case 'NotFoundError':
-      return t('recording.errorDeviceNotFound', 'Lydenheten ble ikke funnet — sjekk USB-tilkoblingen')
-    case 'OverconstrainedError':
-      return t('recording.errorOverconstrained', 'Lydenheten støtter ikke valgte innstillinger')
-    case 'NotReadableError':
-      return t('recording.errorNotReadable', 'Lydenheten er i bruk av et annet program')
-    default:
-      return err.message
+    case 'NotAllowedError':      return t('recording.errorPermission',    'Mikrofontilgang nektet — sjekk systeminnstillingene')
+    case 'NotFoundError':        return t('recording.errorDeviceNotFound', 'Lydenheten ble ikke funnet — sjekk USB-tilkoblingen')
+    case 'OverconstrainedError': return t('recording.errorOverconstrained','Lydenheten støtter ikke valgte innstillinger')
+    case 'NotReadableError':     return t('recording.errorNotReadable',    'Lydenheten er i bruk av et annet program')
+    default:                     return err.message
   }
 }
 
-async function startMediaRecorder(opts: RecordingOpts): Promise<void> {
-  stopHomeVU()
-  stopMonitoring()
+// ── Monitoring stream (VU only) ──────────────────────────────────────────────
 
-  // Resolve per-device channels if not already set in opts
-  const deviceId  = opts.deviceId ?? settings.deviceId ?? null
+async function startMonitoring(opts: RecordingOpts): Promise<void> {
+  stopHomeVU()
+  stopAudioPageMonitoring()
+
+  const deviceId    = opts.deviceId ?? settings.deviceId ?? null
   const devChannels = deviceId ? (settings.deviceChannels?.[deviceId] ?? null) : null
   const resolvedOpts: RecordingOpts = {
     ...opts,
@@ -214,12 +234,14 @@ async function startMediaRecorder(opts: RecordingOpts): Promise<void> {
     channelR: opts.channelR ?? devChannels?.channelR ?? 1
   }
 
-  activeSession = await startCapture(resolvedOpts)
+  monitorSession = await startMonitorStream(resolvedOpts)
+  recStartTime   = Date.now()
+  recBytes       = 0
 
-  // Detect USB disconnect mid-recording — retry for 10 seconds before giving up
-  attachDisconnectHandler(activeSession, opts)
+  // Attach disconnect handler — for monitoring stream reconnect (VU display)
+  attachMonitorDisconnectHandler(monitorSession, resolvedOpts)
 
-  // Connect recording VU
+  // VU meter
   const vuL   = document.getElementById('rec-vu-l')
   const vuPkL = document.getElementById('rec-vu-peak-l')
   const vuDbL = document.getElementById('rec-vu-db-l')
@@ -230,8 +252,8 @@ async function startMediaRecorder(opts: RecordingOpts): Promise<void> {
   const cR    = document.getElementById('rec-vu-clip-r')
 
   Object.assign(recVu, {
-    analyserL: activeSession.vuAnalyserL,
-    analyserR: activeSession.vuAnalyserR
+    analyserL: monitorSession.vuAnalyserL,
+    analyserR: monitorSession.vuAnalyserR
   })
 
   tickVU(recVu, vuL, vuPkL, vuDbL, vuR, vuPkR, vuDbR, (dbL, dbR) => {
@@ -240,14 +262,13 @@ async function startMediaRecorder(opts: RecordingOpts): Promise<void> {
     if (cR && recVu.smR > -0.5) cR.classList.add('clip')
   })
 
-  // Silence detection — float RMS against configurable dB threshold
-  if (opts.stopOnSilence && activeSession.audioCtx) {
-    const silenceAn = activeSession.audioCtx.createAnalyser()
-    silenceAn.fftSize = 2048
-    activeSession.vuAnalyserL.connect(silenceAn)
-    const threshDb  = opts.silenceThreshold ?? -50
-    const timeoutMs = (opts.silenceTimeoutMinutes ?? 5) * 60000
-    let silenceStart: number | null = null
+  // Silence detection — operates on monitoring stream
+  if (opts.stopOnSilence) {
+    const silenceAn   = monitorSession.audioCtx.createAnalyser(); silenceAn.fftSize = 2048
+    monitorSession.vuAnalyserL.connect(silenceAn)
+    const threshDb    = opts.silenceThreshold ?? -50
+    const timeoutMs   = (opts.silenceTimeoutMinutes ?? 5) * 60000
+    let   silenceStart: number | null = null
     silenceInterval = setInterval(() => {
       if (!isRecording) { clearInterval(silenceInterval!); silenceInterval = null; return }
       const buf = new Float32Array(silenceAn.fftSize)
@@ -264,7 +285,7 @@ async function startMediaRecorder(opts: RecordingOpts): Promise<void> {
     }, 5000)
   }
 
-  // Interval split — triggers every N minutes from recording start
+  // Interval split — stop and auto-restart after N minutes
   if (opts.splitMinutes && opts.splitMinutes > 0) {
     splitTimer = setTimeout(() => {
       const ts = new Date().toTimeString().slice(0, 5).replace(':', '')
@@ -274,11 +295,8 @@ async function startMediaRecorder(opts: RecordingOpts): Promise<void> {
     }, opts.splitMinutes * 60000)
   }
 
-  window.api.notifyStarted({ name: opts.customName ?? opts.overrideName ?? t('recording.defaultName', 'Opptak') })
-  window.api.confirmStart({ name: opts.customName ?? t('recording.defaultName', 'Opptak'), startTime: activeSession.recStartTime })
-
-  // Signal check — 15 s after start: if average frequency energy is near zero, the input is likely silent/off
-  const analyserRef = activeSession.vuAnalyserL
+  // Signal check — warn if input is near-silent 15 s into recording
+  const analyserRef = monitorSession.vuAnalyserL
   signalCheckTimer = setTimeout(() => {
     signalCheckTimer = null
     if (!isRecording || !analyserRef) return
@@ -288,85 +306,62 @@ async function startMediaRecorder(opts: RecordingOpts): Promise<void> {
     if (avg < 3) window.api.notifyWeakSignal()
   }, 15000)
 
-  // Timer display
+  // Elapsed timer + size display
   recTimerIval = setInterval(() => {
-    if (!activeSession) return
-    const elapsed = Math.floor((Date.now() - activeSession.recStartTime) / 1000)
+    if (!isRecording) return
+    const elapsed = Math.floor((Date.now() - recStartTime) / 1000)
     const h = Math.floor(elapsed / 3600)
     const m = Math.floor((elapsed % 3600) / 60)
     const s = elapsed % 60
     const timerEl = document.getElementById('rec-timer')
     if (timerEl) timerEl.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
     const sizeEl = document.getElementById('rec-size')
-    if (sizeEl && activeSession) sizeEl.textContent = (activeSession.recBytes / 1e6).toFixed(1) + ' MB'
+    if (sizeEl) sizeEl.textContent = (recBytes / 1e6).toFixed(1) + ' MB'
   }, 1000)
 }
 
-async function stopMediaRecorder(): Promise<void> {
-  try {
-    stopVuState(recVu)
-  } finally {
-    if (silenceInterval)  { clearInterval(silenceInterval);  silenceInterval  = null }
-    if (splitTimer)       { clearTimeout(splitTimer);        splitTimer       = null }
-    if (recTimerIval)     { clearInterval(recTimerIval);     recTimerIval     = null }
-    if (signalCheckTimer) { clearTimeout(signalCheckTimer);  signalCheckTimer = null }
-  }
+async function stopMonitoring(): Promise<void> {
+  stopVuState(recVu)
+  if (silenceInterval)  { clearInterval(silenceInterval);  silenceInterval  = null }
+  if (splitTimer)       { clearTimeout(splitTimer);        splitTimer       = null }
+  if (recTimerIval)     { clearInterval(recTimerIval);     recTimerIval     = null }
+  if (signalCheckTimer) { clearTimeout(signalCheckTimer);  signalCheckTimer = null }
 
-  if (!activeSession) return
-  const session = activeSession
-  activeSession = null
-  window.api.chunksDone()
-  window.api.notifyStopped({})
-  await stopCapture(session)
+  if (!monitorSession) return
+  const s = monitorSession; monitorSession = null
+  await stopMonitorStream(s)
 }
 
 async function doStopRecording(): Promise<void> {
-  await stopMediaRecorder()
+  // Tell main to stop ffmpeg first, then close monitoring stream
+  window.api.stopRecordingNow()
+  await stopMonitoring()
   hideOverlay()
 }
 
-function attachDisconnectHandler(session: CaptureSession, opts: RecordingOpts): void {
-  if (!session.stream) return
+// ── Monitoring stream reconnect (for VU continuity) ─────────────────────────
+
+function attachMonitorDisconnectHandler(session: MonitorSession, opts: RecordingOpts): void {
   session.stream.getAudioTracks().forEach(track => {
-    track.onended = () => { if (isRecording) handleDisconnect(session, opts) }
+    track.onended = () => {
+      if (!isRecording || !monitorSession || monitorSession !== session) return
+      tryReconnectMonitor(session, opts)
+    }
   })
 }
 
-async function handleDisconnect(session: CaptureSession, opts: RecordingOpts): Promise<void> {
-  if (!isRecording) return
-  showReconnectBanner()
-  let reconnected = false
-  // 30 seconds — covers Windows driver reload + USB hub re-enumeration
-  for (let remaining = 30; remaining > 0 && isRecording; remaining--) {
-    updateReconnectBanner(remaining)
-    if (await reconnectStream(session)) {
-      reconnected = true
-      attachDisconnectHandler(session, opts)
-      break
-    }
+async function tryReconnectMonitor(session: MonitorSession, opts: RecordingOpts): Promise<void> {
+  // Try for 30 s to reconnect the monitoring stream (main handles actual recording reconnect)
+  for (let i = 0; i < 30 && isRecording; i++) {
     await new Promise<void>(r => setTimeout(r, 1000))
+    if (await reconnectMonitorStream(session)) {
+      attachMonitorDisconnectHandler(session, opts)
+      return
+    }
   }
-  hideReconnectBanner()
-  if (!reconnected && isRecording) {
-    window.api.notifyError({ error: t('recording.disconnected', 'Lydkilden ble koblet fra under opptak') })
-    doStopRecording()
-  }
 }
 
-function showReconnectBanner(): void {
-  const el = document.getElementById('rec-reconnect')
-  if (el) el.style.display = 'flex'
-}
-
-function hideReconnectBanner(): void {
-  const el = document.getElementById('rec-reconnect')
-  if (el) el.style.display = 'none'
-}
-
-function updateReconnectBanner(secsLeft: number): void {
-  const el = document.getElementById('rec-reconnect-countdown')
-  if (el) el.textContent = String(secsLeft)
-}
+// ── Overlay / UI state ───────────────────────────────────────────────────────
 
 function showOverlay(opts: RecordingOpts): void {
   isRecording = true
@@ -379,11 +374,11 @@ function showOverlay(opts: RecordingOpts): void {
   if (lbl) lbl.textContent = t('status.recording', 'Tar opp')
   document.getElementById('btn-start-recording')?.classList.add('recording')
 
-  scheduledStop    = opts.scheduledStopTime ? new Date(opts.scheduledStopTime) : null
-  stopOverridden   = false
+  scheduledStop  = opts.scheduledStopTime ? new Date(opts.scheduledStopTime) : null
+  stopOverridden = false
   updateScheduledStopUI()
 
-  // Device name
+  // Device name display
   const deviceEl = document.getElementById('rec-device-name')
   if (deviceEl) {
     deviceEl.textContent = opts.deviceName ?? ''
@@ -395,7 +390,7 @@ function showOverlay(opts: RecordingOpts): void {
 
   // Save path hint
   const pathEl = document.getElementById('rec-savepath')
-  if (pathEl && opts) {
+  if (pathEl) {
     const folder = opts.saveFolder ?? settings.saveFolder ?? ''
     const date   = isoDate(new Date())
     const ext    = opts.format ?? 'mp3'
@@ -418,18 +413,27 @@ function hideOverlay(): void {
   window.__isRecording = false
   const overlay = document.getElementById('recording-overlay')
   if (overlay) overlay.style.display = 'none'
-  scheduledStop    = null
-  stopOverridden   = false
+  scheduledStop  = null
+  stopOverridden = false
   if (schedStopTimer) { clearTimeout(schedStopTimer);  schedStopTimer = null }
   if (schedCntTimer)  { clearInterval(schedCntTimer);  schedCntTimer  = null }
   const autostopEl = document.getElementById('rec-autostop')
   if (autostopEl) autostopEl.style.display = 'none'
   document.getElementById('btn-start-recording')?.classList.remove('recording')
-
   const dot = document.getElementById('status-dot')
   const lbl = document.getElementById('status-label')
   if (dot) dot.className = 'status-dot'
   if (lbl) lbl.textContent = t('status.ready', 'Alt er klart')
+}
+
+function showReconnectBanner(): void {
+  const el = document.getElementById('rec-reconnect')
+  if (el) el.style.display = 'flex'
+}
+
+function hideReconnectBanner(): void {
+  const el = document.getElementById('rec-reconnect')
+  if (el) el.style.display = 'none'
 }
 
 function updateScheduledStopUI(): void {
@@ -440,7 +444,6 @@ function updateScheduledStopUI(): void {
   updateScheduledStopCountdown()
   if (schedCntTimer) clearInterval(schedCntTimer)
   schedCntTimer = setInterval(updateScheduledStopCountdown, 1000)
-
   if (schedStopTimer) clearTimeout(schedStopTimer)
   const ms = scheduledStop.getTime() - Date.now()
   if (ms > 0) schedStopTimer = setTimeout(() => { if (isRecording) doStopRecording() }, ms)

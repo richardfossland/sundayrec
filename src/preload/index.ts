@@ -3,9 +3,11 @@ import { contextBridge, ipcRenderer } from 'electron'
 const ALLOWED_CHANNELS = [
   'schedule-start-recording',
   'schedule-stop-recording',
-  'stop-media-recorder',
   'recording-finished',
   'recording-error',
+  'recording-progress',
+  'recording-reconnecting',
+  'recording-reconnected',
   'tray-start-recording',
   'tray-stop-recording',
   'update-available',
@@ -63,14 +65,8 @@ contextBridge.exposeInMainWorld('api', {
   fixMacSleep:          ()   => ipcRenderer.invoke('fix-mac-sleep'),
   fixWinWakeTimers:     ()   => ipcRenderer.invoke('fix-win-wake-timers'),
 
-  sendAudioChunk: (buf: ArrayBuffer) => ipcRenderer.send('audio-chunk', buf),
-  confirmStart:   (data: unknown)    => ipcRenderer.send('recording-confirmed-start', data),
-  chunksDone:     ()                 => ipcRenderer.send('recording-chunks-done'),
-
-  notifyStarted:      (data: unknown) => ipcRenderer.send('recording-started', data),
-  notifyStopped:      (entry: unknown) => ipcRenderer.send('recording-stopped', entry),
-  notifyError:        (data: unknown) => ipcRenderer.send('recording-error', data),
-  notifyWeakSignal:   () => ipcRenderer.send('weak-signal'),
+  notifyError:      (data: unknown) => ipcRenderer.send('recording-error', data),
+  notifyWeakSignal: () => ipcRenderer.send('weak-signal'),
 
   on: (channel: string, fn: (...args: unknown[]) => void) => {
     if (!ALLOWED_CHANNELS.includes(channel as AllowedChannel)) return

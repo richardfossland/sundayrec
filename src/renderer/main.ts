@@ -47,11 +47,6 @@ declare global {
       getSleepConfig:       () => Promise<unknown>
       fixMacSleep:          () => Promise<{ ok: boolean; message?: string }>
       fixWinWakeTimers:     () => Promise<{ ok: boolean; message?: string }>
-      sendAudioChunk:      (buf: ArrayBuffer) => void
-      confirmStart:        (data: unknown) => void
-      chunksDone:          () => void
-      notifyStarted:       (data: unknown) => void
-      notifyStopped:       (entry: unknown) => void
       notifyError:         (data: unknown) => void
       notifyWeakSignal:    () => void
       on:                  (channel: string, fn: (...args: unknown[]) => void) => (() => void) | undefined

@@ -131,7 +131,6 @@ app.whenReady().then(async () => {
 
   createWindow()
   tray.create(mainWindow)
-  recorder.init()
   recorder.recoverCrashedSession()
   scheduler.init(mainWindow)
   updater.init(mainWindow)
@@ -304,7 +303,7 @@ function setupIPC(): void {
     return { freeBytes: null }
   })
 
-  ipcMain.handle('start-recording-now', (_, opts) => {
+  ipcMain.handle('start-recording-now', async (_, opts) => {
     const settings = store.getAll()
     return recorder.startSession({ ...settings, ...opts }, mainWindow)
   })

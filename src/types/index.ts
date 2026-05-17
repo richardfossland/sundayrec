@@ -41,9 +41,10 @@ export interface RecordingEntry {
 }
 
 export interface ActiveRecovery {
-  tempPath: string
-  startTime: number
-  sessionId: string
+  outputPath?: string   // v4.1+: path to the in-progress output file
+  tempPath?:   string   // legacy: pre-v4.1 temp WebM path (kept for backward compat)
+  startTime:   number
+  sessionId:   string
 }
 
 export interface Settings {

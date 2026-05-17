@@ -1,28 +1,51 @@
 /**
- * Audio capture pipeline.
+ * Audio monitoring pipeline (renderer-side).
  *
- * Device robustness: getUserMedia uses exact→ideal→default fallback chain so
- * scheduled recordings survive Windows device-ID reassignment after reboot.
+ * In the v4.1 architecture, recording is handled entirely by ffmpeg in the main
+ * process (native-recorder.ts). This module is ONLY responsible for:
+ *   • Enumerating audio devices for the settings UI
+ *   • Opening a lightweight monitoring stream for the VU meter display
  *
- * PCM fix: for lossless formats (WAV/FLAC) we request audio/webm;codecs=pcm
- * from MediaRecorder to avoid Opus→WAV transcoding artifacts. Falls back to
- * audio/webm;codecs=opus for lossy formats.
+ * A renderer crash no longer affects the recording.
  */
 
 import type { RecordingOpts } from '../../types'
 
-export interface CaptureSession {
-  stream:        MediaStream
-  audioCtx:      AudioContext
-  mediaRecorder: MediaRecorder
-  recStartTime:  number
-  recBytes:      number
-  vuAnalyserL:   AnalyserNode
-  vuAnalyserR:   AnalyserNode
-  inputRouter:   AudioNode   // exposed for USB hot-swap
-  gain:          GainNode    // exposed for USB hot-swap
-  opts:          RecordingOpts
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export interface MonitorSession {
+  stream:      MediaStream
+  audioCtx:    AudioContext
+  vuAnalyserL: AnalyserNode
+  vuAnalyserR: AnalyserNode
+  inputRouter: AudioNode
+  opts:        RecordingOpts
 }
+
+// ── Device helpers ───────────────────────────────────────────────────────────
+
+export async function getAudioDevices(): Promise<MediaDeviceInfo[]> {
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+    s.getTracks().forEach(t => t.stop())
+    return (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput')
+  } catch { return [] }
+}
+
+export async function detectDeviceChannels(deviceId: string | null | undefined): Promise<number> {
+  if (!deviceId || deviceId === 'default' || deviceId === '') return 2
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({
+      audio: { deviceId: { ideal: deviceId }, channelCount: { ideal: 32 } },
+      video: false
+    })
+    const ch = s.getAudioTracks()[0]?.getSettings().channelCount ?? 2
+    s.getTracks().forEach(t => t.stop())
+    return Math.max(2, ch)
+  } catch { return 2 }
+}
+
+// ── Channel routing helper (also used by audio-page.ts) ─────────────────────
 
 export function buildInputRouter(
   ctx: AudioContext,
@@ -42,12 +65,8 @@ export function buildInputRouter(
   return merger
 }
 
-/**
- * getUserMedia with fallback chain:
- *   1. exact deviceId        — fastest, fails if ID changed (Windows reboot)
- *   2. ideal deviceId        — OS picks best match, allows reconnect after ID change
- *   3. any available device  — last resort, warns in console
- */
+// ── getUserMedia with fallback chain ─────────────────────────────────────────
+
 async function getUserMediaWithFallback(
   deviceId: string | null,
   baseConstraints: MediaTrackConstraints
@@ -55,190 +74,91 @@ async function getUserMediaWithFallback(
   if (deviceId) {
     try {
       return await navigator.mediaDevices.getUserMedia({
-        audio: { ...baseConstraints, deviceId: { exact: deviceId } },
-        video: false
+        audio: { ...baseConstraints, deviceId: { exact: deviceId } }, video: false
       })
-    } catch { /* fall through */ }
-
+    } catch {}
     try {
       return await navigator.mediaDevices.getUserMedia({
-        audio: { ...baseConstraints, deviceId: { ideal: deviceId } },
-        video: false
+        audio: { ...baseConstraints, deviceId: { ideal: deviceId } }, video: false
       })
-    } catch { /* fall through */ }
-
-    console.warn('[capture] Stored deviceId not available, falling back to default device')
+    } catch {}
+    console.warn('[monitor] Stored deviceId not available, falling back to default device')
   }
-
-  return await navigator.mediaDevices.getUserMedia({
-    audio: baseConstraints,
-    video: false
-  })
+  return await navigator.mediaDevices.getUserMedia({ audio: baseConstraints, video: false })
 }
 
-export async function detectDeviceChannels(deviceId: string | null | undefined): Promise<number> {
-  if (!deviceId || deviceId === 'default' || deviceId === '') return 2
-  try {
-    const s = await navigator.mediaDevices.getUserMedia({
-      audio: { deviceId: { ideal: deviceId }, channelCount: { ideal: 32 } },
-      video: false
-    })
-    const ch = s.getAudioTracks()[0]?.getSettings().channelCount ?? 2
-    s.getTracks().forEach(t => t.stop())
-    return Math.max(2, ch)
-  } catch { return 2 }
-}
+// ── Start / stop monitoring ──────────────────────────────────────────────────
 
-export async function getAudioDevices(): Promise<MediaDeviceInfo[]> {
-  try {
-    const s = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-    s.getTracks().forEach(t => t.stop())
-    return (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput')
-  } catch { return [] }
-}
-
-function chooseMime(format: string): string {
-  const isLossless = format === 'wav' || format === 'flac'
-  if (isLossless && MediaRecorder.isTypeSupported('audio/webm;codecs=pcm')) {
-    return 'audio/webm;codecs=pcm'
-  }
-  const candidates = [
-    'audio/webm;codecs=opus',
-    'audio/ogg;codecs=opus',
-    'audio/webm',
-  ]
-  return candidates.find(m => MediaRecorder.isTypeSupported(m)) ?? 'audio/webm'
-}
-
-export async function startCapture(opts: RecordingOpts): Promise<CaptureSession> {
+export async function startMonitorStream(opts: RecordingOpts): Promise<MonitorSession> {
   const realDeviceId = opts.deviceId && opts.deviceId !== 'default' && opts.deviceId !== ''
     ? opts.deviceId : null
 
-  const chL  = opts.channelL ?? 0
-  const chR  = opts.channelR ?? 1
-  const isMonoChannel = opts.channels === 'monoL' || opts.channels === 'monoR'
+  const chL = opts.channelL ?? 0
+  const chR = opts.channelR ?? 1
   const neededCh = Math.max(
-    opts.channels === 'stereo' || isMonoChannel ? 2 : 1,
+    opts.channels === 'stereo' || opts.channels === 'monoL' || opts.channels === 'monoR' ? 2 : 1,
     chL + 1, chR + 1
   )
 
-  const baseConstraints: MediaTrackConstraints = {
+  const constraints: MediaTrackConstraints = {
     channelCount:     { ideal: neededCh },
     echoCancellation: false,
     noiseSuppression: false,
     autoGainControl:  false
   }
 
-  const stream = await getUserMediaWithFallback(realDeviceId, baseConstraints)
+  const stream = await getUserMediaWithFallback(realDeviceId, constraints)
 
-  // Request the user's preferred sample rate for best fidelity.
-  // latencyHint 'playback' prioritises buffer stability over low latency —
-  // critical for hour-long church recordings.
   const requestedRate = opts.sampleRate ?? 48000
-  const audioCtx = new AudioContext({
-    latencyHint: 'playback',
-    sampleRate: requestedRate
-  })
+  const audioCtx = new AudioContext({ latencyHint: 'playback', sampleRate: requestedRate })
   if (audioCtx.sampleRate !== requestedRate) {
-    console.warn(`[capture] Requested ${requestedRate}Hz but audio device delivered ${audioCtx.sampleRate}Hz — Windows driver may not support the requested rate`)
-  }
-  const src      = audioCtx.createMediaStreamSource(stream)
-  const inputNode = buildInputRouter(audioCtx, src, stream, chL, chR)
-
-  // Input gain
-  const gain = audioCtx.createGain()
-  gain.gain.value = (opts.inputVolume ?? 80) / 100
-
-  // Compressor (bypass when disabled)
-  const comp = audioCtx.createDynamicsCompressor()
-  if (opts.compEnabled) {
-    comp.threshold.value = opts.compThreshold ?? -24
-    comp.ratio.value     = opts.compRatio     ?? 4
-    comp.knee.value      = 6
-    comp.attack.value    = (opts.compAttack  ?? 10)  / 1000
-    comp.release.value   = (opts.compRelease ?? 200) / 1000
-  } else {
-    comp.threshold.value = 0; comp.ratio.value = 1
+    console.warn(`[monitor] Requested ${requestedRate}Hz but got ${audioCtx.sampleRate}Hz`)
   }
 
-  // Limiter (always present — protects recordings from clipping)
-  const limiter = audioCtx.createDynamicsCompressor()
-  if (opts.limiterEnabled !== false) {
-    limiter.threshold.value = opts.limiterCeiling ?? -1
-    limiter.ratio.value     = 20
-    limiter.knee.value      = 0
-    limiter.attack.value    = 0.001
-    limiter.release.value   = 0.1
-  } else {
-    limiter.threshold.value = 0; limiter.ratio.value = 1
-  }
+  const src        = audioCtx.createMediaStreamSource(stream)
+  const inputRouter = buildInputRouter(audioCtx, src, stream, chL, chR)
 
-  const dest = audioCtx.createMediaStreamDestination()
-  inputNode.connect(gain).connect(comp).connect(limiter)
-
-  if (isMonoChannel) {
-    const splitter = audioCtx.createChannelSplitter(2)
-    limiter.connect(splitter)
-    splitter.connect(dest, opts.channels === 'monoL' ? 0 : 1, 0)
-  } else {
-    limiter.connect(dest)
-  }
-
-  // VU tap after limiter — always 2ch
-  const vuSplitter = audioCtx.createChannelSplitter(2)
+  // VU analysers — tapped after input routing
+  const vuSplitter  = audioCtx.createChannelSplitter(2)
   const vuAnalyserL = audioCtx.createAnalyser(); vuAnalyserL.fftSize = 1024
   const vuAnalyserR = audioCtx.createAnalyser(); vuAnalyserR.fftSize = 1024
-  limiter.connect(vuSplitter)
+  inputRouter.connect(vuSplitter)
   vuSplitter.connect(vuAnalyserL, 0)
   vuSplitter.connect(vuAnalyserR, 1)
 
-  const mime         = chooseMime(opts.format ?? 'mp3')
-  const mediaRecorder = new MediaRecorder(dest.stream, { mimeType: mime })
-  const recStartTime  = Date.now()
-  let   recBytes      = 0
-
-  mediaRecorder.ondataavailable = (e) => {
-    if (e.data.size > 0) {
-      recBytes += e.data.size
-      e.data.arrayBuffer()
-        .then(buf => window.api.sendAudioChunk(buf))
-        .catch(err => console.error('audio chunk dropped:', err))
-    }
-  }
-
-  mediaRecorder.start(1000)
-
-  return { stream, audioCtx, mediaRecorder, recStartTime, recBytes, vuAnalyserL, vuAnalyserR, inputRouter: inputNode, gain, opts }
+  return { stream, audioCtx, vuAnalyserL, vuAnalyserR, inputRouter, opts }
 }
 
-export async function reconnectStream(session: CaptureSession): Promise<boolean> {
-  const { opts, audioCtx, inputRouter, gain } = session
-  const realDeviceId = opts.deviceId && opts.deviceId !== 'default' && opts.deviceId !== ''
-    ? opts.deviceId : null
+export async function stopMonitorStream(session: MonitorSession): Promise<void> {
+  session.stream.getTracks().forEach(t => t.stop())
+  await session.audioCtx.close().catch(() => {})
+}
+
+export async function reconnectMonitorStream(session: MonitorSession): Promise<boolean> {
+  const { opts, audioCtx, inputRouter } = session
+  const realDeviceId = opts.deviceId && opts.deviceId !== 'default' ? opts.deviceId : null
   const chL = opts.channelL ?? 0
   const chR = opts.channelR ?? 1
-  const isMonoChannel = opts.channels === 'monoL' || opts.channels === 'monoR'
   const neededCh = Math.max(
-    opts.channels === 'stereo' || isMonoChannel ? 2 : 1,
+    opts.channels === 'stereo' || opts.channels === 'monoL' || opts.channels === 'monoR' ? 2 : 1,
     chL + 1, chR + 1
   )
-  const baseConstraints: MediaTrackConstraints = {
-    channelCount: { ideal: neededCh },
-    echoCancellation: false, noiseSuppression: false, autoGainControl: false
-  }
   try {
-    // Use ideal (not exact) so reconnect survives Windows device-ID reassignment
     const newStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         ...(realDeviceId ? { deviceId: { ideal: realDeviceId } } : {}),
-        ...baseConstraints
+        channelCount: { ideal: neededCh },
+        echoCancellation: false, noiseSuppression: false, autoGainControl: false
       },
       video: false
     })
     const newSrc    = audioCtx.createMediaStreamSource(newStream)
     const newRouter = buildInputRouter(audioCtx, newSrc, newStream, chL, chR)
     inputRouter.disconnect()
-    newRouter.connect(gain)
+    const vuSplitter = audioCtx.createChannelSplitter(2)
+    newRouter.connect(vuSplitter)
+    vuSplitter.connect(session.vuAnalyserL, 0)
+    vuSplitter.connect(session.vuAnalyserR, 1)
     session.stream.getTracks().forEach(t => { t.onended = null; t.stop() })
     session.stream      = newStream
     session.inputRouter = newRouter
@@ -246,16 +166,4 @@ export async function reconnectStream(session: CaptureSession): Promise<boolean>
   } catch {
     return false
   }
-}
-
-export async function stopCapture(session: CaptureSession): Promise<void> {
-  if (session.mediaRecorder.state !== 'inactive') {
-    await new Promise<void>(resolve => {
-      const prev = session.mediaRecorder.onstop
-      session.mediaRecorder.onstop = (e) => { (prev as ((e: Event) => void) | null)?.(e); resolve() }
-      session.mediaRecorder.stop()
-    })
-  }
-  session.stream.getTracks().forEach(t => t.stop())
-  await session.audioCtx.close()
 }
