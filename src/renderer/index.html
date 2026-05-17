@@ -19,13 +19,13 @@
       <svg viewBox="0 0 20 20"><path d="M10 2L2 8v10h6v-6h4v6h6V8z"/></svg>
       <span data-i18n="nav.home">Hjem</span>
     </a></li>
-    <li><a href="#" class="nav-link" data-page="schedule">
-      <svg viewBox="0 0 20 20"><path d="M6 2v2H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-2V2h-2v2H8V2zm8 6H6v2h8zm0 4H6v2h8z"/></svg>
-      <span data-i18n="nav.schedule">Kalender</span>
-    </a></li>
     <li><a href="#" class="nav-link" data-page="audio">
       <svg viewBox="0 0 20 20"><path d="M10 2a3 3 0 00-3 3v5a3 3 0 006 0V5a3 3 0 00-3-3zm-5 8a5 5 0 0010 0h2a7 7 0 01-14 0zm5 6h4v2h-4z"/></svg>
       <span data-i18n="nav.audio">Lydkilde</span>
+    </a></li>
+    <li><a href="#" class="nav-link" data-page="schedule">
+      <svg viewBox="0 0 20 20"><path d="M6 2v2H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-2V2h-2v2H8V2zm8 6H6v2h8zm0 4H6v2h8z"/></svg>
+      <span data-i18n="nav.schedule">Tidsplan</span>
     </a></li>
     <li><a href="#" class="nav-link" data-page="files">
       <svg viewBox="0 0 20 20"><path d="M4 4a2 2 0 012-2h4l2 2h4a2 2 0 012 2v9a2 2 0 01-2 2H6a2 2 0 01-2-2z"/></svg>
@@ -90,7 +90,7 @@
       <div class="hero-text">
         <div class="hero-label" data-i18n="status.warn">KREVER HANDLING</div>
         <div class="hero-title" data-i18n="home.warnTitle">Lydmikseren er ikke tilkoblet</div>
-        <div class="hero-detail" data-i18n="home.warnDetail">Koble til mikseren via USB før søndag</div>
+        <div class="hero-detail" id="hero-warn-detail" data-i18n="home.warnDetail">Koble til mikseren via USB før søndag</div>
       </div>
       <button class="btn-fix" id="btn-how-to-fix" data-i18n="home.howToFix">Slik løser du det</button>
     </div>
@@ -220,71 +220,11 @@
   <section id="page-schedule" class="page">
 
     <div class="page-header">
-      <h1 data-i18n="nav.schedule">Kalender</h1>
-      <p class="subtitle" data-i18n="calendar.subtitle">Klikk på en dato for å legge til et opptak. Helligdager vises automatisk.</p>
+      <h1 data-i18n="nav.schedule">Tidsplan</h1>
+      <p class="subtitle" data-i18n="schedule.subtitle">Faste opptak som gjentas automatisk hver uke.</p>
     </div>
 
-    <!-- Calendar + right panel side by side -->
-    <div class="cal-layout">
-      <div class="card cal-card">
-        <div class="cal-month-nav">
-          <div class="cal-nav-left">
-            <button id="cal-prev">‹</button>
-            <button id="btn-today" class="btn-today" title="Gå til i dag" data-i18n="calendar.today">I dag</button>
-          </div>
-          <span id="cal-month-label" style="font-weight:700;font-size:15px"></span>
-          <div class="cal-nav-right">
-            <button id="btn-autofill" class="btn-autofill-icon" title="Legg til kirkehøytider automatisk">
-              <span data-i18n="calendar.autofillShort">Kirkehøytider</span> <span id="autofill-year"></span>
-            </button>
-            <button id="cal-next">›</button>
-          </div>
-        </div>
-        <div id="cal-weekdays" class="cal-weekdays"></div>
-        <div id="cal-grid" class="cal-grid"></div>
-        <div class="cal-legend">
-          <span class="leg-dot leg-weekly"></span><span data-i18n="calendar.legendWeekly">Ukentlig</span>&nbsp;&nbsp;
-          <span class="leg-dot leg-special"></span><span data-i18n="calendar.legendSpecial">Spesialopptak</span>&nbsp;&nbsp;
-          <span class="leg-dot leg-holiday"></span><span data-i18n="calendar.legendHoliday">Kirkehøytid</span>
-        </div>
-      </div>
-      <div class="cal-right">
-        <!-- Day detail panel — shown when a day is clicked -->
-        <div class="card cal-day-detail" id="cal-day-detail" style="display:none">
-          <div class="cal-day-detail-title" id="cal-day-detail-title">Mandag 2. juni</div>
-          <div class="cal-day-events" id="cal-day-events"></div>
-          <div class="form-row">
-            <label class="form-label" data-i18n="calendar.name">NAVN PÅ OPPTAK</label>
-            <input type="text" class="form-input" id="special-name" placeholder="Gudstjeneste" />
-          </div>
-          <div class="form-row two-col">
-            <div>
-              <label class="form-label" data-i18n="schedule.starts">STARTER</label>
-              <input type="time" class="form-input" id="special-start" value="11:00" />
-            </div>
-            <div>
-              <label class="form-label" data-i18n="schedule.stops">STOPPER</label>
-              <input type="time" class="form-input" id="special-stop" value="12:00" />
-            </div>
-          </div>
-          <input type="hidden" id="special-date" />
-          <button class="btn-primary mt" id="btn-add-special" data-i18n="calendar.addRecording">Legg til opptak</button>
-        </div>
-
-        <!-- Default hint when no day selected -->
-        <div class="cal-hint-card" id="cal-hint-card">
-          <span data-i18n="calendar.hintShort">Klikk på en dag for å legge til opptak</span>
-        </div>
-
-        <!-- Upcoming special recordings -->
-        <div class="card">
-          <div class="card-title" data-i18n="calendar.planned">Kommende spesialopptak</div>
-          <div id="planned-list"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Weekly recurring schedule -->
+    <!-- Weekly recurring schedule — shown first as most common use case -->
     <div class="card">
       <div class="card-title" data-i18n="schedule.title">Ukentlig tidsplan</div>
       <p class="card-desc" data-i18n="schedule.subtitle">Faste opptak som gjentas automatisk hver uke.</p>
@@ -437,6 +377,61 @@
       </div>
     </div>
 
+    <!-- Special recordings calendar — for non-recurring dates -->
+    <div class="cal-layout">
+      <div class="card cal-card">
+        <div class="cal-month-nav">
+          <div class="cal-nav-left">
+            <button id="cal-prev">‹</button>
+            <button id="btn-today" class="btn-today" title="Gå til i dag" data-i18n="calendar.today">I dag</button>
+          </div>
+          <span id="cal-month-label" style="font-weight:700;font-size:15px"></span>
+          <div class="cal-nav-right">
+            <button id="btn-autofill" class="btn-autofill-icon" title="Legg til kirkehøytider automatisk">
+              <span data-i18n="calendar.autofillShort">Kirkehøytider</span> <span id="autofill-year"></span>
+            </button>
+            <button id="cal-next">›</button>
+          </div>
+        </div>
+        <div id="cal-weekdays" class="cal-weekdays"></div>
+        <div id="cal-grid" class="cal-grid"></div>
+        <div class="cal-legend">
+          <span class="leg-dot leg-weekly"></span><span data-i18n="calendar.legendWeekly">Ukentlig</span>&nbsp;&nbsp;
+          <span class="leg-dot leg-special"></span><span data-i18n="calendar.legendSpecial">Spesialopptak</span>&nbsp;&nbsp;
+          <span class="leg-dot leg-holiday"></span><span data-i18n="calendar.legendHoliday">Kirkehøytid</span>
+        </div>
+      </div>
+      <div class="cal-right">
+        <div class="card cal-day-detail" id="cal-day-detail" style="display:none">
+          <div class="cal-day-detail-title" id="cal-day-detail-title">Mandag 2. juni</div>
+          <div class="cal-day-events" id="cal-day-events"></div>
+          <div class="form-row">
+            <label class="form-label" data-i18n="calendar.name">NAVN PÅ OPPTAK</label>
+            <input type="text" class="form-input" id="special-name" placeholder="Gudstjeneste" />
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label class="form-label" data-i18n="schedule.starts">STARTER</label>
+              <input type="time" class="form-input" id="special-start" value="11:00" />
+            </div>
+            <div>
+              <label class="form-label" data-i18n="schedule.stops">STOPPER</label>
+              <input type="time" class="form-input" id="special-stop" value="12:00" />
+            </div>
+          </div>
+          <input type="hidden" id="special-date" />
+          <button class="btn-primary mt" id="btn-add-special" data-i18n="calendar.addRecording">Legg til opptak</button>
+        </div>
+        <div class="cal-hint-card" id="cal-hint-card">
+          <span data-i18n="calendar.hintShort">Klikk på en dag for å legge til opptak</span>
+        </div>
+        <div class="card">
+          <div class="card-title" data-i18n="calendar.planned">Kommende spesialopptak</div>
+          <div id="planned-list"></div>
+        </div>
+      </div>
+    </div>
+
   </section>
 
   <!-- ══ LYDKILDE ═══════════════════════════════════════════════ -->
@@ -449,6 +444,9 @@
     <div class="card">
       <div class="card-title" data-i18n="audio.available">Tilgjengelige enheter</div>
       <div id="device-list"></div>
+
+      <!-- Windows ASIO note -->
+      <p class="form-hint" style="margin-top:12px;margin-bottom:0" data-i18n="audio.compatAsio">Windows: ASIO-modus er ikke tilgjengelig via nettleser-API. Velg WDM eller WASAPI i driverinnstillingene.</p>
 
       <!-- Audio test section -->
       <div class="audio-test-section">
@@ -564,7 +562,7 @@
     </div>
 
 
-    <div class="btn-row">
+    <div class="page-footer">
       <button class="btn-primary" id="btn-audio-save" data-i18n="audio.save">Lagre</button>
       <button class="btn-ghost" id="btn-audio-cancel" data-i18n="audio.cancel">Avbryt</button>
     </div>
@@ -635,7 +633,7 @@
         <label class="toggle"><input type="checkbox" id="opt-trim-silence" /><span class="toggle-track"></span></label>
       </div>
     </div>
-    <div class="btn-row">
+    <div class="page-footer">
       <button class="btn-primary" id="btn-files-save" data-i18n="files.save">Lagre</button>
       <button class="btn-ghost" id="btn-files-cancel" data-i18n="files.cancel">Avbryt</button>
     </div>
@@ -660,6 +658,13 @@
       </select>
       <div class="form-hint" data-i18n="general.langHint">Endringen trer i kraft etter at du trykker Lagre.</div>
     </div>
+    <div class="card">
+      <div class="card-title" data-i18n="general.profile">Kirkeprofil</div>
+      <p class="card-desc" style="margin-bottom:12px">Brukes i filnavn og e-postvarsler.</p>
+      <label class="form-label" data-i18n="general.church">MENIGHET / KIRKE</label>
+      <input type="text" class="form-input" id="church-name" data-i18n-placeholder="general.churchPlaceholder" placeholder="Alta Frikirke" />
+      <label class="form-label mt" data-i18n="general.responsible">ANSVARLIG PERSON</label>
+      <input type="text" class="form-input" id="responsible-person" data-i18n-placeholder="general.responsiblePlaceholder" placeholder="Navn" />
     </div>
     <div class="card">
       <div class="card-title" data-i18n="general.notifications">Varsler</div>
@@ -679,10 +684,6 @@
         <label class="toggle"><input type="checkbox" id="opt-email-error" /><span class="toggle-track"></span></label>
       </div>
       <div id="email-section" style="display:none">
-        <label class="form-label mt" data-i18n="general.church">MENIGHET / KIRKE</label>
-        <input type="text" class="form-input" id="church-name" data-i18n-placeholder="general.churchPlaceholder" />
-        <label class="form-label mt" data-i18n="general.responsible">ANSVARLIG PERSON</label>
-        <input type="text" class="form-input" id="responsible-person" data-i18n-placeholder="general.responsiblePlaceholder" />
         <label class="form-label mt" data-i18n="general.sendTo">SEND TIL</label>
         <input type="email" class="form-input" id="email-address" placeholder="navn@kirke.no" />
         <label class="form-label mt">SMTP SERVER</label>
@@ -748,7 +749,7 @@
         <button class="btn-primary" id="btn-restart-install" style="display:none">↺ Start på nytt og installer</button>
       </div>
     </div>
-    <div class="btn-row">
+    <div class="page-footer">
       <button class="btn-primary" id="btn-general-save" data-i18n="general.save">Lagre</button>
       <button class="btn-ghost" id="btn-general-cancel" data-i18n="general.cancel">Avbryt</button>
     </div>

@@ -259,6 +259,15 @@ body.platform-darwin #sidebar { padding-top: 28px; }
 .btn-sm { font-size: 12px; padding: 6px 12px; }
 .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
 
+/* ── Page footer (sticky Save/Cancel bar on settings pages) ─────── */
+.page-footer {
+  display: flex; gap: 10px; align-items: center;
+  margin-top: 24px; padding: 14px 20px;
+  background: var(--surface); border-top: 1px solid var(--border);
+  border-radius: var(--r);
+  position: sticky; bottom: 0;
+}
+
 /* ── Record button ─────────────────────────────────────────────── */
 .btn-record {
   display: flex; align-items: center; gap: 10px;
