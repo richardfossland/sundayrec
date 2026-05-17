@@ -2,12 +2,14 @@ import { t } from '../i18n'
 import { settings, patchSettings } from '../state'
 import { flashSaved, setVal, setRadio, updateSliderLabel } from '../helpers'
 import { getAudioDevices, detectDeviceChannels, buildInputRouter } from '../audio/capture'
+import { makeVuState, tickVU, stopVuState } from '../audio/vu'
 import type { DeviceChannels, ChannelMode } from '../../types'
 
 let monitorStream: MediaStream   | null = null
 let monitorCtx:    AudioContext  | null = null
 let monitorSrc:    MediaStreamAudioSourceNode | null = null
 let isMonitoring   = false
+let testVu = makeVuState()
 
 let detectedChannelCount = 2
 
@@ -20,6 +22,8 @@ export function setupAudioPage(): void {
     const lbl = document.getElementById('comp-ratio-val')
     if (el && lbl) lbl.textContent = el.value + ':1'
   })
+  document.getElementById('comp-attack')?.addEventListener('input',  () => updateSliderLabel('comp-attack',  'comp-attack-val',  ' ms'))
+  document.getElementById('comp-release')?.addEventListener('input', () => updateSliderLabel('comp-release', 'comp-release-val', ' ms'))
   document.getElementById('limiter-ceiling')?.addEventListener('input', () => updateSliderLabel('limiter-ceiling', 'limiter-ceiling-val', ' dB'))
   document.getElementById('opt-compressor')?.addEventListener('change', function (this: HTMLInputElement) {
     const cs = document.getElementById('comp-settings')
@@ -48,10 +52,14 @@ export function applyAudioSettingsToUI(): void {
   }
   setVal('comp-threshold', settings.compThreshold ?? -24)
   setVal('comp-ratio',     settings.compRatio     ?? 4)
+  setVal('comp-attack',    settings.compAttack    ?? 10)
+  setVal('comp-release',   settings.compRelease   ?? 200)
   updateSliderLabel('comp-threshold', 'comp-threshold-val', ' dB')
   const crEl  = document.getElementById('comp-ratio') as HTMLInputElement | null
   const crLbl = document.getElementById('comp-ratio-val')
   if (crEl && crLbl) crLbl.textContent = crEl.value + ':1'
+  updateSliderLabel('comp-attack',  'comp-attack-val',  ' ms')
+  updateSliderLabel('comp-release', 'comp-release-val', ' ms')
   const limEl = document.getElementById('opt-limiter') as HTMLInputElement | null
   if (limEl) limEl.checked = settings.limiterEnabled !== false
   setVal('limiter-ceiling', settings.limiterCeiling ?? -1)
@@ -82,6 +90,8 @@ async function saveAudioSettings(): Promise<void> {
     compEnabled:    !!(document.getElementById('opt-compressor') as HTMLInputElement | null)?.checked,
     compThreshold:  +((document.getElementById('comp-threshold')  as HTMLInputElement | null)?.value ?? -24),
     compRatio:      +((document.getElementById('comp-ratio')      as HTMLInputElement | null)?.value ?? 4),
+    compAttack:     +((document.getElementById('comp-attack')     as HTMLInputElement | null)?.value ?? 10),
+    compRelease:    +((document.getElementById('comp-release')    as HTMLInputElement | null)?.value ?? 200),
     limiterEnabled: !!(document.getElementById('opt-limiter')    as HTMLInputElement | null)?.checked,
     limiterCeiling: +((document.getElementById('limiter-ceiling') as HTMLInputElement | null)?.value ?? -1)
   }
@@ -178,6 +188,19 @@ async function startMonitoring(): Promise<void> {
     gain.gain.value = (settings.inputVolume ?? 80) / 100
     inputNode.connect(gain).connect(monitorCtx.destination)
 
+    // VU meters for audio test
+    const monAnalyser = monitorCtx.createAnalyser()
+    monAnalyser.fftSize = 2048
+    inputNode.connect(monAnalyser)
+    testVu = makeVuState()
+    Object.assign(testVu, { analyserL: monAnalyser, analyserR: monAnalyser })
+    tickVU(testVu,
+      document.getElementById('test-vu-l'), null, null,
+      document.getElementById('test-vu-r'), null, null
+    )
+    const vuSect = document.getElementById('test-vu-section')
+    if (vuSect) vuSect.style.display = 'block'
+
     isMonitoring = true
     const btn  = document.getElementById('btn-test-audio')
     if (btn) btn.innerHTML = `⏹ <span>${t('audio.monitorStop', 'Stopp test')}</span>`
@@ -189,6 +212,9 @@ async function startMonitoring(): Promise<void> {
 }
 
 export function stopMonitoring(): void {
+  stopVuState(testVu); testVu = makeVuState()
+  const vuSect = document.getElementById('test-vu-section')
+  if (vuSect) vuSect.style.display = 'none'
   monitorSrc?.disconnect(); monitorSrc = null
   monitorCtx?.close();      monitorCtx = null
   monitorStream?.getTracks().forEach(t => t.stop()); monitorStream = null

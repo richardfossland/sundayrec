@@ -862,7 +862,8 @@
         <div class="proc-tabs">
           <button class="proc-tab active" data-tab="normalize" data-i18n="editor.procNormalize">Normalisering</button>
           <button class="proc-tab" data-tab="compressor" data-i18n="editor.procCompressor">Kompressor</button>
-          <button class="proc-tab" data-tab="eq" data-i18n="editor.procEQ">Grafisk EQ</button>
+          <button class="proc-tab" data-tab="eq" data-i18n="editor.procEQ">Parametrisk EQ</button>
+          <button class="proc-tab" data-tab="noise" data-i18n="editor.procNoise">Støy &amp; Romklang</button>
           <button class="proc-tab" data-tab="limiter" data-i18n="editor.procLimiter">Limiter</button>
         </div>
 
@@ -946,28 +947,80 @@
           </div>
         </div>
 
-        <!-- EQ tab -->
-        <div class="proc-body" id="proc-body-eq" style="display:none">
-          <div class="proc-row">
+        <!-- EQ tab — Logic Pro-style parametric canvas -->
+        <div class="proc-body proc-body-eq-full" id="proc-body-eq" style="display:none">
+          <div class="eq-toolbar">
             <label class="proc-toggle-label">
               <input type="checkbox" id="proc-eq-enable" class="proc-toggle-input">
               <span class="proc-toggle-track"></span>
-              <span data-i18n="editor.procEQ">Grafisk EQ</span>
+              <span data-i18n="editor.procEQ">Parametrisk EQ</span>
             </label>
+            <div class="eq-preset-bar">
+              <button class="eq-preset-btn active" data-preset="flat">Flat</button>
+              <button class="eq-preset-btn" data-preset="speech">Tale</button>
+              <button class="eq-preset-btn" data-preset="male">Mannsstemme</button>
+              <button class="eq-preset-btn" data-preset="female">Damestemme</button>
+              <button class="eq-preset-btn" data-preset="church">Kirke</button>
+            </div>
             <button class="btn-ghost btn-sm" id="btn-proc-eq-reset" data-i18n="editor.procEQReset">Nullstill</button>
           </div>
-          <canvas class="proc-eq-canvas" id="proc-eq-canvas" height="80"></canvas>
-          <div class="proc-eq-sliders">
-            <div class="proc-eq-band"><input type="range" class="proc-eq-slider" id="proc-eq-0" min="-12" max="12" step="0.5" value="0" orient="vertical"><span class="proc-eq-val" id="proc-eq-val-0">0.0</span><span class="proc-eq-freq">31</span></div>
-            <div class="proc-eq-band"><input type="range" class="proc-eq-slider" id="proc-eq-1" min="-12" max="12" step="0.5" value="0" orient="vertical"><span class="proc-eq-val" id="proc-eq-val-1">0.0</span><span class="proc-eq-freq">63</span></div>
-            <div class="proc-eq-band"><input type="range" class="proc-eq-slider" id="proc-eq-2" min="-12" max="12" step="0.5" value="0" orient="vertical"><span class="proc-eq-val" id="proc-eq-val-2">0.0</span><span class="proc-eq-freq">125</span></div>
-            <div class="proc-eq-band"><input type="range" class="proc-eq-slider" id="proc-eq-3" min="-12" max="12" step="0.5" value="0" orient="vertical"><span class="proc-eq-val" id="proc-eq-val-3">0.0</span><span class="proc-eq-freq">250</span></div>
-            <div class="proc-eq-band"><input type="range" class="proc-eq-slider" id="proc-eq-4" min="-12" max="12" step="0.5" value="0" orient="vertical"><span class="proc-eq-val" id="proc-eq-val-4">0.0</span><span class="proc-eq-freq">500</span></div>
-            <div class="proc-eq-band"><input type="range" class="proc-eq-slider" id="proc-eq-5" min="-12" max="12" step="0.5" value="0" orient="vertical"><span class="proc-eq-val" id="proc-eq-val-5">0.0</span><span class="proc-eq-freq">1k</span></div>
-            <div class="proc-eq-band"><input type="range" class="proc-eq-slider" id="proc-eq-6" min="-12" max="12" step="0.5" value="0" orient="vertical"><span class="proc-eq-val" id="proc-eq-val-6">0.0</span><span class="proc-eq-freq">2k</span></div>
-            <div class="proc-eq-band"><input type="range" class="proc-eq-slider" id="proc-eq-7" min="-12" max="12" step="0.5" value="0" orient="vertical"><span class="proc-eq-val" id="proc-eq-val-7">0.0</span><span class="proc-eq-freq">4k</span></div>
-            <div class="proc-eq-band"><input type="range" class="proc-eq-slider" id="proc-eq-8" min="-12" max="12" step="0.5" value="0" orient="vertical"><span class="proc-eq-val" id="proc-eq-val-8">0.0</span><span class="proc-eq-freq">8k</span></div>
-            <div class="proc-eq-band"><input type="range" class="proc-eq-slider" id="proc-eq-9" min="-12" max="12" step="0.5" value="0" orient="vertical"><span class="proc-eq-val" id="proc-eq-val-9">0.0</span><span class="proc-eq-freq">16k</span></div>
+          <canvas class="proc-eq-canvas-large" id="proc-eq-canvas"></canvas>
+          <div class="eq-band-info" id="eq-band-info" style="display:none">
+            <span class="eq-info-dot" id="eq-info-dot"></span>
+            <span class="eq-info-type" id="eq-info-type">PEQ</span>
+            <span class="eq-info-sep">·</span>
+            <span class="eq-info-freq" id="eq-info-freq">1.0 kHz</span>
+            <span class="eq-info-sep">·</span>
+            <span class="eq-info-gain" id="eq-info-gain">0.0 dB</span>
+            <span class="eq-info-sep">·</span>
+            <span class="eq-info-qlabel">Q</span>
+            <span class="eq-info-q" id="eq-info-q">1.00</span>
+            <span class="eq-info-hint">Dra = freq/gain · Scroll = Q · Dblklikk = av/på</span>
+          </div>
+        </div>
+
+        <!-- Noise & Reverb tab -->
+        <div class="proc-body" id="proc-body-noise" style="display:none">
+          <!-- Noise reduction -->
+          <div class="noise-section">
+            <div class="proc-row">
+              <label class="proc-toggle-label">
+                <input type="checkbox" id="proc-noise-enable" class="proc-toggle-input">
+                <span class="proc-toggle-track"></span>
+                <span data-i18n="editor.procNoise">Støyreduksjon</span>
+              </label>
+            </div>
+            <p class="proc-desc" data-i18n="editor.procNoiseDesc">Reduserer bakgrunnsstøy som viftestøy, romstøy og elektrisk sus ved hjelp av FFT-basert spektralfiltrering.</p>
+            <div class="noise-level-row">
+              <span class="proc-param-label" data-i18n="editor.procNoiseLevel">Styrke</span>
+              <div class="level-btn-group">
+                <button class="noise-level-btn" data-level="1" data-i18n="editor.procNoiseLow">Svak</button>
+                <button class="noise-level-btn active" data-level="2" data-i18n="editor.procNoiseMed">Medium</button>
+                <button class="noise-level-btn" data-level="3" data-i18n="editor.procNoiseHigh">Sterk</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="noise-divider"></div>
+
+          <!-- Reverb / room reduction -->
+          <div class="noise-section">
+            <div class="proc-row">
+              <label class="proc-toggle-label">
+                <input type="checkbox" id="proc-reverb-enable" class="proc-toggle-input">
+                <span class="proc-toggle-track"></span>
+                <span data-i18n="editor.procReverb">Romklang-reduksjon</span>
+              </label>
+            </div>
+            <p class="proc-desc" data-i18n="editor.procReverbDesc">Demper etterklang og romklang med en nedover-expander (gate). Passer for opptak i kirkerom med mye romklang.</p>
+            <div class="noise-level-row">
+              <span class="proc-param-label" data-i18n="editor.procReverbLevel">Styrke</span>
+              <div class="level-btn-group">
+                <button class="reverb-level-btn" data-level="1" data-i18n="editor.procNoiseLow">Svak</button>
+                <button class="reverb-level-btn active" data-level="2" data-i18n="editor.procNoiseMed">Medium</button>
+                <button class="reverb-level-btn" data-level="3" data-i18n="editor.procNoiseHigh">Sterk</button>
+              </div>
+            </div>
           </div>
         </div>
 

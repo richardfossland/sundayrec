@@ -168,6 +168,10 @@ async function convertAndSave(session: Session): Promise<void> {
   if (settings.format === 'mp3') cmd.audioBitrate(bitrateStr + 'k')
   if (settings.format === 'aac') cmd.audioBitrate(bitrateStr + 'k')
 
+  if (settings.trimSilence) {
+    cmd.audioFilters('silenceremove=start_periods=1:start_duration=0.1:start_threshold=-50dB:stop_periods=-1:stop_duration=1:stop_threshold=-50dB')
+  }
+
   cmd
     .output(outputPath)
     .on('end', () => {

@@ -21,6 +21,7 @@ export function setupFilesPage(): void {
     const row = document.getElementById('auto-delete-days-row')
     if (row) row.style.display = this.checked ? 'block' : 'none'
   })
+  document.getElementById('opt-trim-silence')?.addEventListener('change', () => {/* live preview not needed */})
   document.getElementById('btn-files-save')?.addEventListener('click', saveFilesSettings)
   document.getElementById('btn-files-cancel')?.addEventListener('click', () => applyFilesSettingsToUI())
 }
@@ -38,6 +39,8 @@ export function applyFilesSettingsToUI(): void {
     if (daysEl) daysEl.value = String(settings.autoDeleteDays || 90)
     if (rowEl)  rowEl.style.display = settings.autoDeleteDays ? 'block' : 'none'
   }
+  const trimEl = document.getElementById('opt-trim-silence') as HTMLInputElement | null
+  if (trimEl) trimEl.checked = !!settings.trimSilence
   toggleMp3Quality()
   updateFilenamePreview()
 }
@@ -76,7 +79,8 @@ async function saveFilesSettings(): Promise<void> {
     filenamePattern: ((document.querySelector('input[name="pattern"]:checked') as HTMLInputElement | null)?.value ?? 'date') as FilenamePattern,
     format:          ((document.querySelector('input[name="format"]:checked')  as HTMLInputElement | null)?.value ?? 'mp3') as FileFormat,
     bitrate:         (document.querySelector('input[name="bitrate"]:checked') as HTMLInputElement | null)?.value ?? '192',
-    autoDeleteDays:  autoDelEl?.checked ? (+(autoDelDays?.value ?? '') || 90) : 0
+    autoDeleteDays:  autoDelEl?.checked ? (+(autoDelDays?.value ?? '') || 90) : 0,
+    trimSilence:     !!(document.getElementById('opt-trim-silence') as HTMLInputElement | null)?.checked
   })
   await window.api.saveSettings(settings)
   flashSaved(document.getElementById('btn-files-save'))

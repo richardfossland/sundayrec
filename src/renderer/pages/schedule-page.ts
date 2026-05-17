@@ -1,6 +1,6 @@
 import { t, tArr } from '../i18n'
 import { settings, patchSettings } from '../state'
-import { flashSaved, escHtml } from '../helpers'
+import { flashSaved, escHtml, isoDate } from '../helpers'
 import type { ScheduleSlot } from '../../types'
 
 let editingSlotIndex = -1
@@ -18,6 +18,11 @@ export function setupSchedulePage(): void {
     if (editor) editor.style.display = 'none'
   })
   document.getElementById('btn-schedule-save')?.addEventListener('click', saveScheduleSettings)
+  document.getElementById('btn-export-ical')?.addEventListener('click', exportIcal)
+  document.getElementById('opt-silence')?.addEventListener('change', function (this: HTMLInputElement) {
+    const silCfg = document.getElementById('silence-config')
+    if (silCfg) silCfg.style.display = this.checked ? 'block' : 'none'
+  })
   document.getElementById('opt-wake')?.addEventListener('change', function (this: HTMLInputElement) {
     const wakeRow   = document.getElementById('wake-status-row')
     const sleepPanel = document.getElementById('sleep-config-panel')
@@ -80,7 +85,15 @@ export function applyScheduleSettingsToUI(): void {
     if (settings.wakeFromSleep) void loadSleepConfig()
   }
   if (protectEl)    protectEl.checked   = settings.protectRecording !== false
-  if (silenceEl)    silenceEl.checked   = !!settings.stopOnSilence
+  if (silenceEl) {
+    silenceEl.checked = !!settings.stopOnSilence
+    const silCfg = document.getElementById('silence-config')
+    if (silCfg) silCfg.style.display = settings.stopOnSilence ? 'block' : 'none'
+  }
+  const silThreshSel = document.getElementById('opt-silence-threshold') as HTMLSelectElement | null
+  const silTimeoutSel = document.getElementById('opt-silence-timeout') as HTMLSelectElement | null
+  if (silThreshSel)  silThreshSel.value  = String(settings.silenceThreshold   ?? -50)
+  if (silTimeoutSel) silTimeoutSel.value = String(settings.silenceTimeoutMinutes ?? 5)
   if (splitMinSel)  splitMinSel.value   = String(settings.splitMinutes   ?? 0)
   if (reminderSel)  reminderSel.value   = String(settings.reminderMinutes  ?? 0)
   if (manualMaxSel) manualMaxSel.value  = String(settings.manualMaxMinutes ?? 0)
@@ -88,19 +101,23 @@ export function applyScheduleSettingsToUI(): void {
 }
 
 async function saveScheduleSettings(): Promise<void> {
-  const wakeEl       = document.getElementById('opt-wake')             as HTMLInputElement  | null
-  const protectEl    = document.getElementById('opt-protect')          as HTMLInputElement  | null
-  const silenceEl    = document.getElementById('opt-silence')          as HTMLInputElement  | null
-  const splitMinSel  = document.getElementById('opt-split-minutes')    as HTMLSelectElement | null
-  const reminderSel  = document.getElementById('opt-reminder-minutes') as HTMLSelectElement | null
-  const manualMaxSel = document.getElementById('opt-manual-max')       as HTMLSelectElement | null
+  const wakeEl        = document.getElementById('opt-wake')              as HTMLInputElement  | null
+  const protectEl     = document.getElementById('opt-protect')           as HTMLInputElement  | null
+  const silenceEl     = document.getElementById('opt-silence')           as HTMLInputElement  | null
+  const silThreshSel  = document.getElementById('opt-silence-threshold') as HTMLSelectElement | null
+  const silTimeoutSel = document.getElementById('opt-silence-timeout')   as HTMLSelectElement | null
+  const splitMinSel   = document.getElementById('opt-split-minutes')     as HTMLSelectElement | null
+  const reminderSel   = document.getElementById('opt-reminder-minutes')  as HTMLSelectElement | null
+  const manualMaxSel  = document.getElementById('opt-manual-max')        as HTMLSelectElement | null
   patchSettings({
-    wakeFromSleep:      wakeEl?.checked ?? false,
-    protectRecording:   protectEl?.checked ?? true,
-    stopOnSilence:      silenceEl?.checked ?? false,
-    splitMinutes:       parseInt(splitMinSel?.value  ?? '0') || 0,
-    reminderMinutes:    parseInt(reminderSel?.value  ?? '0') || 0,
-    manualMaxMinutes:   parseInt(manualMaxSel?.value ?? '0') || 0,
+    wakeFromSleep:           wakeEl?.checked ?? false,
+    protectRecording:        protectEl?.checked ?? true,
+    stopOnSilence:           silenceEl?.checked ?? false,
+    silenceThreshold:        parseInt(silThreshSel?.value  ?? '-50') || -50,
+    silenceTimeoutMinutes:   parseInt(silTimeoutSel?.value ?? '5')   || 5,
+    splitMinutes:            parseInt(splitMinSel?.value   ?? '0')   || 0,
+    reminderMinutes:         parseInt(reminderSel?.value   ?? '0')   || 0,
+    manualMaxMinutes:        parseInt(manualMaxSel?.value  ?? '0')   || 0,
   })
   await window.api.saveSettings(settings)
   flashSaved(document.getElementById('btn-schedule-save'))
@@ -268,6 +285,71 @@ function setSleepConfigStatus(cls: string, key: string, fallback: string, showFi
   if (dot)     dot.className = `wake-status-dot ${cls}`
   if (txt)     txt.textContent = t(key) || fallback
   if (fixBtn)  fixBtn.style.display = showFix ? '' : 'none'
+}
+
+function exportIcal(): void {
+  const now = new Date()
+  const cutoff = new Date(now)
+  cutoff.setMonth(cutoff.getMonth() + 3)
+
+  const lines: string[] = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//SundayRec//SundayRec//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH'
+  ]
+
+  function fmt(d: Date): string {
+    const p = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`
+  }
+
+  // Weekly slots — generate for the next 3 months
+  const slots = settings.slots ?? []
+  const day = new Date(now); day.setHours(0, 0, 0, 0)
+  while (day <= cutoff) {
+    const jsDay = day.getDay()
+    const uiDay = jsDay === 0 ? 6 : jsDay - 1
+    for (const slot of slots) {
+      if (!slot.days?.includes(uiDay)) continue
+      const [sh, sm] = slot.start.split(':').map(Number)
+      const [eh, em] = slot.stop.split(':').map(Number)
+      const dtStart = new Date(day); dtStart.setHours(sh, sm, 0, 0)
+      const dtEnd   = new Date(day); dtEnd.setHours(eh, em, 0, 0)
+      if (dtEnd <= dtStart) dtEnd.setDate(dtEnd.getDate() + 1)
+      lines.push('BEGIN:VEVENT',
+        `UID:${dtStart.getTime()}-wk@sundayrec`,
+        `DTSTART:${fmt(dtStart)}`,
+        `DTEND:${fmt(dtEnd)}`,
+        `SUMMARY:${(settings.churchName || t('recording.defaultName', 'Opptak')).replace(/[,;\\]/g, '\\$&')}`,
+        'END:VEVENT')
+    }
+    day.setDate(day.getDate() + 1)
+  }
+
+  // Special recordings in window
+  for (const sr of settings.specialRecordings ?? []) {
+    const dtStart = new Date(sr.date + 'T' + sr.start)
+    const dtEnd   = new Date(sr.date + 'T' + sr.stop)
+    if (dtEnd <= dtStart) dtEnd.setDate(dtEnd.getDate() + 1)
+    if (dtStart < now || dtStart > cutoff) continue
+    lines.push('BEGIN:VEVENT',
+      `UID:${sr.id || dtStart.getTime()}-sp@sundayrec`,
+      `DTSTART:${fmt(dtStart)}`,
+      `DTEND:${fmt(dtEnd)}`,
+      `SUMMARY:${(sr.name || t('recording.defaultName', 'Opptak')).replace(/[,;\\]/g, '\\$&')}`,
+      'END:VEVENT')
+  }
+
+  lines.push('END:VCALENDAR')
+
+  const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' })
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(blob),
+    download: `${t('schedule.icalFilename', 'SundayRec-timeplan')}.ics`
+  })
+  a.click()
 }
 
 async function loadSleepConfig(): Promise<void> {

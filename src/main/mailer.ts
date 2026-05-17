@@ -87,6 +87,35 @@ const MAIL_STRINGS: Record<string, MailStrings> = {
   }
 }
 
+const TEST_STRINGS: Record<string, { subject: string; body: string }> = {
+  no: { subject: '✓ SundayRec — e-post fungerer', body: 'E-postkonfigurasjonen er korrekt. Dette er en testmelding fra SundayRec.' },
+  en: { subject: '✓ SundayRec — email works',     body: 'Email configuration is correct. This is a test message from SundayRec.' },
+  de: { subject: '✓ SundayRec — E-Mail funktioniert', body: 'Die E-Mail-Konfiguration ist korrekt. Dies ist eine Testnachricht von SundayRec.' },
+  sv: { subject: '✓ SundayRec — e-post fungerar', body: 'E-postkonfigurationen är korrekt. Detta är ett testmeddelande från SundayRec.' },
+  da: { subject: '✓ SundayRec — e-mail virker',   body: 'E-mailkonfigurationen er korrekt. Dette er en testbesked fra SundayRec.' },
+  pl: { subject: '✓ SundayRec — e-mail działa',   body: 'Konfiguracja e-mail jest poprawna. To jest wiadomość testowa z SundayRec.' },
+  fr: { subject: "✓ SundayRec — e-mail fonctionne", body: "La configuration e-mail est correcte. C'est un message test de SundayRec." }
+}
+
+export async function sendTest(settings: Settings, smtpPass: string): Promise<void> {
+  if (!settings.emailAddress || !settings.emailSmtp) throw new Error('no_config')
+  const transporter = nodemailer.createTransport({
+    host: settings.emailSmtp,
+    port: settings.emailSmtpPort || 587,
+    secure: settings.emailSmtpPort === 465,
+    auth: settings.emailSmtpUser
+      ? { user: settings.emailSmtpUser, pass: smtpPass }
+      : undefined
+  })
+  const ts = TEST_STRINGS[settings.language ?? 'no'] ?? TEST_STRINGS.no
+  await transporter.sendMail({
+    from: `"SundayRec" <${settings.emailSmtpUser || 'noreply@sundayrec.app'}>`,
+    to: settings.emailAddress,
+    subject: ts.subject,
+    text: ts.body
+  })
+}
+
 export async function sendError(settings: Settings, smtpPass: string, errorMessage: string): Promise<void> {
   if (!settings.emailAddress || !settings.emailSmtp) return
 

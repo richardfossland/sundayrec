@@ -2,16 +2,24 @@
 // Web Audio API processing chain: EQ → Compressor → Limiter → Normalization
 // Mirrors the ffmpeg filter chain used at export time.
 
-// ── EQ config ────────────────────────────────────────────────────────────
-export const EQ_BANDS = [31, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
-const EQ_Q = 1.41
+import {
+  buildEQNodes,
+  getBands,
+  getEQFFmpegFilters,
+  hasEQActivity,
+  initEQCanvas,
+  setEQAnalyserNode,
+  applyEQPreset,
+} from './editor-eq-canvas'
 
 // ── Interfaces ────────────────────────────────────────────────────────────
 export interface ProcessingSettings {
-  normalize:  { enabled: boolean; mode: 'peak' | 'lufs'; target: number; gainDb: number }
-  compressor: { enabled: boolean; preset: string; threshold: number; ratio: number; attack: number; release: number; knee: number; makeup: number }
-  eq:         { enabled: boolean; gains: number[] }
-  limiter:    { enabled: boolean; ceiling: number }
+  normalize:       { enabled: boolean; mode: 'peak' | 'lufs'; target: number; gainDb: number }
+  compressor:      { enabled: boolean; preset: string; threshold: number; ratio: number; attack: number; release: number; knee: number; makeup: number }
+  eq:              { enabled: boolean }
+  limiter:         { enabled: boolean; ceiling: number }
+  noiseReduction:  { enabled: boolean; level: 0 | 1 | 2 | 3 }
+  reverbReduction: { enabled: boolean; level: 0 | 1 | 2 | 3 }
 }
 
 // ── Compressor presets ────────────────────────────────────────────────────
@@ -23,41 +31,37 @@ export const COMP_PRESETS: Record<string, Partial<ProcessingSettings['compressor
   custom:    { threshold: -24, ratio: 4,   attack: 10,  release: 100, knee: 3, makeup: 3 },
 }
 
+// Noise reduction: ffmpeg afftdn noise floor values per level
+const NOISE_LEVELS = [-999, -50, -38, -25] as const   // level 0=off
+// Reverb reduction: agate open/close thresholds per level
+const REVERB_GATE: Array<{ open: number; close: number }> = [
+  { open: -999, close: -999 },
+  { open: -35, close: -45 },
+  { open: -28, close: -38 },
+  { open: -22, close: -32 },
+]
+
 // ── State ─────────────────────────────────────────────────────────────────
 let state: ProcessingSettings = buildDefault()
 
 function buildDefault(): ProcessingSettings {
   return {
-    normalize:  { enabled: false, mode: 'peak', target: -1.0, gainDb: 0 },
-    compressor: { enabled: false, preset: 'church', ...COMP_PRESETS.church },
-    eq:         { enabled: false, gains: new Array(10).fill(0) },
-    limiter:    { enabled: false, ceiling: -0.3 },
+    normalize:       { enabled: false, mode: 'peak', target: -1.0, gainDb: 0 },
+    compressor:      { enabled: false, preset: 'church', ...COMP_PRESETS.church },
+    eq:              { enabled: false },
+    limiter:         { enabled: false, ceiling: -0.3 },
+    noiseReduction:  { enabled: false, level: 1 },
+    reverbReduction: { enabled: false, level: 1 },
   }
 }
 
 // ── Web Audio nodes ───────────────────────────────────────────────────────
-let eqNodes:      BiquadFilterNode[]        = []
+let eqNodes:      BiquadFilterNode[]           = []
 let compNode:     DynamicsCompressorNode | null = null
-let makeupGain:   GainNode | null           = null
+let makeupGain:   GainNode | null              = null
 let limiterNode:  DynamicsCompressorNode | null = null
-let normGainNode: GainNode | null           = null
-
-// Separate display nodes for frequency response (always available)
-let displayCtx:  AudioContext | null = null
-let displayEq:   BiquadFilterNode[]  = []
-
-function ensureDisplayCtx(): void {
-  if (displayCtx) return
-  displayCtx = new AudioContext()
-  displayEq  = EQ_BANDS.map((freq, i) => {
-    const n = displayCtx!.createBiquadFilter()
-    n.type = 'peaking'
-    n.frequency.value = freq
-    n.Q.value = EQ_Q
-    n.gain.value = state.eq.gains[i]
-    return n
-  })
-}
+let normGainNode: GainNode | null              = null
+let analyserOut:  AnalyserNode | null          = null
 
 // ── Build playback chain ───────────────────────────────────────────────────
 export function buildAudioChain(
@@ -65,23 +69,24 @@ export function buildAudioChain(
   source: AudioNode,
   dest: AudioNode
 ): void {
-  // EQ nodes
-  eqNodes = EQ_BANDS.map((freq, i) => {
-    const n = ctx.createBiquadFilter()
-    n.type = 'peaking'
-    n.frequency.value = freq
-    n.Q.value = EQ_Q
-    n.gain.value = state.eq.enabled ? state.eq.gains[i] : 0
-    return n
-  })
+  // EQ — parametric nodes from canvas module
+  eqNodes = buildEQNodes(ctx)
+  let lastNode: AudioNode = source
 
-  source.connect(eqNodes[0])
-  for (let i = 0; i < eqNodes.length - 1; i++) eqNodes[i].connect(eqNodes[i + 1])
+  if (eqNodes.length > 0) {
+    // When EQ master is disabled, zero all band gains at node level
+    if (!state.eq.enabled) {
+      eqNodes.forEach(n => { n.gain.value = 0 })
+    }
+    source.connect(eqNodes[0])
+    for (let i = 0; i < eqNodes.length - 1; i++) eqNodes[i].connect(eqNodes[i + 1])
+    lastNode = eqNodes[eqNodes.length - 1]
+  }
 
   // Compressor
   compNode = ctx.createDynamicsCompressor()
   applyCompressorValues()
-  eqNodes[eqNodes.length - 1].connect(compNode)
+  lastNode.connect(compNode)
 
   // Makeup gain
   makeupGain = ctx.createGain()
@@ -97,7 +102,16 @@ export function buildAudioChain(
   normGainNode = ctx.createGain()
   normGainNode.gain.value = state.normalize.enabled ? dbToLin(state.normalize.gainDb) : 1
   limiterNode.connect(normGainNode)
-  normGainNode.connect(dest)
+
+  // Analyser — always present, drives EQ spectrum visualizer
+  analyserOut = ctx.createAnalyser()
+  analyserOut.fftSize               = 2048
+  analyserOut.smoothingTimeConstant = 0.8
+  normGainNode.connect(analyserOut)
+  analyserOut.connect(dest)
+
+  // Feed spectrum to EQ canvas (only when EQ panel active)
+  setEQAnalyserNode(analyserOut)
 }
 
 function applyCompressorValues(): void {
@@ -167,143 +181,45 @@ export function analyzeBuffer(buffer: AudioBuffer): { peakDb: number; lufs: numb
   return { peakDb, lufs }
 }
 
-// ── EQ frequency response canvas ──────────────────────────────────────────
-export function drawEQCurve(canvas: HTMLCanvasElement): void {
-  ensureDisplayCtx()
-  const dpr = window.devicePixelRatio || 1
-  const W   = canvas.offsetWidth  || canvas.clientWidth  || 400
-  const H   = canvas.offsetHeight || canvas.clientHeight || 80
-  if (W === 0 || H === 0) return
-  canvas.width  = W * dpr
-  canvas.height = H * dpr
-  const ctx = canvas.getContext('2d')!
-  ctx.save()
-  ctx.scale(dpr, dpr)
-
-  ctx.fillStyle = '#0c0c18'
-  ctx.fillRect(0, 0, W, H)
-
-  const DB_RANGE = 12
-
-  // Grid lines
-  for (const db of [-12, -6, 0, 6, 12]) {
-    const y = H / 2 - (db / DB_RANGE) * (H / 2 - 6)
-    ctx.strokeStyle = db === 0 ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)'
-    ctx.lineWidth   = db === 0 ? 1 : 0.5
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke()
-    if (db !== 0) {
-      ctx.font      = '500 9px system-ui'
-      ctx.fillStyle = 'rgba(255,255,255,0.18)'
-      ctx.textBaseline = 'middle'
-      ctx.fillText((db > 0 ? '+' : '') + db, 2, y)
-    }
-  }
-
-  // Frequency gridlines
-  for (const f of [100, 1000, 10000]) {
-    const x = freqToX(f, W)
-    ctx.strokeStyle = 'rgba(255,255,255,0.06)'
-    ctx.lineWidth   = 0.5
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke()
-  }
-
-  if (!state.eq.enabled) {
-    // Dashed flat line
-    const y = H / 2
-    ctx.strokeStyle = 'rgba(124,109,255,0.35)'
-    ctx.lineWidth   = 1.5
-    ctx.setLineDash([4, 5])
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke()
-    ctx.setLineDash([])
-    ctx.restore()
-    return
-  }
-
-  // Compute frequency response using display nodes
-  const NUM = Math.max(W, 256)
-  const freqArr  = new Float32Array(NUM)
-  const magArr   = new Float32Array(NUM)
-  const phaseArr = new Float32Array(NUM)
-  const combined = new Float32Array(NUM).fill(1)
-
-  for (let i = 0; i < NUM; i++) {
-    freqArr[i] = 20 * Math.pow(1000, i / (NUM - 1))  // 20Hz → 20kHz log
-  }
-  for (const node of displayEq) {
-    node.getFrequencyResponse(freqArr, magArr, phaseArr)
-    for (let i = 0; i < NUM; i++) combined[i] *= magArr[i]
-  }
-
-  // Filled gradient area
-  const grad = ctx.createLinearGradient(0, 0, 0, H)
-  grad.addColorStop(0,   'rgba(124,109,255,0.28)')
-  grad.addColorStop(0.5, 'rgba(124,109,255,0.08)')
-  grad.addColorStop(1,   'rgba(124,109,255,0.01)')
-
-  ctx.beginPath()
-  for (let i = 0; i < NUM; i++) {
-    const db = 20 * Math.log10(Math.max(combined[i], 1e-6))
-    const y  = H / 2 - (db / DB_RANGE) * (H / 2 - 6)
-    const x  = (i / (NUM - 1)) * W
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
-  }
-  ctx.lineTo(W, H / 2); ctx.lineTo(0, H / 2); ctx.closePath()
-  ctx.fillStyle = grad
-  ctx.fill()
-
-  // Curve line
-  ctx.beginPath()
-  for (let i = 0; i < NUM; i++) {
-    const db = 20 * Math.log10(Math.max(combined[i], 1e-6))
-    const y  = H / 2 - (db / DB_RANGE) * (H / 2 - 6)
-    const x  = (i / (NUM - 1)) * W
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
-  }
-  ctx.strokeStyle = 'rgba(167,157,255,0.9)'
-  ctx.lineWidth   = 1.5
-  ctx.stroke()
-
-  // Band dots
-  for (let b = 0; b < EQ_BANDS.length; b++) {
-    if (Math.abs(state.eq.gains[b]) < 0.1) continue
-    const x  = freqToX(EQ_BANDS[b], W)
-    const db = state.eq.gains[b]
-    const y  = H / 2 - (db / DB_RANGE) * (H / 2 - 6)
-    ctx.fillStyle = 'rgba(167,157,255,0.7)'
-    ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill()
-  }
-
-  ctx.restore()
-}
-
-function freqToX(f: number, W: number): number {
-  return (Math.log10(f / 20) / Math.log10(1000)) * W
-}
-
 // ── FFmpeg filter strings ──────────────────────────────────────────────────
 export function getFFmpegFilters(): string[] {
   const f: string[] = []
 
-  if (state.eq.enabled) {
-    for (let i = 0; i < EQ_BANDS.length; i++) {
-      const g = state.eq.gains[i]
-      if (Math.abs(g) < 0.05) continue
-      f.push(`equalizer=f=${EQ_BANDS[i]}:width_type=o:width=2:g=${g.toFixed(2)}`)
-    }
+  // Noise reduction — ffmpeg afftdn (FFT denoiser)
+  if (state.noiseReduction.enabled && state.noiseReduction.level > 0) {
+    const nf = NOISE_LEVELS[state.noiseReduction.level]
+    f.push(`afftdn=nf=${nf}:nt=w`)
   }
 
+  // Reverb / room reduction — agate (downward expander)
+  if (state.reverbReduction.enabled && state.reverbReduction.level > 0) {
+    const g = REVERB_GATE[state.reverbReduction.level]
+    const openLin  = Math.pow(10, g.open  / 20)
+    const closeLin = Math.pow(10, g.close / 20)
+    f.push(`agate=threshold=${openLin.toFixed(6)}:range=0.25:attack=10:release=200:makeup=1`)
+    void closeLin // suppress unused warning
+  }
+
+  // EQ — parametric from canvas module
+  if (state.eq.enabled && hasEQActivity()) {
+    f.push(...getEQFFmpegFilters())
+  }
+
+  // Compressor
   if (state.compressor.enabled) {
     const { threshold, ratio, attack, release, knee, makeup } = state.compressor
-    const threshLin  = Math.pow(10, threshold / 20)
-    const makeupLin  = Math.pow(10, makeup / 20)
+    const threshLin = Math.pow(10, threshold / 20)
+    const makeupLin = Math.pow(10, makeup / 20)
     f.push(`acompressor=threshold=${threshLin.toFixed(6)}:ratio=${ratio}:attack=${attack}:release=${release}:knee=${knee}:makeup=${makeupLin.toFixed(4)}`)
   }
 
+  // Limiter
   if (state.limiter.enabled) {
     const lim = Math.pow(10, state.limiter.ceiling / 20)
     f.push(`alimiter=level_in=1:level_out=1:limit=${lim.toFixed(6)}:attack=5:release=50:asc=true`)
   }
 
+  // Normalization volume
   if (state.normalize.enabled && Math.abs(state.normalize.gainDb) > 0.05) {
     f.push(`volume=${state.normalize.gainDb.toFixed(2)}dB`)
   }
@@ -316,20 +232,33 @@ export function getProcessingState(): ProcessingSettings {
 }
 
 export function hasAnyProcessing(): boolean {
-  return state.normalize.enabled || state.compressor.enabled || state.eq.enabled || state.limiter.enabled
+  return (
+    state.normalize.enabled ||
+    state.compressor.enabled ||
+    (state.eq.enabled && hasEQActivity()) ||
+    state.limiter.enabled ||
+    state.noiseReduction.enabled ||
+    state.reverbReduction.enabled
+  )
 }
 
-// ── Runtime setters (update live nodes) ──────────────────────────────────
+// ── Runtime setters ────────────────────────────────────────────────────────
 export function setEQEnabled(enabled: boolean): void {
   state.eq.enabled = enabled
-  eqNodes.forEach((n, i) => { n.gain.value = enabled ? state.eq.gains[i] : 0 })
-  displayEq.forEach((n, i) => { n.gain.value = enabled ? state.eq.gains[i] : 0 })
-}
-
-export function setEQGain(bandIdx: number, gainDb: number): void {
-  state.eq.gains[bandIdx] = gainDb
-  if (eqNodes[bandIdx])    eqNodes[bandIdx].gain.value    = state.eq.enabled ? gainDb : 0
-  if (displayEq[bandIdx])  displayEq[bandIdx].gain.value  = state.eq.enabled ? gainDb : 0
+  if (eqNodes.length > 0) {
+    if (!enabled) {
+      eqNodes.forEach(n => { n.gain.value = 0 })
+    } else {
+      getBands().forEach((b, i) => {
+        if (!eqNodes[i]) return
+        eqNodes[i].type            = b.type
+        eqNodes[i].frequency.value = b.freq
+        eqNodes[i].Q.value         = b.q
+        eqNodes[i].gain.value      = b.enabled ? b.gain : 0
+      })
+    }
+  }
+  setEQAnalyserNode(enabled ? analyserOut : null)
 }
 
 export function setCompEnabled(enabled: boolean): void {
@@ -367,12 +296,26 @@ export function setNormEnabled(enabled: boolean): void {
   if (normGainNode) normGainNode.gain.value = enabled ? dbToLin(state.normalize.gainDb) : 1
 }
 
+export function setNoiseReductionEnabled(enabled: boolean): void {
+  state.noiseReduction.enabled = enabled
+}
+
+export function setNoiseReductionLevel(level: 0 | 1 | 2 | 3): void {
+  state.noiseReduction.level = level
+}
+
+export function setReverbReductionEnabled(enabled: boolean): void {
+  state.reverbReduction.enabled = enabled
+}
+
+export function setReverbReductionLevel(level: 0 | 1 | 2 | 3): void {
+  state.reverbReduction.level = level
+}
+
 // ── UI setup ───────────────────────────────────────────────────────────────
 const $ = (id: string): HTMLElement | null => document.getElementById(id)
 
 export function setupProcessingPanel(onUpdate: () => void): void {
-  ensureDisplayCtx()
-
   // ── Tab switching ──────────────────────────────────────────────────────
   document.querySelectorAll<HTMLElement>('.proc-tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -381,84 +324,95 @@ export function setupProcessingPanel(onUpdate: () => void): void {
       tab.classList.add('active')
       const body = $('proc-body-' + tab.dataset.tab)
       if (body) body.style.display = ''
-      // Redraw EQ canvas when tab becomes visible
-      if (tab.dataset.tab === 'eq') {
-        const c = $('proc-eq-canvas') as HTMLCanvasElement | null
-        if (c) setTimeout(() => drawEQCurve(c), 10)
-      }
     })
   })
 
   // ── Normalization ──────────────────────────────────────────────────────
   wireToggle('proc-norm-enable', v => { setNormEnabled(v); onUpdate() })
-
   wireRadio('proc-norm-peak', () => { state.normalize.mode = 'peak' })
   wireRadio('proc-norm-lufs', () => { state.normalize.mode = 'lufs' })
-
   wireSlider('proc-norm-target', v => {
     state.normalize.target = v
     if (normGainNode && state.normalize.enabled) normGainNode.gain.value = dbToLin(state.normalize.gainDb)
   }, v => v.toFixed(1) + ' dBFS')
-
   $('btn-proc-norm-analyze')?.addEventListener('click', () => {
-    const ev = new CustomEvent('proc-analyze-request')
-    document.dispatchEvent(ev)
+    document.dispatchEvent(new CustomEvent('proc-analyze-request'))
   })
 
   // ── Compressor ─────────────────────────────────────────────────────────
   wireToggle('proc-comp-enable', v => { setCompEnabled(v); onUpdate() })
-
   const presetSel = $('proc-comp-preset') as HTMLSelectElement | null
   presetSel?.addEventListener('change', () => {
     applyCompPreset(presetSel.value)
     syncCompSliders()
     onUpdate()
   })
-
   wireSlider('proc-comp-threshold', v => { setCompParam('threshold', v); markCustomPreset() }, v => v.toFixed(0) + ' dBFS')
   wireSlider('proc-comp-ratio',     v => { setCompParam('ratio', v);     markCustomPreset() }, v => v.toFixed(1) + ':1')
   wireSlider('proc-comp-attack',    v => { setCompParam('attack', v);    markCustomPreset() }, v => v.toFixed(0) + ' ms')
   wireSlider('proc-comp-release',   v => { setCompParam('release', v);   markCustomPreset() }, v => v.toFixed(0) + ' ms')
   wireSlider('proc-comp-makeup',    v => { setCompParam('makeup', v);    markCustomPreset() }, v => v.toFixed(1) + ' dB')
 
-  // ── EQ ─────────────────────────────────────────────────────────────────
+  // ── EQ canvas ──────────────────────────────────────────────────────────
+  const eqCanvas = $('proc-eq-canvas') as HTMLCanvasElement | null
+  if (eqCanvas) {
+    initEQCanvas(eqCanvas, onUpdate)
+  }
+
   wireToggle('proc-eq-enable', v => {
     setEQEnabled(v)
-    const c = $('proc-eq-canvas') as HTMLCanvasElement | null
-    if (c) drawEQCurve(c)
     onUpdate()
   })
 
-  for (let i = 0; i < EQ_BANDS.length; i++) {
-    const slider = $(`proc-eq-${i}`) as HTMLInputElement | null
-    const valEl  = $(`proc-eq-val-${i}`)
-    if (!slider) continue
-    slider.addEventListener('input', () => {
-      const v = parseFloat(slider.value)
-      setEQGain(i, v)
-      if (valEl) valEl.textContent = (v >= 0 ? '+' : '') + v.toFixed(1)
-      const c = $('proc-eq-canvas') as HTMLCanvasElement | null
-      if (c) drawEQCurve(c)
+  // Preset buttons
+  document.querySelectorAll<HTMLElement>('.eq-preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const preset = btn.dataset.preset
+      if (preset) {
+        applyEQPreset(preset)
+        // Activate EQ master toggle if preset is not flat
+        if (preset !== 'flat') {
+          const toggle = $('proc-eq-enable') as HTMLInputElement | null
+          if (toggle && !toggle.checked) { toggle.checked = true; setEQEnabled(true) }
+        }
+        onUpdate()
+        document.querySelectorAll('.eq-preset-btn').forEach(b => b.classList.remove('active'))
+        btn.classList.add('active')
+      }
     })
-  }
-
-  $('btn-proc-eq-reset')?.addEventListener('click', () => {
-    for (let i = 0; i < EQ_BANDS.length; i++) {
-      setEQGain(i, 0)
-      const sl = $(`proc-eq-${i}`) as HTMLInputElement | null
-      const vl = $(`proc-eq-val-${i}`)
-      if (sl) sl.value = '0'
-      if (vl) vl.textContent = '0.0'
-    }
-    const c = $('proc-eq-canvas') as HTMLCanvasElement | null
-    if (c) drawEQCurve(c)
   })
 
-  // ResizeObserver for EQ canvas
-  const eqCanvas = $('proc-eq-canvas') as HTMLCanvasElement | null
-  if (eqCanvas) {
-    new ResizeObserver(() => drawEQCurve(eqCanvas)).observe(eqCanvas)
-  }
+  $('btn-proc-eq-reset')?.addEventListener('click', () => {
+    applyEQPreset('flat')
+    document.querySelectorAll('.eq-preset-btn').forEach(b => {
+      b.classList.toggle('active', (b as HTMLElement).dataset.preset === 'flat')
+    })
+    onUpdate()
+  })
+
+  // ── Noise & Reverb reduction ───────────────────────────────────────────
+  wireToggle('proc-noise-enable', v => { setNoiseReductionEnabled(v); onUpdate() })
+  wireToggle('proc-reverb-enable', v => { setReverbReductionEnabled(v); onUpdate() })
+
+  document.querySelectorAll<HTMLElement>('.noise-level-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const lvl = parseInt(btn.dataset.level ?? '1', 10) as 0 | 1 | 2 | 3
+      setNoiseReductionLevel(lvl)
+      document.querySelectorAll('.noise-level-btn').forEach(b => b.classList.remove('active'))
+      btn.classList.add('active')
+      onUpdate()
+    })
+  })
+
+  document.querySelectorAll<HTMLElement>('.reverb-level-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const lvl = parseInt(btn.dataset.level ?? '1', 10) as 0 | 1 | 2 | 3
+      setReverbReductionLevel(lvl)
+      document.querySelectorAll('.reverb-level-btn').forEach(b => b.classList.remove('active'))
+      btn.classList.add('active')
+      onUpdate()
+    })
+  })
 
   // ── Limiter ────────────────────────────────────────────────────────────
   wireToggle('proc-limiter-enable', v => { setLimiterEnabled(v); onUpdate() })
