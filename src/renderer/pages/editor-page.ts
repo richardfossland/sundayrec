@@ -21,13 +21,14 @@ let vpEnd   = 0
 
 // Playback
 let audioCtx: AudioContext | null = null
-let sourceNode: AudioBufferSourceNode | null = null
+let sourceNodes: AudioBufferSourceNode[] = []
 let audioBuffer: AudioBuffer | null = null
 let playStartCtxTime = 0
 let playStartSec     = 0
 let isPlaying        = false
 let isPreview        = false
 let rafId            = 0
+let loadSeq          = 0
 
 // Interaction state
 let dragStartSec     = -1
@@ -167,6 +168,9 @@ export function openEditorWithFile(fp: string): void {
 
 export function deactivateEditor(): void {
   stopPlay()
+  audioCtx?.close().catch(() => {})
+  audioCtx = null
+  audioBuffer = null
   destroyEQCanvas()
 }
 
@@ -177,7 +181,12 @@ async function pickAndLoad(): Promise<void> {
 }
 
 async function loadFile(fp: string): Promise<void> {
+  const seq = ++loadSeq
   stopPlay()
+  const prevCtx = audioCtx
+  audioCtx = null
+  prevCtx?.close().catch(() => {})
+
   cuts = []
   cutHistory = []
   filePath = fp
@@ -193,12 +202,17 @@ async function loadFile(fp: string): Promise<void> {
   const u8 = raw instanceof Uint8Array ? raw : new Uint8Array(raw as ArrayBuffer)
   const ab  = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer
 
+  let localCtx: AudioContext | null = null
   try {
-    audioCtx    = new AudioContext()
-    audioBuffer = await audioCtx.decodeAudioData(ab)
+    localCtx = new AudioContext()
+    const buf = await localCtx.decodeAudioData(ab)
+    if (seq !== loadSeq) { localCtx.close().catch(() => {}); return }
+    audioCtx    = localCtx
+    audioBuffer = buf
     duration    = audioBuffer.duration
     peaks       = computePeaks(audioBuffer)
   } catch {
+    localCtx?.close().catch(() => {})
     showState('empty')
     return
   }
@@ -945,7 +959,7 @@ function startPlay(preview: boolean): void {
 
   if (firstSec < 0) { isPlaying = false; return }
   playStartSec = firstSec
-  sourceNode   = nodes[0] ?? null
+  sourceNodes  = nodes
 
   nodes[nodes.length - 1]?.addEventListener('ended', () => {
     if (isPlaying) { isPlaying = false; cancelAnimationFrame(rafId); updatePlayIcon(); drawWaveform() }
@@ -956,8 +970,8 @@ function startPlay(preview: boolean): void {
 }
 
 function stopPlay(): void {
-  try { sourceNode?.stop() } catch { /* already stopped */ }
-  sourceNode = null
+  for (const n of sourceNodes) { try { n.stop() } catch { /* already stopped */ } }
+  sourceNodes = []
   if (isPlaying) {
     playStartSec = Math.min(duration, playStartSec + (audioCtx!.currentTime - playStartCtxTime))
   }

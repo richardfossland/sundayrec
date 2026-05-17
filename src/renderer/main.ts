@@ -4,7 +4,7 @@ import type { Settings } from '../types'
 
 import { setupHome, refreshHome, loadRecentHistory } from './pages/home'
 import { stopVU, setupClipReset } from './pages/home-vu'
-import { setupAudioPage, applyAudioSettingsToUI, renderDeviceList } from './pages/audio-page'
+import { setupAudioPage, applyAudioSettingsToUI, renderDeviceList, stopMonitoring } from './pages/audio-page'
 import { setupSchedulePage, applyScheduleSettingsToUI, renderDayPickers, renderSlotsList } from './pages/schedule-page'
 import { setupCalendarPage, renderCalendar, renderPlannedList } from './pages/calendar-page'
 import { setupFilesPage, applyFilesSettingsToUI, updateFilenamePreview, toggleMp3Quality } from './pages/files-page'
@@ -81,6 +81,7 @@ function applyAllSettingsToUI(s: Settings): void {
 function showPage(id: string): void {
   if (id !== 'home') stopVU()
   if (id !== 'editor') deactivateEditor()
+  if (id !== 'audio') stopMonitoring()
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'))
   document.querySelectorAll('.nav-link').forEach(a => a.classList.remove('active'))
   document.getElementById(`page-${id}`)?.classList.add('active')

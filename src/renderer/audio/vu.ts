@@ -61,7 +61,7 @@ export function tickVU(
   state: VuState,
   fillL: HTMLElement | null, peakL: HTMLElement | null, dbL: HTMLElement | null,
   fillR: HTMLElement | null, peakR: HTMLElement | null, dbR: HTMLElement | null,
-  onSignal: (dbL: number, dbR: number, state: VuState) => void
+  onSignal?: (dbL: number, dbR: number, state: VuState) => void
 ): void {
   if (!state.analyserL || !state.analyserR) return
   const now  = Date.now()
@@ -75,7 +75,7 @@ export function tickVU(
   if (state.smR > state.peakR) state.peakR = state.smR
   setVUBar(fillL, peakL, dbL, state.smL, state.pkL)
   setVUBar(fillR, peakR, dbR, state.smR, state.pkR)
-  onSignal(state.smL, state.smR, state)
+  onSignal?.(state.smL, state.smR, state)
   state.animFrame = requestAnimationFrame(() =>
     tickVU(state, fillL, peakL, dbL, fillR, peakR, dbR, onSignal))
 }

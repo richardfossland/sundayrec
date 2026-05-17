@@ -7,6 +7,7 @@ let tray: Tray | null = null
 let win: BrowserWindow | null = null
 let isRecording = false
 let hasError    = false
+let themeDebounce: ReturnType<typeof setTimeout> | null = null
 
 const TRAY_LABELS: Record<string, [string, string, string, string, string, string, string]> = {
   //                  recording          error                    ready       open          stop          start         quit
@@ -49,7 +50,10 @@ export function create(mainWindow: BrowserWindow): void {
 
   // Update tray icon when Windows dark/light mode changes
   if (process.platform === 'win32') {
-    nativeTheme.on('updated', () => updateMenu())
+    nativeTheme.on('updated', () => {
+      if (themeDebounce) clearTimeout(themeDebounce)
+      themeDebounce = setTimeout(() => updateMenu(), 50)
+    })
   }
 
   updateMenu()

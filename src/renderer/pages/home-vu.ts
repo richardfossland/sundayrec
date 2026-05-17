@@ -4,6 +4,8 @@ import { makeVuState, tickVU, stopVuState } from '../audio/vu'
 import type { VuState } from '../audio/vu'
 
 const vu = makeVuState()
+let vuRetries = 0
+const MAX_VU_RETRIES = 5
 
 export function stopVU(): void {
   stopVuState(vu)
@@ -18,6 +20,11 @@ export function stopVU(): void {
 
 export function startVU(): void {
   stopVU()
+  vuRetries = 0
+  tryStartVU()
+}
+
+function tryStartVU(): void {
   if (!document.getElementById('vu-l')) return
 
   const devId = settings.deviceId && settings.deviceId !== 'default' ? settings.deviceId : null
@@ -37,6 +44,7 @@ export function startVU(): void {
     video: false
   })
     .then(stream => {
+      vuRetries = 0
       vu.stream = stream
       vu.ctx    = new AudioContext()
       const src    = vu.ctx.createMediaStreamSource(stream)
@@ -64,7 +72,10 @@ export function startVU(): void {
       })
     })
     .catch(() => {
-      setTimeout(() => { if (!vu.stream && document.getElementById('vu-l')) startVU() }, 5000)
+      vuRetries++
+      if (vuRetries < MAX_VU_RETRIES) {
+        setTimeout(() => { if (!vu.stream && document.getElementById('vu-l')) tryStartVU() }, 5000)
+      }
     })
 }
 
