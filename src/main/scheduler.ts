@@ -1,8 +1,11 @@
 import schedule from 'node-schedule'
 import { Notification } from 'electron'
 import * as store from './store'
+import * as recorder from './recorder'
 import type { BrowserWindow } from 'electron'
 import type { ScheduleSlot, SpecialRecording, RecordingOpts } from '../types'
+
+const LOCAL_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone
 
 const jobs = new Map<string, schedule.Job>()
 let mainWindow: BrowserWindow | null = null
@@ -57,11 +60,13 @@ export function reschedule(): void {
       const jsDay = uiDayToJsDay(uiDay)
 
       const startRule = new schedule.RecurrenceRule()
-      startRule.dayOfWeek = jsDay; startRule.hour = sh; startRule.minute = sm
-      jobs.set(`slot-${idx}-${uiDay}-start`, schedule.scheduleJob(startRule, () => triggerStart(slot)))
+      startRule.dayOfWeek = jsDay; startRule.hour = sh; startRule.minute = sm; startRule.tz = LOCAL_TZ
+      jobs.set(`slot-${idx}-${uiDay}-start`, schedule.scheduleJob(startRule, () => {
+        triggerStart(slot).catch(err => console.error('[scheduler] start error:', err))
+      }))
 
       const stopRule = new schedule.RecurrenceRule()
-      stopRule.dayOfWeek = jsDay; stopRule.hour = eh; stopRule.minute = em
+      stopRule.dayOfWeek = jsDay; stopRule.hour = eh; stopRule.minute = em; stopRule.tz = LOCAL_TZ
       jobs.set(`slot-${idx}-${uiDay}-stop`, schedule.scheduleJob(stopRule, () => triggerStop()))
 
       if (reminderMin > 0) {
@@ -71,7 +76,7 @@ export function reschedule(): void {
         const remM = normMin % 60
         const remJsDay = totalMin < 0 ? ((jsDay + 6) % 7) : jsDay
         const remRule = new schedule.RecurrenceRule()
-        remRule.dayOfWeek = remJsDay; remRule.hour = remH; remRule.minute = remM
+        remRule.dayOfWeek = remJsDay; remRule.hour = remH; remRule.minute = remM; remRule.tz = LOCAL_TZ
         jobs.set(`slot-${idx}-${uiDay}-reminder`, schedule.scheduleJob(remRule, () => triggerReminder(reminderMin)))
       }
     })
@@ -84,7 +89,9 @@ export function reschedule(): void {
 
     jobs.set(`special-${idx}-stop`, schedule.scheduleJob(stopDate, () => triggerStop()))
     if (startDate >= new Date()) {
-      jobs.set(`special-${idx}-start`, schedule.scheduleJob(startDate, () => triggerStart(special, special.name)))
+      jobs.set(`special-${idx}-start`, schedule.scheduleJob(startDate, () => {
+        triggerStart(special, special.name).catch(err => console.error('[scheduler] special start error:', err))
+      }))
       if (reminderMin > 0) {
         const remDate = new Date(startDate.getTime() - reminderMin * 60000)
         if (remDate > new Date()) {
@@ -95,7 +102,7 @@ export function reschedule(): void {
   })
 }
 
-function triggerStart(slot: ScheduleSlot | SpecialRecording, overrideName?: string): void {
+async function triggerStart(slot: ScheduleSlot | SpecialRecording, overrideName?: string): Promise<void> {
   if (!mainWindow) return
 
   const s = store.getAll()
@@ -112,7 +119,6 @@ function triggerStart(slot: ScheduleSlot | SpecialRecording, overrideName?: stri
     if (scheduledStopTime < new Date()) scheduledStopTime.setDate(scheduledStopTime.getDate() + 1)
   }
 
-  // Look up per-device channel override
   const devChannels = deviceId ? (s.deviceChannels?.[deviceId] ?? null) : null
   const channelL    = devChannels?.channelL ?? 0
   const channelR    = devChannels?.channelR ?? 1
@@ -145,11 +151,21 @@ function triggerStart(slot: ScheduleSlot | SpecialRecording, overrideName?: stri
     scheduledStopTime: scheduledStopTime.toISOString()
   }
 
-  mainWindow?.webContents.send('schedule-start-recording', opts)
+  // Start recording directly in main — no longer routed through the renderer
+  const result = await recorder.startSession(opts, mainWindow)
+  if ('error' in result) {
+    mainWindow.webContents.send('recording-error', { error: result.error })
+    return
+  }
+
+  // Tell renderer to show overlay and open monitoring stream for VU meter
+  mainWindow.webContents.send('recording-overlay-start', opts)
 }
 
 function triggerStop(): void {
-  mainWindow?.webContents.send('schedule-stop-recording', {})
+  // Stop ffmpeg directly in main; tell renderer to close monitoring stream
+  recorder.stopSession()
+  mainWindow?.webContents.send('recording-overlay-stop', {})
 }
 
 const REMINDER_LABELS: Record<string, string> = {
@@ -204,10 +220,14 @@ export function checkMissedRecordings(): void {
   const now      = new Date()
 
   slots.forEach(slot => {
-    if (slotActiveNow(slot.start, slot.stop, slot.days ?? [], now)) triggerStart(slot)
+    if (slotActiveNow(slot.start, slot.stop, slot.days ?? [], now)) {
+      triggerStart(slot).catch(err => console.error('[scheduler] missed slot start error:', err))
+    }
   })
 
   specials.forEach(special => {
-    if (specialActiveNow(special.date, special.start, special.stop, now)) triggerStart(special, special.name)
+    if (specialActiveNow(special.date, special.start, special.stop, now)) {
+      triggerStart(special, special.name).catch(err => console.error('[scheduler] missed special start error:', err))
+    }
   })
 }

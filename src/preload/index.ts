@@ -1,8 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
 const ALLOWED_CHANNELS = [
-  'schedule-start-recording',
-  'schedule-stop-recording',
+  'recording-overlay-start',
+  'recording-overlay-stop',
   'recording-finished',
   'recording-error',
   'recording-progress',

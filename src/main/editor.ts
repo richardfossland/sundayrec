@@ -6,6 +6,8 @@ import ffmpeg from 'fluent-ffmpeg'
 import { codecFor } from './recorder-utils'
 import * as store from './store'
 
+const MAX_EDIT_MS = 10 * 60 * 1000   // kill ffmpeg after 10 minutes
+
 let ffmpegPath = ffmpegStatic as string
 if (app.isPackaged) {
   const normalized = ffmpegPath.replace(/\\/g, '/')
@@ -25,6 +27,26 @@ if (app.isPackaged) {
   }
 }
 ffmpeg.setFfmpegPath(ffmpegPath)
+
+// Atomically replace targetPath with tempPath, keeping the original safe until swap completes.
+// On POSIX: rename() replaces the target atomically (no gap where file is missing).
+// On Windows: rename() fails if target exists; use a backup to minimise the exposure window.
+async function safeReplaceFile(tempPath: string, targetPath: string): Promise<void> {
+  if (process.platform !== 'win32') {
+    await fs.promises.rename(tempPath, targetPath)
+    return
+  }
+  const bakPath = targetPath + '.__editor_bak'
+  await fs.promises.rename(targetPath, bakPath)
+  try {
+    await fs.promises.rename(tempPath, targetPath)
+  } catch (err) {
+    // Restore original if rename failed
+    await fs.promises.rename(bakPath, targetPath).catch(() => {})
+    throw err
+  }
+  fs.promises.unlink(bakPath).catch(() => {})
+}
 
 export interface CutRegion { start: number; end: number }
 
@@ -103,11 +125,26 @@ export async function saveEdited(params: EditorSaveParams): Promise<EditorSaveRe
   const s = store.getAll()
 
   return new Promise(resolve => {
-    let cmd = ffmpeg(inputPath)
+    let settled = false
+    const finish = (result: EditorSaveResult) => {
+      if (settled) return
+      settled = true
+      clearTimeout(killTimer)
+      resolve(result)
+    }
+
+    const cmd = ffmpeg(inputPath)
+
+    // Guard against hung ffmpeg — kill after 10 minutes
+    const killTimer = setTimeout(() => {
+      try { cmd.kill('SIGTERM') } catch {}
+      if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
+      finish({ ok: false, error: 'timeout' })
+    }, MAX_EDIT_MS)
 
     if (keeps.length === 1) {
       const seg = keeps[0]
-      cmd = cmd.audioFilters(
+      cmd.audioFilters(
         `atrim=start=${seg.start.toFixed(4)}:end=${seg.end.toFixed(4)},asetpts=PTS-STARTPTS`
       )
     } else {
@@ -116,9 +153,7 @@ export async function saveEdited(params: EditorSaveParams): Promise<EditorSaveRe
       )
       const inputs = keeps.map((_, i) => `[seg${i}]`).join('')
       parts.push(`${inputs}concat=n=${keeps.length}:v=0:a=1[out]`)
-      cmd = cmd
-        .complexFilter(parts.join(';'))
-        .addOutputOption('-map', '[out]')
+      cmd.complexFilter(parts.join(';')).addOutputOption('-map', '[out]')
     }
 
     cmd.audioCodec(codecFor(ext))
@@ -131,19 +166,18 @@ export async function saveEdited(params: EditorSaveParams): Promise<EditorSaveRe
       .on('end', async () => {
         if (mode === 'replace' && tempPath) {
           try {
-            await fs.promises.unlink(inputPath)
-            await fs.promises.rename(tempPath, inputPath)
-            resolve({ ok: true, outputPath: inputPath })
+            await safeReplaceFile(tempPath, inputPath)
+            finish({ ok: true, outputPath: inputPath })
           } catch (err) {
-            resolve({ ok: false, error: (err as Error).message })
+            finish({ ok: false, error: (err as Error).message })
           }
         } else {
-          resolve({ ok: true, outputPath: outPath })
+          finish({ ok: true, outputPath: outPath })
         }
       })
       .on('error', (err: Error) => {
         if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
-        resolve({ ok: false, error: err.message })
+        finish({ ok: false, error: err.message })
       })
       .run()
   })
@@ -198,7 +232,21 @@ export async function exportEdited(params: EditorExportParams): Promise<EditorSa
   fs.mkdirSync(path.dirname(outPath), { recursive: true })
 
   return new Promise(resolve => {
-    let cmd = ffmpeg(inputPath)
+    let settled = false
+    const finish = (result: EditorSaveResult) => {
+      if (settled) return
+      settled = true
+      clearTimeout(killTimer)
+      resolve(result)
+    }
+
+    const cmd = ffmpeg(inputPath)
+
+    const killTimer = setTimeout(() => {
+      try { cmd.kill('SIGTERM') } catch {}
+      if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
+      finish({ ok: false, error: 'timeout' })
+    }, MAX_EDIT_MS)
 
     // Build the edit + processing filter chain
     const procFilters = processing.ffmpegFilters ?? []
@@ -207,18 +255,15 @@ export async function exportEdited(params: EditorExportParams): Promise<EditorSa
       const seg = keeps[0]
       const trimFilter = `atrim=start=${seg.start.toFixed(4)}:end=${seg.end.toFixed(4)},asetpts=PTS-STARTPTS`
       const allFilters = [trimFilter, ...procFilters].join(',')
-      cmd = cmd.audioFilters(allFilters)
+      cmd.audioFilters(allFilters)
     } else {
-      // Multi-segment: use filter_complex for concat, then apply processing as audioFilters
       const parts = keeps.map((seg, i) =>
         `[0:a]atrim=start=${seg.start.toFixed(4)}:end=${seg.end.toFixed(4)},asetpts=PTS-STARTPTS[seg${i}]`
       )
       const inputs = keeps.map((_, i) => `[seg${i}]`).join('')
       parts.push(`${inputs}concat=n=${keeps.length}:v=0:a=1[out]`)
-      cmd = cmd.complexFilter(parts.join(';')).addOutputOption('-map', '[out]')
-      if (procFilters.length > 0) {
-        cmd = cmd.audioFilters(procFilters.join(','))
-      }
+      cmd.complexFilter(parts.join(';')).addOutputOption('-map', '[out]')
+      if (procFilters.length > 0) cmd.audioFilters(procFilters.join(','))
     }
 
     // Codec + quality
@@ -239,19 +284,18 @@ export async function exportEdited(params: EditorExportParams): Promise<EditorSa
       .on('end', async () => {
         if (mode === 'replace' && tempPath) {
           try {
-            await fs.promises.unlink(inputPath)
-            await fs.promises.rename(tempPath, inputPath)
-            resolve({ ok: true, outputPath: inputPath })
+            await safeReplaceFile(tempPath, inputPath)
+            finish({ ok: true, outputPath: inputPath })
           } catch (err) {
-            resolve({ ok: false, error: (err as Error).message })
+            finish({ ok: false, error: (err as Error).message })
           }
         } else {
-          resolve({ ok: true, outputPath: outPath })
+          finish({ ok: true, outputPath: outPath })
         }
       })
       .on('error', (err: Error) => {
         if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
-        resolve({ ok: false, error: err.message })
+        finish({ ok: false, error: err.message })
       })
       .run()
   })

@@ -99,8 +99,20 @@ export function setupRecording(): void {
   })
 
   const ipcCleanups = [
-    window.api.on('schedule-start-recording', (opts) => startRecordingWithOpts(opts as RecordingOpts)),
-    window.api.on('schedule-stop-recording',  () => { if (!stopOverridden) doStopRecording() }),
+    window.api.on('recording-overlay-start', (opts) => {
+      // Recording already started in main; just show UI and open monitoring stream
+      const o = opts as RecordingOpts
+      showOverlay(o)
+      startMonitoring(o).catch(err => {
+        console.error('[recording] monitoring start error:', err)
+        try { stopMonitoring() } catch {}
+      })
+    }),
+    window.api.on('recording-overlay-stop', () => {
+      // Main already called stopSession(); just close monitoring stream and hide UI
+      if (stopOverridden) return
+      stopMonitoring().catch(err => console.error('[recording] monitoring stop error:', err)).finally(() => hideOverlay())
+    }),
     window.api.on('recording-finished', (entry) => {
       hideOverlay()
       loadRecentHistory()
@@ -179,7 +191,7 @@ async function handleManualStart(): Promise<void> {
     showOverlay(opts)
     try { await startMonitoring(opts) }
     catch (err) {
-      await stopMonitoring()
+      try { await stopMonitoring() } catch {}
       window.api.notifyError({ error: translateAudioError(err as Error) })
       await window.api.stopRecordingNow()
       hideOverlay()
@@ -201,7 +213,7 @@ export async function startRecordingWithOpts(opts: RecordingOpts): Promise<void>
   try { await startMonitoring(opts) }
   catch (err) {
     autoRestartOpts = null
-    await stopMonitoring()
+    try { await stopMonitoring() } catch {}
     window.api.notifyError({ error: translateAudioError(err as Error) })
     await window.api.stopRecordingNow()
     hideOverlay()
@@ -345,13 +357,15 @@ async function stopMonitoring(): Promise<void> {
 
   if (!monitorSession) return
   const s = monitorSession; monitorSession = null
-  await stopMonitorStream(s)
+  await Promise.race([
+    stopMonitorStream(s),
+    new Promise<void>(resolve => setTimeout(resolve, 5000))
+  ])
 }
 
 async function doStopRecording(): Promise<void> {
-  // Tell main to stop ffmpeg first, then close monitoring stream
   window.api.stopRecordingNow()
-  await stopMonitoring()
+  try { await stopMonitoring() } catch (err) { console.error('[recording] stopMonitoring error:', err) }
   hideOverlay()
 }
 

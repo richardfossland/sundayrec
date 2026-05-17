@@ -165,7 +165,7 @@ export async function startSession(
 }
 
 export function stopSession(): void {
-  if (!activeSession) return
+  if (!activeSession || activeSession.stopping) return
   const session = activeSession
   session.stopping = true
   if (session.maxTimer) clearTimeout(session.maxTimer)
@@ -173,7 +173,7 @@ export function stopSession(): void {
     // finishSession will be called via handle.onExit
   }).catch(err => {
     console.error('[recorder] stopCapture error:', err)
-    finishSession(session)
+    try { finishSession(session) } catch (e) { console.error('[recorder] finishSession error:', e) }
   })
 }
 

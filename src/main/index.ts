@@ -159,7 +159,7 @@ app.whenReady().then(async () => {
   setupIPC()
   cleanupOldRecordings()
   store.pruneHistory()
-  void wake.reschedule(scheduler.getUpcomingDates(), mainWindow)
+  wake.reschedule(scheduler.getUpcomingDates(), mainWindow).catch(err => console.error('[wake] reschedule error:', err))
 
   if (store.get('launchAtLogin')) {
     if (process.platform === 'win32') {
@@ -233,7 +233,12 @@ app.on('activate', () => {
   else mainWindow.show()
 })
 
+let ipcSetup = false
+
 function setupIPC(): void {
+  if (ipcSetup) return
+  ipcSetup = true
+
   ipcMain.handle('install-update', () => {
     forceQuit = true
     quitting  = true
@@ -253,7 +258,7 @@ function setupIPC(): void {
     store.setAll(settings)
     scheduler.reschedule()
     app.setLoginItemSettings({ openAtLogin: !!settings.launchAtLogin, openAsHidden: true })
-    void wake.reschedule(scheduler.getUpcomingDates(), mainWindow)
+    wake.reschedule(scheduler.getUpcomingDates(), mainWindow).catch(err => console.error('[wake] reschedule error:', err))
     return true
   })
 
@@ -325,8 +330,11 @@ function setupIPC(): void {
   })
 
   ipcMain.handle('start-recording-now', async (_, opts) => {
+    if (opts !== undefined && opts !== null && (typeof opts !== 'object' || Array.isArray(opts))) {
+      return { error: 'invalid_opts' }
+    }
     const settings = store.getAll()
-    return recorder.startSession({ ...settings, ...opts }, mainWindow)
+    return recorder.startSession({ ...settings, ...(opts ?? {}) }, mainWindow)
   })
   ipcMain.handle('stop-recording-now', () => { recorder.stopSession(); return true })
 
@@ -345,14 +353,6 @@ function setupIPC(): void {
     if (typeof p !== 'string' || !fs.existsSync(p)) return
     shell.showItemInFolder(p)
   })
-
-  ipcMain.on('recording-started', (_, data: { name: string }) => {
-    tray.setRecording(true)
-    tray.setError(false)
-    if (store.get('notifyStart') !== false) notify('SundayRec', data.name)
-  })
-
-  ipcMain.on('recording-stopped', () => tray.setRecording(false))
 
   ipcMain.on('recording-error', (_, data: { error: string }) => {
     tray.setRecording(false)
