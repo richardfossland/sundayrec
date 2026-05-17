@@ -185,18 +185,18 @@ async function handleManualStart(): Promise<void> {
       hideOverlay()
     }
   } else {
-    flashMsg(
-      document.getElementById('btn-manual-start'),
-      '✕ ' + (res?.error ?? t('general.unknownError', 'ukjent feil')),
-      false
-    )
+    const errMsg = res?.error ? translateNativeError(res.error) : t('general.unknownError', 'ukjent feil')
+    flashMsg(document.getElementById('btn-manual-start'), '✕ ' + errMsg, false)
   }
   if (btn) btn.disabled = false
 }
 
 export async function startRecordingWithOpts(opts: RecordingOpts): Promise<void> {
   const res = await window.api.startRecordingNow(opts)
-  if (!res?.ok) return
+  if (!res?.ok) {
+    if (res?.error) window.api.notifyError({ error: translateNativeError(res.error) })
+    return
+  }
   showOverlay(opts)
   try { await startMonitoring(opts) }
   catch (err) {
@@ -217,6 +217,22 @@ function translateAudioError(err: Error): string {
     case 'OverconstrainedError': return t('recording.errorOverconstrained','Lydenheten støtter ikke valgte innstillinger')
     case 'NotReadableError':     return t('recording.errorNotReadable',    'Lydenheten er i bruk av et annet program')
     default:                     return err.message
+  }
+}
+
+// Maps error codes from native-recorder (main process) to user-facing strings
+export function translateNativeError(code: string): string {
+  switch (code) {
+    case 'no_device':
+    case 'device_not_found':     return t('recording.errorDeviceNotFound', 'Lydenheten ble ikke funnet — sjekk USB-tilkoblingen')
+    case 'device_permission_denied': return t('recording.errorPermission', 'Tilgang til lydenheten ble nektet — sjekk systeminnstillingene')
+    case 'device_busy':          return t('recording.errorNotReadable',    'Lydenheten er i bruk av et annet program — lukk DAW eller lydprogram')
+    case 'device_error':         return t('recording.errorDeviceError',    'Feil ved åpning av lydenhet — prøv å koble til på nytt')
+    case 'already_recording':      return t('recording.errorAlreadyRecording',  'Et opptak er allerede i gang')
+    case 'empty_output':           return t('recording.errorEmpty',              'Opptaket er tomt — ingen lyd ble mottatt fra enheten')
+    case 'save_folder_permission': return t('recording.errorFolderPermission',   'Ingen tilgang til lagringsmappen — sjekk at mappen er skrivbar')
+    case 'save_folder_error':      return t('recording.errorFolderError',        'Kan ikke opprette lagringsmappe — sjekk diskplass og tillatelser')
+    default:                       return code
   }
 }
 

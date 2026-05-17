@@ -88,27 +88,47 @@ export async function listFfmpegDevices(): Promise<FfmpegDevice[]> {
 
 // ── Device input resolution ─────────────────────────────────────────────────
 
-export async function resolveDeviceInput(opts: RecordingOpts): Promise<{ format: string; device: string } | null> {
+function bestMatch(devices: FfmpegDevice[], name: string): FfmpegDevice | undefined {
+  if (!name) return devices[0]
+  const n = name.toLowerCase()
+  // 1. Exact match
+  const exact = devices.find(d => d.name.toLowerCase() === n)
+  if (exact) return exact
+  // 2. Stored name is a substring of device name (e.g. "USB Audio" ⊂ "USB Audio Device (2- USB Audio)")
+  const sub = devices.find(d => d.name.toLowerCase().includes(n))
+  if (sub) return sub
+  // 3. Device name is a substring of stored name
+  const rev = devices.find(d => n.includes(d.name.toLowerCase()))
+  if (rev) return rev
+  return undefined
+}
+
+export async function resolveDeviceInput(
+  opts: RecordingOpts
+): Promise<{ format: string; device: string; resolvedName: string } | null> {
   const name = (opts.deviceName ?? '').trim()
 
   if (process.platform === 'win32') {
-    if (!name) {
-      const devices = await listFfmpegDevices()
-      if (!devices.length) return null
-      return { format: 'dshow', device: `audio="${devices[0].name}"` }
+    // Always enumerate so we validate the name actually exists in DirectShow
+    const devices = await listFfmpegDevices()
+    if (!devices.length) return null
+    const match = bestMatch(devices, name)
+    if (!match) {
+      console.warn(`[native-recorder] No DirectShow device matching "${name}" — using first device: "${devices[0].name}"`)
     }
-    return { format: 'dshow', device: `audio="${name}"` }
+    const resolved = match ?? devices[0]
+    return { format: 'dshow', device: `audio="${resolved.name}"`, resolvedName: resolved.name }
   }
 
   if (process.platform === 'darwin') {
-    if (!name) return { format: 'avfoundation', device: ':0' }
     const devices = await listFfmpegDevices()
-    const match = devices.find(d =>
-      d.name.toLowerCase() === name.toLowerCase() ||
-      d.name.toLowerCase().includes(name.toLowerCase()) ||
-      name.toLowerCase().includes(d.name.toLowerCase())
-    )
-    return { format: 'avfoundation', device: `:${match?.index ?? 0}` }
+    if (!devices.length) return { format: 'avfoundation', device: ':0', resolvedName: 'default' }
+    const match = name ? bestMatch(devices, name) : devices[0]
+    if (name && !match) {
+      console.warn(`[native-recorder] No AVFoundation device matching "${name}" — using :0`)
+    }
+    const resolved = match ?? devices[0]
+    return { format: 'avfoundation', device: `:${resolved.index}`, resolvedName: resolved.name }
   }
 
   return null
@@ -185,6 +205,24 @@ export interface NativeHandle {
 
 // ── Start / stop ────────────────────────────────────────────────────────────
 
+// Classify ffmpeg stderr into a user-facing error code
+function classifyFfmpegError(stderr: string): string {
+  const s = stderr.toLowerCase()
+  if (s.includes('no such file') || s.includes('device not found') || s.includes('could not find') || s.includes('not found')) {
+    return 'device_not_found'
+  }
+  if (s.includes('access is denied') || s.includes('permission') || s.includes('not permitted') || s.includes('avfoundation: video not enabled')) {
+    return 'device_permission_denied'
+  }
+  if (s.includes('already in use') || s.includes('device busy') || s.includes('being used by another')) {
+    return 'device_busy'
+  }
+  if (s.includes('invalid argument') || s.includes('no devices found')) {
+    return 'device_not_found'
+  }
+  return 'device_error'
+}
+
 export async function startCapture(
   opts: RecordingOpts,
   outputPath: string
@@ -221,16 +259,19 @@ export async function startCapture(
     onProgress: null
   }
 
+  let stderrBuf = ''
+
   proc.stderr?.on('data', (d: Buffer) => {
-    const line = d.toString()
-    const m = line.match(/size=\s*(\d+)kB/)
+    const chunk = d.toString()
+    stderrBuf  += chunk
+    const m = chunk.match(/size=\s*(\d+)kB/)
     if (m) {
       handle.bytesWritten = parseInt(m[1]) * 1024
       handle.onProgress?.(handle.bytesWritten)
       return
     }
-    if (line.trim() && !line.includes('Press [q]') && !line.includes('time=')) {
-      console.log('[ffmpeg-capture]', line.trimEnd())
+    if (chunk.trim() && !chunk.includes('Press [q]') && !chunk.includes('time=')) {
+      console.log('[ffmpeg-capture]', chunk.trimEnd())
     }
   })
 
@@ -239,19 +280,23 @@ export async function startCapture(
     handle.onExit?.(code)
   })
 
-  // Wait up to 1s to detect immediate startup failures (wrong device name, permission denied)
+  // Windows DirectShow can take 2-3 s to enumerate and open a device.
+  // macOS AVFoundation is usually < 1 s.
+  const startupMs = process.platform === 'win32' ? 2500 : 1200
+
   const startupError = await new Promise<string | null>(resolve => {
-    const timer = setTimeout(() => resolve(null), 1000)
+    const timer = setTimeout(() => resolve(null), startupMs)
     proc.on('close', code => {
       clearTimeout(timer)
-      // Exit code 0 at startup = unlikely but not an error
-      resolve(code !== null && code !== 0 ? `ffmpeg_exit_${code}` : null)
+      if (code !== null && code !== 0) {
+        resolve(classifyFfmpegError(stderrBuf))
+      } else {
+        resolve(null)
+      }
     })
   })
 
-  if (startupError) {
-    return { error: startupError }
-  }
+  if (startupError) return { error: startupError }
 
   return handle
 }
@@ -262,17 +307,24 @@ export async function stopCapture(handle: NativeHandle): Promise<void> {
   return new Promise(resolve => {
     handle.proc.once('close', resolve)
 
-    // 'q' is the standard ffmpeg graceful-stop signal via stdin
-    try {
-      handle.proc.stdin?.write('q')
-      handle.proc.stdin?.end()
-    } catch {}
-
-    // Force kill if ffmpeg doesn't exit within 10 seconds
-    const killer = setTimeout(() => {
+    if (process.platform === 'win32') {
+      // DirectShow on Windows does not reliably flush when ffmpeg receives stdin 'q'.
+      // SIGTERM causes Windows to call TerminateProcess which flushes the codec buffer
+      // in the same way as CTRL+C — the file is written cleanly.
       try { handle.proc.kill('SIGTERM') } catch {}
-    }, 10000)
+    } else {
+      // macOS / Linux: send 'q' via stdin for a clean codec flush + container finalization
+      try {
+        handle.proc.stdin?.write('q')
+        handle.proc.stdin?.end()
+      } catch {}
 
-    handle.proc.once('close', () => clearTimeout(killer))
+      // Force kill if ffmpeg doesn't respond within 10 seconds
+      const killer = setTimeout(() => {
+        try { handle.proc.kill('SIGTERM') } catch {}
+      }, 10000)
+
+      handle.proc.once('close', () => clearTimeout(killer))
+    }
   })
 }

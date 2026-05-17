@@ -102,7 +102,15 @@ export async function startSession(
   const filename   = buildFilename(settings)
   const folder     = settings.saveFolder ?? defaultFolder()
   const outputPath = await uniquePath(path.join(folder, filename))
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true })
+  try {
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true })
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code
+    if (code === 'EPERM' || code === 'EACCES') {
+      return { error: 'save_folder_permission' }
+    }
+    return { error: 'save_folder_error' }
+  }
 
   const result = await startCapture(settings, outputPath)
   if ('error' in result) return { error: result.error }
@@ -209,21 +217,27 @@ function finishSession(session: Session): void {
 
 // ── Watchdog: reconnect after unexpected ffmpeg death ───────────────────────
 
-const RECONNECT_SECS = 30
+const MAX_RECONNECT_ATTEMPTS = 5   // ~30 s total (5 × ~6 s per attempt including startup wait)
 
 function startWatchdog(session: Session): void {
+  // Guard: only one watchdog per session
+  if (session.reconnectCount >= MAX_RECONNECT_ATTEMPTS) {
+    failSession(session, 'device_disconnected')
+    return
+  }
+
   session.win.webContents.send('recording-reconnecting', {})
   console.warn('[recorder] ffmpeg died unexpectedly — starting reconnect watchdog')
 
   let attempts = 0
   const tryReconnect = async () => {
     if (!activeSession || activeSession.sessionId !== session.sessionId) return
-    if (attempts >= RECONNECT_SECS) {
+    if (attempts >= MAX_RECONNECT_ATTEMPTS) {
       failSession(session, 'device_disconnected')
       return
     }
     attempts++
-    console.log(`[recorder] Reconnect attempt ${attempts}/${RECONNECT_SECS}…`)
+    console.log(`[recorder] Reconnect attempt ${attempts}/${MAX_RECONNECT_ATTEMPTS}…`)
 
     // Build a new output path with _r1/_r2 suffix for the reconnected segment
     session.reconnectCount++

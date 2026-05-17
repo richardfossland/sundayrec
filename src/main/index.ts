@@ -126,7 +126,28 @@ app.whenReady().then(async () => {
 
   if (process.platform === 'darwin') {
     const status = await systemPreferences.askForMediaAccess('microphone')
-    if (!status) console.warn('Microphone access denied')
+    if (!status) {
+      console.warn('[SundayRec] Microphone access denied')
+      // Show once per launch — user must fix in System Settings before recording works
+      const MIC_DENIED: Record<string, [string, string, string]> = {
+        no: ['Mikrofontilgang nektet', 'SundayRec trenger tilgang til mikrofon for å ta opp. Åpne Systeminnstillinger → Personvern & sikkerhet → Mikrofon og aktiver SundayRec.', 'Åpne Systeminnstillinger'],
+        en: ['Microphone access denied', 'SundayRec needs microphone access to record. Open System Settings → Privacy & Security → Microphone and enable SundayRec.', 'Open System Settings'],
+        de: ['Mikrofonzugriff verweigert', 'SundayRec benötigt Mikrofonzugriff. Öffnen Sie Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon.', 'Systemeinstellungen öffnen'],
+        sv: ['Mikrofonåtkomst nekad', 'SundayRec behöver mikrofonåtkomst. Öppna Systeminställningar → Integritet & säkerhet → Mikrofon.', 'Öppna Systeminställningar'],
+        da: ['Mikrofonadgang nægtet', 'SundayRec skal bruge mikrofonadgang. Åbn Systemindstillinger → Privatliv & sikkerhed → Mikrofon.', 'Åbn Systemindstillinger'],
+        pl: ['Odmowa dostępu do mikrofonu', 'SundayRec potrzebuje dostępu do mikrofonu. Otwórz Ustawienia systemowe → Prywatność i bezpieczeństwo → Mikrofon.', 'Otwórz ustawienia systemowe'],
+        fr: ['Accès au microphone refusé', "SundayRec a besoin d'accéder au microphone. Ouvrez Réglages système → Confidentialité et sécurité → Microphone.", 'Ouvrir les Réglages système'],
+      }
+      const lang = store.get('language') ?? 'en'
+      const [title, detail, openBtn] = MIC_DENIED[lang] ?? MIC_DENIED.en
+      const { response } = await dialog.showMessageBox({
+        type: 'warning', buttons: [openBtn, 'OK'], defaultId: 0,
+        title, message: title, detail
+      })
+      if (response === 0) {
+        shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone')
+      }
+    }
   }
 
   createWindow()
