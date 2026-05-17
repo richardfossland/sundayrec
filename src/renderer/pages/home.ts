@@ -198,6 +198,7 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
     tr.className = 'hist-row'
     tr.style.animationDelay = `${idx * 0.04}s`
     const badgeCls = r.status === 'ok' || r.status === 'complete' ? 'ok' : r.status === 'error' ? 'error' : 'sched'
+    tr.dataset.status = badgeCls
     const badge    = Object.assign(document.createElement('span'), { className: `badge badge-${badgeCls}`, textContent: t(`history.${r.status}`, r.status) })
     const tdStatus = document.createElement('td'); tdStatus.appendChild(badge)
     const tdActions = document.createElement('td'); tdActions.style.cssText = 'white-space:nowrap'

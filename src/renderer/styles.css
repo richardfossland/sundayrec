@@ -344,9 +344,17 @@ body.platform-darwin #sidebar { padding-top: 28px; }
   width: 10px; flex-shrink: 0; text-align: right;
 }
 .vu-bar-track {
-  flex: 1; height: 24px; border-radius: 4px;
+  flex: 1; height: 32px; border-radius: 5px;
   background: var(--surface2); border: 1px solid rgba(255,255,255,.06);
   position: relative; overflow: hidden;
+}
+/* dB tick marks: -24, -12, -6 dBFS */
+.vu-bar-track::after {
+  content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background-image:
+    linear-gradient(90deg, transparent 59.5%, rgba(0,0,0,.45) 59.5%, rgba(0,0,0,.45) 60.5%, transparent 60.5%),
+    linear-gradient(90deg, transparent 79.5%, rgba(0,0,0,.45) 79.5%, rgba(0,0,0,.45) 80.5%, transparent 80.5%),
+    linear-gradient(90deg, transparent 89.5%, rgba(0,0,0,.45) 89.5%, rgba(0,0,0,.45) 90.5%, transparent 90.5%);
 }
 .vu-bar-fill {
   position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
@@ -361,7 +369,7 @@ body.platform-darwin #sidebar { padding-top: 28px; }
   opacity: 0; pointer-events: none;
 }
 .vu-bar-clip {
-  width: 10px; height: 24px; border-radius: 2px; flex-shrink: 0;
+  width: 10px; height: 32px; border-radius: 3px; flex-shrink: 0;
   background: var(--surface3); border: 1px solid var(--border2);
   cursor: pointer; transition: background .08s, box-shadow .08s;
 }
@@ -466,11 +474,18 @@ body.platform-darwin #sidebar { padding-top: 28px; }
 }
 .rec-table td:first-child { color: var(--text); font-weight: 500; }
 .rec-table tr:last-child td { border-bottom: none; }
-.rec-table tr:hover td { background: rgba(255,255,255,.02); }
-.badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-.badge-ok    { background: rgba(34,197,94,.12); color: var(--green); }
-.badge-error { background: rgba(239,68,68,.12); color: var(--red); }
-.badge-sched { background: var(--accent-bg); color: var(--accent2); }
+.rec-table tr:hover td { background: rgba(255,255,255,.03); }
+.hist-row[data-status="ok"] td:first-child    { border-left: 3px solid rgba(34,197,94,.55); padding-left: 9px; }
+.hist-row[data-status="error"] td:first-child { border-left: 3px solid rgba(239,68,68,.55); padding-left: 9px; }
+.hist-row[data-status="sched"] td:first-child { border-left: 3px solid rgba(124,109,255,.5); padding-left: 9px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
+  letter-spacing: .02em;
+}
+.badge-ok    { background: rgba(34,197,94,.14); color: var(--green);  border: 1px solid rgba(34,197,94,.2); box-shadow: 0 0 8px rgba(34,197,94,.12); }
+.badge-error { background: rgba(239,68,68,.14); color: var(--red);    border: 1px solid rgba(239,68,68,.2); box-shadow: 0 0 8px rgba(239,68,68,.12); }
+.badge-sched { background: var(--accent-bg);    color: var(--accent2); border: 1px solid var(--accent-border); }
 
 /* ── Cards ─────────────────────────────────────────────────────── */
 .card {
@@ -1297,11 +1312,7 @@ select.form-input {
 #editor-workspace { padding-bottom: 20px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
 
-/* ── Processing badge on toolbar button ──────────────────────────── */
-.proc-badge {
-  font-size: 8px; color: var(--green); line-height: 1;
-  animation: pdot 1.5s ease-in-out infinite;
-}
+/* ── Processing badge on toolbar button — see visual-polish section ── */
 
 /* ── Processing panel ────────────────────────────────────────────── */
 .editor-proc-panel {
@@ -1323,7 +1334,7 @@ select.form-input {
 }
 .proc-tab:last-child { border-right: none; }
 .proc-tab:hover { color: var(--text2); background: var(--surface3); }
-.proc-tab.active { color: var(--accent2); background: var(--surface); }
+.proc-tab.active { color: var(--accent2); background: var(--surface); box-shadow: inset 0 -2px 0 var(--accent); }
 
 .proc-body { padding: 14px 16px; }
 
@@ -1541,3 +1552,302 @@ select.form-input {
   border-radius: var(--rsm); font-size: 12px;
 }
 .export-proc-summary { color: var(--text2); flex: 1; }
+
+/* ═══════════════════════════════════════════════════════════════
+   VISUAL POLISH — graphical lift across all pages
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Extra keyframes ───────────────────────────────────────────── */
+@keyframes heroGlow {
+  0%,100% { box-shadow: 0 0 24px rgba(34,197,94,.12); }
+  50%      { box-shadow: 0 0 40px rgba(34,197,94,.24); }
+}
+@keyframes heroGlowWarn {
+  0%,100% { box-shadow: 0 0 24px rgba(245,158,11,.12); }
+  50%      { box-shadow: 0 0 40px rgba(245,158,11,.24); }
+}
+@keyframes recRing {
+  0%   { transform: scale(1);    opacity: .7; }
+  70%  { transform: scale(1.12); opacity: 0;  }
+  100% { transform: scale(1.12); opacity: 0;  }
+}
+@keyframes shimmerSlide {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+/* ── Hero animated glow ───────────────────────────────────────── */
+.hero-ok   { animation: heroGlow     3s ease-in-out infinite; }
+.hero-warn { animation: heroGlowWarn 3s ease-in-out infinite; }
+
+/* ── Hero — recording state (btn-record.recording sibling) ─────── */
+.hero-ok.hero-recording {
+  background: linear-gradient(135deg, rgba(239,68,68,.08), rgba(239,68,68,.02));
+  border-color: rgba(239,68,68,.28);
+  animation: none;
+  box-shadow: 0 0 32px rgba(239,68,68,.15);
+}
+
+/* ── Recording button ring ─────────────────────────────────────── */
+.btn-record { position: relative; overflow: visible; }
+.btn-record.recording::before {
+  content: '';
+  position: absolute; inset: -7px;
+  border-radius: calc(var(--r) + 7px);
+  border: 2px solid rgba(239,68,68,.55);
+  animation: recRing 1.8s ease-out infinite;
+  pointer-events: none;
+}
+.btn-record.recording::after {
+  content: '';
+  position: absolute; inset: -14px;
+  border-radius: calc(var(--r) + 14px);
+  border: 1px solid rgba(239,68,68,.2);
+  animation: recRing 1.8s ease-out .4s infinite;
+  pointer-events: none;
+}
+
+/* ── Info cards — hover glow + accent bar ─────────────────────── */
+.info-card {
+  border-top: 2px solid transparent;
+  background-clip: padding-box;
+  transition: box-shadow .2s, border-color .2s, transform .15s;
+}
+.info-card:hover {
+  box-shadow: 0 6px 24px rgba(124,109,255,.12);
+  transform: translateY(-1px);
+}
+.info-card:hover .info-card-icon {
+  background: rgba(124,109,255,.2);
+  transform: scale(1.08);
+}
+.info-card-icon { transition: background .2s, transform .2s; }
+
+/* ── Cards — subtle top gradient accent ───────────────────────── */
+.card {
+  position: relative;
+  transition: box-shadow .2s;
+}
+.card::before {
+  content: ''; position: absolute; top: 0; left: 16px; right: 16px; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(124,109,255,.3), transparent);
+  border-radius: 1px;
+}
+.card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.35); }
+
+/* ── Calendar chips — animated dot for weekly ─────────────────── */
+.cal-chip.chip-weekly {
+  background: linear-gradient(90deg, rgba(124,109,255,.25), rgba(124,109,255,.35));
+}
+.cal-chip.chip-weekly::before {
+  content: ''; display: inline-block; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--accent2);
+  vertical-align: middle; margin-right: 3px;
+  animation: pdot 2s ease-in-out infinite;
+}
+.cal-chip.chip-special::before {
+  content: ''; display: inline-block; width: 5px; height: 5px;
+  border-radius: 50%; background: #fca5a5;
+  vertical-align: middle; margin-right: 3px;
+}
+.cal-day { transition: background .12s, transform .1s; }
+.cal-day:not(.other-month):hover { transform: scale(1.04); z-index: 1; }
+.cal-day.today { z-index: 2; }
+
+/* ── Planned items — timeline bar ─────────────────────────────── */
+.planned-item {
+  position: relative; padding-left: 16px;
+  transition: background .15s;
+  border-radius: var(--rxs);
+}
+.planned-item::before {
+  content: ''; position: absolute; left: 0; top: 50%;
+  transform: translateY(-50%);
+  width: 3px; height: 22px; border-radius: 2px;
+  background: linear-gradient(to bottom, var(--accent), var(--accent2));
+}
+
+/* ── Device cards — more dramatic selection ───────────────────── */
+.device-card {
+  transition: background .15s, border-color .2s, box-shadow .2s, transform .12s;
+}
+.device-card:hover { transform: translateY(-1px); }
+.device-card.selected {
+  border-color: var(--accent);
+  background: linear-gradient(135deg, rgba(124,109,255,.12), rgba(124,109,255,.04));
+  box-shadow: 0 0 0 3px rgba(124,109,255,.15), 0 4px 16px rgba(124,109,255,.1);
+}
+
+/* ── Format picker as visual card buttons ─────────────────────── */
+#format-group {
+  flex-direction: row; gap: 8px; flex-wrap: wrap;
+}
+#format-group label {
+  flex: 1; min-width: 64px;
+  flex-direction: column; justify-content: center; gap: 2px;
+  padding: 11px 14px; text-align: center;
+  background: var(--surface2); border: 1.5px solid var(--border2);
+  border-radius: var(--rsm); color: var(--text2);
+  font-size: 14px; font-weight: 700; letter-spacing: .5px;
+  transition: all .15s;
+}
+#format-group label:hover { background: var(--surface3); color: var(--text); }
+#format-group label:has(input:checked) {
+  background: var(--accent-bg); border-color: var(--accent);
+  color: var(--accent2); box-shadow: 0 0 0 3px rgba(124,109,255,.12);
+}
+#format-group input[type="radio"] { display: none; }
+
+/* ── Bitrate picker as visual cards ───────────────────────────── */
+#format-group + #mp3-quality-section .radio-group,
+#mp3-quality-section .radio-group {
+  flex-direction: row; gap: 8px; flex-wrap: wrap;
+}
+#mp3-quality-section .radio-group label {
+  flex: 1; min-width: 100px;
+  flex-direction: column; justify-content: center; gap: 1px;
+  padding: 10px 12px; text-align: center;
+  background: var(--surface2); border: 1.5px solid var(--border2);
+  border-radius: var(--rsm); color: var(--text2);
+  font-size: 12px; font-weight: 600;
+  transition: all .15s;
+}
+#mp3-quality-section .radio-group label:has(input:checked) {
+  background: var(--accent-bg); border-color: var(--accent);
+  color: var(--accent2); box-shadow: 0 0 0 3px rgba(124,109,255,.12);
+}
+#mp3-quality-section .radio-group input[type="radio"] { display: none; }
+
+/* ── Filename pattern picker ──────────────────────────────────── */
+.radio-group:has(input[name="pattern"]) { flex-direction: column; gap: 6px; }
+.radio-group:has(input[name="pattern"]) label {
+  padding: 9px 12px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--rsm); justify-content: flex-start;
+  font-size: 12px;
+}
+.radio-group:has(input[name="pattern"]) label:has(input:checked) {
+  background: var(--accent-bg); border-color: var(--accent-border);
+  color: var(--text);
+}
+.radio-group:has(input[name="pattern"]) input[type="radio"] {
+  accent-color: var(--accent); display: inline-block;
+}
+
+/* ── Slot rows — timeline accent ──────────────────────────────── */
+.slot-row {
+  position: relative; padding-left: 12px;
+  transition: background .12s;
+  border-radius: 4px;
+}
+.slot-row::before {
+  content: ''; position: absolute; left: 0; top: 50%;
+  transform: translateY(-50%);
+  width: 2px; height: 18px; border-radius: 1px;
+  background: var(--accent); opacity: .5;
+}
+.slot-row:hover { background: rgba(124,109,255,.04); }
+
+/* ── Scheduled upcoming items ─────────────────────────────────── */
+.planned-item:hover { background: rgba(255,255,255,.02); }
+
+/* ── VU section — add glow class when high ───────────────────── */
+.vu-bar-fill.high {
+  filter: drop-shadow(0 0 4px rgba(239,68,68,.5));
+}
+
+/* ── Preview box — shimmer on hover ───────────────────────────── */
+.preview-box {
+  background-size: 200% auto;
+  transition: background-position .4s;
+}
+.preview-box:hover {
+  background: linear-gradient(90deg, var(--surface2), rgba(124,109,255,.1), var(--surface2));
+  background-size: 200% auto;
+  animation: shimmerSlide 1.5s linear infinite;
+}
+
+/* ── Proc panel — active tab indicator: see existing .proc-tab.active ── */
+
+/* ── Proc toggle badge — pulse when active ────────────────────── */
+.proc-badge {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--green); box-shadow: 0 0 6px rgba(34,197,94,.5);
+  animation: pdot 1.5s ease-in-out infinite;
+  vertical-align: middle; font-size: 0; line-height: 0;
+}
+
+/* ── Sidebar recording dot — bigger aura ──────────────────────── */
+.status-dot.recording {
+  box-shadow: 0 0 0 4px rgba(239,68,68,.15), 0 0 10px rgba(239,68,68,.6);
+}
+
+/* ── Page titles — subtle gradient ───────────────────────────── */
+.page-header h1 {
+  background: linear-gradient(135deg, var(--text) 0%, var(--text2) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Cards — animated entrance ───────────────────────────────── */
+.card { animation: cardIn .25s ease-out both; }
+
+/* ── History table — row transition ──────────────────────────── */
+.hist-row { transition: background .1s; }
+.hist-row td { transition: background .1s; }
+
+/* ── Rec-table status column — compact icon + text ───────────── */
+.badge-ok::before    { content: '✓'; margin-right: 2px; opacity: .7; }
+.badge-error::before { content: '✕'; margin-right: 2px; opacity: .7; }
+
+/* ── Forms — focus ring improvement ──────────────────────────── */
+.form-input:focus {
+  box-shadow: 0 0 0 3px rgba(124,109,255,.15), 0 0 8px rgba(124,109,255,.08);
+}
+
+/* ── Toggle — active glow ─────────────────────────────────────── */
+.toggle input:checked + .toggle-track {
+  box-shadow: 0 0 8px rgba(124,109,255,.3);
+}
+
+/* ── Proc slider — styled range ───────────────────────────────── */
+.proc-slider {
+  accent-color: var(--accent);
+}
+.proc-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 3px rgba(124,109,255,.2), var(--shadow-sm);
+  transition: box-shadow .15s;
+}
+.proc-slider::-webkit-slider-thumb:hover { box-shadow: 0 0 0 5px rgba(124,109,255,.25), var(--shadow-sm); }
+
+/* ── Cal day — today pulse ────────────────────────────────────── */
+.cal-day.today .cal-day-num {
+  box-shadow: 0 0 10px rgba(124,109,255,.4);
+  animation: pdot 3s ease-in-out infinite;
+}
+
+/* ── Cal day — selected glow ──────────────────────────────────── */
+.cal-day.selected {
+  box-shadow: 0 0 0 2px rgba(124,109,255,.3);
+}
+
+/* ── Btn-primary — glow shimmer ───────────────────────────────── */
+.btn-primary:hover {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+}
+
+/* ── Recording overlay VU bars — match taller height ──────────── */
+.rec-vu-bars .vu-bar-clip { height: 80px; }
+
+/* ── Sidebar nav link — active glow ──────────────────────────── */
+.nav-link.active {
+  box-shadow: inset 0 0 12px rgba(124,109,255,.05);
+}
+
+/* ── Editor proc panel — wider tabs ──────────────────────────── */
+.proc-tab { font-size: 11px; letter-spacing: -.1px; }
