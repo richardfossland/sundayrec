@@ -17,8 +17,7 @@ const ALLOWED_CHANNELS = [
   'update-downloaded',
   'update-error',
   'wake-schedule-result',
-  'cloud-upload-progress',
-  'cloud-upload-done'
+
 ] as const
 
 type AllowedChannel = typeof ALLOWED_CHANNELS[number]
@@ -61,13 +60,6 @@ contextBridge.exposeInMainWorld('api', {
   editorSaveMeta:         (filePath: string, metadata: unknown) => ipcRenderer.invoke('editor-save-meta', filePath, metadata),
 
   pickAudioFile: () => ipcRenderer.invoke('pick-audio-file'),
-
-  cloudStatus:      ()                                                              => ipcRenderer.invoke('cloud-status'),
-  cloudConnect:     (service: string)                                               => ipcRenderer.invoke('cloud-connect', service),
-  cloudDisconnect:  (service: string)                                               => ipcRenderer.invoke('cloud-disconnect', service),
-  cloudListFolders: (service: string, parentId?: string)                            => ipcRenderer.invoke('cloud-list-folders', service, parentId),
-  cloudSetFolder:   (service: string, id: string, name: string, path?: string)      => ipcRenderer.invoke('cloud-set-folder', service, id, name, path),
-  cloudUploadFile:  (service: string, filePath: string)                             => ipcRenderer.invoke('cloud-upload-file', service, filePath),
 
   checkForUpdates: ()        => ipcRenderer.invoke('check-for-updates'),
   installUpdate:   ()        => ipcRenderer.invoke('install-update'),

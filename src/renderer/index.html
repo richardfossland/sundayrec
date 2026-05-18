@@ -439,7 +439,6 @@
       <button class="inner-tab active" data-tab="settings-audio" data-i18n="nav.audio">Lydkilde</button>
       <button class="inner-tab" data-tab="settings-files" data-i18n="nav.files">Filer</button>
       <button class="inner-tab" data-tab="settings-general" data-i18n="nav.general">Generelt</button>
-      <button class="inner-tab" data-tab="settings-publish" data-i18n="nav.publish">Publiser</button>
     </div>
 
     <!-- ── Lydkilde ────────────────────────────────────────────── -->
@@ -760,136 +759,6 @@
       </div>
     </div>
 
-    <!-- ── Publiser ──────────────────────────────────────────────── -->
-    <div id="settings-publish" class="inner-page">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div style="font-size:14px;color:var(--text2)" data-i18n="publish.desc">Koble til skytjenester for automatisk opplasting etter opptak og eksport.</div>
-        <button class="btn-ghost btn-sm" id="btn-cloud-refresh" data-i18n="publish.refresh">↺ Oppdater</button>
-      </div>
-
-      <!-- Google Drive card -->
-      <div class="card cloud-card" id="cloud-card-google-drive">
-        <div class="cloud-card-header">
-          <div class="cloud-card-icon cloud-icon-gdrive">
-            <svg viewBox="0 0 24 24" width="24" height="24"><path fill="#4285F4" d="M6 2l6 10.4L6 22H2L8 12 2 2z"/><path fill="#34A853" d="M12 12.4L18 2H14L8 12l3 5.2z"/><path fill="#FBBC05" d="M22 22H10l3-5.2L18 22z"/></svg>
-          </div>
-          <div class="cloud-card-name">Google Drive</div>
-          <div class="cloud-connected" style="display:none">
-            <span class="cloud-status-dot cloud-dot-ok"></span>
-            <span class="cloud-account-name" style="font-size:13px;color:var(--text2)"></span>
-          </div>
-          <div class="cloud-disconnected">
-            <span class="cloud-status-dot cloud-dot-off"></span>
-            <span style="font-size:13px;color:var(--text3)" data-i18n="publish.notConnected">Ikke tilkoblet</span>
-          </div>
-        </div>
-        <div class="cloud-connected" style="display:none">
-          <div class="cloud-folder-row">
-            <span class="cloud-folder-label" data-i18n="publish.folder">Mappe:</span>
-            <span class="cloud-folder-name"></span>
-            <button class="btn-ghost btn-sm" data-cloud-pick-folder="google-drive" data-i18n="publish.changeFolder">Endre</button>
-          </div>
-          <div class="cloud-upload-row">
-            <span class="cloud-last-upload-label" data-i18n="publish.lastUpload">Siste opplasting:</span>
-            <span class="cloud-last-upload">—</span>
-          </div>
-          <div class="cloud-toggle-row">
-            <label class="toggle"><input type="checkbox" data-cloud-auto="google-drive" /><span class="toggle-track"></span></label>
-            <span data-i18n="publish.autoUpload">Last opp automatisk etter opptak</span>
-          </div>
-          <div class="cloud-toggle-row">
-            <label class="toggle"><input type="checkbox" data-cloud-enabled="google-drive" /><span class="toggle-track"></span></label>
-            <span data-i18n="publish.enabled">Aktivert</span>
-          </div>
-          <button class="btn-ghost btn-sm cloud-disconnect-btn" data-cloud-disconnect="google-drive" data-i18n="publish.disconnect">Koble fra</button>
-        </div>
-        <div class="cloud-disconnected">
-          <button class="btn-secondary btn-sm" data-cloud-connect="google-drive" data-i18n="publish.connect">Koble til</button>
-        </div>
-      </div>
-
-      <!-- Dropbox card -->
-      <div class="card cloud-card" id="cloud-card-dropbox">
-        <div class="cloud-card-header">
-          <div class="cloud-card-icon">
-            <svg viewBox="0 0 24 24" width="24" height="24"><path fill="#0061FF" d="M6 2L0 6l6 4L0 14l6 4 6-4 6 4 6-4-6-4 6-4-6-4-6 4z"/></svg>
-          </div>
-          <div class="cloud-card-name">Dropbox</div>
-          <div class="cloud-connected" style="display:none">
-            <span class="cloud-status-dot cloud-dot-ok"></span>
-            <span class="cloud-account-name" style="font-size:13px;color:var(--text2)"></span>
-          </div>
-          <div class="cloud-disconnected">
-            <span class="cloud-status-dot cloud-dot-off"></span>
-            <span style="font-size:13px;color:var(--text3)" data-i18n="publish.notConnected">Ikke tilkoblet</span>
-          </div>
-        </div>
-        <div class="cloud-connected" style="display:none">
-          <div class="cloud-folder-row">
-            <span class="cloud-folder-label" data-i18n="publish.folder">Mappe:</span>
-            <span class="cloud-folder-name"></span>
-            <button class="btn-ghost btn-sm" data-cloud-pick-folder="dropbox" data-i18n="publish.changeFolder">Endre</button>
-          </div>
-          <div class="cloud-upload-row">
-            <span class="cloud-last-upload-label" data-i18n="publish.lastUpload">Siste opplasting:</span>
-            <span class="cloud-last-upload">—</span>
-          </div>
-          <div class="cloud-toggle-row">
-            <label class="toggle"><input type="checkbox" data-cloud-auto="dropbox" /><span class="toggle-track"></span></label>
-            <span data-i18n="publish.autoUpload">Last opp automatisk etter opptak</span>
-          </div>
-          <div class="cloud-toggle-row">
-            <label class="toggle"><input type="checkbox" data-cloud-enabled="dropbox" /><span class="toggle-track"></span></label>
-            <span data-i18n="publish.enabled">Aktivert</span>
-          </div>
-          <button class="btn-ghost btn-sm cloud-disconnect-btn" data-cloud-disconnect="dropbox" data-i18n="publish.disconnect">Koble fra</button>
-        </div>
-        <div class="cloud-disconnected">
-          <button class="btn-secondary btn-sm" data-cloud-connect="dropbox" data-i18n="publish.connect">Koble til</button>
-        </div>
-      </div>
-
-      <!-- OneDrive card -->
-      <div class="card cloud-card" id="cloud-card-onedrive">
-        <div class="cloud-card-header">
-          <div class="cloud-card-icon">
-            <svg viewBox="0 0 24 24" width="24" height="24"><path fill="#0078D4" d="M9.5 9a5.5 5.5 0 0110.7 1.7A4 4 0 0122 18H8a5 5 0 01-.7-10A5.4 5.4 0 019.5 9z"/><path fill="#50E6FF" d="M5 18a4 4 0 01-.2-8A6 6 0 019.3 7.3 5.5 5.5 0 007.5 9a5 5 0 00.2 9z" opacity=".8"/></svg>
-          </div>
-          <div class="cloud-card-name">OneDrive</div>
-          <div class="cloud-connected" style="display:none">
-            <span class="cloud-status-dot cloud-dot-ok"></span>
-            <span class="cloud-account-name" style="font-size:13px;color:var(--text2)"></span>
-          </div>
-          <div class="cloud-disconnected">
-            <span class="cloud-status-dot cloud-dot-off"></span>
-            <span style="font-size:13px;color:var(--text3)" data-i18n="publish.notConnected">Ikke tilkoblet</span>
-          </div>
-        </div>
-        <div class="cloud-connected" style="display:none">
-          <div class="cloud-folder-row">
-            <span class="cloud-folder-label" data-i18n="publish.folder">Mappe:</span>
-            <span class="cloud-folder-name"></span>
-            <button class="btn-ghost btn-sm" data-cloud-pick-folder="onedrive" data-i18n="publish.changeFolder">Endre</button>
-          </div>
-          <div class="cloud-upload-row">
-            <span class="cloud-last-upload-label" data-i18n="publish.lastUpload">Siste opplasting:</span>
-            <span class="cloud-last-upload">—</span>
-          </div>
-          <div class="cloud-toggle-row">
-            <label class="toggle"><input type="checkbox" data-cloud-auto="onedrive" /><span class="toggle-track"></span></label>
-            <span data-i18n="publish.autoUpload">Last opp automatisk etter opptak</span>
-          </div>
-          <div class="cloud-toggle-row">
-            <label class="toggle"><input type="checkbox" data-cloud-enabled="onedrive" /><span class="toggle-track"></span></label>
-            <span data-i18n="publish.enabled">Aktivert</span>
-          </div>
-          <button class="btn-ghost btn-sm cloud-disconnect-btn" data-cloud-disconnect="onedrive" data-i18n="publish.disconnect">Koble fra</button>
-        </div>
-        <div class="cloud-disconnected">
-          <button class="btn-secondary btn-sm" data-cloud-connect="onedrive" data-i18n="publish.connect">Koble til</button>
-        </div>
-      </div>
-    </div>
   </section>
 
   <!-- ══ REDIGER ═════════════════════════════════════════════════ -->
@@ -1452,17 +1321,6 @@
     <span class="rec-reconnect-text" data-i18n="recording.reconnecting">Lydkilde frakoblet — kobler til på nytt</span>
     <span class="rec-reconnect-countdown" id="rec-reconnect-countdown">10</span>
     <span class="rec-reconnect-unit" data-i18n="recording.reconnectSecs">s</span>
-  </div>
-</div>
-
-<!-- Cloud folder picker modal -->
-<div id="cloud-folder-modal" class="modal-backdrop" style="display:none">
-  <div class="modal modal-sm">
-    <h2 id="cloud-folder-modal-title">Velg mappe</h2>
-    <div id="cloud-folder-list" class="cloud-folder-list"></div>
-    <div class="btn-row mt">
-      <button class="btn-ghost" id="cloud-folder-modal-close" data-i18n="editor.cancel">Avbryt</button>
-    </div>
   </div>
 </div>
 

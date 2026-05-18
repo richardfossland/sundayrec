@@ -35,7 +35,6 @@ import { localDateStr, buildFilename, sanitizeFilename, formatDuration } from '.
 import { startCapture, stopCapture, ffmpegBin } from './native-recorder'
 import type { NativeHandle } from './native-recorder'
 import type { RecordingOpts, RecordingEntry } from '../types'
-import { autoUploadAfterRecording } from './cloud'
 
 // ── Localised notification labels ───────────────────────────────────────────
 
@@ -208,10 +207,6 @@ function finishSession(session: Session): void {
   }
   store.addHistory(entry)
   session.win.webContents.send('recording-finished', entry)
-
-  autoUploadAfterRecording(session.outputPath, session.win).catch(err =>
-    console.error('[recorder] cloud auto-upload error:', err)
-  )
 
   tray.setRecording(false)
   if (store.get('notifyStop') !== false) {
