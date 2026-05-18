@@ -84,12 +84,12 @@
     <div id="hero-ok" class="hero hero-ok">
       <div class="hero-icon"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg></div>
       <div class="hero-text">
-        <div class="hero-label" data-i18n="status.ok">KLAR FOR OPPTAK</div>
+        <div class="hero-label" data-i18n="status.ok">Klar for opptak</div>
         <div class="hero-title" id="hero-ready-title">Alt er klart</div>
         <div class="hero-version-badge" id="hero-app-version">—</div>
       </div>
-      <div class="hero-next">
-        <div class="next-label" data-i18n="home.nextRecording">NESTE OPPTAK</div>
+      <div class="hero-next" id="hero-next-section">
+        <div class="next-label" data-i18n="home.nextRecording">Neste opptak</div>
         <div class="next-date" id="next-date">—</div>
         <div class="next-countdown" id="next-countdown"></div>
       </div>
@@ -99,7 +99,7 @@
     <div id="hero-warn" class="hero hero-warn" style="display:none">
       <div class="hero-icon"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"/></svg></div>
       <div class="hero-text">
-        <div class="hero-label" data-i18n="status.warn">KREVER HANDLING</div>
+        <div class="hero-label" data-i18n="status.warn">Krever handling</div>
         <div class="hero-title" data-i18n="home.warnTitle">Lydmikseren er ikke tilkoblet</div>
         <div class="hero-detail" id="hero-warn-detail" data-i18n="home.warnDetail">Koble til mikseren via USB før søndag</div>
       </div>
@@ -117,7 +117,7 @@
     <!-- Full-width VU section with signal status -->
     <div class="vu-section">
       <div class="vu-section-head">
-        <span class="vu-section-label" data-i18n="home.audioLevel">Lydnivå — live</span>
+        <span class="vu-section-label" data-i18n="home.audioLevel">Lydnivå</span>
         <div class="signal-row">
           <span class="signal-dot" id="signal-dot"></span>
           <span class="signal-text" id="signal-text">—</span>
@@ -1405,6 +1405,22 @@
     <div class="btn-row mt">
       <button class="btn-danger" id="btn-confirm-stop" data-i18n="recording.confirmStop">Ja, stopp</button>
       <button class="btn-ghost" id="btn-confirm-cancel" data-i18n="recording.confirmCancel">Fortsett opptak</button>
+    </div>
+  </div>
+</div>
+
+<!-- Note modal -->
+<div id="modal-note" class="modal-backdrop" style="display:none">
+  <div class="modal modal-sm">
+    <h2 data-i18n="history.noteTitle">Notat</h2>
+    <p data-i18n="history.noteDesc">Skriv et notat til dette opptaket (valgfritt)</p>
+    <textarea id="note-textarea" class="form-input" rows="3"
+      data-i18n-placeholder="history.notePlaceholder"
+      placeholder="Skriv notat…"
+      style="width:100%;resize:vertical;min-height:70px;font-size:14px;line-height:1.5"></textarea>
+    <div class="btn-row mt">
+      <button class="btn-primary" id="btn-note-save" data-i18n="history.noteSave">Lagre notat</button>
+      <button class="btn-ghost" id="btn-note-cancel" data-i18n="history.noteCancel">Avbryt</button>
     </div>
   </div>
 </div>

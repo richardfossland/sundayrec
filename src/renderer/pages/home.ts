@@ -64,12 +64,15 @@ async function loadNextRecording(prefetchedNext?: { date: string } | null): Prom
   const cntEl   = document.getElementById('next-countdown')
   const titleEl = document.getElementById('hero-ready-title')
 
+  const heroNextEl = document.getElementById('hero-next-section')
   if (!next) {
-    if (dateEl)  dateEl.textContent  = '—'
-    if (cntEl)   cntEl.textContent   = ''
-    if (titleEl) titleEl.textContent = t('home.readyTitle', 'Alt er klart')
+    if (dateEl)    dateEl.textContent  = '—'
+    if (cntEl)     cntEl.textContent   = ''
+    if (titleEl)   titleEl.textContent = t('home.readyTitle', 'Alt er klart')
+    if (heroNextEl) heroNextEl.style.display = 'none'
     return
   }
+  if (heroNextEl) heroNextEl.style.display = ''
 
   const d      = new Date(next.date)
   const locale = currentLang === 'no' ? 'nb-NO' : currentLang
@@ -225,24 +228,23 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
     aNote.innerHTML = r.note
       ? '<svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>'
       : '<svg viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>'
-    aNote.addEventListener('click', async e => {
+    aNote.addEventListener('click', e => {
       e.preventDefault()
-      const newNote = prompt(t('history.notePlaceholder', 'Skriv notat…'), r.note ?? '')
-      if (newNote === null) return
-      r.note = newNote.trim() || undefined
-      await window.api.updateHistoryNote(r.timestamp!, newNote.trim())
-      const fileCell = tr.cells[3]
-      const existing = fileCell.querySelector('.hist-note')
-      if (existing) existing.remove()
-      if (r.note) {
-        const noteEl = Object.assign(document.createElement('div'), { className: 'hist-note', textContent: r.note })
-        noteEl.style.cssText = 'font-size:11px;color:var(--text3);white-space:normal;margin-top:2px'
-        fileCell.appendChild(noteEl)
-      }
-      aNote.title = r.note ? t('history.editNote', 'Rediger notat') : t('history.addNote', 'Legg til notat')
-      aNote.innerHTML = r.note
-        ? '<svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>'
-        : '<svg viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>'
+      showNoteModal(r.note ?? '', async (newNote: string) => {
+        r.note = newNote.trim() || undefined
+        await window.api.updateHistoryNote(r.timestamp!, newNote.trim())
+        const fileCell = tr.cells[3]
+        const existing = fileCell.querySelector('.hist-note')
+        if (existing) existing.remove()
+        if (r.note) {
+          const noteEl = Object.assign(document.createElement('div'), { className: 'hist-note', textContent: r.note })
+          fileCell.appendChild(noteEl)
+        }
+        aNote.title = r.note ? t('history.editNote', 'Rediger notat') : t('history.addNote', 'Legg til notat')
+        aNote.innerHTML = r.note
+          ? '<svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>'
+          : '<svg viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>'
+      })
     })
     tdActions.appendChild(aNote)
 
@@ -260,7 +262,7 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
       updateHistoryStats(fullHistory)
     })
     tdActions.appendChild(aDel)
-    tdActions.style.cssText = 'white-space:nowrap;display:flex;align-items:center;gap:2px'
+    tdActions.style.cssText = 'white-space:nowrap;display:flex;align-items:center;gap:3px'
 
     const cells = [r.date ? fmtDate(r.date) : '—', r.startTime ?? '—', r.duration ?? '—', r.filename ?? '—']
     cells.forEach((text, i) => {
@@ -269,9 +271,7 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
       if (i === 3) {
         if (r.path) td.title = r.path
         if (r.note) {
-          const noteEl = Object.assign(document.createElement('div'), { className: 'hist-note', textContent: r.note })
-          noteEl.style.cssText = 'font-size:11px;color:var(--text3);white-space:normal;margin-top:2px'
-          td.appendChild(noteEl)
+          td.appendChild(Object.assign(document.createElement('div'), { className: 'hist-note', textContent: r.note }))
         }
       }
       tr.appendChild(td)
@@ -361,5 +361,36 @@ async function loadHomeInfoStrip(): Promise<void> {
   if (fmtSub) fmtSub.textContent = `${ch} · ${srLabel}`
 }
 
+function showNoteModal(currentNote: string, onSave: (note: string) => void): void {
+  const modal    = document.getElementById('modal-note') as HTMLDivElement | null
+  const textarea = document.getElementById('note-textarea') as HTMLTextAreaElement | null
+  if (!modal || !textarea) return
+  textarea.value = currentNote
+  modal.style.display = 'flex'
+  setTimeout(() => textarea.focus(), 50)
+
+  const saveBtn   = document.getElementById('btn-note-save')
+  const cancelBtn = document.getElementById('btn-note-cancel')
+
+  const close = () => {
+    modal.style.display = 'none'
+    saveBtn?.removeEventListener('click', handleSave)
+    cancelBtn?.removeEventListener('click', handleCancel)
+    modal.removeEventListener('click', handleBackdrop)
+    document.removeEventListener('keydown', handleKey)
+  }
+  const handleSave    = () => { onSave(textarea.value); close() }
+  const handleCancel  = () => close()
+  const handleBackdrop = (e: MouseEvent) => { if (e.target === modal) close() }
+  const handleKey     = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') close()
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { onSave(textarea.value); close() }
+  }
+  saveBtn?.addEventListener('click', handleSave)
+  cancelBtn?.addEventListener('click', handleCancel)
+  modal.addEventListener('click', handleBackdrop)
+  document.addEventListener('keydown', handleKey)
+}
+
 // Type helpers
-interface RecordingEntry { date?: string; startTime?: string; duration?: string; filename?: string; path?: string; status: string; timestamp?: number }
+interface RecordingEntry { date?: string; startTime?: string; duration?: string; filename?: string; path?: string; status: string; timestamp?: number; note?: string }

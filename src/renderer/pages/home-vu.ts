@@ -96,10 +96,10 @@ function updateSignalStatus(dbL: number, dbR: number, state: VuState): void {
   if (!dot || !text) return
 
   let cls = '', label = '—'
-  if      (db >= -3)  { cls = 'klipping'; label = 'KLIPPING' }
-  else if (db >= -12) { cls = 'hoyt';     label = 'HØYT'     }
-  else if (db >= -40) { cls = 'god';      label = 'GOD'      }
-  else if (db > -55)  { cls = 'svak';     label = 'SVAK'     }
+  if      (db >= -3)  { cls = 'klipping'; label = 'Klipper!' }
+  else if (db >= -12) { cls = 'hoyt';     label = 'Høyt'     }
+  else if (db >= -40) { cls = 'god';      label = 'Bra'      }
+  else if (db > -55)  { cls = 'svak';     label = 'Svakt'    }
   dot.className  = 'signal-dot'  + (cls ? ' ' + cls : '')
   text.className = 'signal-text' + (cls ? ' ' + cls : '')
   text.textContent = label

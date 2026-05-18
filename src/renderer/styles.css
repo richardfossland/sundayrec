@@ -225,11 +225,11 @@ body.platform-win32 ::-webkit-scrollbar-thumb { border-radius: 4px; }
 .hero-ok   .hero-icon { background: rgba(34,197,94,.15); color: var(--green); }
 .hero-warn .hero-icon { background: rgba(245,158,11,.15); color: var(--orange); }
 .hero-text { flex: 1; min-width: 0; }
-.hero-label { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; color: var(--text3); margin-bottom: 3px; text-transform: uppercase; }
+.hero-label { font-size: 10px; font-weight: 700; letter-spacing: .6px; color: var(--text3); margin-bottom: 3px; }
 .hero-title { font-size: 16px; font-weight: 700; letter-spacing: -.2px; }
 .hero-detail { font-size: 12px; color: var(--text2); margin-top: 3px; }
 .hero-next { text-align: right; flex-shrink: 0; }
-.next-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: var(--text3); margin-bottom: 3px; text-transform: uppercase; }
+.next-label { font-size: 10px; font-weight: 700; letter-spacing: .6px; color: var(--text3); margin-bottom: 3px; }
 .next-date { font-size: 14px; font-weight: 700; }
 .next-countdown { font-size: 12px; color: var(--accent2); margin-top: 2px; }
 .btn-fix {
@@ -565,8 +565,8 @@ body.platform-win32 ::-webkit-scrollbar-thumb { border-radius: 4px; }
   margin-bottom: 14px;
 }
 .vu-section-label {
-  font-size: 10px; font-weight: 700; letter-spacing: 1px;
-  color: var(--text3); text-transform: uppercase;
+  font-size: 10px; font-weight: 700; letter-spacing: .6px;
+  color: var(--text3);
 }
 .signal-row { display: flex; align-items: center; gap: 6px; }
 .signal-dot {
@@ -635,6 +635,10 @@ body.platform-win32 ::-webkit-scrollbar-thumb { border-radius: 4px; }
 .hist-row[data-status="ok"] td:first-child    { border-left: 3px solid rgba(34,197,94,.55); padding-left: 9px; }
 .hist-row[data-status="error"] td:first-child { border-left: 3px solid rgba(239,68,68,.55); padding-left: 9px; }
 .hist-row[data-status="sched"] td:first-child { border-left: 3px solid rgba(240,187,71,.5); padding-left: 9px; }
+.hist-note {
+  font-size: 11px; color: var(--text3); margin-top: 3px;
+  white-space: normal; line-height: 1.4; font-style: italic;
+}
 .badge {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
@@ -1193,13 +1197,14 @@ select.form-input {
 /* ── History action icons ───────────────────────────────────────── */
 .hist-action {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 26px; height: 26px; border-radius: 6px;
+  width: 30px; height: 30px; border-radius: 7px;
   color: var(--text3); text-decoration: none;
   transition: background .12s, color .12s; cursor: pointer;
+  flex-shrink: 0;
 }
 .hist-action:hover { background: var(--surface3); color: var(--text2); }
-.hist-action.hist-del:hover { color: var(--red); }
-.hist-action svg { width: 14px; height: 14px; fill: currentColor; }
+.hist-action.hist-del:hover { color: var(--red); background: var(--red-bg); }
+.hist-action svg { width: 15px; height: 15px; fill: currentColor; }
 
 /* ── Scrollbar ─────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; }
