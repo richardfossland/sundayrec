@@ -86,7 +86,6 @@
       <div class="hero-text">
         <div class="hero-label" data-i18n="status.ok">Klar for opptak</div>
         <div class="hero-title" id="hero-ready-title">Alt er klart</div>
-        <div class="hero-version-badge" id="hero-app-version">—</div>
       </div>
       <div class="hero-next" id="hero-next-section">
         <div class="next-label" data-i18n="home.nextRecording">Neste opptak</div>
@@ -146,12 +145,8 @@
         <div class="vu-bar-scale-row">
           <span class="vu-bar-lbl"></span>
           <div class="vu-bar-scale">
-            <span style="left:0%">−60</span>
-            <span style="left:20%">−48</span>
-            <span style="left:40%">−36</span>
-            <span style="left:60%">−24</span>
-            <span style="left:80%">−12</span>
-            <span style="left:100%">0</span>
+            <span style="left:0%">Stille</span>
+            <span style="left:100%">Maks</span>
           </div>
           <div class="vu-bar-clip-spacer"></div>
           <span class="vu-bar-val-spacer"></span>
@@ -196,14 +191,17 @@
       </div>
     </div>
 
-    <!-- Historikk section -->
+    <!-- History section -->
     <div class="section-header">
-      <h2 data-i18n="home.recentRecordings">Historikk</h2>
-      <div style="display:flex;gap:14px;align-items:center">
-        <a href="#" class="view-all" id="btn-delete-errors" data-i18n="history.clearErrors">Slett feil</a>
-        <a href="#" class="view-all" id="btn-prune-history" data-i18n="history.pruneBtn" title="Fjern oppføringer uten tilhørende fil">Rydd opp</a>
+      <h2 data-i18n="home.recentRecordings">Siste opptak</h2>
+      <div style="display:flex;gap:10px;align-items:center">
         <a href="#" class="view-all" id="btn-clear-history" title="Slett alle opptak fra historikken" data-i18n="history.clearBtn">Slett alle</a>
+        <button class="btn-history-more" id="btn-history-more" title="Vedlikehold" aria-expanded="false">⋯</button>
       </div>
+    </div>
+    <div id="history-more-panel" class="history-more-panel" style="display:none">
+      <a href="#" id="btn-delete-errors" data-i18n="history.clearErrors">Slett feiloppføringer</a>
+      <a href="#" id="btn-prune-history" data-i18n="history.pruneBtn">Fjern oppføringer uten fil</a>
     </div>
     <div style="margin-bottom:8px">
       <input type="search" id="history-search" class="form-input" data-i18n-placeholder="history.searchPlaceholder" placeholder="Søk i historikk…" style="max-width:300px;font-size:13px;padding:6px 10px" />
@@ -215,8 +213,7 @@
     </div>
     <table class="rec-table">
       <thead><tr>
-        <th data-i18n="history.date">Dato</th>
-        <th data-i18n="history.start">Klokkeslett</th>
+        <th data-i18n="history.date">Tidspunkt</th>
         <th data-i18n="history.duration">Varighet</th>
         <th data-i18n="history.filename">Filnavn</th>
         <th data-i18n="history.status">Status</th>
@@ -235,160 +232,7 @@
       <p class="subtitle" data-i18n="schedule.subtitle">Faste opptak som gjentas automatisk hver uke.</p>
     </div>
 
-    <!-- Weekly recurring schedule — shown first as most common use case -->
-    <div class="card">
-      <div class="card-title" data-i18n="schedule.title">Ukentlig tidsplan</div>
-      <p class="card-desc" data-i18n="schedule.subtitle">Faste opptak som gjentas automatisk hver uke.</p>
-      <div id="slots-list"></div>
-      <button class="btn-secondary mt" id="btn-add-slot" data-i18n="schedule.addSlot">Legg til tidspunkt</button>
-    </div>
-
-    <!-- Slot editor (inline) -->
-    <div class="card" id="slot-editor" style="display:none">
-      <div class="card-title" data-i18n="schedule.edit">Rediger tidspunkt</div>
-      <div class="form-row">
-        <label class="form-label" data-i18n="schedule.dayLabel">DAG</label>
-        <div class="day-picker" id="day-picker"></div>
-      </div>
-      <div class="form-row two-col">
-        <div>
-          <label class="form-label" data-i18n="schedule.starts">STARTER</label>
-          <input type="time" class="form-input" id="slot-start" value="11:00" />
-        </div>
-        <div>
-          <label class="form-label" data-i18n="schedule.stops">STOPPER</label>
-          <input type="time" class="form-input" id="slot-stop" value="12:00" />
-        </div>
-      </div>
-      <div id="slot-duration-display" style="display:none;font-size:12px;padding:2px 0 6px;color:var(--text3)"></div>
-      <div class="form-row" style="margin-top:4px">
-        <div>
-          <label class="form-label" data-i18n="schedule.max">MAKS VARIGHET (min, valgfritt)</label>
-          <input type="number" class="form-input" id="slot-max" placeholder="—" min="0" max="480" style="max-width:120px" />
-        </div>
-      </div>
-      <div class="btn-row">
-        <button class="btn-primary" id="btn-slot-save" data-i18n="schedule.save">Lagre</button>
-        <button class="btn-ghost" id="btn-slot-cancel" data-i18n="schedule.cancel">Avbryt</button>
-      </div>
-    </div>
-
-    <!-- Advanced schedule options -->
-    <div class="card">
-      <div class="card-title" data-i18n="schedule.advanced">Avanserte valg</div>
-      <div class="toggle-row">
-        <div>
-          <div class="toggle-title" data-i18n="schedule.wakeTitle">Vekk datamaskinen fra dvale</div>
-          <div class="toggle-desc" data-i18n="schedule.wakeDesc">Starter automatisk noen minutter før opptaket begynner</div>
-        </div>
-        <label class="toggle"><input type="checkbox" id="opt-wake" /><span class="toggle-track"></span></label>
-      </div>
-      <div id="wake-status-row" class="wake-status-row" style="display:none">
-        <span id="wake-status-dot" class="wake-status-dot"></span>
-        <span id="wake-status-text" class="wake-status-text"></span>
-        <button id="btn-schedule-wake" class="btn-ghost btn-sm" data-i18n="schedule.wakeBtn">Planlegg oppvåkning</button>
-      </div>
-      <!-- Sleep config status — shown when wake is enabled -->
-      <div id="sleep-config-panel" class="sleep-config-panel" style="display:none">
-        <div id="sleep-config-loading" class="sleep-config-loading">
-          <span data-i18n="schedule.sleepChecking">Sjekker dvaleinnstillinger…</span>
-        </div>
-        <div id="sleep-config-result" style="display:none">
-          <div class="wake-status-row" style="margin-top:0;padding-top:0;border-top:none">
-            <span id="sleep-config-dot" class="wake-status-dot"></span>
-            <span id="sleep-config-text" class="wake-status-text" style="flex:1"></span>
-            <button id="btn-fix-sleep" class="btn-ghost btn-sm" style="display:none" data-i18n="schedule.sleepFixBtn">Fiks automatisk</button>
-          </div>
-          <div id="sleep-config-detail" class="sleep-config-detail" style="display:none"></div>
-        </div>
-        <div id="sleep-always-off-note" class="sleep-config-detail" style="margin-top:8px" data-i18n="schedule.sleepAlwaysOffNote">
-          Vil du at maskinen alltid skal starte opptak? La den stå i dvale (ikke slå den av) og aktiver «Oppstart med Windows/Mac» i Generelt-siden.
-        </div>
-      </div>
-      <div class="toggle-row">
-        <div>
-          <div class="toggle-title" data-i18n="schedule.protectTitle">Beskytt pågående opptak</div>
-          <div class="toggle-desc" data-i18n="schedule.protectDesc">Krever bekreftelse for å stoppe et pågående opptak</div>
-        </div>
-        <label class="toggle"><input type="checkbox" id="opt-protect" checked /><span class="toggle-track"></span></label>
-      </div>
-      <div class="toggle-row">
-        <div>
-          <div class="toggle-title" data-i18n="schedule.silenceTitle">Stopp ved vedvarende stillhet</div>
-          <div class="toggle-desc" data-i18n="schedule.silenceDesc">Avslutter opptaket hvis lyden er stille i mer enn 5 minutter</div>
-        </div>
-        <label class="toggle"><input type="checkbox" id="opt-silence" /><span class="toggle-track"></span></label>
-      </div>
-      <div id="silence-config" style="display:none;margin:4px 0 8px;padding:8px;background:var(--surface2,rgba(255,255,255,.04));border-radius:6px">
-        <div class="form-row two-col">
-          <div>
-            <label class="form-label" data-i18n="schedule.silenceThresholdLabel">GRENSE (dBFS)</label>
-            <select class="form-input" id="opt-silence-threshold">
-              <option value="-40">-40 dB</option>
-              <option value="-50" selected>-50 dB</option>
-              <option value="-60">-60 dB</option>
-              <option value="-70">-70 dB</option>
-            </select>
-          </div>
-          <div>
-            <label class="form-label" data-i18n="schedule.silenceTimeoutLabel">VARIGHET FØR STOPP</label>
-            <select class="form-input" id="opt-silence-timeout">
-              <option value="2">2 min</option>
-              <option value="5" selected>5 min</option>
-              <option value="10">10 min</option>
-              <option value="15">15 min</option>
-            </select>
-          </div>
-        </div>
-      </div>
-      <div class="toggle-row">
-        <div>
-          <div class="toggle-title" data-i18n="schedule.splitTitle">Del opp filer automatisk</div>
-          <div class="toggle-desc" data-i18n="schedule.splitDesc">Lager ny lydfil for hvert intervall — enklere å redigere etterpå</div>
-        </div>
-        <select class="form-input split-select" id="opt-split-minutes">
-          <option value="0"  data-i18n="schedule.splitOff">Av</option>
-          <option value="30">30 min</option>
-          <option value="45">45 min</option>
-          <option value="60">60 min (1 t)</option>
-          <option value="90">90 min</option>
-          <option value="120">120 min (2 t)</option>
-        </select>
-      </div>
-      <div class="toggle-row">
-        <div>
-          <div class="toggle-title" data-i18n="schedule.reminderTitle">Påminnelse før opptak</div>
-          <div class="toggle-desc" data-i18n="schedule.reminderDesc">Systemvarsel N minutter før planlagt opptak starter</div>
-        </div>
-        <select class="form-input split-select" id="opt-reminder-minutes">
-          <option value="0" data-i18n="schedule.splitOff">Av</option>
-          <option value="5">5 min</option>
-          <option value="10">10 min</option>
-          <option value="15">15 min</option>
-          <option value="30">30 min</option>
-        </select>
-      </div>
-      <div class="toggle-row">
-        <div>
-          <div class="toggle-title" data-i18n="schedule.manualMaxTitle">Maks varighet — manuelle opptak</div>
-          <div class="toggle-desc" data-i18n="schedule.manualMaxDesc">Stopper automatisk etter angitt tid — unngår enorme filer ved glemt stopp</div>
-        </div>
-        <select class="form-input split-select" id="opt-manual-max">
-          <option value="0" data-i18n="schedule.splitOff">Av</option>
-          <option value="60">1 time</option>
-          <option value="120">2 timer</option>
-          <option value="180">3 timer</option>
-          <option value="240">4 timer</option>
-          <option value="360">6 timer</option>
-        </select>
-      </div>
-      <div class="btn-row">
-        <button class="btn-primary" id="btn-schedule-save" data-i18n="schedule.save">Lagre tidsplan</button>
-        <button class="btn-secondary" id="btn-export-ical" data-i18n="schedule.exportIcal">Eksporter til iCal</button>
-      </div>
-    </div>
-
-    <!-- Special recordings calendar — for non-recurring dates -->
+    <!-- Calendar — shown first for immediate overview -->
     <div class="cal-layout">
       <div class="card cal-card">
         <div class="cal-month-nav">
@@ -443,12 +287,169 @@
       </div>
     </div>
 
+    <!-- Weekly recurring schedule -->
+    <div class="card">
+      <div class="card-title" data-i18n="schedule.title">Ukentlig tidsplan</div>
+      <div id="slots-list"></div>
+      <button class="btn-secondary mt" id="btn-add-slot" data-i18n="schedule.addSlot">Legg til tidspunkt</button>
+    </div>
+
+    <!-- Slot editor (inline) -->
+    <div class="card" id="slot-editor" style="display:none">
+      <div class="card-title" data-i18n="schedule.edit">Rediger tidspunkt</div>
+      <div class="form-row">
+        <label class="form-label" data-i18n="schedule.dayLabel">DAG</label>
+        <div class="day-picker" id="day-picker"></div>
+      </div>
+      <div class="form-row two-col">
+        <div>
+          <label class="form-label" data-i18n="schedule.starts">STARTER</label>
+          <input type="time" class="form-input" id="slot-start" value="11:00" />
+        </div>
+        <div>
+          <label class="form-label" data-i18n="schedule.stops">STOPPER</label>
+          <input type="time" class="form-input" id="slot-stop" value="12:00" />
+        </div>
+      </div>
+      <div id="slot-duration-display" style="display:none;font-size:12px;padding:2px 0 6px;color:var(--text3)"></div>
+      <div class="form-row" style="margin-top:4px">
+        <div>
+          <label class="form-label" data-i18n="schedule.max">MAKS VARIGHET (min, valgfritt)</label>
+          <input type="number" class="form-input" id="slot-max" placeholder="—" min="0" max="480" style="max-width:120px" />
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" id="btn-slot-save" data-i18n="schedule.save">Lagre</button>
+        <button class="btn-ghost" id="btn-slot-cancel" data-i18n="schedule.cancel">Avbryt</button>
+      </div>
+    </div>
+
+    <!-- Advanced schedule options (collapsible) -->
+    <div class="card adv-card">
+      <button class="adv-toggle" id="btn-adv-toggle" aria-expanded="false">
+        <span data-i18n="schedule.advanced">Avanserte innstillinger</span>
+        <svg class="adv-toggle-chevron" id="adv-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+      <div id="adv-section" style="display:none">
+        <div class="toggle-row" style="margin-top:12px">
+          <div>
+            <div class="toggle-title" data-i18n="schedule.wakeTitle">Vekk datamaskinen fra dvale</div>
+            <div class="toggle-desc" data-i18n="schedule.wakeDesc">Starter automatisk noen minutter før opptaket begynner</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-wake" /><span class="toggle-track"></span></label>
+        </div>
+        <div id="wake-status-row" class="wake-status-row" style="display:none">
+          <span id="wake-status-dot" class="wake-status-dot"></span>
+          <span id="wake-status-text" class="wake-status-text"></span>
+          <button id="btn-schedule-wake" class="btn-ghost btn-sm" data-i18n="schedule.wakeBtn">Planlegg oppvåkning</button>
+        </div>
+        <div id="sleep-config-panel" class="sleep-config-panel" style="display:none">
+          <div id="sleep-config-loading" class="sleep-config-loading">
+            <span data-i18n="schedule.sleepChecking">Sjekker dvaleinnstillinger…</span>
+          </div>
+          <div id="sleep-config-result" style="display:none">
+            <div class="wake-status-row" style="margin-top:0;padding-top:0;border-top:none">
+              <span id="sleep-config-dot" class="wake-status-dot"></span>
+              <span id="sleep-config-text" class="wake-status-text" style="flex:1"></span>
+              <button id="btn-fix-sleep" class="btn-ghost btn-sm" style="display:none" data-i18n="schedule.sleepFixBtn">Fiks automatisk</button>
+            </div>
+            <div id="sleep-config-detail" class="sleep-config-detail" style="display:none"></div>
+          </div>
+          <div id="sleep-always-off-note" class="sleep-config-detail" style="margin-top:8px" data-i18n="schedule.sleepAlwaysOffNote">
+            Vil du at maskinen alltid skal starte opptak? La den stå i dvale (ikke slå den av) og aktiver «Oppstart med Windows/Mac» i Generelt-siden.
+          </div>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="schedule.protectTitle">Beskytt pågående opptak</div>
+            <div class="toggle-desc" data-i18n="schedule.protectDesc">Krever bekreftelse for å stoppe et pågående opptak</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-protect" checked /><span class="toggle-track"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="schedule.silenceTitle">Stopp ved vedvarende stillhet</div>
+            <div class="toggle-desc" data-i18n="schedule.silenceDesc">Avslutter opptaket hvis lyden er stille i mer enn 5 minutter</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-silence" /><span class="toggle-track"></span></label>
+        </div>
+        <div id="silence-config" style="display:none;margin:4px 0 8px;padding:8px;background:var(--surface2,rgba(255,255,255,.04));border-radius:6px">
+          <div class="form-row two-col">
+            <div>
+              <label class="form-label" data-i18n="schedule.silenceThresholdLabel">GRENSE (dBFS)</label>
+              <select class="form-input" id="opt-silence-threshold">
+                <option value="-40">-40 dB</option>
+                <option value="-50" selected>-50 dB</option>
+                <option value="-60">-60 dB</option>
+                <option value="-70">-70 dB</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label" data-i18n="schedule.silenceTimeoutLabel">VARIGHET FØR STOPP</label>
+              <select class="form-input" id="opt-silence-timeout">
+                <option value="2">2 min</option>
+                <option value="5" selected>5 min</option>
+                <option value="10">10 min</option>
+                <option value="15">15 min</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="schedule.splitTitle">Del opp filer automatisk</div>
+            <div class="toggle-desc" data-i18n="schedule.splitDesc">Lager ny lydfil for hvert intervall — enklere å redigere etterpå</div>
+          </div>
+          <select class="form-input split-select" id="opt-split-minutes">
+            <option value="0"  data-i18n="schedule.splitOff">Av</option>
+            <option value="30">30 min</option>
+            <option value="45">45 min</option>
+            <option value="60">60 min (1 t)</option>
+            <option value="90">90 min</option>
+            <option value="120">120 min (2 t)</option>
+          </select>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="schedule.reminderTitle">Påminnelse før opptak</div>
+            <div class="toggle-desc" data-i18n="schedule.reminderDesc">Systemvarsel N minutter før planlagt opptak starter</div>
+          </div>
+          <select class="form-input split-select" id="opt-reminder-minutes">
+            <option value="0" data-i18n="schedule.splitOff">Av</option>
+            <option value="5">5 min</option>
+            <option value="10">10 min</option>
+            <option value="15">15 min</option>
+            <option value="30">30 min</option>
+          </select>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="schedule.manualMaxTitle">Maks varighet — manuelle opptak</div>
+            <div class="toggle-desc" data-i18n="schedule.manualMaxDesc">Stopper automatisk etter angitt tid — unngår enorme filer ved glemt stopp</div>
+          </div>
+          <select class="form-input split-select" id="opt-manual-max">
+            <option value="0" data-i18n="schedule.splitOff">Av</option>
+            <option value="60">1 time</option>
+            <option value="120">2 timer</option>
+            <option value="180">3 timer</option>
+            <option value="240">4 timer</option>
+            <option value="360">6 timer</option>
+          </select>
+        </div>
+        <div class="btn-row" style="margin-top:16px">
+          <button class="btn-primary" id="btn-schedule-save" data-i18n="schedule.save">Lagre innstillinger</button>
+        </div>
+      </div>
+    </div>
+
   </section>
 
   <!-- ══ INNSTILLINGER ════════════════════════════════════════════ -->
   <section id="page-settings" class="page">
     <div class="inner-tabs" id="settings-tabs">
-      <button class="inner-tab active" data-tab="settings-audio" data-i18n="nav.audio">Lydkilde</button>
+      <button class="inner-tab active" data-tab="settings-audio" data-i18n="nav.audio">Lyd</button>
       <button class="inner-tab" data-tab="settings-files" data-i18n="nav.files">Filer</button>
       <button class="inner-tab" data-tab="settings-general" data-i18n="nav.general">Generelt</button>
     </div>
@@ -549,12 +550,13 @@
           <label class="option-card">
             <input type="radio" name="sampleRate" value="44100" id="sr-44" />
             <div class="option-card-name">44 100 Hz</div>
-            <div class="option-card-desc">CD-kvalitet</div>
+            <div class="option-card-desc">Musikk, CD og podcast</div>
           </label>
           <label class="option-card">
             <input type="radio" name="sampleRate" value="48000" id="sr-48" checked />
             <div class="option-card-name">48 000 Hz</div>
-            <div class="option-card-badge">Standard</div>
+            <div class="option-card-badge">Anbefalt</div>
+            <div class="option-card-desc">Video, Zoom og TV-utstyr</div>
           </label>
         </div>
         <!-- Hidden select for compatibility with existing save logic -->
@@ -562,11 +564,9 @@
           <option value="44100">44100</option>
           <option value="48000" selected>48000</option>
         </select>
-      </div>
 
-      <div class="card">
-        <div class="card-title">Lydforbedringer</div>
-        <div class="toggle-row mt">
+        <div class="card-title" style="margin-top:20px">Lydforbedringer</div>
+        <div class="toggle-row" style="margin-top:8px">
           <div>
             <div class="toggle-title">Jevn ut lydnivå</div>
             <div class="toggle-desc">Reduserer plutselige volum-topper automatisk under opptak</div>

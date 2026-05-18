@@ -45,6 +45,14 @@ export function setupHome(): void {
     filterAndRenderHistory(q)
   })
 
+  document.getElementById('btn-history-more')?.addEventListener('click', () => {
+    const panel = document.getElementById('history-more-panel')
+    const btn   = document.getElementById('btn-history-more')
+    const open  = panel?.style.display !== 'none'
+    if (panel) panel.style.display = open ? 'none' : 'flex'
+    btn?.setAttribute('aria-expanded', String(!open))
+  })
+
   const onDeviceChange = (): void => { void checkStatus() }
   navigator.mediaDevices.addEventListener('devicechange', onDeviceChange)
   window.addEventListener('beforeunload', () =>
@@ -171,6 +179,7 @@ function updateHistoryStats(history: RecordingEntry[]): void {
   let totalSec = 0
   for (const r of ok) {
     const parts = (r.duration || '0').split(':').map(Number)
+    if (parts.some(isNaN)) continue
     if (parts.length === 3)      totalSec += parts[0] * 3600 + parts[1] * 60 + parts[2]
     else if (parts.length === 2) totalSec += parts[0] * 60 + parts[1]
     else                         totalSec += parts[0]
@@ -264,7 +273,8 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
     tdActions.appendChild(aDel)
     tdActions.style.cssText = 'white-space:nowrap;display:flex;align-items:center;gap:3px'
 
-    const cells = [r.date ? fmtDate(r.date) : '—', r.startTime ?? '—', r.duration ?? '—', r.filename ?? '—']
+    const timeStr  = r.startTime ? ` kl. ${r.startTime}` : ''
+    const cells = [r.date ? `${fmtDate(r.date)}${timeStr}` : '—', r.duration ?? '—', r.filename ?? '—']
     cells.forEach((text, i) => {
       const td = document.createElement('td')
       td.textContent = text

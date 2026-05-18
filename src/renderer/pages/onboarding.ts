@@ -99,7 +99,7 @@ function s1(body: HTMLElement): void {
     <div class="ob-features">
       <div class="ob-feature"><span>🎛️</span><span>Velg mikser eller lydkort</span></div>
       <div class="ob-feature"><span>✅</span><span>Test at lyden fungerer</span></div>
-      <div class="ob-feature"><span>📅</span><span>Sett opp automatisk søndagsopptak</span></div>
+      <div class="ob-feature"><span>📅</span><span>Sett opp automatisk ukentlig opptak</span></div>
     </div>
     <div class="ob-actions">
       <button class="btn-primary" id="ob-n1" style="justify-content:center">Kom i gang →</button>
@@ -224,25 +224,36 @@ async function s3(body: HTMLElement): Promise<void> {
 
 // ── Step 4: Schedule ─────────────────────────────────────────────
 function s4(body: HTMLElement): void {
-  const existingSun = settings.slots?.find(s => s.days.includes(6))
-  const defStart    = existingSun?.start ?? '10:00'
-  const defDur      = existingSun
+  const dayLabels  = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn']
+  let selectedDay  = 6  // default: Sunday
+
+  const getSlotForDay = (d: number) => settings.slots?.find(s => s.days.includes(d))
+
+  const existing = getSlotForDay(selectedDay)
+  const defStart = existing?.start ?? '11:00'
+  const defDur   = existing
     ? (() => {
-        const [sh, sm] = existingSun.start.split(':').map(Number)
-        const [eh, em] = existingSun.stop.split(':').map(Number)
+        const [sh, sm] = existing.start.split(':').map(Number)
+        const [eh, em] = existing.stop.split(':').map(Number)
         return (eh * 60 + em) - (sh * 60 + sm)
       })()
     : 90
 
   body.innerHTML = `
-    <h2 class="ob-title">Automatisk søndagsopptak</h2>
+    <h2 class="ob-title">Ukentlig automatisk opptak</h2>
     <p class="ob-desc">SundayRec kan starte og stoppe opptaket automatisk — uten at noen trenger å huske det.</p>
     <div class="ob-sched-card">
       <label class="ob-toggle-row">
-        <span>Aktiver automatisk søndagsopptak</span>
+        <span>Aktiver automatisk ukentlig opptak</span>
         <input type="checkbox" id="ob-on" checked style="width:auto;cursor:pointer">
       </label>
       <div id="ob-sched-fields">
+        <div class="ob-field-row ob-field-row--col">
+          <span class="ob-field-lbl">Dag</span>
+          <div class="ob-day-picker" id="ob-day-picker">
+            ${dayLabels.map((d, i) => `<button type="button" class="ob-day-btn${i === 6 ? ' sel' : ''}" data-day="${i}">${d}</button>`).join('')}
+          </div>
+        </div>
         <div class="ob-field-row">
           <span class="ob-field-lbl">Gudstjenesten starter kl.</span>
           <input type="time" class="form-input" id="ob-start" value="${defStart}" style="max-width:110px">
@@ -270,15 +281,35 @@ function s4(body: HTMLElement): void {
   syncFields()
   chk.addEventListener('change', syncFields)
 
+  document.getElementById('ob-day-picker')?.querySelectorAll<HTMLElement>('.ob-day-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#ob-day-picker .ob-day-btn').forEach(b => b.classList.remove('sel'))
+      btn.classList.add('sel')
+      selectedDay = +(btn.dataset.day ?? '6')
+      const slot   = getSlotForDay(selectedDay)
+      const startIn = document.getElementById('ob-start') as HTMLInputElement
+      const durIn   = document.getElementById('ob-dur')   as HTMLInputElement
+      if (slot) {
+        startIn.value = slot.start
+        const [sh, sm] = slot.start.split(':').map(Number)
+        const [eh, em] = slot.stop.split(':').map(Number)
+        durIn.value = String((eh * 60 + em) - (sh * 60 + sm))
+      } else {
+        startIn.value = '11:00'
+        durIn.value   = '90'
+      }
+    })
+  })
+
   const save = () => {
     if (chk.checked) {
-      const startVal = (document.getElementById('ob-start') as HTMLInputElement)?.value ?? '10:00'
+      const startVal = (document.getElementById('ob-start') as HTMLInputElement)?.value ?? '11:00'
       const durMin   = Math.max(15, parseInt((document.getElementById('ob-dur') as HTMLInputElement)?.value ?? '90') || 90)
       const [sh, sm] = startVal.split(':').map(Number)
       const endMin   = sh * 60 + sm + durMin
       const stopVal  = `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`
-      const slots    = (settings.slots ?? []).filter(s => !s.days.includes(6))
-      slots.push({ days: [6], start: startVal, stop: stopVal })
+      const slots    = (settings.slots ?? []).filter(s => !s.days.includes(selectedDay))
+      slots.push({ days: [selectedDay], start: startVal, stop: stopVal })
       patchSettings({ slots })
       void window.api.saveSettings(settings)
     }

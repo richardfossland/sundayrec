@@ -145,8 +145,8 @@ function buildAudioFilters(opts: RecordingOpts): string {
 
   // Channel routing — handles multi-channel devices and custom channel selection
   const channels = opts.channels ?? 'stereo'
-  const chL = opts.channelL ?? 0
-  const chR = opts.channelR ?? 1
+  const chL = Math.max(0, Math.min(31, Math.trunc(opts.channelL ?? 0)))
+  const chR = Math.max(0, Math.min(31, Math.trunc(opts.channelR ?? 1)))
   if (channels === 'monoL') {
     filters.push(`pan=mono|c0=c${chL}`)
   } else if (channels === 'monoR') {
@@ -159,17 +159,17 @@ function buildAudioFilters(opts: RecordingOpts): string {
 
   // Compressor
   if (opts.compEnabled) {
-    const thr  = opts.compThreshold ?? -24
-    const rat  = opts.compRatio     ?? 4
-    const atk  = ((opts.compAttack  ?? 10)  / 1000).toFixed(4)
-    const rel  = ((opts.compRelease ?? 200) / 1000).toFixed(4)
-    filters.push(`acompressor=threshold=${thr}dB:ratio=${rat}:attack=${atk}:release=${rel}:knee=6dB`)
+    const thr  = Math.max(-60, Math.min(0,   Number(opts.compThreshold ?? -24)))
+    const rat  = Math.max(1,   Math.min(100, Number(opts.compRatio     ?? 4)))
+    const atk  = Math.max(0.1, Math.min(2000, Number(opts.compAttack  ?? 10))) / 1000
+    const rel  = Math.max(1,   Math.min(9000, Number(opts.compRelease ?? 200))) / 1000
+    filters.push(`acompressor=threshold=${thr.toFixed(1)}dB:ratio=${rat.toFixed(1)}:attack=${atk.toFixed(4)}:release=${rel.toFixed(4)}:knee=6dB`)
   }
 
   // Limiter — always on unless explicitly disabled
   if (opts.limiterEnabled !== false) {
-    const ceil = opts.limiterCeiling ?? -1
-    filters.push(`alimiter=level_in=1:level_out=1:limit=${ceil}dB:attack=0.001:release=0.1`)
+    const ceil = Math.max(-10, Math.min(0, Number(opts.limiterCeiling ?? -1)))
+    filters.push(`alimiter=level_in=1:level_out=1:limit=${ceil.toFixed(1)}dB:attack=0.001:release=0.1`)
   }
 
   // Silence trim (post-process style — remove sustained silence at start/end)

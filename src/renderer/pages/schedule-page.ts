@@ -1,6 +1,6 @@
 import { t, tArr } from '../i18n'
 import { settings, patchSettings } from '../state'
-import { flashSaved, escHtml, isoDate } from '../helpers'
+import { flashSaved, escHtml } from '../helpers'
 import type { ScheduleSlot } from '../../types'
 
 let editingSlotIndex = -1
@@ -18,7 +18,15 @@ export function setupSchedulePage(): void {
     if (editor) editor.style.display = 'none'
   })
   document.getElementById('btn-schedule-save')?.addEventListener('click', saveScheduleSettings)
-  document.getElementById('btn-export-ical')?.addEventListener('click', exportIcal)
+  document.getElementById('btn-adv-toggle')?.addEventListener('click', () => {
+    const section = document.getElementById('adv-section')
+    const chevron = document.getElementById('adv-chevron')
+    const btn     = document.getElementById('btn-adv-toggle')
+    const open    = section?.style.display !== 'none'
+    if (section) section.style.display = open ? 'none' : 'block'
+    btn?.setAttribute('aria-expanded', String(!open))
+    if (chevron) chevron.style.transform = open ? '' : 'rotate(180deg)'
+  })
   document.getElementById('opt-silence')?.addEventListener('change', function (this: HTMLInputElement) {
     const silCfg = document.getElementById('silence-config')
     if (silCfg) silCfg.style.display = this.checked ? 'block' : 'none'
@@ -285,71 +293,6 @@ function setSleepConfigStatus(cls: string, key: string, fallback: string, showFi
   if (dot)     dot.className = `wake-status-dot ${cls}`
   if (txt)     txt.textContent = t(key) || fallback
   if (fixBtn)  fixBtn.style.display = showFix ? '' : 'none'
-}
-
-function exportIcal(): void {
-  const now = new Date()
-  const cutoff = new Date(now)
-  cutoff.setMonth(cutoff.getMonth() + 3)
-
-  const lines: string[] = [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//SundayRec//SundayRec//EN',
-    'CALSCALE:GREGORIAN',
-    'METHOD:PUBLISH'
-  ]
-
-  function fmt(d: Date): string {
-    const p = (n: number) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`
-  }
-
-  // Weekly slots — generate for the next 3 months
-  const slots = settings.slots ?? []
-  const day = new Date(now); day.setHours(0, 0, 0, 0)
-  while (day <= cutoff) {
-    const jsDay = day.getDay()
-    const uiDay = jsDay === 0 ? 6 : jsDay - 1
-    for (const slot of slots) {
-      if (!slot.days?.includes(uiDay)) continue
-      const [sh, sm] = slot.start.split(':').map(Number)
-      const [eh, em] = slot.stop.split(':').map(Number)
-      const dtStart = new Date(day); dtStart.setHours(sh, sm, 0, 0)
-      const dtEnd   = new Date(day); dtEnd.setHours(eh, em, 0, 0)
-      if (dtEnd <= dtStart) dtEnd.setDate(dtEnd.getDate() + 1)
-      lines.push('BEGIN:VEVENT',
-        `UID:${dtStart.getTime()}-wk@sundayrec`,
-        `DTSTART:${fmt(dtStart)}`,
-        `DTEND:${fmt(dtEnd)}`,
-        `SUMMARY:${(settings.churchName || t('recording.defaultName', 'Opptak')).replace(/[,;\\]/g, '\\$&')}`,
-        'END:VEVENT')
-    }
-    day.setDate(day.getDate() + 1)
-  }
-
-  // Special recordings in window
-  for (const sr of settings.specialRecordings ?? []) {
-    const dtStart = new Date(sr.date + 'T' + sr.start)
-    const dtEnd   = new Date(sr.date + 'T' + sr.stop)
-    if (dtEnd <= dtStart) dtEnd.setDate(dtEnd.getDate() + 1)
-    if (dtStart < now || dtStart > cutoff) continue
-    lines.push('BEGIN:VEVENT',
-      `UID:${sr.id || dtStart.getTime()}-sp@sundayrec`,
-      `DTSTART:${fmt(dtStart)}`,
-      `DTEND:${fmt(dtEnd)}`,
-      `SUMMARY:${(sr.name || t('recording.defaultName', 'Opptak')).replace(/[,;\\]/g, '\\$&')}`,
-      'END:VEVENT')
-  }
-
-  lines.push('END:VCALENDAR')
-
-  const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' })
-  const a = Object.assign(document.createElement('a'), {
-    href: URL.createObjectURL(blob),
-    download: `${t('schedule.icalFilename', 'SundayRec-timeplan')}.ics`
-  })
-  a.click()
 }
 
 async function loadSleepConfig(): Promise<void> {

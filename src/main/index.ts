@@ -406,7 +406,7 @@ function setupIPC(): void {
   })
 
   ipcMain.handle('editor-read-file', async (_, filePath: string) => {
-    if (typeof filePath !== 'string') return null
+    if (typeof filePath !== 'string' || !isAllowedAudioPath(filePath)) return null
     try { return await fs.promises.readFile(filePath) } catch { return null }
   })
 
@@ -452,8 +452,9 @@ function setupIPC(): void {
 
   // Metadata sidecar read/write
   ipcMain.handle('editor-read-meta', async (_, filePath: string) => {
-    if (typeof filePath !== 'string') return null
-    const metaPath = filePath.replace(/\.[^.]+$/, '') + '.meta.json'
+    if (typeof filePath !== 'string' || !isAllowedAudioPath(filePath)) return null
+    const metaPath = sidecarPath(filePath, '.meta.json')
+    if (!metaPath) return null
     try {
       const raw = await fs.promises.readFile(metaPath, 'utf8')
       return JSON.parse(raw)
@@ -461,8 +462,9 @@ function setupIPC(): void {
   })
 
   ipcMain.handle('editor-save-meta', async (_, filePath: string, metadata: unknown) => {
-    if (typeof filePath !== 'string') return false
-    const metaPath = filePath.replace(/\.[^.]+$/, '') + '.meta.json'
+    if (typeof filePath !== 'string' || !isAllowedAudioPath(filePath)) return false
+    const metaPath = sidecarPath(filePath, '.meta.json')
+    if (!metaPath) return false
     try {
       await fs.promises.writeFile(metaPath, JSON.stringify(metadata, null, 2), 'utf8')
       return true
@@ -475,19 +477,43 @@ function notify(title: string, body: string): void {
   if (Notification.isSupported()) new Notification({ title, body }).show()
 }
 
-function cleanupOldRecordings(): void {
+async function cleanupOldRecordings(): Promise<void> {
   const days = store.get('autoDeleteDays')
   if (!days || days <= 0) return
-  const cutoff = Date.now() - days * 86400000
-  const history = store.getHistory()
+  const cutoff   = Date.now() - days * 86400000
+  const saveDir  = path.resolve(store.get('saveFolder') ?? app.getPath('documents'))
+  const history  = store.getHistory()
+  const toDelete: typeof history = []
   const remaining = history.filter(entry => {
-    if (entry.timestamp && entry.timestamp < cutoff && entry.path && entry.status === 'ok') {
-      fs.unlink(entry.path, err => { if (err) console.error('Failed to delete recording:', err) })
+    if (
+      entry.timestamp && entry.timestamp < cutoff &&
+      entry.path && entry.status === 'ok' &&
+      path.resolve(entry.path).startsWith(saveDir + path.sep)
+    ) {
+      toDelete.push(entry)
       return false
     }
     return true
   })
-  if (remaining.length !== history.length) {
-    store.set('recordingHistory', remaining)
+  if (!toDelete.length) return
+  store.set('recordingHistory', remaining)
+  for (const entry of toDelete) {
+    try { await fs.promises.unlink(entry.path!) } catch { /* already gone */ }
   }
+}
+
+const ALLOWED_AUDIO_EXTS = new Set(['.mp3', '.wav', '.flac', '.aac', '.m4a', '.ogg', '.webm'])
+
+function isAllowedAudioPath(p: string): boolean {
+  return ALLOWED_AUDIO_EXTS.has(path.extname(p).toLowerCase())
+}
+
+function sidecarPath(audioPath: string, suffix: string): string | null {
+  const resolved = path.resolve(audioPath)
+  const dir      = path.dirname(resolved)
+  const base     = path.basename(resolved, path.extname(resolved))
+  const result   = path.join(dir, base + suffix)
+  // Ensure sidecar stays in the same directory (guards against base containing '..')
+  if (path.dirname(result) !== dir) return null
+  return result
 }
