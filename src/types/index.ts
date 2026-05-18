@@ -51,6 +51,7 @@ export interface Settings {
   // System
   language: string | null
   hasLaunched?: boolean
+  onboardingDone?: boolean
 
   // Audio device
   deviceId: string | null

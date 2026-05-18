@@ -11,6 +11,7 @@ import { setupFilesPage, applyFilesSettingsToUI, updateFilenamePreview, toggleMp
 import { setupGeneralPage, applyGeneralSettingsToUI } from './pages/general-page'
 import { setupRecording } from './pages/recording'
 import { setupEditorPage, openEditorWithFile, deactivateEditor } from './pages/editor-page'
+import { checkAndShowOnboarding } from './pages/onboarding'
 
 // Expose globals that sub-modules need
 declare global {
@@ -169,6 +170,9 @@ async function init(): Promise<void> {
 
   // Load settings, which triggers locale + UI apply
   await loadSettings()
+
+  // Show first-run onboarding wizard for new users
+  checkAndShowOnboarding()
 
   // Initial page load
   await refreshHome()
