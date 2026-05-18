@@ -425,10 +425,13 @@ function setupIPC(): void {
     return r.canceled ? null : r.filePaths[0]
   })
 
-  ipcMain.handle('editor-export-file', async (_, params) => {
+  ipcMain.handle('editor-export-file', async (event, params) => {
     if (!params || typeof params !== 'object' || Array.isArray(params)) return { ok: false, error: 'invalid_params' }
     const { exportEdited } = await import('./editor')
-    return exportEdited(params)
+    const onProgress = (percent: number) => {
+      try { event.sender.send('editor-export-progress', { percent }) } catch {}
+    }
+    return exportEdited({ ...params, onProgress })
   })
 
   ipcMain.handle('editor-pick-output-folder', async (event) => {

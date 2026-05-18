@@ -17,7 +17,7 @@ const ALLOWED_CHANNELS = [
   'update-downloaded',
   'update-error',
   'wake-schedule-result',
-
+  'editor-export-progress',
 ] as const
 
 type AllowedChannel = typeof ALLOWED_CHANNELS[number]

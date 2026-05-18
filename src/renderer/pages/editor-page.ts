@@ -53,6 +53,20 @@ let minimapDragging  = false
 // Export state
 let exportOutputFolder = ''
 
+// Clipping detection
+let clipTimes: number[] = []
+
+// Loop playback
+let isLooping    = false
+let loopStartSec = 0
+
+// Cut handle dragging
+interface HandleDrag { cutIdx: number; side: 'start' | 'end' }
+let handleDrag: HandleDrag | null = null
+
+// Playhead dragging (drag the playhead triangle)
+let playheadDragging = false
+
 // ── DOM refs ──────────────────────────────────────────────────────────────
 const $ = (id: string) => document.getElementById(id)
 let canvas:    HTMLCanvasElement
@@ -199,6 +213,33 @@ export function setupEditorPage(): void {
   // Meta save button
   $('btn-meta-save')?.addEventListener('click', saveMetadata)
 
+  // Loop toggle
+  $('btn-editor-loop')?.addEventListener('click', () => {
+    isLooping = !isLooping
+    $('btn-editor-loop')?.classList.toggle('active', isLooping)
+  })
+
+  // Clip badge — jump to first clip
+  $('editor-clip-badge')?.addEventListener('click', () => {
+    if (clipTimes.length === 0) return
+    playStartSec = Math.max(0, clipTimes[0] - 1)
+    updateTimecode(playStartSec)
+    const half = (vpEnd - vpStart) / 2
+    vpStart = Math.max(0, playStartSec - half * 0.3)
+    vpEnd   = Math.min(duration, vpStart + half * 2)
+    updateMinimapViewport()
+    drawWaveform()
+  })
+
+  // Export progress listener
+  window.api.on('editor-export-progress', (data: unknown) => {
+    const { percent } = data as { percent: number }
+    const bar   = $('editor-export-progress-bar')
+    const label = $('editor-export-progress-label')
+    if (bar)   bar.style.width   = Math.min(99, percent) + '%'
+    if (label) label.textContent = `Eksporterer… ${Math.round(percent)}%`
+  })
+
   // Canvas interactions
   canvas?.addEventListener('mousedown',   onCanvasDown)
   canvas?.addEventListener('mousemove',   onCanvasMove)
@@ -293,6 +334,14 @@ async function loadFile(fp: string): Promise<void> {
   updateRemainingDisplay()
   updateTimecode(0)
   updateTotalTime()
+
+  // Clipping badge (shown after computePeaks)
+  const clipBadge = $('editor-clip-badge')
+  if (clipBadge) {
+    clipBadge.style.display = clipTimes.length > 0 ? '' : 'none'
+    if (clipTimes.length > 0) clipBadge.textContent = `⚠ ${clipTimes.length} klipp`
+  }
+
   syncCanvasSize()
   drawWaveform()
   drawMinimap()
@@ -432,6 +481,7 @@ function computePeaks(buf: AudioBuffer): Float32Array {
   const ch0   = buf.getChannelData(0)
   const ch1   = buf.numberOfChannels > 1 ? buf.getChannelData(1) : ch0
   const spp   = Math.floor(buf.sampleRate / RATE)
+  clipTimes   = []
 
   for (let i = 0; i < total; i++) {
     const s = i * spp
@@ -442,6 +492,7 @@ function computePeaks(buf: AudioBuffer): Float32Array {
       if (v > pk) pk = v
     }
     out[i] = pk
+    if (pk >= 0.99) clipTimes.push(i / RATE)
   }
   return out
 }
@@ -711,6 +762,34 @@ function drawWaveform(): void {
     }
   }
 
+  // ── Clipping indicators ────────────────────────────────────────
+  if (clipTimes.length > 0) {
+    ctx.fillStyle = '#ef4444'
+    ctx.globalAlpha = 0.8
+    for (const t of clipTimes) {
+      const x = secToX(t, W)
+      if (x < 0 || x > W) continue
+      ctx.fillRect(x - 0.5, RULER, 1, 5)
+    }
+    ctx.globalAlpha = 1
+  }
+
+  // ── Cut handle hover highlights ────────────────────────────────
+  if (hoverSec >= vpStart && hoverSec <= vpEnd && !isDragging && !handleDrag) {
+    const threshold = (vpEnd - vpStart) / W * 10
+    for (const c of cuts) {
+      for (const side of ['start', 'end'] as const) {
+        const t = c[side]
+        if (Math.abs(hoverSec - t) < threshold) {
+          const x = secToX(t, W)
+          ctx.strokeStyle = '#fbbf24'
+          ctx.lineWidth = 2
+          ctx.beginPath(); ctx.moveTo(x, RULER); ctx.lineTo(x, H); ctx.stroke()
+        }
+      }
+    }
+  }
+
   ctx.restore()
 }
 
@@ -867,6 +946,11 @@ function setupKeyboardShortcuts(): void {
         fitAll()
         drawWaveform()
         updateMinimapViewport()
+        break
+      case 'KeyL':
+        e.preventDefault()
+        isLooping = !isLooping
+        $('btn-editor-loop')?.classList.toggle('active', isLooping)
         break
     }
   })
@@ -1062,31 +1146,113 @@ function renderCutList(): void {
   panel.style.display = ''
   undo.style.display  = ''
 
-  list.innerHTML = cuts.map((c, i) => {
-    const dur = c.end - c.start
-    return `<div class="editor-cut-row" style="animation-delay:${i * 0.05}s">
-      <div class="editor-cut-icon">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M5 5l10 10M5 15L15 5" stroke-linecap="round"/>
-        </svg>
-      </div>
-      <div class="editor-cut-range">${formatTime(c.start)} – ${formatTime(c.end)}</div>
-      <div class="editor-cut-dur">${formatDuration(dur)}</div>
-      <button class="editor-cut-del" data-i="${i}" title="${t('editor.deleteCut') || 'Fjern kutt'}">✕</button>
-    </div>`
-  }).join('')
+  list.innerHTML = ''
 
-  list.querySelectorAll('.editor-cut-del').forEach(btn => {
-    btn.addEventListener('click', () => deleteCut(parseInt((btn as HTMLElement).dataset.i!)))
+  cuts.forEach((c, i) => {
+    const dur = c.end - c.start
+    const row = document.createElement('div')
+    row.className = 'editor-cut-row'
+    row.style.animationDelay = `${i * 0.05}s`
+
+    // Thumbnail
+    const thumb = document.createElement('div')
+    thumb.className = 'editor-cut-thumb'
+    if (peaks) {
+      thumb.innerHTML = makeCutThumbnailSvg(c)
+    }
+
+    // Info
+    const info = document.createElement('div')
+    info.className = 'editor-cut-info'
+    info.innerHTML = `<div class="editor-cut-range">${formatTime(c.start)} – ${formatTime(c.end)}</div>
+      <div class="editor-cut-dur">${formatDuration(dur)}</div>`
+
+    // Preview button (pre/post-roll)
+    const prevBtn = document.createElement('button')
+    prevBtn.className = 'editor-cut-prev'
+    prevBtn.title = 'Spill 3s rundt kuttet'
+    prevBtn.innerHTML = '<svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12"><path d="M6.3 4.6a1 1 0 011.4 0l6 5a1 1 0 010 1.6l-6 5A1 1 0 016 15.4V4.6z"/></svg>'
+    prevBtn.addEventListener('click', () => previewCut(c))
+
+    // Delete button
+    const delBtn = document.createElement('button')
+    delBtn.className = 'editor-cut-del'
+    delBtn.title = t('editor.deleteCut') || 'Fjern kutt'
+    delBtn.textContent = '✕'
+    delBtn.addEventListener('click', () => deleteCut(i))
+
+    row.appendChild(thumb)
+    row.appendChild(info)
+    row.appendChild(prevBtn)
+    row.appendChild(delBtn)
+    list.appendChild(row)
   })
+}
+
+function makeCutThumbnailSvg(cut: Cut): string {
+  if (!peaks) return ''
+  const W = 72, H = 24
+  const startIdx = Math.floor(cut.start * 100)
+  const endIdx   = Math.ceil(cut.end * 100)
+  const count    = Math.max(1, endIdx - startIdx)
+  const midY     = H / 2
+  const rects: string[] = []
+  for (let px = 0; px < W; px++) {
+    const pi = startIdx + Math.floor(px / W * count)
+    if (pi >= peaks.length) break
+    const h = peaks[pi] * (midY - 2)
+    rects.push(`<rect x="${px}" y="${(midY - h).toFixed(1)}" width="1" height="${(h * 2).toFixed(1)}"/>`)
+  }
+  return `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="display:block">${rects.join('')}</svg>`
+}
+
+function previewCut(cut: Cut): void {
+  stopPlay()
+  const PRE_ROLL = 3
+  playStartSec = Math.max(0, cut.start - PRE_ROLL)
+  updateTimecode(playStartSec)
+  if (playStartSec < vpStart || playStartSec > vpEnd) {
+    const half = (vpEnd - vpStart) / 2
+    vpStart = Math.max(0, playStartSec - half * 0.3)
+    vpEnd   = Math.min(duration, vpStart + half * 2)
+    updateMinimapViewport()
+  }
+  startPlay(false)
 }
 
 // ── Canvas mouse events ───────────────────────────────────────────────────
 function onCanvasDown(e: MouseEvent): void {
   if (!peaks || e.button !== 0) return
-  const rect   = canvas.getBoundingClientRect()
-  dragStartSec = xToSec(e.clientX - rect.left, rect.width)
-  dragEndSec   = dragStartSec
+  const rect = canvas.getBoundingClientRect()
+  const sec  = xToSec(e.clientX - rect.left, rect.width)
+
+  // Check if clicking near a cut boundary → start handle drag
+  const threshold = (vpEnd - vpStart) / rect.width * 10
+  for (let i = 0; i < cuts.length; i++) {
+    if (Math.abs(sec - cuts[i].start) < threshold) {
+      cutHistory.push([...cuts])
+      handleDrag = { cutIdx: i, side: 'start' }
+      return
+    }
+    if (Math.abs(sec - cuts[i].end) < threshold) {
+      cutHistory.push([...cuts])
+      handleDrag = { cutIdx: i, side: 'end' }
+      return
+    }
+  }
+
+  // Check if clicking near playhead in the ruler area → playhead drag
+  const yInCanvas = e.clientY - rect.top
+  const playX = secToX(playStartSec, rect.width)
+  if (Math.abs(e.clientX - rect.left - playX) < 12 && yInCanvas < 28) {
+    playheadDragging = true
+    stopPlay()
+    return
+  }
+
+  // Normal drag to create cut
+  dragStartSec = sec
+  dragEndSec   = sec
   isDragging   = true
 }
 
@@ -1094,24 +1260,72 @@ function onCanvasMove(e: MouseEvent): void {
   if (!peaks) return
   const rect = canvas.getBoundingClientRect()
   const sec  = xToSec(e.clientX - rect.left, rect.width)
-  hoverSec   = sec
 
-  // Cursor feedback: pointer over cut region = can delete via right-click
-  const overCut = cuts.some(c => sec >= c.start && sec <= c.end)
-  canvas.style.cursor = overCut ? 'pointer' : 'crosshair'
-
-  if (isDragging) {
-    dragEndSec = sec
+  // Handle drag: resize cut boundary
+  if (handleDrag) {
+    const c = cuts[handleDrag.cutIdx]
+    if (handleDrag.side === 'start') {
+      c.start = Math.max(0, Math.min(c.end - 0.1, sec))
+    } else {
+      c.end   = Math.min(duration, Math.max(c.start + 0.1, sec))
+    }
+    updateRemainingDisplay()
+    drawWaveform()
+    return
   }
+
+  // Playhead drag
+  if (playheadDragging) {
+    playStartSec = Math.max(0, Math.min(duration, sec))
+    updateTimecode(playStartSec)
+    drawWaveform()
+    return
+  }
+
+  hoverSec = sec
+
+  // Cursor feedback
+  const threshold = (vpEnd - vpStart) / rect.width * 10
+  const nearBoundary = cuts.some(c =>
+    Math.abs(sec - c.start) < threshold || Math.abs(sec - c.end) < threshold
+  )
+  const overCut = cuts.some(c => sec >= c.start && sec <= c.end)
+  const nearPlayhead = Math.abs(e.clientX - rect.left - secToX(playStartSec, rect.width)) < 12
+    && (e.clientY - rect.top) < 28
+
+  canvas.style.cursor = nearBoundary ? 'ew-resize'
+    : nearPlayhead    ? 'col-resize'
+    : overCut         ? 'pointer'
+    : 'crosshair'
+
+  if (isDragging) dragEndSec = sec
 
   drawWaveform()
 }
 
 function onCanvasUp(e: MouseEvent): void {
-  if (!isDragging || !peaks) return
+  if (!peaks) return
   const rect  = canvas.getBoundingClientRect()
   const upSec = xToSec(e.clientX - rect.left, rect.width)
-  isDragging  = false
+
+  if (handleDrag) {
+    handleDrag = null
+    cuts.sort((a, b) => a.start - b.start)
+    renderCutList()
+    updateRemainingDisplay()
+    drawWaveform()
+    drawMinimap()
+    return
+  }
+
+  if (playheadDragging) {
+    playheadDragging = false
+    drawWaveform()
+    return
+  }
+
+  if (!isDragging) return
+  isDragging = false
 
   if (Math.abs(upSec - dragStartSec) > 0.1) {
     addCut(dragStartSec, upSec)
@@ -1131,6 +1345,22 @@ function onCanvasUp(e: MouseEvent): void {
 
 function onCanvasLeave(): void {
   hoverSec = -1
+
+  if (handleDrag) {
+    handleDrag = null
+    cuts.sort((a, b) => a.start - b.start)
+    renderCutList()
+    updateRemainingDisplay()
+    drawWaveform(); drawMinimap()
+    return
+  }
+
+  if (playheadDragging) {
+    playheadDragging = false
+    drawWaveform()
+    return
+  }
+
   if (isDragging) {
     isDragging = false
     if (Math.abs(dragEndSec - dragStartSec) > 0.1) {
@@ -1182,6 +1412,7 @@ function togglePlay(preview: boolean): void {
 function startPlay(preview: boolean): void {
   if (!audioBuffer || !audioCtx) return
   isPreview = preview
+  loopStartSec = playStartSec
 
   const allSegs  = preview ? getKeepSegs() : [{ start: 0, end: duration }]
   const segments = allSegs.filter(s => s.end > playStartSec)
@@ -1237,7 +1468,17 @@ function startPlay(preview: boolean): void {
   }
 
   nodes[nodes.length - 1]?.addEventListener('ended', () => {
-    if (isPlaying) { isPlaying = false; cancelAnimationFrame(rafId); updatePlayIcon(); drawWaveform() }
+    if (!isPlaying) return
+    if (isLooping) {
+      stopPlay()
+      playStartSec = loopStartSec
+      startPlay(isPreview)
+    } else {
+      isPlaying = false
+      cancelAnimationFrame(rafId)
+      updatePlayIcon()
+      drawWaveform()
+    }
   })
 
   updatePlayIcon()
@@ -1309,6 +1550,19 @@ function openExportModal(): void {
     if (ps.limiter.enabled)    active.push('Limiter')
     summary.textContent = active.length ? active.join(' · ') : 'Ingen lydbehandling'
   }
+  const ioRow     = $('export-io-row')
+  const ioSummary = $('export-io-summary')
+  if (ioRow && ioSummary) {
+    const parts = []
+    if (includeIntroOutro && settings.editorIntroPath) {
+      parts.push('Intro: ' + (settings.editorIntroPath.split(/[/\\]/).pop() ?? ''))
+    }
+    if (includeIntroOutro && settings.editorOutroPath) {
+      parts.push('Outro: ' + (settings.editorOutroPath.split(/[/\\]/).pop() ?? ''))
+    }
+    ioSummary.textContent = parts.length ? parts.join(' · ') : ''
+    ioRow.style.display   = parts.length ? '' : 'none'
+  }
   $('editor-export-modal')!.style.display = 'flex'
 }
 
@@ -1318,8 +1572,16 @@ function closeExportModal(): void {
 
 async function runExport(): Promise<void> {
   closeExportModal()
-  const btn = $('btn-editor-save') as HTMLButtonElement
-  if (btn) { btn.disabled = true; btn.textContent = t('editor.exportExporting') || 'Eksporterer…' }
+  const btn      = $('btn-editor-save') as HTMLButtonElement
+  const progRow  = $('editor-export-progress-row')
+  const progBar  = $('editor-export-progress-bar')
+  const progLbl  = $('editor-export-progress-label')
+  const resultRow = $('editor-result-row')!
+
+  if (btn)     { btn.disabled = true; btn.textContent = t('editor.exportExporting') || 'Eksporterer…' }
+  if (progRow) progRow.style.display = ''
+  if (progBar) progBar.style.width   = '0%'
+  if (resultRow) resultRow.style.display = 'none'
 
   const fmt = (document.querySelector<HTMLElement>('.export-fmt-btn.active')?.dataset.fmt ?? 'mp3') as 'mp3'|'wav'|'flac'|'aac'
   const dest = document.querySelector<HTMLElement>('.export-dest-btn.active')?.dataset.dest ?? 'same'
@@ -1348,6 +1610,8 @@ async function runExport(): Promise<void> {
     metadata:   meta,
   })
 
+  if (progRow) progRow.style.display = 'none'
+  if (progBar) progBar.style.width   = '0%'
   if (btn) { btn.disabled = false; btn.textContent = t('editor.save') || 'Eksporter' }
 
   const row  = $('editor-result-row')!

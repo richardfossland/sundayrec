@@ -83,6 +83,7 @@ export interface EditorExportParams {
   introPath?:   string
   outroPath?:   string
   metadata?:    RecordingMetadata
+  onProgress?:  (percent: number) => void
 }
 
 export async function saveEdited(params: EditorSaveParams): Promise<EditorSaveResult> {
@@ -286,6 +287,7 @@ export async function exportEdited(params: EditorExportParams): Promise<EditorSa
         finish({ ok: false, error: 'timeout' })
       }, MAX_EDIT_MS)
       mainCmd.audioFilters(`atrim=start=${seg.start.toFixed(4)}:end=${seg.end.toFixed(4)},asetpts=PTS-STARTPTS`)
+      mainCmd.on('progress', p => { params.onProgress?.(Math.min(98, p.percent ?? 0)) })
       applyCodec(mainCmd, fmt, outputBitrate, outputBitDepth)
       if (metaFilePath) mainCmd.input(metaFilePath).addOutputOption('-map_metadata', '1')
       if (metadata?.title)   mainCmd.outputOptions('-metadata', `title=${metadata.title}`)
@@ -371,6 +373,7 @@ export async function exportEdited(params: EditorExportParams): Promise<EditorSa
     if (metaFilePath)          { cmd.input(metaFilePath); cmd.addOutputOption('-map_metadata', String(hasIntro ? 3 : hasOutro ? 2 : 1)) }
 
     applyCodec(cmd, fmt, outputBitrate, outputBitDepth)
+    cmd.on('progress', p => { params.onProgress?.(Math.min(98, p.percent ?? 0)) })
 
     cmd
       .output(outPath)

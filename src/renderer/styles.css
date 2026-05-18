@@ -2048,3 +2048,48 @@ select.form-input {
 }
 .cloud-folder-item:last-child { border-bottom: none; }
 .cloud-folder-item:hover { background: var(--surface3); }
+
+/* ── Editor: export progress bar ─────────────────────────────── */
+.editor-export-progress-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
+}
+.editor-export-progress-bar-wrap {
+  flex: 1; height: 4px; background: var(--surface3); border-radius: 2px; overflow: hidden;
+}
+.editor-export-progress-bar {
+  height: 100%; width: 0%; background: var(--accent);
+  transition: width .4s ease; border-radius: 2px;
+}
+.editor-export-progress-label { font-size: 12px; color: var(--text3); white-space: nowrap; }
+
+/* ── Editor: loop button active state ─────────────────────────── */
+.btn-editor-loop.active { color: var(--accent); background: rgba(124,109,255,.12); }
+
+/* ── Editor: cut thumbnail SVG ────────────────────────────────── */
+.editor-cut-thumb {
+  color: var(--accent); flex-shrink: 0; border-radius: 3px;
+  background: rgba(124,109,255,.07); overflow: hidden;
+}
+
+/* ── Editor: clip indicator ───────────────────────────────────── */
+.editor-clip-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 700;
+  background: rgba(239,68,68,.12); color: var(--red);
+  cursor: pointer;
+}
+
+/* ── Export modal: intro/outro row ────────────────────────────── */
+.export-io-row {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 8px; font-size: 12px; color: var(--text2);
+}
+
+/* ── Editor: cut preview button ───────────────────────────────── */
+.editor-cut-prev {
+  background: none; border: none; cursor: pointer; color: var(--text3);
+  padding: 3px 5px; border-radius: 4px; transition: color .15s, background .15s;
+  flex-shrink: 0;
+}
+.editor-cut-prev:hover { color: var(--accent); background: rgba(124,109,255,.1); }
+.editor-cut-info { flex: 1; min-width: 0; }
