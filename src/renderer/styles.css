@@ -144,13 +144,22 @@ body {
 #sidebar.collapsed .nav-link span,
 #sidebar.collapsed .sidebar-status,
 #sidebar.collapsed .sidebar-version { display: none; }
-#sidebar.collapsed .logo { justify-content: center; }
+#sidebar.collapsed .logo { display: none; }
+#sidebar.collapsed .sidebar-top { justify-content: center; padding-left: 0; padding-right: 0; }
 #sidebar.collapsed .nav-link {
   justify-content: center; padding: 9px 0;
 }
 #sidebar.collapsed .sidebar-bottom { padding-top: 4px; }
 #sidebar.collapsed ul { padding: 0 4px; }
 #sidebar.collapsed .sidebar-bottom .nav-link { margin: 1px 4px; }
+
+/* ── Titlebar drag strip (macOS: drag + double-click to zoom) ─── */
+.titlebar-drag {
+  position: fixed; top: 0; left: 0; right: 0; height: 28px;
+  -webkit-app-region: drag;
+  z-index: 9999; pointer-events: none;
+}
+body.platform-darwin .titlebar-drag { pointer-events: auto; }
 
 /* ── Main content ──────────────────────────────────────────────── */
 #main { flex: 1; overflow-y: auto; padding: 28px 32px; position: relative; }
