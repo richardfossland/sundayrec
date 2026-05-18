@@ -193,7 +193,7 @@ export function importProfile(json: string): boolean {
       if (!Array.isArray(profile.slots)) return false
       for (const s of profile.slots) {
         if (!s || typeof s !== 'object' || Array.isArray(s)) return false
-        const slot = s as Record<string, unknown>
+        const slot = s as unknown as Record<string, unknown>
         if (!Array.isArray(slot.days) || typeof slot.start !== 'string' || typeof slot.stop !== 'string') return false
         if (!(slot.days as unknown[]).every(d => typeof d === 'number' && d >= 0 && d <= 6)) return false
         if (!/^\d{2}:\d{2}$/.test(slot.start as string) || !/^\d{2}:\d{2}$/.test(slot.stop as string)) return false
@@ -203,7 +203,7 @@ export function importProfile(json: string): boolean {
       if (!Array.isArray(profile.specialRecordings)) return false
       for (const s of profile.specialRecordings) {
         if (!s || typeof s !== 'object' || Array.isArray(s)) return false
-        const sr = s as Record<string, unknown>
+        const sr = s as unknown as Record<string, unknown>
         if (typeof sr.date !== 'string' || typeof sr.start !== 'string' || typeof sr.stop !== 'string') return false
         if (!/^\d{4}-\d{2}-\d{2}$/.test(sr.date as string)) return false
       }
