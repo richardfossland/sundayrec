@@ -13,8 +13,26 @@ let testVu = makeVuState()
 
 let detectedChannelCount = 2
 
+function updateVolGradient(): void {
+  const el = document.getElementById('input-volume') as HTMLInputElement | null
+  if (!el) return
+  const pct = +el.value
+  el.style.setProperty('--vol-pct', pct + '%')
+}
+
 export function setupAudioPage(): void {
-  document.getElementById('input-volume')?.addEventListener('input', updateVolumeLabel)
+  document.getElementById('input-volume')?.addEventListener('input', () => {
+    updateVolumeLabel()
+    updateVolGradient()
+  })
+
+  // Sync sample-rate cards ↔ hidden select
+  document.querySelectorAll<HTMLInputElement>('input[name="sampleRate"]').forEach(r => {
+    r.addEventListener('change', () => {
+      const sel = document.getElementById('sample-rate') as HTMLSelectElement | null
+      if (sel) sel.value = r.value
+    })
+  })
 
   document.getElementById('opt-compressor')?.addEventListener('change', function (this: HTMLInputElement) {
     const cs = document.getElementById('comp-settings')
@@ -35,6 +53,12 @@ export function applyAudioSettingsToUI(): void {
   updateVolumeLabel()
   setRadio('channels', settings.channels ?? 'stereo')
   setVal('sample-rate', settings.sampleRate ?? 48000)
+  // Sync sample-rate cards
+  const srVal = String(settings.sampleRate ?? 48000)
+  document.querySelectorAll<HTMLInputElement>('input[name="sampleRate"]').forEach(r => {
+    r.checked = r.value === srVal
+  })
+  updateVolGradient()
   const compEl = document.getElementById('opt-compressor') as HTMLInputElement | null
   if (compEl) {
     compEl.checked = !!settings.compEnabled

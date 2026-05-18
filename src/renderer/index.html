@@ -500,24 +500,68 @@
       </div>
 
       <div class="card">
-        <div class="card-title" data-i18n="audio.volume">Volum og kanaler</div>
-        <label class="form-label" data-i18n="audio.inputVolume">INNGANGSVOLUM</label>
-        <input type="range" id="input-volume" min="0" max="100" value="100" class="slider" />
-        <div class="slider-value" id="volume-value">100%</div>
-        <div class="form-hint" data-i18n="audio.inputVolumeHint">100% = ingen endring av signalet. Juster heller volumet på mikseren for best lydkvalitet.</div>
-        <label class="form-label mt" data-i18n="audio.channels">KANALER</label>
-        <div class="radio-group" id="channels-group">
-          <label><input type="radio" name="channels" value="stereo" checked /> <span data-i18n="audio.stereo">Stereo (anbefalt)</span></label>
-          <label><input type="radio" name="channels" value="monoL" /> <span data-i18n="audio.monoL">Mono — venstre</span></label>
-          <label><input type="radio" name="channels" value="monoR" /> <span data-i18n="audio.monoR">Mono — høyre</span></label>
-          <label><input type="radio" name="channels" value="monoMix" /> <span data-i18n="audio.monoMix">Mono — miks av begge</span></label>
+        <div class="card-title" data-i18n="audio.volume">Inngangsvolum</div>
+        <div class="vol-slider-wrap">
+          <svg class="vol-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.617.793L4.828 14H3a1 1 0 01-1-1V7a1 1 0 011-1h1.828l3.555-2.793a1 1 0 011 .076zM12.293 7.293a1 1 0 011.414 0A4.978 4.978 0 0115 10a4.978 4.978 0 01-1.293 2.707 1 1 0 01-1.414-1.414A2.978 2.978 0 0013 10a2.978 2.978 0 00-.707-1.293 1 1 0 010-1.414z"/></svg>
+          <input type="range" id="input-volume" min="0" max="100" value="100" class="slider vol-slider" />
+          <span class="vol-badge" id="volume-value">100%</span>
         </div>
-        <label class="form-label mt" data-i18n="audio.sampleRate">SAMPLINGSRATE</label>
-        <select class="form-input" id="sample-rate">
-          <option value="44100">44 100 Hz</option>
-          <option value="48000" selected>48 000 Hz</option>
+        <div class="form-hint">Juster heller volumet direkte på mikseren for best lydkvalitet. 100% = ingen endring.</div>
+
+        <div class="card-title" style="margin-top:20px" data-i18n="audio.channels">Kanaler</div>
+        <div class="option-cards" id="channels-group">
+          <label class="option-card">
+            <input type="radio" name="channels" value="stereo" checked />
+            <svg viewBox="0 0 32 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <path d="M4 10 Q6 4 8 10 Q10 16 12 10"/><path d="M20 10 Q22 4 24 10 Q26 16 28 10"/>
+            </svg>
+            <div class="option-card-name">Stereo</div>
+            <div class="option-card-badge">Anbefalt</div>
+          </label>
+          <label class="option-card">
+            <input type="radio" name="channels" value="monoMix" />
+            <svg viewBox="0 0 32 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <path d="M10 10 Q13 3 16 10 Q19 17 22 10"/>
+            </svg>
+            <div class="option-card-name">Mono</div>
+            <div class="option-card-desc">Miks L+R</div>
+          </label>
+          <label class="option-card">
+            <input type="radio" name="channels" value="monoL" />
+            <svg viewBox="0 0 32 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <path d="M7 10 Q10 4 13 10 Q16 16 19 10" opacity=".9"/><path d="M22 10h4" opacity=".2"/>
+            </svg>
+            <div class="option-card-name">Mono L</div>
+            <div class="option-card-desc">Kun venstre</div>
+          </label>
+          <label class="option-card">
+            <input type="radio" name="channels" value="monoR" />
+            <svg viewBox="0 0 32 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <path d="M6 10h4" opacity=".2"/><path d="M13 10 Q16 4 19 10 Q22 16 25 10" opacity=".9"/>
+            </svg>
+            <div class="option-card-name">Mono R</div>
+            <div class="option-card-desc">Kun høyre</div>
+          </label>
+        </div>
+
+        <div class="card-title" style="margin-top:20px" data-i18n="audio.sampleRate">Samplingsrate</div>
+        <div class="option-cards" style="grid-template-columns:1fr 1fr">
+          <label class="option-card">
+            <input type="radio" name="sampleRate" value="44100" id="sr-44" />
+            <div class="option-card-name">44 100 Hz</div>
+            <div class="option-card-desc">CD-kvalitet</div>
+          </label>
+          <label class="option-card">
+            <input type="radio" name="sampleRate" value="48000" id="sr-48" checked />
+            <div class="option-card-name">48 000 Hz</div>
+            <div class="option-card-badge">Standard</div>
+          </label>
+        </div>
+        <!-- Hidden select for compatibility with existing save logic -->
+        <select id="sample-rate" style="display:none">
+          <option value="44100">44100</option>
+          <option value="48000" selected>48000</option>
         </select>
-        <div class="form-hint" data-i18n="audio.sampleRateHint">48 000 Hz er standard for video og kirkelyd</div>
       </div>
 
       <div class="card">
@@ -570,18 +614,48 @@
       </div>
       <div class="card">
         <div class="card-title" data-i18n="files.format">Format &amp; Kvalitet</div>
-        <label class="form-label" data-i18n="files.fileFormat">FILFORMAT</label>
-        <div class="radio-group" id="format-group">
-          <label><input type="radio" name="format" value="mp3" checked /> MP3</label>
-          <label><input type="radio" name="format" value="wav" /> WAV</label>
-          <label><input type="radio" name="format" value="flac" /> FLAC</label>
+        <div class="option-cards" id="format-group">
+          <label class="option-card format-card">
+            <input type="radio" name="format" value="mp3" checked />
+            <div class="format-card-name">MP3</div>
+            <div class="format-card-size">~85 MB / time</div>
+            <div class="option-card-desc">Anbefalt for deling og nett</div>
+          </label>
+          <label class="option-card format-card">
+            <input type="radio" name="format" value="flac" />
+            <div class="format-card-name">FLAC</div>
+            <div class="format-card-size">~300 MB / time</div>
+            <div class="option-card-desc">Tapsfri komprimering</div>
+          </label>
+          <label class="option-card format-card">
+            <input type="radio" name="format" value="wav" />
+            <div class="format-card-name">WAV</div>
+            <div class="format-card-size">~635 MB / time</div>
+            <div class="option-card-desc">Ukomprimert, høyest kvalitet</div>
+          </label>
         </div>
+
         <div id="mp3-quality-section">
-          <label class="form-label mt" data-i18n="files.quality">KVALITET (MP3)</label>
-          <div class="radio-group">
-            <label><input type="radio" name="bitrate" value="128" /> <span data-i18n="files.q128">128 kbps — liten fil, OK kvalitet</span></label>
-            <label><input type="radio" name="bitrate" value="192" checked /> <span data-i18n="files.q192">192 kbps — god kvalitet (anbefalt)</span></label>
-            <label><input type="radio" name="bitrate" value="320" /> <span data-i18n="files.q320">320 kbps — høyeste kvalitet</span></label>
+          <div class="card-title" style="margin-top:20px">MP3-kvalitet</div>
+          <div class="quality-scale">
+            <label class="quality-step">
+              <input type="radio" name="bitrate" value="128" />
+              <div class="quality-bars"><div class="qb qb1"></div><div class="qb qb2"></div><div class="qb qb3"></div></div>
+              <div class="quality-label">Kompakt</div>
+              <div class="quality-sub">~50 MB / time</div>
+            </label>
+            <label class="quality-step">
+              <input type="radio" name="bitrate" value="192" checked />
+              <div class="quality-bars"><div class="qb qb1"></div><div class="qb qb2"></div><div class="qb qb3"></div></div>
+              <div class="quality-label">Anbefalt</div>
+              <div class="quality-sub">~85 MB / time</div>
+            </label>
+            <label class="quality-step">
+              <input type="radio" name="bitrate" value="320" />
+              <div class="quality-bars"><div class="qb qb1"></div><div class="qb qb2"></div><div class="qb qb3"></div></div>
+              <div class="quality-label">Høyeste</div>
+              <div class="quality-sub">~140 MB / time</div>
+            </label>
           </div>
         </div>
         <div class="toggle-row mt">

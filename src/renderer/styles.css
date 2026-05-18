@@ -308,6 +308,105 @@ body.platform-win32 ::-webkit-scrollbar-thumb { border-radius: 4px; }
 .btn-sm { font-size: 12px; padding: 6px 12px; }
 .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
 
+/* ── Option cards (visual radio-button replacements) ─────────────── */
+.option-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px; margin-top: 10px;
+}
+.option-card {
+  position: relative; cursor: pointer;
+  border: 1.5px solid var(--border2); border-radius: var(--r);
+  padding: 14px 10px 12px; text-align: center;
+  background: var(--surface2);
+  transition: border-color .15s, background .15s, box-shadow .15s;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  user-select: none;
+}
+.option-card input[type="radio"] {
+  position: absolute; opacity: 0; pointer-events: none;
+}
+.option-card svg { width: 32px; height: 20px; color: var(--text3); transition: color .15s; }
+.option-card:hover { border-color: var(--accent-border); background: var(--surface3); }
+.option-card:hover svg { color: var(--text2); }
+.option-card:has(input:checked) {
+  border-color: var(--accent); background: var(--accent-bg);
+  box-shadow: 0 0 0 1px var(--accent-border);
+}
+.option-card:has(input:checked) svg { color: var(--accent); }
+.option-card-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.option-card-desc { font-size: 11px; color: var(--text3); }
+.option-card-badge {
+  font-size: 10px; font-weight: 600; letter-spacing: .3px;
+  background: var(--accent-bg); color: var(--accent);
+  border: 1px solid var(--accent-border); border-radius: 20px;
+  padding: 1px 7px;
+}
+
+/* Format cards (3 columns, taller) */
+.format-card { padding: 16px 12px 14px; }
+.format-card-name { font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: -.5px; }
+.format-card-size { font-size: 11px; color: var(--accent2); font-weight: 500; margin: 2px 0; }
+
+/* MP3 quality scale */
+.quality-scale {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 8px; margin-top: 10px;
+}
+.quality-step {
+  cursor: pointer; user-select: none;
+  border: 1.5px solid var(--border2); border-radius: var(--r);
+  padding: 16px 12px 12px; text-align: center;
+  background: var(--surface2);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  transition: border-color .15s, background .15s;
+}
+.quality-step input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }
+.quality-step:hover { border-color: var(--accent-border); background: var(--surface3); }
+.quality-step:has(input:checked) {
+  border-color: var(--accent); background: var(--accent-bg);
+  box-shadow: 0 0 0 1px var(--accent-border);
+}
+.quality-bars {
+  display: flex; align-items: flex-end; gap: 3px; height: 28px;
+}
+.qb {
+  width: 8px; border-radius: 3px 3px 0 0;
+  background: var(--border2); transition: background .15s;
+}
+/* Bar heights per step: 1=low, 2=mid, 3=full */
+.quality-step:nth-child(1) .qb1 { height: 9px; }
+.quality-step:nth-child(1) .qb2 { height: 9px; }
+.quality-step:nth-child(1) .qb3 { height: 9px; }
+.quality-step:nth-child(2) .qb1 { height: 14px; }
+.quality-step:nth-child(2) .qb2 { height: 20px; }
+.quality-step:nth-child(2) .qb3 { height: 14px; }
+.quality-step:nth-child(3) .qb1 { height: 28px; }
+.quality-step:nth-child(3) .qb2 { height: 28px; }
+.quality-step:nth-child(3) .qb3 { height: 28px; }
+.quality-step:has(input:checked) .qb { background: var(--accent); }
+.quality-step:hover .qb { background: var(--accent-border); }
+.quality-label { font-size: 13px; font-weight: 600; color: var(--text); }
+.quality-sub { font-size: 11px; color: var(--text3); }
+
+/* Volume slider with color gradient */
+.vol-slider-wrap {
+  display: flex; align-items: center; gap: 12px; margin-top: 8px; margin-bottom: 6px;
+}
+.vol-icon { width: 18px; height: 18px; color: var(--text3); flex-shrink: 0; }
+.vol-slider { flex: 1; --vol-pct: 100%; }
+.vol-slider::-webkit-slider-runnable-track {
+  background: linear-gradient(to right,
+    #22c55e 0%, #22c55e 70%,
+    #f59e0b 70%, #f59e0b 90%,
+    #ef4444 90%, #ef4444 100%
+  ) !important;
+}
+.vol-badge {
+  font-size: 12px; font-weight: 600; color: var(--text2);
+  min-width: 36px; text-align: right;
+}
+
 /* ── Page footer (sticky Save/Cancel bar on settings pages) ─────── */
 .page-footer {
   display: flex; gap: 10px; align-items: center;
