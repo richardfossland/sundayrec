@@ -4,26 +4,26 @@
 /* ── Design tokens ─────────────────────────────────────────────── */
 :root {
   /* Backgrounds — three distinct layers for clear depth */
-  --bg:       #0b0b0f;
-  --surface:  #13131c;
-  --surface2: #1a1a26;
-  --surface3: #222232;
+  --bg:       #0c1020;
+  --surface:  #111827;
+  --surface2: #172035;
+  --surface3: #1e2a42;
 
   /* Borders — subtle but present */
-  --border:   #24243a;
-  --border2:  #2e2e46;
+  --border:   #1e2d4a;
+  --border2:  #263860;
 
   /* Text — four-level hierarchy */
   --text:     #eaeaf6;
-  --text2:    #8888b0;
-  --text3:    #4e4e6a;
-  --text4:    #36364e;
+  --text2:    #8899bb;
+  --text3:    #4a5878;
+  --text4:    #2e3a55;
 
   /* Brand */
-  --accent:   #7c6dff;
-  --accent2:  #a79dff;
-  --accent-bg: rgba(124,109,255,.1);
-  --accent-border: rgba(124,109,255,.3);
+  --accent:   #E8B84B;
+  --accent2:  #F2CC72;
+  --accent-bg: rgba(232,184,75,.12);
+  --accent-border: rgba(232,184,75,.35);
 
   /* Semantic */
   --green:    #22c55e;
@@ -67,7 +67,8 @@ body {
   -webkit-app-region: drag;
 }
 
-.logo { margin-bottom: 4px; }
+.logo { margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+.logo-icon { width: 28px; height: 28px; flex-shrink: 0; border-radius: 6px; }
 .logo-text { font-size: 15px; font-weight: 700; letter-spacing: -.4px; color: var(--text); }
 
 #sidebar ul { list-style: none; flex: 1; padding: 0 8px; }
@@ -143,6 +144,7 @@ body {
 #sidebar.collapsed .nav-link span,
 #sidebar.collapsed .sidebar-status,
 #sidebar.collapsed .sidebar-version { display: none; }
+#sidebar.collapsed .logo { justify-content: center; }
 #sidebar.collapsed .nav-link {
   justify-content: center; padding: 9px 0;
 }
