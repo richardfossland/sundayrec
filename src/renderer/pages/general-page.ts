@@ -3,6 +3,7 @@ import { settings, patchSettings } from '../state'
 import { flashSaved, flashMsg, setVal } from '../helpers'
 
 export function setupGeneralPage(): void {
+  document.getElementById('btn-show-onboarding')?.addEventListener('click', () => window.showOnboarding())
   document.getElementById('opt-email-error')?.addEventListener('change', toggleEmailSection)
 
   document.getElementById('btn-clear-smtp-pass')?.addEventListener('click', async () => {

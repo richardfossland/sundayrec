@@ -11,13 +11,14 @@ import { setupFilesPage, applyFilesSettingsToUI, updateFilenamePreview, toggleMp
 import { setupGeneralPage, applyGeneralSettingsToUI } from './pages/general-page'
 import { setupRecording } from './pages/recording'
 import { setupEditorPage, openEditorWithFile, deactivateEditor } from './pages/editor-page'
-import { checkAndShowOnboarding } from './pages/onboarding'
+import { checkAndShowOnboarding, showOnboarding } from './pages/onboarding'
 
 // Expose globals that sub-modules need
 declare global {
   interface Window {
     showPage: (id: string) => void
     loadSettings: () => Promise<void>
+    showOnboarding: () => void
     __isRecording: boolean
     openEditorWithFile: (filePath: string) => void
     api: {
@@ -114,9 +115,10 @@ function setupSettingsTabs(): void {
 
 async function init(): Promise<void> {
   // Set globals consumed by sub-modules
-  window.showPage   = showPage
-  window.loadSettings = loadSettings
-  window.__isRecording = false
+  window.showPage       = showPage
+  window.loadSettings   = loadSettings
+  window.showOnboarding = showOnboarding
+  window.__isRecording  = false
 
   const ua = navigator.userAgent.toLowerCase()
   if (ua.includes('mac')) {

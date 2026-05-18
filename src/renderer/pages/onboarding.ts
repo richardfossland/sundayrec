@@ -2,10 +2,10 @@ import { settings, patchSettings } from '../state'
 import { getAudioDevices } from '../audio/capture'
 import { makeVuState, tickVU, stopVuState } from '../audio/vu'
 
-// ── VU state for the audio test step ────────────────────────────
+// ── VU state for audio test step ─────────────────────────────────
 let obVu     = makeVuState()
-let obStream: MediaStream   | null = null
-let obCtx:   AudioContext   | null = null
+let obStream: MediaStream | null = null
+let obCtx:   AudioContext | null = null
 
 function stopObVU(): void {
   stopVuState(obVu); obVu = makeVuState()
@@ -13,21 +13,35 @@ function stopObVU(): void {
   obCtx?.close(); obCtx = null
 }
 
-// ── Device picked in step 2 ──────────────────────────────────────
-let pickedDeviceId:   string | null = null
-let pickedDeviceName: string | null = null
+// ── Device chosen in step 2 ──────────────────────────────────────
+let pickedId:   string | null = null
+let pickedName: string | null = null
 
-// ── Public entry point ───────────────────────────────────────────
+// ── Public API ───────────────────────────────────────────────────
 export function checkAndShowOnboarding(): void {
   if (settings.onboardingDone) return
+  showOnboarding()
+}
+
+export function showOnboarding(): void {
   const el = document.getElementById('onboarding-overlay')
   if (!el) return
-  el.style.display = 'flex'
-  document.getElementById('ob-btn-skip-all')?.addEventListener('click', finish)
+  el.style.transition = ''
+  el.style.opacity    = '1'
+  el.style.display    = 'flex'
+
+  // Replace skip-all button to clear any stale listeners from a previous show
+  const oldSkip = document.getElementById('ob-btn-skip-all')
+  if (oldSkip) {
+    const newSkip = oldSkip.cloneNode(true) as HTMLElement
+    oldSkip.replaceWith(newSkip)
+    newSkip.addEventListener('click', finish)
+  }
+
   goTo(1)
 }
 
-// ── Finish / save flag ───────────────────────────────────────────
+// ── Finish wizard ─────────────────────────────────────────────────
 function finish(): void {
   stopObVU()
   patchSettings({ onboardingDone: true })
@@ -35,7 +49,7 @@ function finish(): void {
   const el = document.getElementById('onboarding-overlay')
   if (!el) return
   el.style.transition = 'opacity .35s'
-  el.style.opacity = '0'
+  el.style.opacity    = '0'
   setTimeout(() => { el.style.display = 'none'; el.style.opacity = '' }, 380)
 }
 
@@ -46,19 +60,23 @@ function goTo(step: number): void {
   const body = document.getElementById('ob-body')
   if (!prog || !body) return
 
-  prog.innerHTML = [1, 2, 3, 4].map(i =>
-    `<div class="ob-dot${i === step ? ' active' : i < step ? ' done' : ''}"></div>`
-  ).join('')
+  if (step <= 4) {
+    prog.innerHTML = [1, 2, 3, 4].map(i =>
+      `<div class="ob-dot${i === step ? ' active' : i < step ? ' done' : ''}"></div>`
+    ).join('')
+  }
 
-  body.style.opacity = '0'
-  body.style.transform = 'translateY(8px)'
+  // Reset transition first so the hide is instant, not animated
+  body.style.transition = ''
+  body.style.opacity    = '0'
+  body.style.transform  = 'translateY(8px)'
 
   setTimeout(() => {
     if      (step === 1) s1(body)
     else if (step === 2) void s2(body)
     else if (step === 3) void s3(body)
     else if (step === 4) s4(body)
-    else                 sDone(body)
+    else                 { allDots(); sDone(body) }
     body.style.transition = 'opacity .22s, transform .22s'
     body.style.opacity    = '1'
     body.style.transform  = 'translateY(0)'
@@ -93,8 +111,8 @@ function s1(body: HTMLElement): void {
 
 // ── Step 2: Pick device ───────────────────────────────────────────
 async function s2(body: HTMLElement): Promise<void> {
-  pickedDeviceId   = settings.deviceId   ?? null
-  pickedDeviceName = settings.deviceName ?? null
+  pickedId   = settings.deviceId   ?? null
+  pickedName = settings.deviceName ?? null
 
   body.innerHTML = `
     <h2 class="ob-title">Hvilken lydenhet bruker dere?</h2>
@@ -105,18 +123,18 @@ async function s2(body: HTMLElement): Promise<void> {
       <button class="ob-text-btn" id="ob-s2">Hopp over dette steget</button>
     </div>`
 
-  const list = document.getElementById('ob-dev-list')!
+  const list    = document.getElementById('ob-dev-list')!
   const devices = await getAudioDevices()
 
   if (!devices.length) {
     list.innerHTML = `<p class="ob-empty">Ingen lydenheter funnet. Kontroller at mikseren er koblet til via USB.</p>`
   } else {
     const preferred = devices.find(d => !/built-in|innebygd|default/i.test(d.label)) ?? devices[0]
-    if (!pickedDeviceId) { pickedDeviceId = preferred?.deviceId ?? null; pickedDeviceName = preferred?.label ?? null }
+    if (!pickedId) { pickedId = preferred?.deviceId ?? null; pickedName = preferred?.label ?? null }
 
     list.innerHTML = devices.map(d => {
       const builtIn  = /built-in|innebygd|default/i.test(d.label)
-      const selected = d.deviceId === pickedDeviceId
+      const selected = d.deviceId === pickedId
       return `<div class="ob-dev-card${selected ? ' sel' : ''}" data-id="${esc(d.deviceId)}" data-name="${esc(d.label)}">
         <span class="ob-dev-emoji">${builtIn ? '💻' : '🎛️'}</span>
         <div class="ob-dev-info">
@@ -131,15 +149,15 @@ async function s2(body: HTMLElement): Promise<void> {
       card.addEventListener('click', () => {
         list.querySelectorAll('.ob-dev-card').forEach(c => c.classList.remove('sel'))
         card.classList.add('sel')
-        pickedDeviceId   = card.dataset.id   ?? null
-        pickedDeviceName = card.dataset.name ?? null
+        pickedId   = card.dataset.id   ?? null
+        pickedName = card.dataset.name ?? null
       })
     })
   }
 
   document.getElementById('ob-n2')?.addEventListener('click', () => {
-    if (pickedDeviceId) {
-      patchSettings({ deviceId: pickedDeviceId, deviceName: pickedDeviceName })
+    if (pickedId) {
+      patchSettings({ deviceId: pickedId, deviceName: pickedName })
       void window.api.saveSettings(settings)
     }
     goTo(3)
@@ -161,7 +179,7 @@ async function s3(body: HTMLElement): Promise<void> {
       <button class="ob-text-btn" id="ob-s3">Hopp over dette steget</button>
     </div>`
 
-  const devId = pickedDeviceId ?? (settings.deviceId ?? null)
+  const devId = pickedId ?? (settings.deviceId ?? null)
   try {
     obStream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -194,7 +212,10 @@ async function s3(body: HTMLElement): Promise<void> {
     })
   } catch {
     const lbl = document.getElementById('ob-vu-lbl')
-    if (lbl) { lbl.textContent = 'Kunne ikke starte lydtest. Sjekk at tillatelse er gitt i systeminnstillingene.'; lbl.style.color = 'var(--orange)' }
+    if (lbl) {
+      lbl.textContent = 'Kunne ikke starte lydtest — sjekk at tillatelse er gitt i systeminnstillingene.'
+      lbl.style.color = 'var(--orange)'
+    }
   }
 
   document.getElementById('ob-n3')?.addEventListener('click', () => goTo(4))
@@ -207,8 +228,8 @@ function s4(body: HTMLElement): void {
   const defStart    = existingSun?.start ?? '10:00'
   const defDur      = existingSun
     ? (() => {
-        const [sh, sm] = (existingSun.start).split(':').map(Number)
-        const [eh, em] = (existingSun.stop).split(':').map(Number)
+        const [sh, sm] = existingSun.start.split(':').map(Number)
+        const [eh, em] = existingSun.stop.split(':').map(Number)
         return (eh * 60 + em) - (sh * 60 + sm)
       })()
     : 90
@@ -219,7 +240,7 @@ function s4(body: HTMLElement): void {
     <div class="ob-sched-card">
       <label class="ob-toggle-row">
         <span>Aktiver automatisk søndagsopptak</span>
-        <input type="checkbox" id="ob-on" ${existingSun || true ? 'checked' : ''} style="width:auto;cursor:pointer">
+        <input type="checkbox" id="ob-on" checked style="width:auto;cursor:pointer">
       </label>
       <div id="ob-sched-fields">
         <div class="ob-field-row">
@@ -242,9 +263,12 @@ function s4(body: HTMLElement): void {
 
   const chk    = document.getElementById('ob-on') as HTMLInputElement
   const fields = document.getElementById('ob-sched-fields')!
-  const setFieldsOpacity = () => { fields.style.opacity = chk.checked ? '1' : '.4'; fields.style.pointerEvents = chk.checked ? '' : 'none' }
-  setFieldsOpacity()
-  chk.addEventListener('change', setFieldsOpacity)
+  const syncFields = () => {
+    fields.style.opacity       = chk.checked ? '1' : '.4'
+    fields.style.pointerEvents = chk.checked ? '' : 'none'
+  }
+  syncFields()
+  chk.addEventListener('change', syncFields)
 
   const save = () => {
     if (chk.checked) {
@@ -258,17 +282,15 @@ function s4(body: HTMLElement): void {
       patchSettings({ slots })
       void window.api.saveSettings(settings)
     }
-    allDots()
-    sDone(document.getElementById('ob-body')!)
+    goTo(5)
   }
 
   document.getElementById('ob-n4')?.addEventListener('click', save)
-  document.getElementById('ob-s4')?.addEventListener('click', () => { allDots(); sDone(document.getElementById('ob-body')!) })
+  document.getElementById('ob-s4')?.addEventListener('click', () => goTo(5))
 }
 
 // ── Done ──────────────────────────────────────────────────────────
 function sDone(body: HTMLElement): void {
-  stopObVU()
   body.innerHTML = `
     <div class="ob-done-ring">
       <svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M16.707 8.293a1 1 0 010 1.414l-6 6a1 1 0 01-1.414 0l-3-3a1 1 0 111.414-1.414L10 13.586l5.293-5.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
