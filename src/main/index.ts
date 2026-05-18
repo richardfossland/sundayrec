@@ -150,6 +150,9 @@ app.whenReady().then(async () => {
     }
   }
 
+  // Register custom URL scheme for OAuth callbacks (sundayrec://oauth/...)
+  app.setAsDefaultProtocolClient('sundayrec')
+
   createWindow()
   tray.create(mainWindow)
   recorder.recoverCrashedSession()
@@ -219,6 +222,37 @@ app.on('before-quit', async (e) => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
+
+// Handle OAuth callbacks on macOS (open-url event)
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  handleOAuthUrl(url)
+})
+
+// Handle OAuth callbacks on Windows (second-instance with URL arg)
+app.on('second-instance', (_event, argv) => {
+  const url = argv.find(a => a.startsWith('sundayrec://'))
+  if (url) handleOAuthUrl(url)
+  if (mainWindow) { mainWindow.show(); mainWindow.focus() }
+})
+
+function handleOAuthUrl(url: string): void {
+  try {
+    const parsed  = new URL(url)
+    const code    = parsed.searchParams.get('code')
+    const service = parsed.pathname.replace(/^\/+/, '')  // e.g. "oauth/google-drive" → strip leading /
+    if (!code) return
+    // pathname is like //oauth/google-drive → extract service id
+    const parts = url.replace('sundayrec://', '').split('/')
+    const svcId = parts[1] as import('./cloud/oauth').CloudServiceId & string
+    if (!svcId) return
+    import('./cloud/index').then(({ handleCallback }) => handleCallback(svcId as never, code)).catch(console.error)
+    console.log('[oauth] received callback for service:', svcId)
+    void service
+  } catch (err) {
+    console.error('[oauth] handleOAuthUrl error:', err)
+  }
+}
 
 app.on('render-process-gone', (_event, _webContents, details) => {
   console.error('[SundayRec] Renderer process gone:', details.reason, 'exitCode:', details.exitCode)
@@ -428,6 +462,73 @@ function setupIPC(): void {
     const win = BrowserWindow.fromWebContents(event.sender) ?? mainWindow
     const r = await dialog.showOpenDialog(win!, { properties: ['openDirectory', 'createDirectory'] })
     return r.canceled ? null : r.filePaths[0]
+  })
+
+  // Pick an audio file (for intro/outro in settings)
+  ipcMain.handle('pick-audio-file', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender) ?? mainWindow
+    const r = await dialog.showOpenDialog(win!, {
+      properties: ['openFile'],
+      filters: [{ name: 'Audio', extensions: ['mp3', 'wav', 'flac', 'aac', 'm4a'] }]
+    })
+    return r.canceled ? null : r.filePaths[0]
+  })
+
+  // Metadata sidecar read/write
+  ipcMain.handle('editor-read-meta', async (_, filePath: string) => {
+    if (typeof filePath !== 'string') return null
+    const metaPath = filePath.replace(/\.[^.]+$/, '') + '.meta.json'
+    try {
+      const raw = await fs.promises.readFile(metaPath, 'utf8')
+      return JSON.parse(raw)
+    } catch { return null }
+  })
+
+  ipcMain.handle('editor-save-meta', async (_, filePath: string, metadata: unknown) => {
+    if (typeof filePath !== 'string') return false
+    const metaPath = filePath.replace(/\.[^.]+$/, '') + '.meta.json'
+    try {
+      await fs.promises.writeFile(metaPath, JSON.stringify(metadata, null, 2), 'utf8')
+      return true
+    } catch { return false }
+  })
+
+  // Cloud backup IPC
+  ipcMain.handle('cloud-status', async () => {
+    const { getStatus } = await import('./cloud/index')
+    return getStatus()
+  })
+
+  ipcMain.handle('cloud-connect', async (_, service: string) => {
+    const { connectService } = await import('./cloud/index')
+    return connectService(service as never)
+  })
+
+  ipcMain.handle('cloud-disconnect', async (_, service: string) => {
+    const { disconnectService } = await import('./cloud/index')
+    disconnectService(service as never)
+    return true
+  })
+
+  ipcMain.handle('cloud-list-folders', async (_, service: string, parentId?: string) => {
+    const { listFolders } = await import('./cloud/index')
+    return listFolders(service as never, parentId)
+  })
+
+  ipcMain.handle('cloud-set-folder', async (_, service: string, folderId: string, folderName: string, folderPath?: string) => {
+    const { setFolder } = await import('./cloud/index')
+    setFolder(service as never, folderId, folderName, folderPath)
+    return true
+  })
+
+  ipcMain.handle('cloud-upload-file', async (_, service: string, filePath: string) => {
+    try {
+      const { uploadFile } = await import('./cloud/index')
+      await uploadFile(service as never, filePath)
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
   })
 }
 

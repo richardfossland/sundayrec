@@ -11,6 +11,7 @@ import { setupFilesPage, applyFilesSettingsToUI, updateFilenamePreview, toggleMp
 import { setupGeneralPage, applyGeneralSettingsToUI } from './pages/general-page'
 import { setupRecording } from './pages/recording'
 import { setupEditorPage, openEditorWithFile, deactivateEditor } from './pages/editor-page'
+import { setupPublishPage, applyPublishSettingsToUI } from './pages/publish-page'
 
 // Expose globals that sub-modules need
 declare global {
@@ -55,6 +56,15 @@ declare global {
       editorPickFile:         ()                 => Promise<string | null>
       editorExportFile:       (params: unknown)  => Promise<{ ok: boolean; outputPath?: string; error?: string }>
       editorPickOutputFolder: ()                 => Promise<string | null>
+      editorReadMeta:         (filePath: string) => Promise<unknown>
+      editorSaveMeta:         (filePath: string, metadata: unknown) => Promise<boolean>
+      pickAudioFile:          ()                 => Promise<string | null>
+      cloudStatus:      ()                                                         => Promise<unknown>
+      cloudConnect:     (service: string)                                          => Promise<{ ok: boolean; accountName?: string; error?: string }>
+      cloudDisconnect:  (service: string)                                          => Promise<boolean>
+      cloudListFolders: (service: string, parentId?: string)                       => Promise<{ id: string; name: string; path?: string }[]>
+      cloudSetFolder:   (service: string, id: string, name: string, path?: string) => Promise<boolean>
+      cloudUploadFile:  (service: string, filePath: string)                        => Promise<{ ok: boolean; error?: string }>
     }
     appVersion?: string
   }
@@ -73,6 +83,7 @@ function applyAllSettingsToUI(s: Settings): void {
   applyScheduleSettingsToUI()
   applyFilesSettingsToUI()
   applyGeneralSettingsToUI()
+  applyPublishSettingsToUI()
   renderSlotsList()
   renderPlannedList()
   updateFilenamePreview()
@@ -91,6 +102,7 @@ function showPage(id: string): void {
   if (id === 'settings') {
     const activeTab = document.querySelector<HTMLElement>('#settings-tabs .inner-tab.active')?.dataset.tab
     if (!activeTab || activeTab === 'settings-audio') renderDeviceList('device-list')
+    if (activeTab === 'settings-publish') applyPublishSettingsToUI()
   }
 }
 
@@ -104,6 +116,7 @@ function setupSettingsTabs(): void {
       document.getElementById(tabId)?.classList.add('active')
       if (tabId === 'settings-audio') renderDeviceList('device-list')
       else stopMonitoring()
+      if (tabId === 'settings-publish') applyPublishSettingsToUI()
     })
   })
 }
@@ -143,6 +156,7 @@ async function init(): Promise<void> {
   setupCalendarPage()
   setupFilesPage()
   setupGeneralPage()
+  setupPublishPage()
   setupRecording()
   setupEditorPage()
   setupClipReset()

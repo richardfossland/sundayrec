@@ -1,10 +1,12 @@
 import path from 'path'
 import fs from 'fs'
+import os from 'os'
 import { app } from 'electron'
 import ffmpegStatic from 'ffmpeg-static'
 import ffmpeg from 'fluent-ffmpeg'
 import { codecFor } from './recorder-utils'
 import * as store from './store'
+import type { RecordingMetadata } from '../types'
 
 const MAX_EDIT_MS = 10 * 60 * 1000   // kill ffmpeg after 10 minutes
 
@@ -78,6 +80,9 @@ export interface EditorExportParams {
   outputBitrate?: number
   outputBitDepth?: 16 | 24
   processing:   ExportProcessing
+  introPath?:   string
+  outroPath?:   string
+  metadata?:    RecordingMetadata
 }
 
 export async function saveEdited(params: EditorSaveParams): Promise<EditorSaveResult> {
@@ -183,9 +188,11 @@ export async function saveEdited(params: EditorSaveParams): Promise<EditorSaveRe
   })
 }
 
-// ── Full export with format + processing ──────────────────────────────────
+// ── Full export with format + processing + intro/outro + metadata ─────────
 export async function exportEdited(params: EditorExportParams): Promise<EditorSaveResult> {
-  const { inputPath, cutRegions, duration, mode, outputFolder, outputFilename, outputFormat, outputBitrate, outputBitDepth, processing } = params
+  const { inputPath, cutRegions, duration, mode, outputFolder, outputFilename,
+          outputFormat, outputBitrate, outputBitDepth, processing,
+          introPath, outroPath, metadata } = params
 
   if (typeof inputPath !== 'string') return { ok: false, error: 'invalid_path' }
   if (!fs.existsSync(inputPath))     return { ok: false, error: 'file_not_found' }
@@ -204,6 +211,10 @@ export async function exportEdited(params: EditorExportParams): Promise<EditorSa
   }
   if (cursor < duration - 0.05) keeps.push({ start: cursor, end: duration })
   if (!keeps.length) return { ok: false, error: 'no_audio_remaining' }
+
+  // Validate intro/outro paths
+  const hasIntro = !!(introPath && fs.existsSync(introPath))
+  const hasOutro = !!(outroPath && fs.existsSync(outroPath))
 
   // Compute output path
   let outPath: string
@@ -231,67 +242,143 @@ export async function exportEdited(params: EditorExportParams): Promise<EditorSa
 
   fs.mkdirSync(path.dirname(outPath), { recursive: true })
 
+  // Build ffmpeg metadata file for chapters (if any)
+  let metaFilePath: string | null = null
+  if (metadata?.chapters?.length) {
+    metaFilePath = path.join(os.tmpdir(), `sundayrec_meta_${Date.now()}.txt`)
+    const lines = [';FFMETADATA1']
+    if (metadata.title)   lines.push(`title=${metadata.title}`)
+    if (metadata.speaker) lines.push(`artist=${metadata.speaker}`)
+    if (metadata.description) lines.push(`comment=${metadata.description}`)
+
+    // Chapters (timebase 1/1000 = milliseconds)
+    for (let i = 0; i < metadata.chapters.length; i++) {
+      const ch    = metadata.chapters[i]
+      const next  = metadata.chapters[i + 1]
+      const start = Math.round((ch.time + (hasIntro && introPath ? 0 : 0)) * 1000)
+      const end   = next ? Math.round(next.time * 1000) - 1 : Math.round(duration * 1000)
+      lines.push('[CHAPTER]', 'TIMEBASE=1/1000', `START=${start}`, `END=${end}`, `title=${ch.title}`)
+    }
+    fs.writeFileSync(metaFilePath, lines.join('\n'), 'utf8')
+  }
+
   return new Promise(resolve => {
     let settled = false
+    let killTimer: ReturnType<typeof setTimeout> | null = null
+
     const finish = (result: EditorSaveResult) => {
       if (settled) return
       settled = true
-      clearTimeout(killTimer)
+      if (killTimer) clearTimeout(killTimer)
+      if (metaFilePath) fs.promises.unlink(metaFilePath!).catch(() => {})
       resolve(result)
     }
 
-    const cmd = ffmpeg(inputPath)
+    const procFilters = processing.ffmpegFilters ?? []
 
-    const killTimer = setTimeout(() => {
+    // ── Simple case: single segment, no processing, no intro/outro ──
+    if (keeps.length === 1 && procFilters.length === 0 && !hasIntro && !hasOutro) {
+      const seg = keeps[0]
+      const mainCmd = ffmpeg(inputPath)
+      killTimer = setTimeout(() => {
+        try { mainCmd.kill('SIGTERM') } catch {}
+        if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
+        finish({ ok: false, error: 'timeout' })
+      }, MAX_EDIT_MS)
+      mainCmd.audioFilters(`atrim=start=${seg.start.toFixed(4)}:end=${seg.end.toFixed(4)},asetpts=PTS-STARTPTS`)
+      applyCodec(mainCmd, fmt, outputBitrate, outputBitDepth)
+      if (metaFilePath) mainCmd.input(metaFilePath).addOutputOption('-map_metadata', '1')
+      if (metadata?.title)   mainCmd.outputOptions('-metadata', `title=${metadata.title}`)
+      if (metadata?.speaker) mainCmd.outputOptions('-metadata', `artist=${metadata.speaker}`)
+      mainCmd.output(outPath)
+        .on('end', async () => {
+          if (mode === 'replace' && tempPath) {
+            try { await safeReplaceFile(tempPath, inputPath); finish({ ok: true, outputPath: inputPath }) }
+            catch (err) { finish({ ok: false, error: (err as Error).message }) }
+          } else { finish({ ok: true, outputPath: outPath }) }
+        })
+        .on('error', (err: Error) => {
+          if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
+          finish({ ok: false, error: err.message })
+        })
+        .run()
+      return
+    }
+
+    // ── Complex case: multiple segments, processing, or intro/outro ──
+    const cmd = ffmpeg()
+    killTimer = setTimeout(() => {
       try { cmd.kill('SIGTERM') } catch {}
       if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
       finish({ ok: false, error: 'timeout' })
     }, MAX_EDIT_MS)
 
-    // Build the edit + processing filter chain
-    const procFilters = processing.ffmpegFilters ?? []
+    let mainInputIdx = 0
+    if (hasIntro) { cmd.input(introPath!); mainInputIdx = 1 }
+    cmd.input(inputPath)
+    const mainRef = `[${mainInputIdx}:a]`
+    if (hasOutro) { cmd.input(outroPath!); }
+
+    // Build main content filter (cuts + processing)
+    const filterParts: string[] = []
 
     if (keeps.length === 1) {
       const seg = keeps[0]
-      const trimFilter = `atrim=start=${seg.start.toFixed(4)}:end=${seg.end.toFixed(4)},asetpts=PTS-STARTPTS`
-      const allFilters = [trimFilter, ...procFilters].join(',')
-      cmd.audioFilters(allFilters)
+      const chainFilters = [
+        `${mainRef}atrim=start=${seg.start.toFixed(4)}:end=${seg.end.toFixed(4)},asetpts=PTS-STARTPTS`,
+        ...procFilters
+      ]
+      filterParts.push(chainFilters.join(',') + '[main_out]')
     } else {
-      const parts = keeps.map((seg, i) =>
-        `[0:a]atrim=start=${seg.start.toFixed(4)}:end=${seg.end.toFixed(4)},asetpts=PTS-STARTPTS[seg${i}]`
-      )
-      const inputs = keeps.map((_, i) => `[seg${i}]`).join('')
-      parts.push(`${inputs}concat=n=${keeps.length}:v=0:a=1[out]`)
-      cmd.complexFilter(parts.join(';')).addOutputOption('-map', '[out]')
-      if (procFilters.length > 0) cmd.audioFilters(procFilters.join(','))
+      keeps.forEach((seg, i) => {
+        filterParts.push(`${mainRef}atrim=start=${seg.start.toFixed(4)}:end=${seg.end.toFixed(4)},asetpts=PTS-STARTPTS[seg${i}]`)
+      })
+      const segInputs = keeps.map((_, i) => `[seg${i}]`).join('')
+      if (procFilters.length > 0) {
+        filterParts.push(`${segInputs}concat=n=${keeps.length}:v=0:a=1[concat_out]`)
+        filterParts.push(`[concat_out]${procFilters.join(',')}[main_out]`)
+      } else {
+        filterParts.push(`${segInputs}concat=n=${keeps.length}:v=0:a=1[main_out]`)
+      }
     }
 
-    // Codec + quality
-    if (fmt === 'wav') {
-      cmd.audioCodec(outputBitDepth === 24 ? 'pcm_s24le' : 'pcm_s16le')
-    } else if (fmt === 'flac') {
-      cmd.audioCodec('flac')
-    } else if (fmt === 'aac') {
-      cmd.audioCodec('aac')
-      cmd.audioBitrate(String(outputBitrate ?? 192) + 'k')
-    } else {
-      cmd.audioCodec('libmp3lame')
-      cmd.audioBitrate(String(outputBitrate ?? 192) + 'k')
+    // Build concat list: intro + main + outro
+    const concatParts: string[] = []
+    if (hasIntro) concatParts.push('[0:a]aformat=sample_fmts=fltp[intro_fmt]')
+    concatParts.push(...filterParts)
+    if (hasOutro) {
+      const outroIdx = hasIntro ? 2 : 1
+      concatParts.push(`[${outroIdx}:a]aformat=sample_fmts=fltp[outro_fmt]`)
     }
+
+    if (hasIntro || hasOutro) {
+      const concatInputs = [
+        ...(hasIntro ? ['[intro_fmt]'] : []),
+        '[main_out]',
+        ...(hasOutro ? ['[outro_fmt]'] : []),
+      ].join('')
+      const n = (hasIntro ? 1 : 0) + 1 + (hasOutro ? 1 : 0)
+      concatParts.push(`${concatInputs}concat=n=${n}:v=0:a=1[final_out]`)
+      cmd.complexFilter(concatParts.join(';')).addOutputOption('-map', '[final_out]')
+    } else {
+      cmd.complexFilter(filterParts.join(';')).addOutputOption('-map', '[main_out]')
+    }
+
+    // Metadata tags
+    if (metadata?.title)       cmd.outputOptions('-metadata', `title=${metadata.title}`)
+    if (metadata?.speaker)     cmd.outputOptions('-metadata', `artist=${metadata.speaker}`)
+    if (metadata?.description) cmd.outputOptions('-metadata', `comment=${metadata.description}`)
+    if (metaFilePath)          { cmd.input(metaFilePath); cmd.addOutputOption('-map_metadata', String(hasIntro ? 3 : hasOutro ? 2 : 1)) }
+
+    applyCodec(cmd, fmt, outputBitrate, outputBitDepth)
 
     cmd
       .output(outPath)
       .on('end', async () => {
         if (mode === 'replace' && tempPath) {
-          try {
-            await safeReplaceFile(tempPath, inputPath)
-            finish({ ok: true, outputPath: inputPath })
-          } catch (err) {
-            finish({ ok: false, error: (err as Error).message })
-          }
-        } else {
-          finish({ ok: true, outputPath: outPath })
-        }
+          try { await safeReplaceFile(tempPath, inputPath); finish({ ok: true, outputPath: inputPath }) }
+          catch (err) { finish({ ok: false, error: (err as Error).message }) }
+        } else { finish({ ok: true, outputPath: outPath }) }
       })
       .on('error', (err: Error) => {
         if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
@@ -299,4 +386,16 @@ export async function exportEdited(params: EditorExportParams): Promise<EditorSa
       })
       .run()
   })
+}
+
+function applyCodec(cmd: ReturnType<typeof ffmpeg>, fmt: string, bitrate?: number, bitDepth?: 16 | 24): void {
+  if (fmt === 'wav') {
+    cmd.audioCodec(bitDepth === 24 ? 'pcm_s24le' : 'pcm_s16le')
+  } else if (fmt === 'flac') {
+    cmd.audioCodec('flac')
+  } else if (fmt === 'aac') {
+    cmd.audioCodec('aac').audioBitrate(String(bitrate ?? 192) + 'k')
+  } else {
+    cmd.audioCodec('libmp3lame').audioBitrate(String(bitrate ?? 192) + 'k')
+  }
 }

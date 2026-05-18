@@ -1,0 +1,49 @@
+import Store from 'electron-store'
+import { safeStorage } from 'electron'
+import type { CloudServiceId } from '../../types'
+
+export interface TokenData {
+  accessToken:   string
+  refreshToken?: string
+  expiresAt?:    number
+  accountName?:  string
+  accountEmail?: string
+  folderId?:     string
+  folderName?:   string
+  folderPath?:   string
+  lastUpload?:   number
+  lastUploadOk?: boolean
+}
+
+interface RawStore {
+  'google-drive'?: string
+  'dropbox'?: string
+  'onedrive'?: string
+}
+
+const store = new Store<RawStore>({ name: 'sundayrec-cloud' })
+
+export function getToken(service: CloudServiceId): TokenData | null {
+  const enc = store.get(service as keyof RawStore)
+  if (!enc) return null
+  try {
+    const json = safeStorage.isEncryptionAvailable()
+      ? safeStorage.decryptString(Buffer.from(enc, 'base64'))
+      : enc
+    return JSON.parse(json)
+  } catch { return null }
+}
+
+export function setToken(service: CloudServiceId, data: TokenData | null): void {
+  if (!data) { store.delete(service as keyof RawStore); return }
+  const json = JSON.stringify(data)
+  const enc  = safeStorage.isEncryptionAvailable()
+    ? safeStorage.encryptString(json).toString('base64')
+    : json
+  store.set(service as keyof RawStore, enc)
+}
+
+export function updateTokenFields(service: CloudServiceId, fields: Partial<TokenData>): void {
+  const cur = getToken(service) ?? {} as TokenData
+  setToken(service, { ...cur, ...fields })
+}

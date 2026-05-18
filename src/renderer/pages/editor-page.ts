@@ -5,6 +5,8 @@ import {
   getProcessingState, setNormEnabled, getGainReduction
 } from './editor-processing'
 import { destroyEQCanvas } from './editor-eq-canvas'
+import { settings } from '../state'
+import type { ChapterMarker, RecordingMetadata } from '../../types'
 
 interface Cut { start: number; end: number }
 
@@ -14,6 +16,17 @@ let duration  = 0
 let peaks: Float32Array | null = null
 let cuts: Cut[] = []
 let cutHistory: Cut[][] = []   // undo stack
+
+// Intro/Outro
+let introBuffer: AudioBuffer | null = null
+let outroBuffer: AudioBuffer | null = null
+let introDuration = 0
+let outroDuration = 0
+let includeIntroOutro = false
+
+// Metadata + chapters
+let meta: RecordingMetadata = { title: '', speaker: '', description: '', chapters: [] }
+let metaDirty = false
 
 // Viewport (seconds visible in main canvas)
 let vpStart = 0
@@ -142,6 +155,50 @@ export function setupEditorPage(): void {
   })
   $('btn-editor-prompt-dismiss')?.addEventListener('click', dismissEditorPrompt)
 
+  // Intro/Outro controls
+  const ioChk = $('editor-include-io') as HTMLInputElement | null
+  if (ioChk) {
+    ioChk.addEventListener('change', () => {
+      includeIntroOutro = ioChk.checked
+      drawWaveform()
+    })
+  }
+
+  // Metadata panel toggle
+  $('btn-meta-toggle')?.addEventListener('click', () => {
+    const body = $('editor-meta-body')
+    if (!body) return
+    const open = body.style.display === 'none'
+    body.style.display = open ? '' : 'none'
+    $('editor-meta-chevron')?.classList.toggle('open', open)
+  })
+
+  // Metadata autosave on change
+  const metaFields: [string, keyof RecordingMetadata][] = [
+    ['meta-title', 'title'], ['meta-speaker', 'speaker'], ['meta-description', 'description']
+  ]
+  for (const [id, field] of metaFields) {
+    $(id)?.addEventListener('input', () => {
+      const el = $(id) as HTMLInputElement | HTMLTextAreaElement | null
+      if (el) (meta as Record<string, unknown>)[field] = el.value
+      metaDirty = true
+    })
+  }
+
+  // Add chapter at current playhead
+  $('btn-add-chapter')?.addEventListener('click', () => {
+    const time = Math.max(0, Math.min(duration, playStartSec))
+    const title = `Kapittel ${meta.chapters.length + 1}`
+    meta.chapters.push({ time, title })
+    meta.chapters.sort((a, b) => a.time - b.time)
+    metaDirty = true
+    renderChapterList()
+    drawWaveform()
+  })
+
+  // Meta save button
+  $('btn-meta-save')?.addEventListener('click', saveMetadata)
+
   // Canvas interactions
   canvas?.addEventListener('mousedown',   onCanvasDown)
   canvas?.addEventListener('mousemove',   onCanvasMove)
@@ -171,6 +228,8 @@ export function deactivateEditor(): void {
   audioCtx?.close().catch(() => {})
   audioCtx = null
   audioBuffer = null
+  introBuffer = null
+  outroBuffer = null
   destroyEQCanvas()
 }
 
@@ -193,6 +252,8 @@ async function loadFile(fp: string): Promise<void> {
   peaks = null
   audioBuffer = null
   playStartSec = 0
+  meta = { title: '', speaker: '', description: '', chapters: [] }
+  metaDirty = false
 
   showState('loading')
 
@@ -222,6 +283,12 @@ async function loadFile(fp: string): Promise<void> {
   const el = $('editor-filename')
   if (el) el.textContent = fname
 
+  // Load intro/outro buffers from settings (non-blocking)
+  loadIntroOutroBuffers(seq)
+
+  // Load metadata sidecar
+  loadMetadataSidecar(fp, fname)
+
   renderCutList()
   updateRemainingDisplay()
   updateTimecode(0)
@@ -231,6 +298,131 @@ async function loadFile(fp: string): Promise<void> {
   drawMinimap()
   updateMinimapViewport()
   showState('workspace')
+}
+
+async function loadIntroOutroBuffers(seq: number): Promise<void> {
+  const introPath = settings.editorIntroPath
+  const outroPath = settings.editorOutroPath
+  introBuffer = null; introDuration = 0
+  outroBuffer = null; outroDuration = 0
+
+  // Update UI
+  const introEl = $('editor-intro-name')
+  const outroEl = $('editor-outro-name')
+  const ioBar   = $('editor-intro-outro-bar')
+  if (ioBar) ioBar.style.display = (introPath || outroPath) ? '' : 'none'
+
+  async function decodeAudio(path: string): Promise<AudioBuffer | null> {
+    try {
+      const raw = await window.api.editorReadFile(path)
+      if (!raw) return null
+      const u8 = raw instanceof Uint8Array ? raw : new Uint8Array(raw as ArrayBuffer)
+      const tmpCtx = new AudioContext()
+      const buf = await tmpCtx.decodeAudioData(u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer)
+      tmpCtx.close().catch(() => {})
+      return buf
+    } catch { return null }
+  }
+
+  if (introPath) {
+    const buf = await decodeAudio(introPath)
+    if (seq === loadSeq && buf) { introBuffer = buf; introDuration = buf.duration }
+    if (introEl) introEl.textContent = introPath.split(/[/\\]/).pop() ?? ''
+  } else {
+    if (introEl) introEl.textContent = 'Ingen'
+  }
+  if (outroPath) {
+    const buf = await decodeAudio(outroPath)
+    if (seq === loadSeq && buf) { outroBuffer = buf; outroDuration = buf.duration }
+    if (outroEl) outroEl.textContent = outroPath.split(/[/\\]/).pop() ?? ''
+  } else {
+    if (outroEl) outroEl.textContent = 'Ingen'
+  }
+  if (seq === loadSeq) drawWaveform()
+}
+
+async function loadMetadataSidecar(fp: string, fname: string): Promise<void> {
+  const raw = await window.api.editorReadMeta(fp)
+  if (raw && typeof raw === 'object') {
+    meta = raw as RecordingMetadata
+  } else {
+    // Auto-fill title from filename (strip extension)
+    meta = {
+      title: fname.replace(/\.[^.]+$/, '').replace(/_redigert(_\d+)?$/, '').replace(/_/g, ' '),
+      speaker: '',
+      description: '',
+      chapters: [],
+    }
+  }
+  renderMetaPanel()
+  renderChapterList()
+}
+
+async function saveMetadata(): Promise<void> {
+  if (!filePath) return
+  await window.api.editorSaveMeta(filePath, meta)
+  metaDirty = false
+  const btn = $('btn-meta-save')
+  if (btn) { btn.textContent = '✓ Lagret'; setTimeout(() => { btn.textContent = 'Lagre metadata' }, 1500) }
+}
+
+function renderMetaPanel(): void {
+  const titleEl = $('meta-title') as HTMLInputElement | null
+  const spkEl   = $('meta-speaker') as HTMLInputElement | null
+  const descEl  = $('meta-description') as HTMLTextAreaElement | null
+  if (titleEl) titleEl.value = meta.title
+  if (spkEl)   spkEl.value   = meta.speaker
+  if (descEl)  descEl.value  = meta.description
+}
+
+function renderChapterList(): void {
+  const list = $('chapter-list')
+  if (!list) return
+  list.innerHTML = ''
+  const countEl = $('editor-chapter-count')
+  if (countEl) {
+    countEl.textContent = String(meta.chapters.length)
+    countEl.style.display = meta.chapters.length ? '' : 'none'
+  }
+  if (meta.chapters.length === 0) {
+    list.innerHTML = '<div class="editor-chapters-empty">Ingen kapitler ennå. Klikk «+ Legg til ved playhead» for å starte.</div>'
+    return
+  }
+  for (let i = 0; i < meta.chapters.length; i++) {
+    const ch = meta.chapters[i]
+    const row = document.createElement('div')
+    row.className = 'editor-chapter-row'
+
+    const timeLbl = document.createElement('span')
+    timeLbl.className = 'editor-chapter-time'
+    timeLbl.textContent = formatTime(ch.time)
+    timeLbl.title = 'Klikk for å søke'
+    timeLbl.addEventListener('click', () => { playStartSec = ch.time; updateTimecode(ch.time); drawWaveform() })
+
+    const nameInput = document.createElement('input')
+    nameInput.className = 'editor-chapter-name'
+    nameInput.value = ch.title
+    nameInput.addEventListener('input', () => {
+      meta.chapters[i].title = nameInput.value
+      metaDirty = true
+      drawWaveform()
+    })
+
+    const delBtn = document.createElement('button')
+    delBtn.className = 'editor-chapter-del'
+    delBtn.textContent = '✕'
+    delBtn.addEventListener('click', () => {
+      meta.chapters.splice(i, 1)
+      metaDirty = true
+      renderChapterList()
+      drawWaveform()
+    })
+
+    row.appendChild(timeLbl)
+    row.appendChild(nameInput)
+    row.appendChild(delBtn)
+    list.appendChild(row)
+  }
 }
 
 function computePeaks(buf: AudioBuffer): Float32Array {
@@ -401,6 +593,71 @@ function drawWaveform(): void {
       ctx.fill()
       ctx.fillStyle = '#fb923c'
       ctx.fillText(label, tx, RULER + 15)
+    }
+  }
+
+  // ── Chapter markers ───────────────────────────────────────────────
+  const CHAPTER_COLOR = '#06b6d4'
+  for (const ch of meta.chapters) {
+    const x = secToX(ch.time, W)
+    if (x < -2 || x > W + 2) continue
+    ctx.strokeStyle = CHAPTER_COLOR
+    ctx.lineWidth   = 1.5
+    ctx.globalAlpha = 0.85
+    ctx.setLineDash([4, 3])
+    ctx.beginPath(); ctx.moveTo(x, RULER); ctx.lineTo(x, H); ctx.stroke()
+    ctx.setLineDash([])
+    ctx.globalAlpha = 1
+
+    // Small triangle at top
+    ctx.fillStyle = CHAPTER_COLOR
+    ctx.beginPath()
+    ctx.moveTo(x - 4, RULER)
+    ctx.lineTo(x + 4, RULER)
+    ctx.lineTo(x, RULER + 7)
+    ctx.closePath()
+    ctx.fill()
+
+    // Label
+    ctx.font = '600 9px system-ui, -apple-system, sans-serif'
+    ctx.textBaseline = 'top'
+    const label = ch.title.length > 14 ? ch.title.slice(0, 13) + '…' : ch.title
+    const tw    = ctx.measureText(label).width
+    const tx    = Math.min(Math.max(x + 3, 2), W - tw - 4)
+    ctx.fillStyle = 'rgba(6,182,212,0.15)'
+    if (ctx.roundRect) ctx.roundRect(tx - 2, RULER + 8, tw + 4, 13, 2)
+    else ctx.rect(tx - 2, RULER + 8, tw + 4, 13)
+    ctx.fill()
+    ctx.fillStyle = CHAPTER_COLOR
+    ctx.fillText(label, tx, RULER + 9)
+    ctx.textBaseline = 'middle'
+  }
+
+  // ── Intro/Outro banners ────────────────────────────────────────────
+  if (includeIntroOutro && (introDuration > 0 || outroDuration > 0)) {
+    ctx.font = '600 10px system-ui, -apple-system, sans-serif'
+    ctx.textBaseline = 'middle'
+    if (introDuration > 0) {
+      ctx.fillStyle = 'rgba(99,102,241,0.18)'
+      ctx.fillRect(0, RULER, 70, H - RULER)
+      ctx.strokeStyle = 'rgba(99,102,241,0.5)'
+      ctx.lineWidth = 1
+      ctx.beginPath(); ctx.moveTo(70, RULER); ctx.lineTo(70, H); ctx.stroke()
+      ctx.fillStyle = '#818cf8'
+      ctx.textAlign = 'center'
+      ctx.fillText(`◀ INTRO ${formatDuration(introDuration)}`, 35, midY)
+      ctx.textAlign = 'left'
+    }
+    if (outroDuration > 0) {
+      ctx.fillStyle = 'rgba(99,102,241,0.18)'
+      ctx.fillRect(W - 70, RULER, 70, H - RULER)
+      ctx.strokeStyle = 'rgba(99,102,241,0.5)'
+      ctx.lineWidth = 1
+      ctx.beginPath(); ctx.moveTo(W - 70, RULER); ctx.lineTo(W - 70, H); ctx.stroke()
+      ctx.fillStyle = '#818cf8'
+      ctx.textAlign = 'center'
+      ctx.fillText(`OUTRO ${formatDuration(outroDuration)} ▶`, W - 35, midY)
+      ctx.textAlign = 'left'
     }
   }
 
@@ -937,9 +1194,18 @@ function startPlay(preview: boolean): void {
   const nodes: AudioBufferSourceNode[] = []
   let firstSec = -1
 
-  // Intermediate gain node to connect multiple sources through the processing chain
   const mixGain = audioCtx.createGain()
   buildAudioChain(audioCtx, mixGain, audioCtx.destination)
+
+  // Schedule intro before main content (only when at start and preview mode)
+  if (includeIntroOutro && introBuffer && playStartSec < 0.1) {
+    const introNode = audioCtx.createBufferSource()
+    introNode.buffer = introBuffer
+    introNode.connect(mixGain)
+    introNode.start(when)
+    when += introDuration
+    nodes.push(introNode)
+  }
 
   for (let i = 0; i < segments.length; i++) {
     const seg    = segments[i]
@@ -960,6 +1226,15 @@ function startPlay(preview: boolean): void {
   if (firstSec < 0) { isPlaying = false; return }
   playStartSec = firstSec
   sourceNodes  = nodes
+
+  // Schedule outro after main content
+  if (includeIntroOutro && outroBuffer) {
+    const outroNode = audioCtx.createBufferSource()
+    outroNode.buffer = outroBuffer
+    outroNode.connect(mixGain)
+    outroNode.start(when)
+    nodes.push(outroNode)
+  }
 
   nodes[nodes.length - 1]?.addEventListener('ended', () => {
     if (isPlaying) { isPlaying = false; cancelAnimationFrame(rafId); updatePlayIcon(); drawWaveform() }
@@ -1055,6 +1330,9 @@ async function runExport(): Promise<void> {
     dest === 'replace' ? 'replace' :
     dest === 'folder'  ? 'folder'  : 'new'
 
+  // Auto-save metadata before export
+  if (metaDirty) await saveMetadata()
+
   const result = await window.api.editorExportFile({
     inputPath:    filePath,
     cutRegions:   cuts,
@@ -1064,7 +1342,10 @@ async function runExport(): Promise<void> {
     outputFormat: fmt,
     outputBitrate:  bitrate,
     outputBitDepth: bitDepth,
-    processing: { ffmpegFilters: getFFmpegFilters() }
+    processing: { ffmpegFilters: getFFmpegFilters() },
+    introPath:  (includeIntroOutro && settings.editorIntroPath) ? settings.editorIntroPath : undefined,
+    outroPath:  (includeIntroOutro && settings.editorOutroPath) ? settings.editorOutroPath : undefined,
+    metadata:   meta,
   })
 
   if (btn) { btn.disabled = false; btn.textContent = t('editor.save') || 'Eksporter' }

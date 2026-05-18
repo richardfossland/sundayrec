@@ -55,6 +55,12 @@ const defaults: Settings = {
 
   autoUpdate: true,
   askOpenEditor: true,
+  editorIntroPath: undefined,
+  editorOutroPath: undefined,
+
+  cloudGoogleDrive: undefined,
+  cloudDropbox: undefined,
+  cloudOneDrive: undefined,
 
   churchName: '',
   responsiblePerson: '',

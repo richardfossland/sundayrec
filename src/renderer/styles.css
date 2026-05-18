@@ -1898,3 +1898,153 @@ select.form-input {
 
 /* ── Editor proc panel — wider tabs ──────────────────────────── */
 .proc-tab { font-size: 11px; letter-spacing: -.1px; }
+
+/* ── Intro/outro path display in settings ─────────────────────── */
+.intro-outro-path {
+  flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; min-width: 0;
+}
+
+/* ── Editor: intro/outro bar ──────────────────────────────────── */
+.editor-intro-outro-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 8px 12px; margin: 0 0 6px;
+  background: rgba(147,103,237,.08);
+  border: 1px solid rgba(147,103,237,.2);
+  border-radius: 8px; font-size: 13px;
+}
+.editor-io-toggle {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  user-select: none;
+}
+.editor-io-files { display: flex; gap: 8px; flex-wrap: wrap; }
+.editor-io-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px; border-radius: 12px;
+  background: rgba(147,103,237,.15); font-size: 12px;
+}
+.editor-io-chip-label { color: var(--text3); font-weight: 600; }
+.editor-io-chip-name { color: var(--text1); }
+.editor-io-chip-dur  { color: var(--text3); }
+
+/* ── Editor: metadata panel ───────────────────────────────────── */
+.editor-meta-panel {
+  margin: 6px 0; border: 1px solid var(--border); border-radius: 8px;
+  overflow: hidden;
+}
+.editor-meta-header {
+  display: flex; align-items: center; gap: 6px;
+  padding: 9px 12px; cursor: pointer; font-size: 13px; font-weight: 600;
+  background: var(--surface2); color: var(--text2);
+  user-select: none; transition: background .15s;
+}
+.editor-meta-header:hover { background: var(--surface3); }
+.editor-meta-chevron { margin-left: auto; opacity: .5; transition: transform .2s; }
+.editor-meta-chevron.open { transform: rotate(180deg); }
+.editor-meta-badge { color: var(--accent); font-size: 10px; }
+.editor-meta-body {
+  padding: 12px; background: var(--surface1);
+  border-top: 1px solid var(--border);
+}
+.meta-form-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;
+}
+.meta-form-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.meta-form-row:last-child { margin-bottom: 0; }
+.meta-form-row .form-label { margin: 0; }
+
+/* ── Editor: chapters panel ───────────────────────────────────── */
+.editor-chapters-panel {
+  margin: 6px 0; border: 1px solid var(--border); border-radius: 8px;
+  overflow: hidden;
+}
+.editor-chapters-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 12px; background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+}
+.editor-chapters-title {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600; color: var(--text2);
+}
+.editor-chapter-count {
+  font-size: 11px; font-weight: 700; color: var(--accent);
+  background: rgba(124,109,255,.12); border-radius: 8px; padding: 1px 6px;
+}
+.editor-chapters-list { background: var(--surface1); }
+.editor-chapter-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px; border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.editor-chapter-row:last-child { border-bottom: none; }
+.editor-chapter-time {
+  font-variant-numeric: tabular-nums; color: var(--accent);
+  font-size: 12px; font-weight: 600; min-width: 54px; cursor: pointer;
+}
+.editor-chapter-time:hover { text-decoration: underline; }
+.editor-chapter-name {
+  flex: 1; background: none; border: none; color: var(--text1);
+  font-size: 13px; padding: 1px 4px; border-radius: 4px; outline: none;
+}
+.editor-chapter-name:focus {
+  background: var(--surface2); box-shadow: 0 0 0 2px rgba(124,109,255,.25);
+}
+.editor-chapter-del {
+  background: none; border: none; cursor: pointer; color: var(--text3);
+  font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 4px;
+  transition: color .15s, background .15s;
+}
+.editor-chapter-del:hover { color: var(--red); background: rgba(239,68,68,.08); }
+.editor-chapters-empty {
+  padding: 12px; text-align: center; font-size: 13px; color: var(--text3);
+}
+
+/* ── Publish (cloud) settings page ───────────────────────────── */
+.cloud-card { margin-bottom: 12px; }
+.cloud-card-header {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+}
+.cloud-card-icon { width: 32px; height: 32px; flex-shrink: 0; }
+.cloud-card-name { font-weight: 700; font-size: 15px; flex: 1; }
+.cloud-status-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.cloud-dot-ok  { background: var(--green); box-shadow: 0 0 6px rgba(52,211,153,.4); }
+.cloud-dot-off { background: var(--text3); }
+.cloud-folder-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; margin-bottom: 6px;
+}
+.cloud-folder-label { color: var(--text3); }
+.cloud-folder-name  { flex: 1; font-weight: 600; }
+.cloud-upload-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; margin-bottom: 8px;
+}
+.cloud-last-upload-label { color: var(--text3); }
+.cloud-last-upload { font-size: 12px; color: var(--text2); }
+.cloud-toggle-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; margin-bottom: 6px;
+}
+.cloud-disconnect-btn { margin-top: 6px; color: var(--red); }
+.cloud-error {
+  margin-top: 6px; font-size: 12px; color: var(--red);
+  background: rgba(239,68,68,.08); border-radius: 6px; padding: 6px 10px;
+}
+
+/* ── Cloud folder picker modal list ──────────────────────────── */
+.cloud-folder-list {
+  max-height: 320px; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: 8px;
+  margin-top: 10px; background: var(--surface2);
+}
+.cloud-folder-item {
+  display: block; width: 100%; text-align: left;
+  padding: 9px 14px; background: none; border: none;
+  border-bottom: 1px solid var(--border); cursor: pointer;
+  font-size: 13px; color: var(--text1); transition: background .12s;
+}
+.cloud-folder-item:last-child { border-bottom: none; }
+.cloud-folder-item:hover { background: var(--surface3); }

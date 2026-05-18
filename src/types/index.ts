@@ -111,6 +111,13 @@ export interface Settings {
 
   // Editor
   askOpenEditor?: boolean
+  editorIntroPath?: string
+  editorOutroPath?: string
+
+  // Cloud backup
+  cloudGoogleDrive?: CloudServiceSettings
+  cloudDropbox?: CloudServiceSettings
+  cloudOneDrive?: CloudServiceSettings
 
   // Updates
   autoUpdate: boolean
@@ -159,4 +166,37 @@ export interface UpdateProgress {
 export interface UpdateInfo {
   version: string
   releaseNotes?: string
+}
+
+export interface ChapterMarker {
+  time: number   // seconds from start of main content
+  title: string
+}
+
+export interface RecordingMetadata {
+  title: string
+  speaker: string
+  description: string
+  chapters: ChapterMarker[]
+}
+
+export type CloudServiceId = 'google-drive' | 'dropbox' | 'onedrive'
+
+export interface CloudServiceSettings {
+  enabled: boolean
+  autoUpload: boolean
+  folderId?: string
+  folderName?: string
+  folderPath?: string
+}
+
+export interface CloudStatus {
+  connected: boolean
+  accountName?: string
+  accountEmail?: string
+  folderId?: string
+  folderName?: string
+  folderPath?: string
+  lastUpload?: number
+  lastUploadOk?: boolean
 }

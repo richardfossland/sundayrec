@@ -439,6 +439,7 @@
       <button class="inner-tab active" data-tab="settings-audio" data-i18n="nav.audio">Lydkilde</button>
       <button class="inner-tab" data-tab="settings-files" data-i18n="nav.files">Filer</button>
       <button class="inner-tab" data-tab="settings-general" data-i18n="nav.general">Generelt</button>
+      <button class="inner-tab" data-tab="settings-publish" data-i18n="nav.publish">Publiser</button>
     </div>
 
     <!-- ── Lydkilde ────────────────────────────────────────────── -->
@@ -624,6 +625,22 @@
           <label class="toggle"><input type="checkbox" id="opt-trim-silence" /><span class="toggle-track"></span></label>
         </div>
       </div>
+      <div class="card">
+        <div class="card-title" data-i18n="files.introOutro">Intro &amp; Outro</div>
+        <p class="card-desc" data-i18n="files.introOutroDesc">Velg faste lyd-filer som limes inn foran og bak hvert opptak ved eksport.</p>
+        <label class="form-label" data-i18n="files.introFile">INTRO-FIL</label>
+        <div class="folder-row" style="align-items:center">
+          <span class="intro-outro-path" id="intro-path-display" style="color:var(--text3)">Ingen fil valgt</span>
+          <button class="btn-secondary btn-sm" id="btn-pick-intro" data-i18n="files.browse">Velg fil</button>
+          <button class="btn-ghost btn-sm" id="btn-clear-intro" style="display:none">✕</button>
+        </div>
+        <label class="form-label mt" data-i18n="files.outroFile">OUTRO-FIL</label>
+        <div class="folder-row" style="align-items:center">
+          <span class="intro-outro-path" id="outro-path-display" style="color:var(--text3)">Ingen fil valgt</span>
+          <button class="btn-secondary btn-sm" id="btn-pick-outro" data-i18n="files.browse">Velg fil</button>
+          <button class="btn-ghost btn-sm" id="btn-clear-outro" style="display:none">✕</button>
+        </div>
+      </div>
       <div class="page-footer">
         <button class="btn-primary" id="btn-files-save" data-i18n="files.save">Lagre</button>
         <button class="btn-ghost" id="btn-files-cancel" data-i18n="files.cancel">Avbryt</button>
@@ -742,6 +759,137 @@
         <button class="btn-ghost" id="btn-general-cancel" data-i18n="general.cancel">Avbryt</button>
       </div>
     </div>
+
+    <!-- ── Publiser ──────────────────────────────────────────────── -->
+    <div id="settings-publish" class="inner-page">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-size:14px;color:var(--text2)" data-i18n="publish.desc">Koble til skytjenester for automatisk opplasting etter opptak og eksport.</div>
+        <button class="btn-ghost btn-sm" id="btn-cloud-refresh" data-i18n="publish.refresh">↺ Oppdater</button>
+      </div>
+
+      <!-- Google Drive card -->
+      <div class="card cloud-card" id="cloud-card-google-drive">
+        <div class="cloud-card-header">
+          <div class="cloud-card-icon cloud-icon-gdrive">
+            <svg viewBox="0 0 24 24" width="24" height="24"><path fill="#4285F4" d="M6 2l6 10.4L6 22H2L8 12 2 2z"/><path fill="#34A853" d="M12 12.4L18 2H14L8 12l3 5.2z"/><path fill="#FBBC05" d="M22 22H10l3-5.2L18 22z"/></svg>
+          </div>
+          <div class="cloud-card-name">Google Drive</div>
+          <div class="cloud-connected" style="display:none">
+            <span class="cloud-status-dot cloud-dot-ok"></span>
+            <span class="cloud-account-name" style="font-size:13px;color:var(--text2)"></span>
+          </div>
+          <div class="cloud-disconnected">
+            <span class="cloud-status-dot cloud-dot-off"></span>
+            <span style="font-size:13px;color:var(--text3)" data-i18n="publish.notConnected">Ikke tilkoblet</span>
+          </div>
+        </div>
+        <div class="cloud-connected" style="display:none">
+          <div class="cloud-folder-row">
+            <span class="cloud-folder-label" data-i18n="publish.folder">Mappe:</span>
+            <span class="cloud-folder-name"></span>
+            <button class="btn-ghost btn-sm" data-cloud-pick-folder="google-drive" data-i18n="publish.changeFolder">Endre</button>
+          </div>
+          <div class="cloud-upload-row">
+            <span class="cloud-last-upload-label" data-i18n="publish.lastUpload">Siste opplasting:</span>
+            <span class="cloud-last-upload">—</span>
+          </div>
+          <div class="cloud-toggle-row">
+            <label class="toggle"><input type="checkbox" data-cloud-auto="google-drive" /><span class="toggle-track"></span></label>
+            <span data-i18n="publish.autoUpload">Last opp automatisk etter opptak</span>
+          </div>
+          <div class="cloud-toggle-row">
+            <label class="toggle"><input type="checkbox" data-cloud-enabled="google-drive" /><span class="toggle-track"></span></label>
+            <span data-i18n="publish.enabled">Aktivert</span>
+          </div>
+          <button class="btn-ghost btn-sm cloud-disconnect-btn" data-cloud-disconnect="google-drive" data-i18n="publish.disconnect">Koble fra</button>
+        </div>
+        <div class="cloud-disconnected">
+          <button class="btn-secondary btn-sm" data-cloud-connect="google-drive" data-i18n="publish.connect">Koble til</button>
+        </div>
+      </div>
+
+      <!-- Dropbox card -->
+      <div class="card cloud-card" id="cloud-card-dropbox">
+        <div class="cloud-card-header">
+          <div class="cloud-card-icon">
+            <svg viewBox="0 0 24 24" width="24" height="24"><path fill="#0061FF" d="M6 2L0 6l6 4L0 14l6 4 6-4 6 4 6-4-6-4 6-4-6-4-6 4z"/></svg>
+          </div>
+          <div class="cloud-card-name">Dropbox</div>
+          <div class="cloud-connected" style="display:none">
+            <span class="cloud-status-dot cloud-dot-ok"></span>
+            <span class="cloud-account-name" style="font-size:13px;color:var(--text2)"></span>
+          </div>
+          <div class="cloud-disconnected">
+            <span class="cloud-status-dot cloud-dot-off"></span>
+            <span style="font-size:13px;color:var(--text3)" data-i18n="publish.notConnected">Ikke tilkoblet</span>
+          </div>
+        </div>
+        <div class="cloud-connected" style="display:none">
+          <div class="cloud-folder-row">
+            <span class="cloud-folder-label" data-i18n="publish.folder">Mappe:</span>
+            <span class="cloud-folder-name"></span>
+            <button class="btn-ghost btn-sm" data-cloud-pick-folder="dropbox" data-i18n="publish.changeFolder">Endre</button>
+          </div>
+          <div class="cloud-upload-row">
+            <span class="cloud-last-upload-label" data-i18n="publish.lastUpload">Siste opplasting:</span>
+            <span class="cloud-last-upload">—</span>
+          </div>
+          <div class="cloud-toggle-row">
+            <label class="toggle"><input type="checkbox" data-cloud-auto="dropbox" /><span class="toggle-track"></span></label>
+            <span data-i18n="publish.autoUpload">Last opp automatisk etter opptak</span>
+          </div>
+          <div class="cloud-toggle-row">
+            <label class="toggle"><input type="checkbox" data-cloud-enabled="dropbox" /><span class="toggle-track"></span></label>
+            <span data-i18n="publish.enabled">Aktivert</span>
+          </div>
+          <button class="btn-ghost btn-sm cloud-disconnect-btn" data-cloud-disconnect="dropbox" data-i18n="publish.disconnect">Koble fra</button>
+        </div>
+        <div class="cloud-disconnected">
+          <button class="btn-secondary btn-sm" data-cloud-connect="dropbox" data-i18n="publish.connect">Koble til</button>
+        </div>
+      </div>
+
+      <!-- OneDrive card -->
+      <div class="card cloud-card" id="cloud-card-onedrive">
+        <div class="cloud-card-header">
+          <div class="cloud-card-icon">
+            <svg viewBox="0 0 24 24" width="24" height="24"><path fill="#0078D4" d="M9.5 9a5.5 5.5 0 0110.7 1.7A4 4 0 0122 18H8a5 5 0 01-.7-10A5.4 5.4 0 019.5 9z"/><path fill="#50E6FF" d="M5 18a4 4 0 01-.2-8A6 6 0 019.3 7.3 5.5 5.5 0 007.5 9a5 5 0 00.2 9z" opacity=".8"/></svg>
+          </div>
+          <div class="cloud-card-name">OneDrive</div>
+          <div class="cloud-connected" style="display:none">
+            <span class="cloud-status-dot cloud-dot-ok"></span>
+            <span class="cloud-account-name" style="font-size:13px;color:var(--text2)"></span>
+          </div>
+          <div class="cloud-disconnected">
+            <span class="cloud-status-dot cloud-dot-off"></span>
+            <span style="font-size:13px;color:var(--text3)" data-i18n="publish.notConnected">Ikke tilkoblet</span>
+          </div>
+        </div>
+        <div class="cloud-connected" style="display:none">
+          <div class="cloud-folder-row">
+            <span class="cloud-folder-label" data-i18n="publish.folder">Mappe:</span>
+            <span class="cloud-folder-name"></span>
+            <button class="btn-ghost btn-sm" data-cloud-pick-folder="onedrive" data-i18n="publish.changeFolder">Endre</button>
+          </div>
+          <div class="cloud-upload-row">
+            <span class="cloud-last-upload-label" data-i18n="publish.lastUpload">Siste opplasting:</span>
+            <span class="cloud-last-upload">—</span>
+          </div>
+          <div class="cloud-toggle-row">
+            <label class="toggle"><input type="checkbox" data-cloud-auto="onedrive" /><span class="toggle-track"></span></label>
+            <span data-i18n="publish.autoUpload">Last opp automatisk etter opptak</span>
+          </div>
+          <div class="cloud-toggle-row">
+            <label class="toggle"><input type="checkbox" data-cloud-enabled="onedrive" /><span class="toggle-track"></span></label>
+            <span data-i18n="publish.enabled">Aktivert</span>
+          </div>
+          <button class="btn-ghost btn-sm cloud-disconnect-btn" data-cloud-disconnect="onedrive" data-i18n="publish.disconnect">Koble fra</button>
+        </div>
+        <div class="cloud-disconnected">
+          <button class="btn-secondary btn-sm" data-cloud-connect="onedrive" data-i18n="publish.connect">Koble til</button>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- ══ REDIGER ═════════════════════════════════════════════════ -->
@@ -840,6 +988,25 @@
         <span class="editor-kbd-hint"><span class="kbd">F</span> Fit</span>
         <span class="editor-kbd-hint"><span class="kbd">⌘Z</span> Angre</span>
         <span class="editor-kbd-hint"><span class="kbd">Esc</span> Stopp</span>
+      </div>
+
+      <!-- Intro/Outro bar -->
+      <div class="editor-intro-outro-bar" id="editor-intro-outro-bar" style="display:none">
+        <label class="editor-io-toggle">
+          <input type="checkbox" id="editor-include-io" />
+          <span class="toggle-track"></span>
+          <span data-i18n="editor.includeIntroOutro">Inkluder intro/outro ved eksport og forhåndsvisning</span>
+        </label>
+        <div class="editor-io-files">
+          <div class="editor-io-chip" id="editor-io-intro-chip">
+            <span class="editor-io-chip-label" data-i18n="editor.intro">Intro:</span>
+            <span class="editor-io-chip-name" id="editor-intro-name"></span>
+          </div>
+          <div class="editor-io-chip" id="editor-io-outro-chip">
+            <span class="editor-io-chip-label" data-i18n="editor.outro">Outro:</span>
+            <span class="editor-io-chip-name" id="editor-outro-name"></span>
+          </div>
+        </div>
       </div>
 
       <!-- Main waveform canvas -->
@@ -1036,6 +1203,46 @@
       <div class="editor-cuts-panel" id="editor-cuts-panel" style="display:none">
         <div class="editor-cuts-header" data-i18n="editor.cutsTitle">Kuttede regioner</div>
         <div id="editor-cuts-list"></div>
+      </div>
+
+      <!-- Metadata panel -->
+      <div class="editor-meta-panel" id="editor-meta-panel">
+        <div class="editor-meta-header" id="btn-meta-toggle">
+          <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>
+          <span data-i18n="editor.metaTitle">Metadata</span>
+          <span class="editor-meta-badge" id="editor-meta-badge" style="display:none">●</span>
+          <svg class="editor-meta-chevron" id="editor-meta-chevron" viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+        </div>
+        <div class="editor-meta-body" id="editor-meta-body" style="display:none">
+          <div class="meta-form-grid">
+            <div class="meta-form-row">
+              <label class="form-label" data-i18n="editor.metaTitle2">TITTEL</label>
+              <input type="text" class="form-input" id="meta-title" placeholder="Gudstjeneste" />
+            </div>
+            <div class="meta-form-row">
+              <label class="form-label" data-i18n="editor.metaSpeaker">TALER</label>
+              <input type="text" class="form-input" id="meta-speaker" placeholder="Pastor Ola Nordmann" />
+            </div>
+          </div>
+          <div class="meta-form-row">
+            <label class="form-label" data-i18n="editor.metaDesc">BESKRIVELSE</label>
+            <textarea class="form-input" id="meta-description" rows="2" placeholder="Kort beskrivelse av gudstjenesten…"></textarea>
+          </div>
+          <button class="btn-ghost btn-sm" id="btn-meta-save" data-i18n="editor.metaSave">Lagre metadata</button>
+        </div>
+      </div>
+
+      <!-- Chapter markers panel -->
+      <div class="editor-chapters-panel" id="editor-chapters-panel">
+        <div class="editor-chapters-header">
+          <div class="editor-chapters-title">
+            <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h6a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h4a1 1 0 110 2H4a1 1 0 01-1-1z"/></svg>
+            <span data-i18n="editor.chaptersTitle">Kapittelmarkører</span>
+            <span class="editor-chapter-count" id="editor-chapter-count" style="display:none"></span>
+          </div>
+          <button class="btn-ghost btn-sm" id="btn-add-chapter" data-i18n="editor.addChapter">+ Legg til ved playhead</button>
+        </div>
+        <div class="editor-chapters-list" id="chapter-list"></div>
       </div>
 
       <!-- Remaining duration after cuts -->
@@ -1245,6 +1452,17 @@
     <span class="rec-reconnect-text" data-i18n="recording.reconnecting">Lydkilde frakoblet — kobler til på nytt</span>
     <span class="rec-reconnect-countdown" id="rec-reconnect-countdown">10</span>
     <span class="rec-reconnect-unit" data-i18n="recording.reconnectSecs">s</span>
+  </div>
+</div>
+
+<!-- Cloud folder picker modal -->
+<div id="cloud-folder-modal" class="modal-backdrop" style="display:none">
+  <div class="modal modal-sm">
+    <h2 id="cloud-folder-modal-title">Velg mappe</h2>
+    <div id="cloud-folder-list" class="cloud-folder-list"></div>
+    <div class="btn-row mt">
+      <button class="btn-ghost" id="cloud-folder-modal-close" data-i18n="editor.cancel">Avbryt</button>
+    </div>
   </div>
 </div>
 
