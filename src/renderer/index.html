@@ -458,7 +458,7 @@
       <div class="card">
         <div class="card-title" data-i18n="audio.available">Tilgjengelige enheter</div>
         <div id="device-list"></div>
-        <p class="form-hint" style="margin-top:12px;margin-bottom:0" data-i18n="audio.compatAsio">Windows: ASIO-modus er ikke tilgjengelig via nettleser-API. Velg WDM eller WASAPI i driverinnstillingene.</p>
+        <p class="form-hint" style="margin-top:12px;margin-bottom:0">Ser du ikke riktig enhet? Kontroller at lydkortet er koblet til og at driveren er installert.</p>
         <div class="audio-test-section">
           <div class="audio-test-info">
             <div class="toggle-title" data-i18n="audio.testTitle">Test lydkilde</div>
@@ -521,52 +521,22 @@
       </div>
 
       <div class="card">
-        <div class="card-title" data-i18n="audio.advanced">Avansert lydbehandling</div>
+        <div class="card-title">Lydforbedringer</div>
         <div class="toggle-row mt">
           <div>
-            <div class="toggle-title" data-i18n="audio.compressor">Kompressor</div>
-            <div class="toggle-desc" data-i18n="audio.compressorDesc">Jevner ut volumvariasjoner i opptaket</div>
+            <div class="toggle-title">Jevn ut lydnivå</div>
+            <div class="toggle-desc">Reduserer plutselige volum-topper automatisk under opptak</div>
           </div>
           <label class="toggle"><input type="checkbox" id="opt-compressor" /><span class="toggle-track"></span></label>
         </div>
-        <div id="comp-settings" style="display:none;margin-top:8px">
-          <div class="form-row two-col">
-            <div>
-              <label class="form-label" data-i18n="audio.threshold">TERSKEL (dB)</label>
-              <input type="range" id="comp-threshold" min="-60" max="0" value="-24" class="slider" />
-              <div class="slider-value" id="comp-threshold-val">−24 dB</div>
-            </div>
-            <div>
-              <label class="form-label" data-i18n="audio.ratio">RATIO</label>
-              <input type="range" id="comp-ratio" min="1" max="20" value="4" class="slider" />
-              <div class="slider-value" id="comp-ratio-val">4:1</div>
-            </div>
-          </div>
-          <div class="form-row two-col" style="margin-top:8px">
-            <div>
-              <label class="form-label" data-i18n="audio.attack">ATTACK (ms)</label>
-              <input type="range" id="comp-attack" min="1" max="200" value="10" class="slider" />
-              <div class="slider-value" id="comp-attack-val">10 ms</div>
-            </div>
-            <div>
-              <label class="form-label" data-i18n="audio.release">RELEASE (ms)</label>
-              <input type="range" id="comp-release" min="10" max="2000" value="200" class="slider" />
-              <div class="slider-value" id="comp-release-val">200 ms</div>
-            </div>
-          </div>
-        </div>
-        <div class="toggle-row mt">
-          <div>
-            <div class="toggle-title" data-i18n="audio.limiter">Limiter</div>
-            <div class="toggle-desc" data-i18n="audio.limiterDesc">Hindrer klipping ved for høye lydnivåer (anbefalt)</div>
-          </div>
-          <label class="toggle"><input type="checkbox" id="opt-limiter" checked /><span class="toggle-track"></span></label>
-        </div>
-        <div id="limiter-settings" style="margin-top:8px">
-          <label class="form-label" data-i18n="audio.ceiling">TAK (dB)</label>
-          <input type="range" id="limiter-ceiling" min="-12" max="0" value="-1" class="slider" />
-          <div class="slider-value" id="limiter-ceiling-val">−1 dB</div>
-        </div>
+        <!-- Kompressor-detaljer skjult — bruker faste standardverdier -->
+        <input type="hidden" id="comp-threshold" value="-24" />
+        <input type="hidden" id="comp-ratio"     value="4" />
+        <input type="hidden" id="comp-attack"    value="10" />
+        <input type="hidden" id="comp-release"   value="200" />
+        <!-- Limiter alltid aktiv — ikke eksponert i UI -->
+        <input type="hidden" id="opt-limiter"    value="true" />
+        <input type="hidden" id="limiter-ceiling" value="-1" />
       </div>
 
       <div class="page-footer">
@@ -588,7 +558,7 @@
       <div class="card">
         <div class="card-title" data-i18n="files.pattern">Filnavn</div>
         <p class="card-desc" data-i18n="files.smartNameDesc">Programmet gjenkjenner kirkelige høytider og kan bruke det riktige norske navnet automatisk.</p>
-        <label class="form-label">NAVNMØNSTER</label>
+        <label class="form-label">NAVNEFORMAT</label>
         <select class="form-input" id="pattern-select" style="max-width:360px">
           <option value="date" data-i18n="files.patternDate">Dato (standard)</option>
           <option value="church" data-i18n="files.patternChurch">Kirkelig navn + dato</option>
@@ -631,7 +601,7 @@
         <div class="toggle-row mt">
           <div>
             <div class="toggle-title" data-i18n="files.trimSilence">Trim stillhet</div>
-            <div class="toggle-desc" data-i18n="files.trimSilenceDesc">Fjerner stillhet i begynnelsen og slutten av filen (ffmpeg silenceremove)</div>
+            <div class="toggle-desc">Kutter automatisk stille sekunder i starten og slutten av opptaket</div>
           </div>
           <label class="toggle"><input type="checkbox" id="opt-trim-silence" /><span class="toggle-track"></span></label>
         </div>
@@ -702,18 +672,20 @@
         <div id="email-section" style="display:none">
           <label class="form-label mt" data-i18n="general.sendTo">SEND TIL</label>
           <input type="email" class="form-input" id="email-address" placeholder="navn@kirke.no" />
-          <label class="form-label mt">SMTP SERVER</label>
+          <label class="form-label mt">E-POSTTJENESTE (SMTP)</label>
           <input type="text" class="form-input" id="email-smtp" placeholder="smtp.gmail.com" />
-          <div class="form-row two-col mt">
-            <div><label class="form-label">PORT</label><input type="number" class="form-input" id="email-port" value="587" /></div>
-            <div><label class="form-label">BRUKERNAVN</label><input type="text" class="form-input" id="email-user" /></div>
-          </div>
-          <label class="form-label mt">PASSORD</label>
+          <div class="form-hint">Gmail: smtp.gmail.com · Outlook: smtp.office365.com</div>
+          <label class="form-label mt">BRUKERNAVN (E-POSTADRESSE)</label>
+          <input type="text" class="form-input" id="email-user" placeholder="din@epost.no" />
+          <label class="form-label mt">PASSORD / APP-PASSORD</label>
           <div class="pass-row">
             <input type="password" class="form-input" id="email-pass" />
             <button type="button" class="btn-link" id="btn-clear-smtp-pass" style="display:none" data-i18n="general.clearPass">Fjern</button>
           </div>
-          <button type="button" class="btn-secondary" id="btn-test-email" style="margin-top:8px" data-i18n="general.testEmail">Test e-post</button>
+          <div class="form-hint">Gmail krever et «App-passord» fra kontosikkerhetsinnstillingene.</div>
+          <!-- Port alltid 587 — skjult fra bruker -->
+          <input type="hidden" id="email-port" value="587" />
+          <button type="button" class="btn-secondary" id="btn-test-email" style="margin-top:12px" data-i18n="general.testEmail">Test e-post</button>
         </div>
       </div>
       <div class="card">

@@ -16,15 +16,6 @@ let detectedChannelCount = 2
 export function setupAudioPage(): void {
   document.getElementById('input-volume')?.addEventListener('input', updateVolumeLabel)
 
-  document.getElementById('comp-threshold')?.addEventListener('input', () => updateSliderLabel('comp-threshold', 'comp-threshold-val', ' dB'))
-  document.getElementById('comp-ratio')?.addEventListener('input', () => {
-    const el = document.getElementById('comp-ratio') as HTMLInputElement | null
-    const lbl = document.getElementById('comp-ratio-val')
-    if (el && lbl) lbl.textContent = el.value + ':1'
-  })
-  document.getElementById('comp-attack')?.addEventListener('input',  () => updateSliderLabel('comp-attack',  'comp-attack-val',  ' ms'))
-  document.getElementById('comp-release')?.addEventListener('input', () => updateSliderLabel('comp-release', 'comp-release-val', ' ms'))
-  document.getElementById('limiter-ceiling')?.addEventListener('input', () => updateSliderLabel('limiter-ceiling', 'limiter-ceiling-val', ' dB'))
   document.getElementById('opt-compressor')?.addEventListener('change', function (this: HTMLInputElement) {
     const cs = document.getElementById('comp-settings')
     if (cs) cs.style.display = this.checked ? 'block' : 'none'
@@ -60,10 +51,6 @@ export function applyAudioSettingsToUI(): void {
   if (crEl && crLbl) crLbl.textContent = crEl.value + ':1'
   updateSliderLabel('comp-attack',  'comp-attack-val',  ' ms')
   updateSliderLabel('comp-release', 'comp-release-val', ' ms')
-  const limEl = document.getElementById('opt-limiter') as HTMLInputElement | null
-  if (limEl) limEl.checked = settings.limiterEnabled !== false
-  setVal('limiter-ceiling', settings.limiterCeiling ?? -1)
-  updateSliderLabel('limiter-ceiling', 'limiter-ceiling-val', ' dB')
 }
 
 function updateVolumeLabel(): void {
@@ -95,8 +82,8 @@ async function saveAudioSettings(): Promise<void> {
     compRatio:      +((document.getElementById('comp-ratio')      as HTMLInputElement | null)?.value ?? 4),
     compAttack:     +((document.getElementById('comp-attack')     as HTMLInputElement | null)?.value ?? 10),
     compRelease:    +((document.getElementById('comp-release')    as HTMLInputElement | null)?.value ?? 200),
-    limiterEnabled: !!(document.getElementById('opt-limiter')    as HTMLInputElement | null)?.checked,
-    limiterCeiling: +((document.getElementById('limiter-ceiling') as HTMLInputElement | null)?.value ?? -1)
+    limiterEnabled: true,
+    limiterCeiling: -1
   }
 
   patchSettings(patch)
