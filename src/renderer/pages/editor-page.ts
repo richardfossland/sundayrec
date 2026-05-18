@@ -526,7 +526,7 @@ function drawWaveform(): void {
   const RULER  = 22
   const midY   = RULER + (H - RULER) / 2
   const maxBar = (H - RULER - 10) / 2
-  const ACCENT = cssVar('--accent') || '#E8B84B'
+  const ACCENT = cssVar('--accent') || '#F0BB47'
   const RED    = '#ef4444'
 
   drawRuler(ctx, W, H, RULER)
@@ -844,7 +844,7 @@ function drawMinimap(): void {
   ctx.fillStyle = '#0d0d16'
   ctx.fillRect(0, 0, W, H)
 
-  const ACCENT = cssVar('--accent') || '#E8B84B'
+  const ACCENT = cssVar('--accent') || '#F0BB47'
   const midY   = H / 2
 
   for (let px = 0; px < W; px++) {

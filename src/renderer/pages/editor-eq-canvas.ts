@@ -296,9 +296,9 @@ function drawSpectrum(ctx: CanvasRenderingContext2D, W: number, H: number): void
 
   // Gradient fill
   const grad = ctx.createLinearGradient(0, PAD.t, 0, H - PAD.b)
-  grad.addColorStop(0,   'rgba(232,184,75,0.55)')
-  grad.addColorStop(0.4, 'rgba(232,184,75,0.2)')
-  grad.addColorStop(1,   'rgba(232,184,75,0.0)')
+  grad.addColorStop(0,   'rgba(240,187,71,0.55)')
+  grad.addColorStop(0.4, 'rgba(240,187,71,0.2)')
+  grad.addColorStop(1,   'rgba(240,187,71,0.0)')
 
   ctx.beginPath()
   ctx.moveTo(PAD.l, base)
@@ -347,9 +347,9 @@ function drawCurve(ctx: CanvasRenderingContext2D, W: number, H: number): void {
 
   // Fill below curve
   const fillGrad = ctx.createLinearGradient(0, PAD.t, 0, H - PAD.b)
-  fillGrad.addColorStop(0,   'rgba(232,184,75,0.22)')
-  fillGrad.addColorStop(0.5, 'rgba(232,184,75,0.06)')
-  fillGrad.addColorStop(1,   'rgba(232,184,75,0.0)')
+  fillGrad.addColorStop(0,   'rgba(240,187,71,0.22)')
+  fillGrad.addColorStop(0.5, 'rgba(240,187,71,0.06)')
+  fillGrad.addColorStop(1,   'rgba(240,187,71,0.0)')
 
   const zeroY = gainToY_inner(0, iH) + PAD.t
 
@@ -375,7 +375,7 @@ function drawCurve(ctx: CanvasRenderingContext2D, W: number, H: number): void {
     const x  = (i / (NUM - 1)) * iW + PAD.l
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
   }
-  ctx.strokeStyle = 'rgba(242,204,114,0.95)'
+  ctx.strokeStyle = 'rgba(249,208,122,0.95)'
   ctx.lineWidth   = 1.8
   ctx.stroke()
 }

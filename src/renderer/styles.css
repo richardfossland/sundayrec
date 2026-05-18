@@ -20,10 +20,10 @@
   --text4:    #2e3a55;
 
   /* Brand */
-  --accent:   #E8B84B;
-  --accent2:  #F2CC72;
-  --accent-bg: rgba(232,184,75,.12);
-  --accent-border: rgba(232,184,75,.35);
+  --accent:   #F0BB47;
+  --accent2:  #F9D07A;
+  --accent-bg: rgba(240,187,71,.12);
+  --accent-border: rgba(240,187,71,.35);
 
   /* Semantic */
   --green:    #22c55e;
@@ -279,9 +279,9 @@ body.platform-win32 ::-webkit-scrollbar-thumb { border-radius: 4px; }
 }
 .btn-primary {
   background: var(--accent); color: #fff;
-  box-shadow: 0 2px 8px rgba(232,184,75,.3);
+  box-shadow: 0 2px 8px rgba(240,187,71,.3);
 }
-.btn-primary:hover { background: var(--accent2); box-shadow: 0 4px 14px rgba(232,184,75,.45); transform: translateY(-1px); }
+.btn-primary:hover { background: var(--accent2); box-shadow: 0 4px 14px rgba(240,187,71,.45); transform: translateY(-1px); }
 .btn-primary:active { transform: translateY(0); }
 .btn-secondary {
   background: var(--surface2); color: var(--text);
@@ -526,7 +526,7 @@ body.platform-win32 ::-webkit-scrollbar-thumb { border-radius: 4px; }
 .rec-table tr:hover td { background: rgba(255,255,255,.03); }
 .hist-row[data-status="ok"] td:first-child    { border-left: 3px solid rgba(34,197,94,.55); padding-left: 9px; }
 .hist-row[data-status="error"] td:first-child { border-left: 3px solid rgba(239,68,68,.55); padding-left: 9px; }
-.hist-row[data-status="sched"] td:first-child { border-left: 3px solid rgba(232,184,75,.5); padding-left: 9px; }
+.hist-row[data-status="sched"] td:first-child { border-left: 3px solid rgba(240,187,71,.5); padding-left: 9px; }
 .badge {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
@@ -564,7 +564,7 @@ body.platform-win32 ::-webkit-scrollbar-thumb { border-radius: 4px; }
 }
 .form-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(232,184,75,.12);
+  box-shadow: 0 0 0 3px rgba(240,187,71,.12);
 }
 .form-input::placeholder { color: var(--text3); }
 select.form-input {
@@ -612,10 +612,10 @@ select.form-input {
 }
 .slider::-webkit-slider-thumb {
   -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
-  background: var(--accent); box-shadow: 0 0 0 3px rgba(232,184,75,.2), var(--shadow-sm);
+  background: var(--accent); box-shadow: 0 0 0 3px rgba(240,187,71,.2), var(--shadow-sm);
   transition: box-shadow .15s;
 }
-.slider::-webkit-slider-thumb:hover { box-shadow: 0 0 0 5px rgba(232,184,75,.25), var(--shadow-sm); }
+.slider::-webkit-slider-thumb:hover { box-shadow: 0 0 0 5px rgba(240,187,71,.25), var(--shadow-sm); }
 .slider-value { font-size: 12px; color: var(--text2); margin-top: 5px; text-align: right; }
 
 /* ── Radio groups ──────────────────────────────────────────────── */
@@ -742,7 +742,7 @@ select.form-input {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   width: 100%; text-align: left; line-height: 1.4;
 }
-.cal-chip.chip-weekly  { background: rgba(232,184,75,.3); color: #F2CC72; }
+.cal-chip.chip-weekly  { background: rgba(240,187,71,.3); color: #F9D07A; }
 .cal-chip.chip-special { background: rgba(220,38,38,.3);   color: #fca5a5; }
 .cal-chip.chip-holiday { background: rgba(245,158,11,.2);  color: var(--orange); }
 .cal-day.is-holiday .cal-day-num { color: var(--orange); }
@@ -964,7 +964,7 @@ select.form-input {
   color: var(--accent2); border-radius: var(--rsm);
   font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s;
 }
-.btn-extend:hover { background: rgba(232,184,75,.2); }
+.btn-extend:hover { background: rgba(240,187,71,.2); }
 .rec-reconnect {
   position: absolute; bottom: 0; left: 0; right: 0;
   display: flex; align-items: center; justify-content: center; gap: 10px;
@@ -1034,7 +1034,7 @@ select.form-input {
 .update-status-row { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; font-size: 13px; color: var(--text2); }
 .update-status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text4); flex-shrink: 0; }
 .update-status-dot.ok       { background: var(--green); box-shadow: 0 0 5px rgba(34,197,94,.4); }
-.update-status-dot.pending  { background: var(--accent2); box-shadow: 0 0 5px rgba(232,184,75,.4); animation: pdot 1.2s ease-in-out infinite; }
+.update-status-dot.pending  { background: var(--accent2); box-shadow: 0 0 5px rgba(240,187,71,.4); animation: pdot 1.2s ease-in-out infinite; }
 .update-status-dot.ready    { background: var(--green); box-shadow: 0 0 8px rgba(34,197,94,.6); animation: pdot .8s ease-in-out infinite; }
 .update-status-dot.error    { background: var(--orange); }
 .update-status-text { flex: 1; }
@@ -1163,7 +1163,7 @@ select.form-input {
 .editor-minimap { display: block; width: 100%; }
 .editor-minimap-vp {
   position: absolute; top: 0; bottom: 0;
-  background: rgba(232,184,75,.15); border: 1px solid rgba(232,184,75,.5);
+  background: rgba(240,187,71,.15); border: 1px solid rgba(240,187,71,.5);
   pointer-events: none; border-radius: 2px;
 }
 
@@ -1288,7 +1288,7 @@ select.form-input {
   transition: box-shadow .3s;
 }
 .editor-canvas-wrap.is-playing {
-  box-shadow: 0 0 0 2px rgba(232,184,75,.35), 0 0 24px rgba(232,184,75,.18);
+  box-shadow: 0 0 0 2px rgba(240,187,71,.35), 0 0 24px rgba(240,187,71,.18);
 }
 
 /* ── Modal entrance ──────────────────────────────────────────────── */
@@ -1303,7 +1303,7 @@ select.form-input {
 /* ── Drop zone overlay ───────────────────────────────────────────── */
 .editor-drop-overlay {
   position: absolute; inset: 0; z-index: 50;
-  background: rgba(232,184,75,.12);
+  background: rgba(240,187,71,.12);
   border: 2px dashed var(--accent);
   border-radius: var(--r);
   display: flex; align-items: center; justify-content: center;
@@ -1667,11 +1667,11 @@ select.form-input {
   transition: box-shadow .2s, border-color .2s, transform .15s;
 }
 .info-card:hover {
-  box-shadow: 0 6px 24px rgba(232,184,75,.12);
+  box-shadow: 0 6px 24px rgba(240,187,71,.12);
   transform: translateY(-1px);
 }
 .info-card:hover .info-card-icon {
-  background: rgba(232,184,75,.2);
+  background: rgba(240,187,71,.2);
   transform: scale(1.08);
 }
 .info-card-icon { transition: background .2s, transform .2s; }
@@ -1683,14 +1683,14 @@ select.form-input {
 }
 .card::before {
   content: ''; position: absolute; top: 0; left: 16px; right: 16px; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(232,184,75,.3), transparent);
+  background: linear-gradient(90deg, transparent, rgba(240,187,71,.3), transparent);
   border-radius: 1px;
 }
 .card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.35); }
 
 /* ── Calendar chips — animated dot for weekly ─────────────────── */
 .cal-chip.chip-weekly {
-  background: linear-gradient(90deg, rgba(232,184,75,.25), rgba(232,184,75,.35));
+  background: linear-gradient(90deg, rgba(240,187,71,.25), rgba(240,187,71,.35));
 }
 .cal-chip.chip-weekly::before {
   content: ''; display: inline-block; width: 5px; height: 5px;
@@ -1727,8 +1727,8 @@ select.form-input {
 .device-card:hover { transform: translateY(-1px); }
 .device-card.selected {
   border-color: var(--accent);
-  background: linear-gradient(135deg, rgba(232,184,75,.12), rgba(232,184,75,.04));
-  box-shadow: 0 0 0 3px rgba(232,184,75,.15), 0 4px 16px rgba(232,184,75,.1);
+  background: linear-gradient(135deg, rgba(240,187,71,.12), rgba(240,187,71,.04));
+  box-shadow: 0 0 0 3px rgba(240,187,71,.15), 0 4px 16px rgba(240,187,71,.1);
 }
 
 /* ── Format picker as visual card buttons ─────────────────────── */
@@ -1747,7 +1747,7 @@ select.form-input {
 #format-group label:hover { background: var(--surface3); color: var(--text); }
 #format-group label:has(input:checked) {
   background: var(--accent-bg); border-color: var(--accent);
-  color: var(--accent2); box-shadow: 0 0 0 3px rgba(232,184,75,.12);
+  color: var(--accent2); box-shadow: 0 0 0 3px rgba(240,187,71,.12);
 }
 #format-group input[type="radio"] { display: none; }
 
@@ -1767,7 +1767,7 @@ select.form-input {
 }
 #mp3-quality-section .radio-group label:has(input:checked) {
   background: var(--accent-bg); border-color: var(--accent);
-  color: var(--accent2); box-shadow: 0 0 0 3px rgba(232,184,75,.12);
+  color: var(--accent2); box-shadow: 0 0 0 3px rgba(240,187,71,.12);
 }
 #mp3-quality-section .radio-group input[type="radio"] { display: none; }
 
@@ -1799,7 +1799,7 @@ select.form-input {
   width: 2px; height: 18px; border-radius: 1px;
   background: var(--accent); opacity: .5;
 }
-.slot-row:hover { background: rgba(232,184,75,.04); }
+.slot-row:hover { background: rgba(240,187,71,.04); }
 
 /* ── Scheduled upcoming items ─────────────────────────────────── */
 .planned-item:hover { background: rgba(255,255,255,.02); }
@@ -1815,7 +1815,7 @@ select.form-input {
   transition: background-position .4s;
 }
 .preview-box:hover {
-  background: linear-gradient(90deg, var(--surface2), rgba(232,184,75,.1), var(--surface2));
+  background: linear-gradient(90deg, var(--surface2), rgba(240,187,71,.1), var(--surface2));
   background-size: 200% auto;
   animation: shimmerSlide 1.5s linear infinite;
 }
@@ -1855,12 +1855,12 @@ select.form-input {
 
 /* ── Forms — focus ring improvement ──────────────────────────── */
 .form-input:focus {
-  box-shadow: 0 0 0 3px rgba(232,184,75,.15), 0 0 8px rgba(232,184,75,.08);
+  box-shadow: 0 0 0 3px rgba(240,187,71,.15), 0 0 8px rgba(240,187,71,.08);
 }
 
 /* ── Toggle — active glow ─────────────────────────────────────── */
 .toggle input:checked + .toggle-track {
-  box-shadow: 0 0 8px rgba(232,184,75,.3);
+  box-shadow: 0 0 8px rgba(240,187,71,.3);
 }
 
 /* ── Proc slider — styled range ───────────────────────────────── */
@@ -1869,20 +1869,20 @@ select.form-input {
 }
 .proc-slider::-webkit-slider-thumb {
   -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
-  background: var(--accent); box-shadow: 0 0 0 3px rgba(232,184,75,.2), var(--shadow-sm);
+  background: var(--accent); box-shadow: 0 0 0 3px rgba(240,187,71,.2), var(--shadow-sm);
   transition: box-shadow .15s;
 }
-.proc-slider::-webkit-slider-thumb:hover { box-shadow: 0 0 0 5px rgba(232,184,75,.25), var(--shadow-sm); }
+.proc-slider::-webkit-slider-thumb:hover { box-shadow: 0 0 0 5px rgba(240,187,71,.25), var(--shadow-sm); }
 
 /* ── Cal day — today pulse ────────────────────────────────────── */
 .cal-day.today .cal-day-num {
-  box-shadow: 0 0 10px rgba(232,184,75,.4);
+  box-shadow: 0 0 10px rgba(240,187,71,.4);
   animation: pdot 3s ease-in-out infinite;
 }
 
 /* ── Cal day — selected glow ──────────────────────────────────── */
 .cal-day.selected {
-  box-shadow: 0 0 0 2px rgba(232,184,75,.3);
+  box-shadow: 0 0 0 2px rgba(240,187,71,.3);
 }
 
 /* ── Btn-primary — glow shimmer ───────────────────────────────── */
@@ -1895,7 +1895,7 @@ select.form-input {
 
 /* ── Sidebar nav link — active glow ──────────────────────────── */
 .nav-link.active {
-  box-shadow: inset 0 0 12px rgba(232,184,75,.05);
+  box-shadow: inset 0 0 12px rgba(240,187,71,.05);
 }
 
 /* ── Editor proc panel — wider tabs ──────────────────────────── */
@@ -1971,7 +1971,7 @@ select.form-input {
 }
 .editor-chapter-count {
   font-size: 11px; font-weight: 700; color: var(--accent);
-  background: rgba(232,184,75,.12); border-radius: 8px; padding: 1px 6px;
+  background: rgba(240,187,71,.12); border-radius: 8px; padding: 1px 6px;
 }
 .editor-chapters-list { background: var(--surface1); }
 .editor-chapter-row {
@@ -1990,7 +1990,7 @@ select.form-input {
   font-size: 13px; padding: 1px 4px; border-radius: 4px; outline: none;
 }
 .editor-chapter-name:focus {
-  background: var(--surface2); box-shadow: 0 0 0 2px rgba(232,184,75,.25);
+  background: var(--surface2); box-shadow: 0 0 0 2px rgba(240,187,71,.25);
 }
 .editor-chapter-del {
   background: none; border: none; cursor: pointer; color: var(--text3);
@@ -2065,12 +2065,12 @@ select.form-input {
 .editor-export-progress-label { font-size: 12px; color: var(--text3); white-space: nowrap; }
 
 /* ── Editor: loop button active state ─────────────────────────── */
-.btn-editor-loop.active { color: var(--accent); background: rgba(232,184,75,.12); }
+.btn-editor-loop.active { color: var(--accent); background: rgba(240,187,71,.12); }
 
 /* ── Editor: cut thumbnail SVG ────────────────────────────────── */
 .editor-cut-thumb {
   color: var(--accent); flex-shrink: 0; border-radius: 3px;
-  background: rgba(232,184,75,.07); overflow: hidden;
+  background: rgba(240,187,71,.07); overflow: hidden;
 }
 
 /* ── Editor: clip indicator ───────────────────────────────────── */
@@ -2093,5 +2093,5 @@ select.form-input {
   padding: 3px 5px; border-radius: 4px; transition: color .15s, background .15s;
   flex-shrink: 0;
 }
-.editor-cut-prev:hover { color: var(--accent); background: rgba(232,184,75,.1); }
+.editor-cut-prev:hover { color: var(--accent); background: rgba(240,187,71,.1); }
 .editor-cut-info { flex: 1; min-width: 0; }
