@@ -180,7 +180,7 @@ function buildAudioFilters(opts: RecordingOpts): string {
   return filters.join(',')
 }
 
-function buildCodecArgs(opts: RecordingOpts): string[] {
+export function buildCodecArgs(opts: RecordingOpts): string[] {
   const fmt     = opts.format ?? 'mp3'
   const bitrate = String(opts.bitrate ?? 192).replace(/k$/i, '')
   switch (fmt) {

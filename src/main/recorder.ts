@@ -24,6 +24,7 @@
 
 import path from 'path'
 import fs from 'fs'
+import { spawn } from 'child_process'
 import { app, Notification, powerSaveBlocker, systemPreferences } from 'electron'
 import type { BrowserWindow } from 'electron'
 import crypto from 'crypto'
@@ -32,7 +33,8 @@ import * as store from './store'
 import * as tray from './tray'
 import * as mailer from './mailer'
 import { localDateStr, buildFilename, sanitizeFilename, formatDuration } from './recorder-utils'
-import { startCapture, stopCapture, ffmpegBin } from './native-recorder'
+import { startCapture, stopCapture, ffmpegBin, buildCodecArgs } from './native-recorder'
+import * as preroll from './preroll'
 import type { NativeHandle } from './native-recorder'
 import type { RecordingOpts, RecordingEntry } from '../types'
 
@@ -154,14 +156,18 @@ interface Session {
   lastProgressAt: number
   stopping:       boolean
   reconnectCount: number
+  prerollRaw:     string | null
+  prerollMs:      number
 }
 
-let activeSession:  Session | null = null
-let recBlocker:     number | null  = null
-let displayBlocker: number | null  = null
-let idleCallback:   (() => void) | null = null
+let activeSession:       Session | null      = null
+let recBlocker:          number | null       = null
+let displayBlocker:      number | null       = null
+let idleCallback:        (() => void) | null = null
+let sessionEndCallback:  (() => void) | null = null
 
 export function onceIdle(cb: () => void): void { idleCallback = cb }
+export function setSessionEndCallback(cb: () => void): void { sessionEndCallback = cb }
 
 function notifyIdle(): void {
   const cb = idleCallback; idleCallback = null; cb?.()
@@ -251,9 +257,17 @@ async function preflightCheck(settings: RecordingOpts): Promise<{ error: string 
 
 export async function startSession(
   settings: RecordingOpts,
-  win: BrowserWindow
+  win: BrowserWindow,
+  prerollData?: { rawPath: string; trimMs: number } | null
 ): Promise<{ ok: true } | { error: string }> {
   if (activeSession) return { error: 'already_recording' }
+
+  // Stop any running pre-roll (it competes for the same audio device)
+  const prerollWasActive = preroll.isRunning()
+  await preroll.stop()
+  if (prerollWasActive && process.platform === 'darwin') {
+    await new Promise<void>(resolve => setTimeout(resolve, 300))
+  }
 
   const preflightError = await preflightCheck(settings)
   if (preflightError) return preflightError
@@ -282,7 +296,9 @@ export async function startSession(
     startTime: handle.startTime,
     win, maxTimer: null, stuckTimer: null,
     lastProgressAt: Date.now(),
-    stopping: false, reconnectCount: 0
+    stopping: false, reconnectCount: 0,
+    prerollRaw: prerollData?.rawPath ?? null,
+    prerollMs:  prerollData?.trimMs  ?? 0,
   }
 
   // Persist recovery info so a crash restart can salvage the partial file
@@ -377,7 +393,27 @@ function finishSession(session: Session): void {
     tray.setError(true)
     notify(getNL().err, msg)
     notifyIdle()
+    sessionEndCallback?.()
     return
+  }
+
+  tray.setRecording(false)
+
+  // Apply pre-roll (encode + concat) — async, notifies renderer when done
+  finishSessionAsync(session, durationSec, recDate).catch(err =>
+    console.error('[recorder] finishSessionAsync error:', err)
+  )
+}
+
+async function finishSessionAsync(session: Session, durationSec: number, recDate: Date): Promise<void> {
+  if (session.prerollRaw && session.prerollMs > 0) {
+    try {
+      await applyPreroll(session.prerollRaw, session.prerollMs, session.outputPath, session.settings)
+    } catch (err) {
+      console.error('[recorder] pre-roll concat failed — continuing without pre-roll:', err)
+      // Clean up orphaned raw file if concat failed
+      fs.promises.unlink(session.prerollRaw).catch(() => {})
+    }
   }
 
   const entry: RecordingEntry = {
@@ -391,11 +427,92 @@ function finishSession(session: Session): void {
   store.addHistory(entry)
   session.win.webContents.send('recording-finished', entry)
 
-  tray.setRecording(false)
   if (store.get('notifyStop') !== false) {
     notify('SundayRec', `${getNL().done}: ${path.basename(session.outputPath)}`)
   }
   notifyIdle()
+  sessionEndCallback?.()
+}
+
+// ── Pre-roll encode + concat ─────────────────────────────────────────────────
+
+async function applyPreroll(
+  rawPath: string,
+  trimMs: number,
+  mainPath: string,
+  opts: RecordingOpts
+): Promise<void> {
+  const ext          = path.extname(mainPath)
+  const dir          = path.dirname(mainPath)
+  const base         = path.basename(mainPath, ext)
+  const encodedPath  = path.join(dir, `${base}_pr_tmp${ext}`)
+  const concatTmp    = path.join(dir, `${base}_concat_tmp${ext}`)
+  const concatList   = path.join(dir, `${base}_concat.txt`)
+
+  try {
+    // Step 1: Trim last trimMs from raw WAV and encode to target format
+    const trimSec   = (trimMs / 1000).toFixed(3)
+    const codecArgs = buildCodecArgs(opts)
+
+    await new Promise<void>((resolve, reject) => {
+      const args = [
+        '-nostdin', '-hide_banner',
+        '-sseof', `-${trimSec}`,   // seek trimSec from end of file
+        '-i', rawPath,
+        ...codecArgs,
+        '-y', encodedPath,
+      ]
+      const proc = spawn(ffmpegBin, args, { stdio: ['ignore', 'ignore', 'pipe'] })
+      let stderr = ''
+      proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+      proc.on('close', code => {
+        if (code === 0) resolve()
+        else reject(new Error(`pre-roll encode failed (${code}): ${stderr.slice(-500)}`))
+      })
+    })
+
+    // Step 2: Concat encoded pre-roll + main recording (lossless copy)
+    const escPath = (p: string) =>
+      (process.platform === 'win32' ? p.replace(/\\/g, '/') : p).replace(/'/g, "'\\''")
+    await fs.promises.writeFile(
+      concatList,
+      `file '${escPath(encodedPath)}'\nfile '${escPath(mainPath)}'\n`,
+      'utf8'
+    )
+
+    await new Promise<void>((resolve, reject) => {
+      const args = [
+        '-nostdin', '-hide_banner',
+        '-f', 'concat', '-safe', '0',
+        '-i', concatList,
+        '-c', 'copy',
+        '-y', concatTmp,
+      ]
+      const proc = spawn(ffmpegBin, args, { stdio: ['ignore', 'ignore', 'pipe'] })
+      let stderr = ''
+      proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+      proc.on('close', code => {
+        if (code === 0) resolve()
+        else reject(new Error(`concat failed (${code}): ${stderr.slice(-500)}`))
+      })
+    })
+
+    // Step 3: Atomically replace main with concatenated result
+    if (process.platform === 'win32') {
+      fs.copyFileSync(concatTmp, mainPath)
+      fs.unlinkSync(concatTmp)
+    } else {
+      fs.renameSync(concatTmp, mainPath)
+    }
+
+    console.log(`[recorder] pre-roll ${(trimMs / 1000).toFixed(1)} s prepended to`, mainPath)
+  } finally {
+    for (const f of [encodedPath, concatList, rawPath]) {
+      fs.promises.unlink(f).catch(() => {})
+    }
+    // concatTmp cleanup in case rename failed
+    fs.promises.unlink(concatTmp).catch(() => {})
+  }
 }
 
 // ── Watchdog: reconnect after unexpected ffmpeg death ───────────────────────
@@ -481,6 +598,9 @@ function failSession(session: Session, reason: string): void {
   stopBlockers()
   store.set('activeRecovery', null)
 
+  // Clean up any orphaned pre-roll temp file
+  if (session.prerollRaw) fs.promises.unlink(session.prerollRaw).catch(() => {})
+
   const nl = getNL()
   const localizedReason = localizeError(reason)
   session.win.webContents.send('recording-error', { error: reason, message: localizedReason })
@@ -491,6 +611,7 @@ function failSession(session: Session, reason: string): void {
   const s = store.getAll()
   if (s.emailOnError) mailer.sendError(s, store.getSmtpPassword(), reason)
   notifyIdle()
+  sessionEndCallback?.()
 }
 
 // ── Crash recovery ───────────────────────────────────────────────────────────

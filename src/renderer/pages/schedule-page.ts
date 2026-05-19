@@ -78,7 +78,8 @@ export function applyScheduleSettingsToUI(): void {
   const silenceEl    = document.getElementById('opt-silence')          as HTMLInputElement  | null
   const splitMinSel  = document.getElementById('opt-split-minutes')    as HTMLSelectElement | null
   const reminderSel  = document.getElementById('opt-reminder-minutes') as HTMLSelectElement | null
-  const manualMaxSel = document.getElementById('opt-manual-max')       as HTMLSelectElement | null
+  const manualMaxSel  = document.getElementById('opt-manual-max')        as HTMLSelectElement | null
+  const prerollSel    = document.getElementById('opt-preroll-seconds')   as HTMLSelectElement | null
   if (wakeEl) {
     wakeEl.checked = !!settings.wakeFromSleep
     setWakeDetailsVisible(!!settings.wakeFromSleep)
@@ -97,6 +98,7 @@ export function applyScheduleSettingsToUI(): void {
   if (splitMinSel)  splitMinSel.value   = String(settings.splitMinutes   ?? 0)
   if (reminderSel)  reminderSel.value   = String(settings.reminderMinutes  ?? 0)
   if (manualMaxSel) manualMaxSel.value  = String(settings.manualMaxMinutes ?? 0)
+  if (prerollSel)   prerollSel.value    = String(settings.preRollSeconds   ?? 0)
   renderSlotsList()
 }
 
@@ -109,6 +111,7 @@ async function saveScheduleSettings(): Promise<void> {
   const splitMinSel   = document.getElementById('opt-split-minutes')     as HTMLSelectElement | null
   const reminderSel   = document.getElementById('opt-reminder-minutes')  as HTMLSelectElement | null
   const manualMaxSel  = document.getElementById('opt-manual-max')        as HTMLSelectElement | null
+  const prerollSel    = document.getElementById('opt-preroll-seconds')   as HTMLSelectElement | null
   patchSettings({
     wakeFromSleep:           wakeEl?.checked ?? false,
     protectRecording:        protectEl?.checked ?? true,
@@ -118,6 +121,7 @@ async function saveScheduleSettings(): Promise<void> {
     splitMinutes:            parseInt(splitMinSel?.value   ?? '0')   || 0,
     reminderMinutes:         parseInt(reminderSel?.value   ?? '0')   || 0,
     manualMaxMinutes:        parseInt(manualMaxSel?.value  ?? '0')   || 0,
+    preRollSeconds:          parseInt(prerollSel?.value    ?? '0')   || 0,
   })
   await window.api.saveSettings(settings)
   flashSaved(document.getElementById('btn-schedule-save'))

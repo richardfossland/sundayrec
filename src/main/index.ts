@@ -5,6 +5,7 @@ import * as store from './store'
 import * as scheduler from './scheduler'
 import * as recorder from './recorder'
 import { NOTIFY_LABELS } from './recorder'
+import * as preroll from './preroll'
 import * as tray from './tray'
 import * as updater from './updater'
 import * as mailer from './mailer'
@@ -170,6 +171,22 @@ app.whenReady().then(async () => {
   updater.init(mainWindow)
   updater.check()
   setupIPC()
+
+  // Restart pre-roll after each session ends (manual or scheduled)
+  recorder.setSessionEndCallback(() => {
+    const s = store.getAll()
+    if ((s.preRollSeconds ?? 0) > 0 && !recorder.isActive()) {
+      setTimeout(() => {
+        preroll.start(s).catch(err => console.error('[preroll] post-session restart error:', err))
+      }, 1000) // brief pause for device release
+    }
+  })
+
+  // Start pre-roll if enabled at launch
+  const launchSettings = store.getAll()
+  if ((launchSettings.preRollSeconds ?? 0) > 0) {
+    preroll.start(launchSettings).catch(err => console.error('[preroll] launch start error:', err))
+  }
   cleanupOldRecordings()
   store.pruneHistory()
   const initialUpcoming = scheduler.getUpcomingDates()
@@ -179,6 +196,15 @@ app.whenReady().then(async () => {
   // On wake from sleep: check for missed recordings, refresh OS wake list, notify user
   powerMonitor.on('resume', () => {
     scheduler.checkMissedRecordings()
+    // Restart pre-roll after wake (it stops when the Mac sleeps)
+    if (!recorder.isActive()) {
+      const wakeSettings = store.getAll()
+      if ((wakeSettings.preRollSeconds ?? 0) > 0) {
+        setTimeout(() => {
+          preroll.start(wakeSettings).catch(err => console.error('[preroll] wake restart error:', err))
+        }, 2000)
+      }
+    }
     const upcoming = scheduler.getUpcomingDates()
     wake.reschedule(upcoming, mainWindow).catch(err => console.error('[wake] resume reschedule error:', err))
     tray.setNextRecording(upcoming[0] ?? null)
@@ -307,6 +333,15 @@ function setupIPC(): void {
     const upcomingAfterSave = scheduler.getUpcomingDates()
     wake.reschedule(upcomingAfterSave, mainWindow).catch(err => console.error('[wake] reschedule error:', err))
     tray.setNextRecording(upcomingAfterSave[0] ?? null)
+    // Sync pre-roll state with new settings
+    if (!recorder.isActive()) {
+      const newPreRollSec = (settings as { preRollSeconds?: number }).preRollSeconds ?? 0
+      if (newPreRollSec > 0) {
+        preroll.start(store.getAll()).catch(err => console.error('[preroll] settings-change start error:', err))
+      } else {
+        preroll.stop().catch(err => console.error('[preroll] settings-change stop error:', err))
+      }
+    }
     return true
   })
 
@@ -381,8 +416,19 @@ function setupIPC(): void {
     if (opts !== undefined && opts !== null && (typeof opts !== 'object' || Array.isArray(opts))) {
       return { error: 'invalid_opts' }
     }
-    const settings = store.getAll()
-    return recorder.startSession({ ...settings, ...(opts ?? {}) }, mainWindow)
+    const settings = { ...store.getAll(), ...(opts ?? {}) }
+    const preRollSec = settings.preRollSeconds ?? 0
+
+    // Harvest pre-roll buffer for manual recordings when enabled
+    let prerollData: { rawPath: string; trimMs: number } | null = null
+    if (preRollSec > 0 && preroll.isRunning()) {
+      prerollData = await preroll.harvest(preRollSec)
+      if (prerollData && process.platform === 'darwin') {
+        await new Promise<void>(resolve => setTimeout(resolve, 300))
+      }
+    }
+
+    return recorder.startSession(settings, mainWindow, prerollData)
   })
   ipcMain.handle('stop-recording-now', () => { recorder.stopSession(); return true })
 

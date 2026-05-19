@@ -37,6 +37,7 @@ const defaults: Settings = {
   splitMinutes: 0,
   reminderMinutes: 0,
   manualMaxMinutes: 0,
+  preRollSeconds: 0,
 
   launchAtLogin: false,
   showOnStartup: false,

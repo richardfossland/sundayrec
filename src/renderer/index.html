@@ -445,6 +445,17 @@
             <option value="360">6 timer</option>
           </select>
         </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="schedule.preRollTitle">Pre-roll buffer</div>
+            <div class="toggle-desc" data-i18n="schedule.preRollDesc">Starter opptak N sekunder bakover i tid — fanger begynnelsen av talen selv om du trykker litt for sent</div>
+          </div>
+          <select class="form-input split-select" id="opt-preroll-seconds">
+            <option value="0" data-i18n="schedule.splitOff">Av</option>
+            <option value="15">15 sek</option>
+            <option value="30">30 sek</option>
+          </select>
+        </div>
         <div class="btn-row" style="margin-top:16px">
           <button class="btn-primary" id="btn-schedule-save" data-i18n="schedule.save">Lagre innstillinger</button>
         </div>

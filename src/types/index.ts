@@ -90,6 +90,7 @@ export interface Settings {
   trimSilence?: boolean    // run ffmpeg silenceremove on output
   reminderMinutes: number  // 0 = off; system notification N min before scheduled recording
   manualMaxMinutes: number // 0 = off; auto-stop manual recordings after N minutes
+  preRollSeconds: number   // 0 = off; 15 or 30 — capture N seconds before manual record press
 
   // System behaviour
   launchAtLogin: boolean
