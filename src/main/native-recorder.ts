@@ -208,17 +208,35 @@ export interface NativeHandle {
 // Classify ffmpeg stderr into a user-facing error code
 function classifyFfmpegError(stderr: string): string {
   const s = stderr.toLowerCase()
-  if (s.includes('no such file') || s.includes('device not found') || s.includes('could not find') || s.includes('not found')) {
+  if (
+    s.includes('no such file') || s.includes('device not found') ||
+    s.includes('could not find') || s.includes('not found') ||
+    s.includes('no devices found') || s.includes('invalid argument') ||
+    s.includes('no such audio device') || s.includes('failed to find') ||
+    s.includes('cannot find')
+  ) {
     return 'device_not_found'
   }
-  if (s.includes('access is denied') || s.includes('permission') || s.includes('not permitted') || s.includes('avfoundation: video not enabled')) {
+  if (
+    s.includes('access is denied') || s.includes('permission') ||
+    s.includes('not permitted') || s.includes('avfoundation: video not enabled') ||
+    s.includes('authorization') || s.includes('microphone access') ||
+    s.includes('privacy') || s.includes('tcm_access')
+  ) {
     return 'device_permission_denied'
   }
-  if (s.includes('already in use') || s.includes('device busy') || s.includes('being used by another')) {
+  if (
+    s.includes('already in use') || s.includes('device busy') ||
+    s.includes('being used by another') || s.includes('resource busy') ||
+    s.includes('device or resource busy')
+  ) {
     return 'device_busy'
   }
-  if (s.includes('invalid argument') || s.includes('no devices found')) {
-    return 'device_not_found'
+  if (s.includes('no space left') || s.includes('disk full') || s.includes('enospc')) {
+    return 'disk_full'
+  }
+  if (s.includes('broken pipe') || s.includes('i/o error') || s.includes('input/output')) {
+    return 'device_disconnected'
   }
   return 'device_error'
 }
@@ -281,22 +299,28 @@ export async function startCapture(
   })
 
   // Windows DirectShow can take 2-3 s to enumerate and open a device.
-  // macOS AVFoundation is usually < 1 s.
-  const startupMs = process.platform === 'win32' ? 2500 : 1200
+  // macOS AVFoundation can also be slow on first access (privacy prompt, driver init).
+  const startupMs = process.platform === 'win32' ? 3000 : 2000
 
   const startupError = await new Promise<string | null>(resolve => {
     const timer = setTimeout(() => resolve(null), startupMs)
     proc.on('close', code => {
       clearTimeout(timer)
-      if (code !== null && code !== 0) {
-        resolve(classifyFfmpegError(stderrBuf))
-      } else {
-        resolve(null)
-      }
+      // Any exit during startup window — success (code 0) or failure — is treated as error.
+      // A capture process that exits within 2 s wrote nothing useful.
+      const classified = classifyFfmpegError(stderrBuf)
+      resolve(classified || (code !== 0 ? 'device_error' : 'device_error'))
     })
   })
 
   if (startupError) return { error: startupError }
+
+  // Guard: process might have exited cleanly during the startup window (race condition).
+  // The close event already fired, handle.onExit was not set yet → zombie session.
+  if (proc.exitCode !== null || proc.killed) {
+    console.error('[native-recorder] process already exited after startup window, exitCode:', proc.exitCode)
+    return { error: classifyFfmpegError(stderrBuf) || 'device_error' }
+  }
 
   return handle
 }

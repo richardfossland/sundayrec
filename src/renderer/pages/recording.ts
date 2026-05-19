@@ -248,6 +248,9 @@ export function translateNativeError(code: string): string {
     case 'save_folder_permission': return t('recording.errorFolderPermission',   'Ingen tilgang til lagringsmappen — sjekk at mappen er skrivbar')
     case 'save_folder_error':      return t('recording.errorFolderError',        'Kan ikke opprette lagringsmappe — sjekk diskplass og tillatelser')
     case 'device_disconnected':    return t('recording.errorDeviceDisconnected', 'Lydenheten ble koblet fra under opptak — sjekk tilkoblingen')
+    case 'disk_full':              return t('recording.errorDiskFull',           'Disken er full — frigjør plass og prøv igjen')
+    case 'ffmpeg_missing':         return t('recording.errorFfmpegMissing',      'Intern feil: opptaksbinær mangler — reinstaller appen')
+    case 'stuck_recording':        return t('recording.errorStuck',              'Opptaket stoppet — ingen lyd fra enheten i 60 sekunder')
     default:                       return code
   }
 }

@@ -24,7 +24,7 @@
 
 import path from 'path'
 import fs from 'fs'
-import { app, Notification, powerSaveBlocker } from 'electron'
+import { app, Notification, powerSaveBlocker, systemPreferences } from 'electron'
 import type { BrowserWindow } from 'electron'
 import crypto from 'crypto'
 import ffmpegLegacy from 'fluent-ffmpeg'
@@ -47,6 +47,9 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
     device_error:             'Feil med lydenheten — prøv å koble til på nytt',
     empty_output:             'Ingen lyd ble tatt opp — var enheten koblet til?',
     no_device:                'Ingen lydenhet funnet',
+    disk_full:                'Disken er full — frigjør plass og prøv igjen',
+    ffmpeg_missing:           'Intern feil: opptaksbinær mangler — reinstaller appen',
+    stuck_recording:          'Opptaket stoppet — ingen lyd fra enheten i 60 sekunder',
   },
   en: {
     device_disconnected:      'Audio device disconnected during recording',
@@ -56,6 +59,9 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
     device_error:             'Audio device error — try reconnecting',
     empty_output:             'No audio was recorded — was the device connected?',
     no_device:                'No audio device found',
+    disk_full:                'Disk is full — free up space and try again',
+    ffmpeg_missing:           'Internal error: recording binary missing — reinstall the app',
+    stuck_recording:          'Recording stalled — no audio from device for 60 seconds',
   },
   de: {
     device_disconnected:      'Audiogerät während der Aufnahme getrennt',
@@ -65,6 +71,9 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
     device_error:             'Fehler am Audiogerät — neu anschließen',
     empty_output:             'Keine Audiodaten — war das Gerät verbunden?',
     no_device:                'Kein Audiogerät gefunden',
+    disk_full:                'Datenträger voll — Speicher freigeben',
+    ffmpeg_missing:           'Interner Fehler: Aufnahme-Binary fehlt — App neu installieren',
+    stuck_recording:          'Aufnahme hängt — kein Audio von Gerät seit 60 Sekunden',
   },
   sv: {
     device_disconnected:      'Ljudenheten kopplades från under inspelning',
@@ -74,6 +83,9 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
     device_error:             'Fel på ljudenheten — försök koppla om',
     empty_output:             'Inget ljud spelades in — var enheten ansluten?',
     no_device:                'Ingen ljudenhet hittad',
+    disk_full:                'Disken är full — frigör utrymme och försök igen',
+    ffmpeg_missing:           'Internt fel: inspelningsbinär saknas — ominstallera appen',
+    stuck_recording:          'Inspelningen fastnade — inget ljud från enhet på 60 sekunder',
   },
   da: {
     device_disconnected:      'Lydenheden blev frakoblet under optagelse',
@@ -83,6 +95,9 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
     device_error:             'Fejl på lydenheden — prøv at tilslutte igen',
     empty_output:             'Ingen lyd optaget — var enheden tilsluttet?',
     no_device:                'Ingen lydenhed fundet',
+    disk_full:                'Disken er fuld — frigør plads og prøv igen',
+    ffmpeg_missing:           'Intern fejl: optagelsesbinær mangler — geninstaller appen',
+    stuck_recording:          'Optagelsen gik i stå — intet lyd fra enhed i 60 sekunder',
   },
   pl: {
     device_disconnected:      'Urządzenie audio rozłączone podczas nagrywania',
@@ -92,6 +107,9 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
     device_error:             'Błąd urządzenia audio — spróbuj podłączyć ponownie',
     empty_output:             'Nie nagrano dźwięku — czy urządzenie było podłączone?',
     no_device:                'Nie znaleziono urządzenia audio',
+    disk_full:                'Dysk jest pełny — zwolnij miejsce i spróbuj ponownie',
+    ffmpeg_missing:           'Błąd wewnętrzny: brak pliku nagrywania — zainstaluj ponownie',
+    stuck_recording:          'Nagrywanie utknęło — brak dźwięku z urządzenia przez 60 sekund',
   },
   fr: {
     device_disconnected:      "Périphérique audio déconnecté pendant l'enregistrement",
@@ -101,6 +119,9 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
     device_error:             'Erreur périphérique audio — reconnectez-le',
     empty_output:             "Aucun audio enregistré — l'appareil était-il connecté ?",
     no_device:                'Aucun périphérique audio trouvé',
+    disk_full:                'Disque plein — libérez de l\'espace et réessayez',
+    ffmpeg_missing:           'Erreur interne : binaire manquant — réinstallez l\'application',
+    stuck_recording:          'Enregistrement bloqué — aucun audio depuis 60 secondes',
   },
 }
 
@@ -122,20 +143,23 @@ export const NOTIFY_LABELS: Record<string, { done: string; err: string; recovere
 // ── Session state ────────────────────────────────────────────────────────────
 
 interface Session {
-  settings:      RecordingOpts
-  outputPath:    string
-  sessionId:     string
-  handle:        NativeHandle
-  startTime:     number
-  win:           BrowserWindow
-  maxTimer:      ReturnType<typeof setTimeout> | null
-  stopping:      boolean       // true once stopSession() has been called
+  settings:       RecordingOpts
+  outputPath:     string
+  sessionId:      string
+  handle:         NativeHandle
+  startTime:      number
+  win:            BrowserWindow
+  maxTimer:       ReturnType<typeof setTimeout> | null
+  stuckTimer:     ReturnType<typeof setInterval> | null
+  lastProgressAt: number
+  stopping:       boolean
   reconnectCount: number
 }
 
-let activeSession: Session | null = null
-let recBlocker:    number | null  = null
-let idleCallback:  (() => void) | null = null
+let activeSession:  Session | null = null
+let recBlocker:     number | null  = null
+let displayBlocker: number | null  = null
+let idleCallback:   (() => void) | null = null
 
 export function onceIdle(cb: () => void): void { idleCallback = cb }
 
@@ -143,11 +167,19 @@ function notifyIdle(): void {
   const cb = idleCallback; idleCallback = null; cb?.()
 }
 
-function stopRecBlocker(): void {
+function stopBlockers(): void {
   if (recBlocker !== null && powerSaveBlocker.isStarted(recBlocker)) {
     powerSaveBlocker.stop(recBlocker)
   }
   recBlocker = null
+  if (displayBlocker !== null && powerSaveBlocker.isStarted(displayBlocker)) {
+    powerSaveBlocker.stop(displayBlocker)
+  }
+  displayBlocker = null
+}
+
+function stopStuckTimer(session: Session): void {
+  if (session.stuckTimer) { clearInterval(session.stuckTimer); session.stuckTimer = null }
 }
 
 function getLang(): string { return store.get('language') ?? 'no' }
@@ -163,11 +195,68 @@ export function isActive(): boolean {
   return activeSession !== null && !activeSession.stopping
 }
 
+// ── Pre-recording safety checks ──────────────────────────────────────────────
+
+async function preflightCheck(settings: RecordingOpts): Promise<{ error: string } | null> {
+  // 1. ffmpeg binary must exist
+  if (ffmpegBin !== 'ffmpeg' && !fs.existsSync(ffmpegBin)) {
+    console.error('[recorder] ffmpeg binary not found at', ffmpegBin)
+    return { error: 'ffmpeg_missing' }
+  }
+
+  // 2. Save folder must be writable
+  const folder = settings.saveFolder ?? defaultFolder()
+  try {
+    fs.mkdirSync(folder, { recursive: true })
+    const probe = path.join(folder, `.srtst_${Date.now()}`)
+    fs.writeFileSync(probe, '')
+    fs.unlinkSync(probe)
+  } catch {
+    return { error: 'save_folder_permission' }
+  }
+
+  // 3. Disk space: require at least 200 MB free
+  try {
+    const { execFile } = await import('child_process')
+    const { promisify } = await import('util')
+    const execAsync = promisify(execFile)
+    if (process.platform === 'darwin' || process.platform === 'linux') {
+      const { stdout } = await execAsync('df', ['-Pk', folder], { timeout: 4000 })
+      const cols = stdout.trim().split('\n')[1]?.trim().split(/\s+/)
+      const freeKb = cols ? parseInt(cols[3]) : NaN
+      if (!isNaN(freeKb) && freeKb < 200 * 1024) return { error: 'disk_full' }
+    } else if (process.platform === 'win32') {
+      const m = folder.match(/^([A-Za-z]):/)
+      if (m) {
+        const { stdout } = await execAsync('powershell', [
+          '-NoProfile', '-Command', `(Get-PSDrive -Name '${m[1]}').Free`
+        ], { timeout: 4000 })
+        const free = parseInt(stdout.trim())
+        if (!isNaN(free) && free < 200 * 1024 * 1024) return { error: 'disk_full' }
+      }
+    }
+  } catch { /* disk check is best-effort */ }
+
+  // 4. macOS: microphone permission must be granted
+  if (process.platform === 'darwin') {
+    const status = systemPreferences.getMediaAccessStatus('microphone')
+    if (status === 'denied' || status === 'restricted') {
+      console.error('[recorder] microphone access', status)
+      return { error: 'device_permission_denied' }
+    }
+  }
+
+  return null
+}
+
 export async function startSession(
   settings: RecordingOpts,
   win: BrowserWindow
 ): Promise<{ ok: true } | { error: string }> {
   if (activeSession) return { error: 'already_recording' }
+
+  const preflightError = await preflightCheck(settings)
+  if (preflightError) return preflightError
 
   const sessionId  = crypto.randomUUID()
   const filename   = buildFilename(settings)
@@ -191,7 +280,9 @@ export async function startSession(
   activeSession = {
     settings, outputPath, sessionId, handle,
     startTime: handle.startTime,
-    win, maxTimer: null, stopping: false, reconnectCount: 0
+    win, maxTimer: null, stuckTimer: null,
+    lastProgressAt: Date.now(),
+    stopping: false, reconnectCount: 0
   }
 
   // Persist recovery info so a crash restart can salvage the partial file
@@ -202,22 +293,40 @@ export async function startSession(
     activeSession.maxTimer = setTimeout(() => stopSession(), settings.maxMinutes * 60000)
   }
 
-  // Keep system awake during recording
+  // Prevent system suspension + display sleep during active recording.
+  // prevent-display-sleep keeps macOS AVFoundation audio session alive even when screen dims.
   if (recBlocker === null || !powerSaveBlocker.isStarted(recBlocker)) {
     recBlocker = powerSaveBlocker.start('prevent-app-suspension')
   }
+  if (displayBlocker === null || !powerSaveBlocker.isStarted(displayBlocker)) {
+    displayBlocker = powerSaveBlocker.start('prevent-display-sleep')
+  }
 
-  // Progress → send bytes to renderer for size display
+  // Progress → update lastProgressAt + send bytes to renderer
   handle.onProgress = bytes => {
+    if (activeSession?.sessionId === sessionId) activeSession.lastProgressAt = Date.now()
     win.webContents.send('recording-progress', { bytes })
   }
+
+  // Stuck detector: if no progress in 60 s while not stopping, trigger watchdog
+  activeSession.stuckTimer = setInterval(() => {
+    const s = activeSession
+    if (!s || s.sessionId !== sessionId || s.stopping) return
+    if (Date.now() - s.lastProgressAt > 60000) {
+      console.warn('[recorder] No progress for 60 s — treating as device failure')
+      stopStuckTimer(s)
+      startWatchdog(s)
+    }
+  }, 15000)
 
   // Watchdog — handles unexpected ffmpeg exit (USB disconnect, driver crash)
   handle.onExit = code => {
     if (!activeSession || activeSession.sessionId !== sessionId) return
     if (activeSession.stopping) {
+      stopStuckTimer(activeSession)
       finishSession(activeSession)
     } else if (code === 0) {
+      stopStuckTimer(activeSession)
       finishSession(activeSession)
     } else {
       startWatchdog(activeSession)
@@ -252,7 +361,8 @@ export function stopSession(): void {
 
 function finishSession(session: Session): void {
   if (activeSession?.sessionId === session.sessionId) activeSession = null
-  stopRecBlocker()
+  stopStuckTimer(session)
+  stopBlockers()
   store.set('activeRecovery', null)
 
   const durationSec = Math.round((Date.now() - session.startTime) / 1000)
@@ -261,9 +371,11 @@ function finishSession(session: Session): void {
   const size        = exists ? fs.statSync(session.outputPath).size : 0
 
   if (!exists || size < 1000) {
-    // Nothing was written — don't add to history
-    session.win.webContents.send('recording-error', { error: 'empty_output' })
+    const msg = localizeError('empty_output')
+    session.win.webContents.send('recording-error', { error: 'empty_output', message: msg })
     tray.setRecording(false)
+    tray.setError(true)
+    notify(getNL().err, msg)
     notifyIdle()
     return
   }
@@ -288,15 +400,20 @@ function finishSession(session: Session): void {
 
 // ── Watchdog: reconnect after unexpected ffmpeg death ───────────────────────
 
-const MAX_RECONNECT_ATTEMPTS = 5   // ~30 s total (5 × ~6 s per attempt including startup wait)
+// 10 attempts with exponential backoff: 2s, 3s, 4s, 5s, 5s… ≈ 50 s total window
+const MAX_RECONNECT_ATTEMPTS = 10
+
+function reconnectDelay(attempt: number): number {
+  return Math.min(2000 + attempt * 1000, 5000)
+}
 
 function startWatchdog(session: Session): void {
-  // Guard: only one watchdog per session
   if (session.reconnectCount >= MAX_RECONNECT_ATTEMPTS) {
     failSession(session, 'device_disconnected')
     return
   }
 
+  stopStuckTimer(session)
   session.win.webContents.send('recording-reconnecting', {})
   console.warn('[recorder] ffmpeg died unexpectedly — starting reconnect watchdog')
 
@@ -308,47 +425,60 @@ function startWatchdog(session: Session): void {
       return
     }
     attempts++
+    session.reconnectCount++
     console.log(`[recorder] Reconnect attempt ${attempts}/${MAX_RECONNECT_ATTEMPTS}…`)
 
     // Build a new output path with _r1/_r2 suffix for the reconnected segment
-    session.reconnectCount++
-    const ext      = path.extname(session.outputPath)
-    const base     = session.outputPath.slice(0, -ext.length).replace(/_r\d+$/, '')
-    const newPath  = `${base}_r${session.reconnectCount}${ext}`
+    const ext     = path.extname(session.outputPath)
+    const base    = session.outputPath.slice(0, -ext.length).replace(/_r\d+$/, '')
+    const newPath = `${base}_r${session.reconnectCount}${ext}`
 
     const result = await startCapture(session.settings, newPath)
     if ('error' in result) {
-      setTimeout(tryReconnect, 1000)
+      setTimeout(tryReconnect, reconnectDelay(attempts))
       return
     }
 
-    // Reconnect succeeded
+    // Reconnect succeeded — update session in place
     console.log('[recorder] Reconnected! New segment:', newPath)
-    session.outputPath = newPath
-    session.handle     = result
-    session.startTime  = result.startTime
+    session.outputPath    = newPath
+    session.handle        = result
+    session.startTime     = result.startTime
+    session.lastProgressAt = Date.now()
     store.set('activeRecovery', { outputPath: newPath, startTime: result.startTime, sessionId: session.sessionId })
 
     result.onProgress = bytes => {
+      if (activeSession?.sessionId === session.sessionId) session.lastProgressAt = Date.now()
       session.win.webContents.send('recording-progress', { bytes })
     }
     result.onExit = code => {
       if (!activeSession || activeSession.sessionId !== session.sessionId) return
-      if (session.stopping || code === 0) finishSession(session)
+      if (session.stopping || code === 0) { stopStuckTimer(session); finishSession(session) }
       else startWatchdog(session)
     }
 
+    // Restart stuck detector for new segment
+    session.stuckTimer = setInterval(() => {
+      const s = activeSession
+      if (!s || s.sessionId !== session.sessionId || s.stopping) return
+      if (Date.now() - s.lastProgressAt > 60000) {
+        console.warn('[recorder] Reconnected segment stuck — triggering watchdog again')
+        stopStuckTimer(s)
+        startWatchdog(s)
+      }
+    }, 15000)
+
     session.win.webContents.send('recording-reconnected', {})
-    const nl = getNL()
-    notify('SundayRec', nl.reconnected)
+    notify('SundayRec', getNL().reconnected)
   }
 
-  setTimeout(tryReconnect, 1000)
+  setTimeout(tryReconnect, reconnectDelay(0))
 }
 
 function failSession(session: Session, reason: string): void {
   if (activeSession?.sessionId === session.sessionId) activeSession = null
-  stopRecBlocker()
+  stopStuckTimer(session)
+  stopBlockers()
   store.set('activeRecovery', null)
 
   const nl = getNL()

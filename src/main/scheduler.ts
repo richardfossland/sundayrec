@@ -125,6 +125,7 @@ async function triggerStart(slot: ScheduleSlot | SpecialRecording, overrideName?
 
   const opts: RecordingOpts = {
     deviceId,
+    deviceName:       s.deviceName,
     format:           s.format,
     bitrate:          s.bitrate,
     channels:         s.channels,
