@@ -74,9 +74,16 @@ export async function listFfmpegDevices(): Promise<FfmpegDevice[]> {
           }
         }
       } else {
-        // Match AVFoundation lines like:  [0] Built-in Microphone
-        for (const m of stderr.matchAll(/\[(\d+)\]\s+(.+)/g)) {
-          devices.push({ index: parseInt(m[1]), name: m[2].trim() })
+        // AVFoundation: only parse the audio devices section.
+        // The output lists video devices first, then audio — both use [0], [1], … indices,
+        // so mixing them would map video index 0 → audio input 0 incorrectly.
+        let inAudioSection = false
+        for (const line of stderr.split('\n')) {
+          if (line.includes('AVFoundation audio devices')) { inAudioSection = true; continue }
+          if (line.includes('AVFoundation video devices')) { inAudioSection = false; continue }
+          if (!inAudioSection) continue
+          const m = line.match(/\[(\d+)\]\s+(.+)/)
+          if (m) devices.push({ index: parseInt(m[1]), name: m[2].trim() })
         }
       }
       resolve(devices)
@@ -100,6 +107,15 @@ function bestMatch(devices: FfmpegDevice[], name: string): FfmpegDevice | undefi
   // 3. Device name is a substring of stored name
   const rev = devices.find(d => n.includes(d.name.toLowerCase()))
   if (rev) return rev
+  // 4. Word-overlap — handles localization (browser reports English names, ffmpeg reports OS language).
+  //    E.g. "MacBook Pro Microphone (Built-in)" vs Norwegian "MacBook Pro-mikrofon": shares "macbook"+"pro".
+  const storedWords = n.split(/[\s\-()+]+/).filter(w => w.length > 2)
+  const wordMatch = devices.find(d => {
+    const devWords = d.name.toLowerCase().split(/[\s\-()+]+/).filter(w => w.length > 2)
+    const overlaps = storedWords.filter(sw => devWords.some(dw => dw.startsWith(sw) || sw.startsWith(dw)))
+    return overlaps.length >= 2
+  })
+  if (wordMatch) return wordMatch
   return undefined
 }
 
