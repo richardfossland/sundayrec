@@ -123,9 +123,12 @@ export function setupRecording(): void {
         setTimeout(() => startRecordingWithOpts(opts), 1000)
       }
     }),
-    window.api.on('recording-error', () => {
+    window.api.on('recording-error', (data) => {
+      const d = data as { error?: string; message?: string } | undefined
       hideOverlay()
       loadRecentHistory()
+      const msg = d?.message ?? (d?.error ? translateNativeError(d.error) : null)
+      if (msg) showGlobalError(msg)
     }),
     window.api.on('recording-progress', (data) => {
       const d = data as { bytes?: number } | undefined
@@ -244,8 +247,24 @@ export function translateNativeError(code: string): string {
     case 'empty_output':           return t('recording.errorEmpty',              'Opptaket er tomt — ingen lyd ble mottatt fra enheten')
     case 'save_folder_permission': return t('recording.errorFolderPermission',   'Ingen tilgang til lagringsmappen — sjekk at mappen er skrivbar')
     case 'save_folder_error':      return t('recording.errorFolderError',        'Kan ikke opprette lagringsmappe — sjekk diskplass og tillatelser')
+    case 'device_disconnected':    return t('recording.errorDeviceDisconnected', 'Lydenheten ble koblet fra under opptak — sjekk tilkoblingen')
     default:                       return code
   }
+}
+
+export function showGlobalError(msg: string): void {
+  const banner  = document.getElementById('global-error-banner')
+  const msgEl   = document.getElementById('global-error-msg')
+  const closeEl = document.getElementById('global-error-close')
+  if (!banner || !msgEl) return
+  msgEl.textContent = msg
+  banner.style.display = 'flex'
+  if (closeEl && !closeEl.dataset.bound) {
+    closeEl.dataset.bound = '1'
+    closeEl.addEventListener('click', () => { banner.style.display = 'none' })
+  }
+  // Navigate to home so user sees the banner
+  if (typeof window.showPage === 'function') window.showPage('home')
 }
 
 // ── Monitoring stream (VU only) ──────────────────────────────────────────────

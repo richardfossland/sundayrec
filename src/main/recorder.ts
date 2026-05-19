@@ -38,6 +38,77 @@ import type { RecordingOpts, RecordingEntry } from '../types'
 
 // ── Localised notification labels ───────────────────────────────────────────
 
+const ERROR_REASONS: Record<string, Record<string, string>> = {
+  no: {
+    device_disconnected:      'Lydenheten ble koblet fra under opptak',
+    device_not_found:         'Lydenheten ble ikke funnet — sjekk USB',
+    device_permission_denied: 'Mikrofontilgang nektet — sjekk Personvern & sikkerhet',
+    device_busy:              'Lydenheten er opptatt av et annet program',
+    device_error:             'Feil med lydenheten — prøv å koble til på nytt',
+    empty_output:             'Ingen lyd ble tatt opp — var enheten koblet til?',
+    no_device:                'Ingen lydenhet funnet',
+  },
+  en: {
+    device_disconnected:      'Audio device disconnected during recording',
+    device_not_found:         'Audio device not found — check USB connection',
+    device_permission_denied: 'Microphone access denied — check Privacy & Security',
+    device_busy:              'Audio device is in use by another application',
+    device_error:             'Audio device error — try reconnecting',
+    empty_output:             'No audio was recorded — was the device connected?',
+    no_device:                'No audio device found',
+  },
+  de: {
+    device_disconnected:      'Audiogerät während der Aufnahme getrennt',
+    device_not_found:         'Audiogerät nicht gefunden — USB prüfen',
+    device_permission_denied: 'Mikrofonzugriff verweigert — Datenschutz prüfen',
+    device_busy:              'Audiogerät von anderem Programm belegt',
+    device_error:             'Fehler am Audiogerät — neu anschließen',
+    empty_output:             'Keine Audiodaten — war das Gerät verbunden?',
+    no_device:                'Kein Audiogerät gefunden',
+  },
+  sv: {
+    device_disconnected:      'Ljudenheten kopplades från under inspelning',
+    device_not_found:         'Ljudenheten hittades inte — kontrollera USB',
+    device_permission_denied: 'Mikrofonåtkomst nekad — kontrollera Integritet',
+    device_busy:              'Ljudenheten används av ett annat program',
+    device_error:             'Fel på ljudenheten — försök koppla om',
+    empty_output:             'Inget ljud spelades in — var enheten ansluten?',
+    no_device:                'Ingen ljudenhet hittad',
+  },
+  da: {
+    device_disconnected:      'Lydenheden blev frakoblet under optagelse',
+    device_not_found:         'Lydenheden blev ikke fundet — tjek USB',
+    device_permission_denied: 'Mikrofonadgang nægtet — tjek Privatliv',
+    device_busy:              'Lydenheden bruges af et andet program',
+    device_error:             'Fejl på lydenheden — prøv at tilslutte igen',
+    empty_output:             'Ingen lyd optaget — var enheden tilsluttet?',
+    no_device:                'Ingen lydenhed fundet',
+  },
+  pl: {
+    device_disconnected:      'Urządzenie audio rozłączone podczas nagrywania',
+    device_not_found:         'Urządzenie audio nie znalezione — sprawdź USB',
+    device_permission_denied: 'Odmowa dostępu do mikrofonu — sprawdź Prywatność',
+    device_busy:              'Urządzenie audio zajęte przez inny program',
+    device_error:             'Błąd urządzenia audio — spróbuj podłączyć ponownie',
+    empty_output:             'Nie nagrano dźwięku — czy urządzenie było podłączone?',
+    no_device:                'Nie znaleziono urządzenia audio',
+  },
+  fr: {
+    device_disconnected:      "Périphérique audio déconnecté pendant l'enregistrement",
+    device_not_found:         'Périphérique audio introuvable — vérifiez USB',
+    device_permission_denied: 'Accès microphone refusé — vérifiez Confidentialité',
+    device_busy:              'Périphérique audio utilisé par une autre application',
+    device_error:             'Erreur périphérique audio — reconnectez-le',
+    empty_output:             "Aucun audio enregistré — l'appareil était-il connecté ?",
+    no_device:                'Aucun périphérique audio trouvé',
+  },
+}
+
+export function localizeError(code: string): string {
+  const lang = getLang()
+  return ERROR_REASONS[lang]?.[code] ?? ERROR_REASONS.en?.[code] ?? code
+}
+
 export const NOTIFY_LABELS: Record<string, { done: string; err: string; recovered: string; reconnected: string }> = {
   no: { done: 'Fullført',      err: 'SundayRec — Feil',    recovered: 'Opptak gjenopprettet: {file}', reconnected: 'Tilkobling gjenopprettet — fortsetter opptak' },
   en: { done: 'Completed',     err: 'SundayRec — Error',   recovered: 'Recording recovered: {file}',  reconnected: 'Connection restored — continuing recording'  },
@@ -281,10 +352,11 @@ function failSession(session: Session, reason: string): void {
   store.set('activeRecovery', null)
 
   const nl = getNL()
-  session.win.webContents.send('recording-error', { error: reason })
+  const localizedReason = localizeError(reason)
+  session.win.webContents.send('recording-error', { error: reason, message: localizedReason })
   tray.setRecording(false)
   tray.setError(true)
-  notify(nl.err, reason)
+  notify(nl.err, localizedReason)
 
   const s = store.getAll()
   if (s.emailOnError) mailer.sendError(s, store.getSmtpPassword(), reason)

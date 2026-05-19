@@ -154,7 +154,11 @@ async function triggerStart(slot: ScheduleSlot | SpecialRecording, overrideName?
   // Start recording directly in main — no longer routed through the renderer
   const result = await recorder.startSession(opts, mainWindow)
   if ('error' in result) {
-    mainWindow.webContents.send('recording-error', { error: result.error })
+    const lang = store.get('language') ?? 'no'
+    const nl   = recorder.NOTIFY_LABELS[lang] ?? recorder.NOTIFY_LABELS.no
+    const msg  = recorder.localizeError(result.error)
+    if (Notification.isSupported()) new Notification({ title: nl.err, body: msg }).show()
+    mainWindow.webContents.send('recording-error', { error: result.error, message: msg })
     return
   }
 

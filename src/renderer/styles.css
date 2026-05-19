@@ -215,6 +215,26 @@ body.platform-win32 ::-webkit-scrollbar-thumb { border-radius: 4px; }
   display: flex; align-items: center; gap: 18px;
   padding: 20px 24px; border-radius: var(--r); margin-bottom: 20px;
 }
+.global-error-banner {
+  display: flex; align-items: center; gap: 10px;
+  margin: 12px 20px 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(239,68,68,.13);
+  border: 1px solid rgba(239,68,68,.35);
+  color: #fca5a5;
+  font-size: 13px;
+  animation: fadeIn .25s ease;
+}
+.global-error-icon { flex-shrink: 0; font-size: 15px; }
+.global-error-msg  { flex: 1; line-height: 1.4; }
+.global-error-close {
+  flex-shrink: 0; background: none; border: none; cursor: pointer;
+  color: #fca5a5; font-size: 14px; padding: 2px 6px; border-radius: 4px;
+  opacity: 0.7;
+}
+.global-error-close:hover { opacity: 1; background: rgba(239,68,68,.2); }
+
 .hero-ok   { background: linear-gradient(135deg,rgba(34,197,94,.1),rgba(34,197,94,.03)); border: 1px solid rgba(34,197,94,.2); }
 .hero-warn { background: linear-gradient(135deg,rgba(245,158,11,.1),rgba(245,158,11,.03)); border: 1px solid rgba(245,158,11,.2); }
 .hero-icon {

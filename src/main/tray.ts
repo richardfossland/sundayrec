@@ -96,7 +96,11 @@ function updateMenu(): void {
     : null
 
   const menuItems: Electron.MenuItemConstructorOptions[] = [
-    { label: statusLabel, enabled: false },
+    {
+      label: statusLabel,
+      enabled: hasError,
+      click: hasError ? () => { win?.show(); win?.focus() } : undefined
+    },
   ]
   if (nextLabel && !isRecording) {
     menuItems.push({ label: `${NEXT_LABEL[lang] ?? NEXT_LABEL.en}: ${nextLabel}`, enabled: false })
