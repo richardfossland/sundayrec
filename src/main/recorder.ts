@@ -195,6 +195,17 @@ function notify(title: string, body: string): void {
   if (Notification.isSupported()) new Notification({ title, body }).show()
 }
 
+// Guard against sending IPC to a destroyed BrowserWindow (e.g. after renderer crash)
+function safeSend(win: BrowserWindow, channel: string, payload?: unknown): void {
+  try {
+    if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
+      win.webContents.send(channel, payload)
+    }
+  } catch (err) {
+    console.warn(`[recorder] safeSend(${channel}) failed:`, (err as Error).message)
+  }
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 export function isActive(): boolean {
@@ -321,7 +332,7 @@ export async function startSession(
   // Progress → update lastProgressAt + send bytes to renderer
   handle.onProgress = bytes => {
     if (activeSession?.sessionId === sessionId) activeSession.lastProgressAt = Date.now()
-    win.webContents.send('recording-progress', { bytes })
+    safeSend(win, 'recording-progress', { bytes })
   }
 
   // Stuck detector: if no progress in 60 s while not stopping, trigger watchdog
@@ -388,7 +399,7 @@ function finishSession(session: Session): void {
 
   if (!exists || size < 1000) {
     const msg = localizeError('empty_output')
-    session.win.webContents.send('recording-error', { error: 'empty_output', message: msg })
+    safeSend(session.win, 'recording-error', { error: 'empty_output', message: msg })
     tray.setRecording(false)
     tray.setError(true)
     notify(getNL().err, msg)
@@ -425,7 +436,7 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
     status:    'ok'
   }
   store.addHistory(entry)
-  session.win.webContents.send('recording-finished', entry)
+  safeSend(session.win, 'recording-finished', entry)
 
   if (store.get('notifyStop') !== false) {
     notify('SundayRec', `${getNL().done}: ${path.basename(session.outputPath)}`)
@@ -531,7 +542,7 @@ function startWatchdog(session: Session): void {
   }
 
   stopStuckTimer(session)
-  session.win.webContents.send('recording-reconnecting', {})
+  safeSend(session.win, 'recording-reconnecting', {})
   console.warn('[recorder] ffmpeg died unexpectedly — starting reconnect watchdog')
 
   let attempts = 0
@@ -566,7 +577,7 @@ function startWatchdog(session: Session): void {
 
     result.onProgress = bytes => {
       if (activeSession?.sessionId === session.sessionId) session.lastProgressAt = Date.now()
-      session.win.webContents.send('recording-progress', { bytes })
+      safeSend(session.win, 'recording-progress', { bytes })
     }
     result.onExit = code => {
       if (!activeSession || activeSession.sessionId !== session.sessionId) return
@@ -585,7 +596,7 @@ function startWatchdog(session: Session): void {
       }
     }, 15000)
 
-    session.win.webContents.send('recording-reconnected', {})
+    safeSend(session.win, 'recording-reconnected', {})
     notify('SundayRec', getNL().reconnected)
   }
 
@@ -603,7 +614,7 @@ function failSession(session: Session, reason: string): void {
 
   const nl = getNL()
   const localizedReason = localizeError(reason)
-  session.win.webContents.send('recording-error', { error: reason, message: localizedReason })
+  safeSend(session.win, 'recording-error', { error: reason, message: localizedReason })
   tray.setRecording(false)
   tray.setError(true)
   notify(nl.err, localizedReason)

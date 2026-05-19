@@ -6,7 +6,11 @@ import * as store from './store'
 let win: BrowserWindow | null = null
 
 function send(channel: string, payload?: unknown): void {
-  win?.webContents.send(channel, payload)
+  try {
+    if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) {
+      win.webContents.send(channel, payload)
+    }
+  } catch { /* renderer may be gone */ }
 }
 
 export function init(mainWindow: BrowserWindow): void {

@@ -294,6 +294,8 @@ app.on('second-instance', (_event, _argv) => {
 
 app.on('render-process-gone', (_event, _webContents, details) => {
   console.error('[SundayRec] Renderer process gone:', details.reason, 'exitCode:', details.exitCode)
+  // Stop pre-roll first so the audio device is released
+  preroll.stop().catch(() => {})
   if (recorder.isActive()) {
     console.error('[SundayRec] Recording active during renderer crash — attempting emergency stop')
     recorder.stopSession()
@@ -333,14 +335,12 @@ function setupIPC(): void {
     const upcomingAfterSave = scheduler.getUpcomingDates()
     wake.reschedule(upcomingAfterSave, mainWindow).catch(err => console.error('[wake] reschedule error:', err))
     tray.setNextRecording(upcomingAfterSave[0] ?? null)
-    // Sync pre-roll state with new settings
+    // Sync pre-roll state with new settings (stop must complete before start)
     if (!recorder.isActive()) {
       const newPreRollSec = (settings as { preRollSeconds?: number }).preRollSeconds ?? 0
-      if (newPreRollSec > 0) {
-        preroll.start(store.getAll()).catch(err => console.error('[preroll] settings-change start error:', err))
-      } else {
-        preroll.stop().catch(err => console.error('[preroll] settings-change stop error:', err))
-      }
+      preroll.stop().then(() => {
+        if (newPreRollSec > 0) return preroll.start(store.getAll())
+      }).catch(err => console.error('[preroll] settings-change restart error:', err))
     }
     return true
   })
