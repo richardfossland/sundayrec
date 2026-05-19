@@ -1,6 +1,7 @@
 import path from 'path'
 import fs from 'fs'
 import os from 'os'
+import { spawn } from 'child_process'
 import { app } from 'electron'
 import ffmpegStatic from 'ffmpeg-static'
 import ffmpeg from 'fluent-ffmpeg'
@@ -388,6 +389,86 @@ export async function exportEdited(params: EditorExportParams): Promise<EditorSa
         finish({ ok: false, error: err.message })
       })
       .run()
+  })
+}
+
+// ── Segment detection ─────────────────────────────────────────────────────
+
+export interface AudioSegment {
+  start:    number   // seconds
+  end:      number
+  duration: number
+  label:    string   // suggested chapter name
+  type:     'sermon' | 'section'
+}
+
+export async function detectSegments(filePath: string): Promise<AudioSegment[]> {
+  return new Promise(resolve => {
+    let done = false
+    const finish = (result: AudioSegment[]) => {
+      if (done) return; done = true; resolve(result)
+    }
+
+    const args = [
+      '-hide_banner',
+      '-i', filePath,
+      '-af', 'silencedetect=noise=-35dB:duration=2',
+      '-f', 'null', '-'
+    ]
+    const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] })
+    let stderr = ''
+    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+
+    proc.on('close', () => {
+      const silences: { start: number; end: number }[] = []
+      let pendingStart: number | null = null
+
+      for (const line of stderr.split('\n')) {
+        const sm = line.match(/silence_start:\s*([\d.]+)/)
+        const em = line.match(/silence_end:\s*([\d.]+)/)
+        if (sm) pendingStart = parseFloat(sm[1])
+        if (em && pendingStart !== null) {
+          silences.push({ start: pendingStart, end: parseFloat(em[1]) })
+          pendingStart = null
+        }
+      }
+
+      const durM = stderr.match(/Duration:\s*(\d+):(\d+):([\d.]+)/)
+      const totalDur = durM
+        ? parseInt(durM[1]) * 3600 + parseInt(durM[2]) * 60 + parseFloat(durM[3])
+        : 0
+      if (totalDur === 0) { finish([]); return }
+
+      // Build content segments (periods between silences), min 30 s
+      const segments: AudioSegment[] = []
+      let cursor = 0
+      for (const sil of silences) {
+        const dur = sil.start - cursor
+        if (dur >= 30) segments.push({ start: cursor, end: sil.start, duration: dur, label: '', type: 'section' })
+        cursor = sil.end
+      }
+      const lastDur = totalDur - cursor
+      if (lastDur >= 30) segments.push({ start: cursor, end: totalDur, duration: lastDur, label: '', type: 'section' })
+
+      // Longest segment starting after 5 min = likely sermon
+      const candidates = segments.filter(s => s.start >= 300)
+      const sermonSeg  = (candidates.length > 0 ? candidates : segments)
+        .reduce<AudioSegment | null>((best, s) => (!best || s.duration > best.duration) ? s : best, null)
+
+      let sectionCount = 0
+      for (const s of segments) {
+        if (s === sermonSeg) {
+          s.type  = 'sermon'
+          s.label = 'Preken'
+        } else {
+          s.label = `Del ${++sectionCount}`
+        }
+      }
+
+      finish(segments)
+    })
+
+    setTimeout(() => { try { proc.kill() } catch {} ; finish([]) }, 30000)
   })
 }
 

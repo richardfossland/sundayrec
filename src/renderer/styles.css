@@ -2200,6 +2200,20 @@ body.platform-win32  #wake-instructions-win { display: block; }
 .editor-io-chip-name { color: var(--text1); }
 .editor-io-chip-dur  { color: var(--text3); }
 
+.editor-io-include-label {
+  display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
+}
+.editor-io-file-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.editor-io-file-label {
+  font-size: 11px; font-weight: 700; color: var(--text3); min-width: 44px; letter-spacing: .04em;
+}
+.editor-io-file-path {
+  flex: 1; font-size: 12px; color: var(--text1); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+
 /* ── Editor: metadata panel ───────────────────────────────────── */
 .editor-meta-panel {
   margin: 6px 0; border: 1px solid var(--border); border-radius: 8px;
@@ -2272,6 +2286,56 @@ body.platform-win32  #wake-instructions-win { display: block; }
 .editor-chapters-empty {
   padding: 12px; text-align: center; font-size: 13px; color: var(--text3);
 }
+
+/* ── Segment suggestions ──────────────────────────────────────── */
+.editor-segments-analyzing {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; font-size: 13px; color: var(--text3);
+  background: var(--surface1);
+}
+.editor-segments-spinner {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid rgba(34,197,94,.3); border-top-color: #22c55e;
+  animation: spin .7s linear infinite; flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.editor-segment-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px; border-bottom: 1px solid var(--border);
+  font-size: 13px; background: var(--surface1);
+}
+.editor-segment-row:last-child { border-bottom: none; }
+.editor-segment-badge {
+  font-size: 10px; color: #22c55e; flex-shrink: 0; opacity: 0.75;
+}
+.editor-segment-badge--sermon { font-size: 12px; opacity: 1; }
+.editor-segment-info { flex: 1; min-width: 0; }
+.editor-segment-time {
+  font-variant-numeric: tabular-nums; color: #22c55e;
+  font-size: 11px; font-weight: 600; margin-bottom: 2px;
+}
+.editor-segment-time:hover { text-decoration: underline; }
+.editor-segment-name {
+  width: 100%; background: none; border: none; color: var(--text1);
+  font-size: 13px; padding: 1px 4px; border-radius: 4px; outline: none;
+}
+.editor-segment-name:focus {
+  background: var(--surface2); box-shadow: 0 0 0 2px rgba(34,197,94,.25);
+}
+.editor-segment-approve {
+  background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.25);
+  border-radius: 5px; color: #22c55e; cursor: pointer;
+  font-size: 11px; font-weight: 600; padding: 3px 8px; white-space: nowrap;
+  transition: background .15s;
+}
+.editor-segment-approve:hover { background: rgba(34,197,94,.22); }
+.editor-segment-dismiss {
+  background: none; border: none; cursor: pointer; color: var(--text3);
+  font-size: 15px; line-height: 1; padding: 2px 4px; border-radius: 4px;
+  transition: color .15s, background .15s; flex-shrink: 0;
+}
+.editor-segment-dismiss:hover { color: var(--red); background: rgba(239,68,68,.08); }
 
 /* ── Publish (cloud) settings page ───────────────────────────── */
 .cloud-card { margin-bottom: 12px; }

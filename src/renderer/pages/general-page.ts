@@ -72,6 +72,8 @@ export function setupGeneralPage(): void {
 
   document.getElementById('btn-general-save')?.addEventListener('click', saveGeneralSettings)
   document.getElementById('btn-general-cancel')?.addEventListener('click', () => applyGeneralSettingsToUI())
+  document.getElementById('btn-varsler-save')?.addEventListener('click', saveGeneralSettings)
+  document.getElementById('btn-varsler-cancel')?.addEventListener('click', () => applyGeneralSettingsToUI())
 
   // Update events from main
   window.api.on('update-checking',          () => setUpdateStatus('pending', t('update.checking', 'Sjekker etter oppdateringer…')))

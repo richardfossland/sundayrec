@@ -468,8 +468,9 @@
   <section id="page-settings" class="page">
     <div class="inner-tabs" id="settings-tabs">
       <button class="inner-tab active" data-tab="settings-audio" data-i18n="nav.audio">Lyd</button>
-      <button class="inner-tab" data-tab="settings-files" data-i18n="nav.files">Filer</button>
-      <button class="inner-tab" data-tab="settings-general" data-i18n="nav.general">Generelt</button>
+      <button class="inner-tab" data-tab="settings-files">Opptak</button>
+      <button class="inner-tab" data-tab="settings-notifications">Varsler</button>
+      <button class="inner-tab" data-tab="settings-general">System</button>
     </div>
 
     <!-- ── Lydkilde ────────────────────────────────────────────── -->
@@ -698,29 +699,59 @@
           <label class="toggle"><input type="checkbox" id="opt-trim-silence" /><span class="toggle-track"></span></label>
         </div>
       </div>
-      <div class="card">
-        <div class="card-title" data-i18n="files.introOutro">Intro &amp; Outro</div>
-        <p class="card-desc" data-i18n="files.introOutroDesc">Velg faste lyd-filer som limes inn foran og bak hvert opptak ved eksport.</p>
-        <label class="form-label" data-i18n="files.introFile">INTRO-FIL</label>
-        <div class="folder-row" style="align-items:center">
-          <span class="intro-outro-path" id="intro-path-display" style="color:var(--text3)">Ingen fil valgt</span>
-          <button class="btn-secondary btn-sm" id="btn-pick-intro" data-i18n="files.browse">Velg fil</button>
-          <button class="btn-ghost btn-sm" id="btn-clear-intro" style="display:none">✕</button>
-        </div>
-        <label class="form-label mt" data-i18n="files.outroFile">OUTRO-FIL</label>
-        <div class="folder-row" style="align-items:center">
-          <span class="intro-outro-path" id="outro-path-display" style="color:var(--text3)">Ingen fil valgt</span>
-          <button class="btn-secondary btn-sm" id="btn-pick-outro" data-i18n="files.browse">Velg fil</button>
-          <button class="btn-ghost btn-sm" id="btn-clear-outro" style="display:none">✕</button>
-        </div>
-      </div>
       <div class="page-footer">
         <button class="btn-primary" id="btn-files-save" data-i18n="files.save">Lagre</button>
         <button class="btn-ghost" id="btn-files-cancel" data-i18n="files.cancel">Avbryt</button>
       </div>
     </div>
 
-    <!-- ── Generelt ────────────────────────────────────────────── -->
+    <!-- ── Varsler ───────────────────────────────────────────────── -->
+    <div id="settings-notifications" class="inner-page">
+      <div class="card">
+        <div class="card-title">Systemvarsler</div>
+        <div class="toggle-row">
+          <span data-i18n="general.notifyStart">Varsel på PC når opptak starter</span>
+          <label class="toggle"><input type="checkbox" id="opt-notify-start" checked /><span class="toggle-track"></span></label>
+        </div>
+        <div class="toggle-row">
+          <span data-i18n="general.notifyStop">Varsel på PC når opptak avsluttes</span>
+          <label class="toggle"><input type="checkbox" id="opt-notify-stop" checked /><span class="toggle-track"></span></label>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">E-postvarsler</div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="general.emailError">Send e-post ved feil</div>
+            <div class="toggle-desc" data-i18n="general.emailErrorDesc">Sender e-post til ansvarlig hvis opptaket mislykkes</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-email-error" /><span class="toggle-track"></span></label>
+        </div>
+        <div id="email-section" style="display:none">
+          <label class="form-label mt" data-i18n="general.sendTo">SEND TIL</label>
+          <input type="email" class="form-input" id="email-address" placeholder="navn@kirke.no" />
+          <label class="form-label mt">E-POSTTJENESTE (SMTP)</label>
+          <input type="text" class="form-input" id="email-smtp" placeholder="smtp.gmail.com" />
+          <div class="form-hint">Gmail: smtp.gmail.com · Outlook: smtp.office365.com</div>
+          <label class="form-label mt">BRUKERNAVN (E-POSTADRESSE)</label>
+          <input type="text" class="form-input" id="email-user" placeholder="din@epost.no" />
+          <label class="form-label mt">PASSORD / APP-PASSORD</label>
+          <div class="pass-row">
+            <input type="password" class="form-input" id="email-pass" />
+            <button type="button" class="btn-link" id="btn-clear-smtp-pass" style="display:none" data-i18n="general.clearPass">Fjern</button>
+          </div>
+          <div class="form-hint">Gmail krever et «App-passord» fra kontosikkerhetsinnstillingene.</div>
+          <input type="hidden" id="email-port" value="587" />
+          <button type="button" class="btn-secondary" id="btn-test-email" style="margin-top:12px" data-i18n="general.testEmail">Test e-post</button>
+        </div>
+      </div>
+      <div class="page-footer">
+        <button class="btn-primary" id="btn-varsler-save">Lagre</button>
+        <button class="btn-ghost" id="btn-varsler-cancel">Avbryt</button>
+      </div>
+    </div>
+
+    <!-- ── System ────────────────────────────────────────────── -->
     <div id="settings-general" class="inner-page">
       <div class="card">
         <div class="card-title" data-i18n="general.language">Språk</div>
@@ -743,42 +774,6 @@
         <input type="text" class="form-input" id="church-name" data-i18n-placeholder="general.churchPlaceholder" placeholder="Alta Frikirke" />
         <label class="form-label mt" data-i18n="general.responsible">ANSVARLIG PERSON</label>
         <input type="text" class="form-input" id="responsible-person" data-i18n-placeholder="general.responsiblePlaceholder" placeholder="Navn" />
-      </div>
-      <div class="card">
-        <div class="card-title" data-i18n="general.notifications">Varsler</div>
-        <div class="toggle-row">
-          <span data-i18n="general.notifyStart">Varsel på PC når opptak starter</span>
-          <label class="toggle"><input type="checkbox" id="opt-notify-start" checked /><span class="toggle-track"></span></label>
-        </div>
-        <div class="toggle-row">
-          <span data-i18n="general.notifyStop">Varsel på PC når opptak avsluttes</span>
-          <label class="toggle"><input type="checkbox" id="opt-notify-stop" checked /><span class="toggle-track"></span></label>
-        </div>
-        <div class="toggle-row">
-          <div>
-            <div class="toggle-title" data-i18n="general.emailError">Send e-post ved feil</div>
-            <div class="toggle-desc" data-i18n="general.emailErrorDesc">Sender e-post til ansvarlig hvis opptaket mislykkes</div>
-          </div>
-          <label class="toggle"><input type="checkbox" id="opt-email-error" /><span class="toggle-track"></span></label>
-        </div>
-        <div id="email-section" style="display:none">
-          <label class="form-label mt" data-i18n="general.sendTo">SEND TIL</label>
-          <input type="email" class="form-input" id="email-address" placeholder="navn@kirke.no" />
-          <label class="form-label mt">E-POSTTJENESTE (SMTP)</label>
-          <input type="text" class="form-input" id="email-smtp" placeholder="smtp.gmail.com" />
-          <div class="form-hint">Gmail: smtp.gmail.com · Outlook: smtp.office365.com</div>
-          <label class="form-label mt">BRUKERNAVN (E-POSTADRESSE)</label>
-          <input type="text" class="form-input" id="email-user" placeholder="din@epost.no" />
-          <label class="form-label mt">PASSORD / APP-PASSORD</label>
-          <div class="pass-row">
-            <input type="password" class="form-input" id="email-pass" />
-            <button type="button" class="btn-link" id="btn-clear-smtp-pass" style="display:none" data-i18n="general.clearPass">Fjern</button>
-          </div>
-          <div class="form-hint">Gmail krever et «App-passord» fra kontosikkerhetsinnstillingene.</div>
-          <!-- Port alltid 587 — skjult fra bruker -->
-          <input type="hidden" id="email-port" value="587" />
-          <button type="button" class="btn-secondary" id="btn-test-email" style="margin-top:12px" data-i18n="general.testEmail">Test e-post</button>
-        </div>
       </div>
       <div class="card">
         <div class="card-title">Hjelp &amp; opplæring</div>
@@ -947,21 +942,28 @@
         <span class="editor-kbd-hint"><span class="kbd">Esc</span> Stopp</span>
       </div>
 
-      <!-- Intro/Outro bar -->
-      <div class="editor-intro-outro-bar" id="editor-intro-outro-bar" style="display:none">
-        <label class="editor-io-toggle">
-          <input type="checkbox" id="editor-include-io" />
-          <span class="toggle-track"></span>
-          <span data-i18n="editor.includeIntroOutro">Inkluder intro/outro ved eksport og forhåndsvisning</span>
-        </label>
-        <div class="editor-io-files">
-          <div class="editor-io-chip" id="editor-io-intro-chip">
-            <span class="editor-io-chip-label" data-i18n="editor.intro">Intro:</span>
-            <span class="editor-io-chip-name" id="editor-intro-name"></span>
+      <!-- Intro/Outro panel -->
+      <div class="editor-chapters-panel">
+        <div class="editor-chapters-header">
+          <div class="editor-chapters-title">Intro &amp; Outro</div>
+          <label class="editor-io-include-label">
+            <input type="checkbox" id="editor-include-io" />
+            <span class="toggle-track" style="transform:scale(.8);transform-origin:right center"></span>
+            <span style="font-size:12px;font-weight:400;color:var(--text2)">Inkluder ved eksport</span>
+          </label>
+        </div>
+        <div style="background:var(--surface1);padding:10px 12px;display:flex;flex-direction:column;gap:8px">
+          <div class="editor-io-file-row">
+            <span class="editor-io-file-label">INTRO</span>
+            <span class="editor-io-file-path" id="editor-intro-display">Ingen fil valgt</span>
+            <button class="btn-secondary btn-sm" id="btn-editor-pick-intro">Velg fil</button>
+            <button class="btn-ghost btn-sm" id="btn-editor-clear-intro" style="display:none">✕</button>
           </div>
-          <div class="editor-io-chip" id="editor-io-outro-chip">
-            <span class="editor-io-chip-label" data-i18n="editor.outro">Outro:</span>
-            <span class="editor-io-chip-name" id="editor-outro-name"></span>
+          <div class="editor-io-file-row">
+            <span class="editor-io-file-label">OUTRO</span>
+            <span class="editor-io-file-path" id="editor-outro-display">Ingen fil valgt</span>
+            <button class="btn-secondary btn-sm" id="btn-editor-pick-outro">Velg fil</button>
+            <button class="btn-ghost btn-sm" id="btn-editor-clear-outro" style="display:none">✕</button>
           </div>
         </div>
       </div>
@@ -1187,6 +1189,21 @@
           </div>
           <button class="btn-ghost btn-sm" id="btn-meta-save" data-i18n="editor.metaSave">Lagre metadata</button>
         </div>
+      </div>
+
+      <!-- Segment analysis panel -->
+      <div class="editor-chapters-panel" id="editor-segments-panel">
+        <div class="editor-chapters-header">
+          <div class="editor-chapters-title">
+            <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M3 6a1 1 0 000 2h14a1 1 0 100-2H3zm0 5a1 1 0 000 2h14a1 1 0 100-2H3z" clip-rule="evenodd"/></svg>
+            <span>Analyser opptak</span>
+          </div>
+          <button class="btn-ghost btn-sm" id="btn-detect-segments">Finn segmenter</button>
+        </div>
+        <div id="editor-segments-analyzing" style="display:none" class="editor-segments-analyzing">
+          <span class="editor-segments-spinner"></span> Analyserer…
+        </div>
+        <div id="editor-segments-list"></div>
       </div>
 
       <!-- Chapter markers panel -->

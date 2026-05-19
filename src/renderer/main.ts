@@ -59,6 +59,7 @@ declare global {
       editorPickOutputFolder: ()                 => Promise<string | null>
       editorReadMeta:         (filePath: string) => Promise<unknown>
       editorSaveMeta:         (filePath: string, metadata: unknown) => Promise<boolean>
+      editorDetectSegments:   (filePath: string) => Promise<{ start: number; end: number; duration: number; label: string; type: string }[]>
       pickAudioFile:          ()                 => Promise<string | null>
     }
     appVersion?: string

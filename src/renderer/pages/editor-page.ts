@@ -5,10 +5,11 @@ import {
   getProcessingState, setNormEnabled, getGainReduction
 } from './editor-processing'
 import { destroyEQCanvas } from './editor-eq-canvas'
-import { settings } from '../state'
+import { settings, patchSettings } from '../state'
 import type { ChapterMarker, RecordingMetadata } from '../../types'
 
 interface Cut { start: number; end: number }
+interface Suggestion { start: number; end: number; duration: number; label: string; type: string }
 
 // ── State ─────────────────────────────────────────────────────────────────
 let filePath  = ''
@@ -16,6 +17,7 @@ let duration  = 0
 let peaks: Float32Array | null = null
 let cuts: Cut[] = []
 let cutHistory: Cut[][] = []   // undo stack
+let suggestions: Suggestion[] = []
 
 // Intro/Outro
 let introBuffer: AudioBuffer | null = null
@@ -178,6 +180,31 @@ export function setupEditorPage(): void {
     })
   }
 
+  $('btn-editor-pick-intro')?.addEventListener('click', async () => {
+    const fp = await window.api.pickAudioFile()
+    if (!fp) return
+    patchSettings({ editorIntroPath: fp })
+    await window.api.saveSettings(settings)
+    await reloadIntroOutro()
+  })
+  $('btn-editor-clear-intro')?.addEventListener('click', async () => {
+    patchSettings({ editorIntroPath: undefined })
+    await window.api.saveSettings(settings)
+    await reloadIntroOutro()
+  })
+  $('btn-editor-pick-outro')?.addEventListener('click', async () => {
+    const fp = await window.api.pickAudioFile()
+    if (!fp) return
+    patchSettings({ editorOutroPath: fp })
+    await window.api.saveSettings(settings)
+    await reloadIntroOutro()
+  })
+  $('btn-editor-clear-outro')?.addEventListener('click', async () => {
+    patchSettings({ editorOutroPath: undefined })
+    await window.api.saveSettings(settings)
+    await reloadIntroOutro()
+  })
+
   // Metadata panel toggle
   $('btn-meta-toggle')?.addEventListener('click', () => {
     const body = $('editor-meta-body')
@@ -198,6 +225,9 @@ export function setupEditorPage(): void {
       metaDirty = true
     })
   }
+
+  // Segment detection
+  $('btn-detect-segments')?.addEventListener('click', () => runDetection())
 
   // Add chapter at current playhead
   $('btn-add-chapter')?.addEventListener('click', () => {
@@ -257,6 +287,7 @@ export function setupEditorPage(): void {
   }
 
   showState('empty')
+  updateEditorIntroOutroDisplay()
 }
 
 export function openEditorWithFile(fp: string): void {
@@ -289,12 +320,14 @@ async function loadFile(fp: string): Promise<void> {
 
   cuts = []
   cutHistory = []
+  suggestions = []
   filePath = fp
   peaks = null
   audioBuffer = null
   playStartSec = 0
   meta = { title: '', speaker: '', description: '', chapters: [] }
   metaDirty = false
+  renderSuggestions()
 
   showState('loading')
 
@@ -349,17 +382,17 @@ async function loadFile(fp: string): Promise<void> {
   showState('workspace')
 }
 
+async function reloadIntroOutro(): Promise<void> {
+  await loadIntroOutroBuffers(loadSeq)
+}
+
 async function loadIntroOutroBuffers(seq: number): Promise<void> {
   const introPath = settings.editorIntroPath
   const outroPath = settings.editorOutroPath
   introBuffer = null; introDuration = 0
   outroBuffer = null; outroDuration = 0
 
-  // Update UI
-  const introEl = $('editor-intro-name')
-  const outroEl = $('editor-outro-name')
-  const ioBar   = $('editor-intro-outro-bar')
-  if (ioBar) ioBar.style.display = (introPath || outroPath) ? '' : 'none'
+  updateEditorIntroOutroDisplay()
 
   async function decodeAudio(path: string): Promise<AudioBuffer | null> {
     try {
@@ -376,18 +409,33 @@ async function loadIntroOutroBuffers(seq: number): Promise<void> {
   if (introPath) {
     const buf = await decodeAudio(introPath)
     if (seq === loadSeq && buf) { introBuffer = buf; introDuration = buf.duration }
-    if (introEl) introEl.textContent = introPath.split(/[/\\]/).pop() ?? ''
-  } else {
-    if (introEl) introEl.textContent = 'Ingen'
   }
   if (outroPath) {
     const buf = await decodeAudio(outroPath)
     if (seq === loadSeq && buf) { outroBuffer = buf; outroDuration = buf.duration }
-    if (outroEl) outroEl.textContent = outroPath.split(/[/\\]/).pop() ?? ''
-  } else {
-    if (outroEl) outroEl.textContent = 'Ingen'
   }
   if (seq === loadSeq) drawWaveform()
+}
+
+function updateEditorIntroOutroDisplay(): void {
+  const introEl  = $('editor-intro-display')
+  const outroEl  = $('editor-outro-display')
+  const clrIntro = $('btn-editor-clear-intro') as HTMLElement | null
+  const clrOutro = $('btn-editor-clear-outro') as HTMLElement | null
+  const introPath = settings.editorIntroPath
+  const outroPath = settings.editorOutroPath
+  if (introEl) {
+    const name = introPath?.split(/[/\\]/).pop() ?? ''
+    introEl.textContent = name || 'Ingen fil valgt'
+    introEl.style.color = name ? '' : 'var(--text3)'
+    if (clrIntro) clrIntro.style.display = name ? '' : 'none'
+  }
+  if (outroEl) {
+    const name = outroPath?.split(/[/\\]/).pop() ?? ''
+    outroEl.textContent = name || 'Ingen fil valgt'
+    outroEl.style.color = name ? '' : 'var(--text3)'
+    if (clrOutro) clrOutro.style.display = name ? '' : 'none'
+  }
 }
 
 async function loadMetadataSidecar(fp: string, fname: string): Promise<void> {
@@ -474,6 +522,107 @@ function renderChapterList(): void {
   }
 }
 
+// ── Segment detection ─────────────────────────────────────────────────────
+
+async function runDetection(): Promise<void> {
+  if (!filePath) return
+  const btn       = $('btn-detect-segments') as HTMLButtonElement | null
+  const analyzing = $('editor-segments-analyzing')
+  if (btn)       { btn.disabled = true; btn.textContent = 'Analyserer…' }
+  if (analyzing)   analyzing.style.display = ''
+
+  suggestions = []
+  renderSuggestions()
+
+  const raw = await window.api.editorDetectSegments(filePath)
+  suggestions = raw as Suggestion[]
+
+  if (btn)       { btn.disabled = false; btn.textContent = 'Finn segmenter' }
+  if (analyzing)   analyzing.style.display = 'none'
+  renderSuggestions()
+  drawWaveform()
+}
+
+function renderSuggestions(): void {
+  const list = $('editor-segments-list')
+  if (!list) return
+  list.innerHTML = ''
+
+  if (suggestions.length === 0) {
+    list.innerHTML = '<div class="editor-chapters-empty">Ingen segmenter funnet — trykk «Finn segmenter» for å analysere opptaket.</div>'
+    return
+  }
+
+  for (let i = 0; i < suggestions.length; i++) {
+    const seg = suggestions[i]
+    const row = document.createElement('div')
+    row.className = 'editor-segment-row'
+
+    const isSermon = seg.type === 'sermon'
+
+    const badge = document.createElement('span')
+    badge.className = 'editor-segment-badge' + (isSermon ? ' editor-segment-badge--sermon' : '')
+    badge.textContent = isSermon ? '★' : '◆'
+
+    const info = document.createElement('div')
+    info.className = 'editor-segment-info'
+
+    const timeEl = document.createElement('div')
+    timeEl.className = 'editor-segment-time'
+    timeEl.textContent = `${formatTime(seg.start)} – ${formatTime(seg.end)}`
+    timeEl.title = 'Klikk for å gå til segmentet'
+    timeEl.style.cursor = 'pointer'
+    timeEl.addEventListener('click', () => {
+      playStartSec = seg.start
+      updateTimecode(seg.start)
+      const half = Math.min((vpEnd - vpStart) / 2, seg.duration / 2)
+      vpStart = Math.max(0, seg.start - half * 0.2)
+      vpEnd   = Math.min(duration, vpStart + (seg.end - seg.start) * 1.15)
+      updateMinimapViewport()
+      drawWaveform()
+    })
+
+    const nameInput = document.createElement('input')
+    nameInput.className = 'editor-segment-name'
+    nameInput.value = seg.label
+    nameInput.addEventListener('input', () => { suggestions[i].label = nameInput.value })
+
+    info.appendChild(timeEl)
+    info.appendChild(nameInput)
+
+    const approveBtn = document.createElement('button')
+    approveBtn.className = 'editor-segment-approve'
+    approveBtn.title = 'Legg til som kapittelmarkør'
+    approveBtn.textContent = '✓ Godkjenn'
+    approveBtn.addEventListener('click', () => {
+      const label = nameInput.value.trim() || seg.label
+      meta.chapters.push({ time: seg.start, title: label })
+      meta.chapters.sort((a, b) => a.time - b.time)
+      metaDirty = true
+      suggestions.splice(i, 1)
+      renderSuggestions()
+      renderChapterList()
+      drawWaveform()
+    })
+
+    const dismissBtn = document.createElement('button')
+    dismissBtn.className = 'editor-segment-dismiss'
+    dismissBtn.title = 'Avvis forslag'
+    dismissBtn.textContent = '✕'
+    dismissBtn.addEventListener('click', () => {
+      suggestions.splice(i, 1)
+      renderSuggestions()
+      drawWaveform()
+    })
+
+    row.appendChild(badge)
+    row.appendChild(info)
+    row.appendChild(approveBtn)
+    row.appendChild(dismissBtn)
+    list.appendChild(row)
+  }
+}
+
 function computePeaks(buf: AudioBuffer): Float32Array {
   const RATE = 100
   const total = Math.ceil(buf.duration * RATE)
@@ -540,6 +689,36 @@ function drawWaveform(): void {
   const curSec = isPlaying
     ? playStartSec + (audioCtx!.currentTime - playStartCtxTime)
     : playStartSec
+
+  // ── Suggested segment backgrounds ─────────────────────────────────
+  for (const seg of suggestions) {
+    const x1 = secToX(seg.start, W), x2 = secToX(seg.end, W)
+    if (x2 < 0 || x1 > W) continue
+    const clampX1 = Math.max(0, x1), clampX2 = Math.min(x2, W)
+    ctx.fillStyle = seg.type === 'sermon' ? 'rgba(34,197,94,0.10)' : 'rgba(34,197,94,0.06)'
+    ctx.fillRect(clampX1, RULER, clampX2 - clampX1, H - RULER)
+    // Boundary lines
+    for (const bx of [x1, x2]) {
+      if (bx < -2 || bx > W + 2) continue
+      ctx.strokeStyle = '#22c55e'
+      ctx.lineWidth   = 1.5
+      ctx.globalAlpha = 0.55
+      ctx.setLineDash([5, 4])
+      ctx.beginPath(); ctx.moveTo(bx, RULER); ctx.lineTo(bx, H); ctx.stroke()
+      ctx.setLineDash([])
+      ctx.globalAlpha = 1
+    }
+    // Label inside region
+    if (clampX2 - clampX1 > 40) {
+      ctx.font = '600 9px system-ui, -apple-system, sans-serif'
+      ctx.textBaseline = 'top'
+      ctx.fillStyle = '#22c55e'
+      ctx.globalAlpha = 0.85
+      const lbl = seg.label.length > 18 ? seg.label.slice(0, 17) + '…' : seg.label
+      ctx.fillText(lbl, Math.max(clampX1 + 4, 2), RULER + 24)
+      ctx.globalAlpha = 1
+    }
+  }
 
   // ── Cut region backgrounds ─────────────────────────────────────────
   for (const c of cuts) {

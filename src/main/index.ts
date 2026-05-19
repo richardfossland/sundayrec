@@ -558,6 +558,12 @@ function setupIPC(): void {
     } catch { return false }
   })
 
+  ipcMain.handle('editor-detect-segments', async (_, filePath: string) => {
+    if (typeof filePath !== 'string' || !isAllowedAudioPath(filePath)) return []
+    const { detectSegments } = await import('./editor')
+    return detectSegments(filePath)
+  })
+
 }
 
 function notify(title: string, body: string): void {

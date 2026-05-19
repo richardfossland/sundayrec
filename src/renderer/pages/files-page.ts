@@ -12,28 +12,6 @@ export function setupFilesPage(): void {
     }
   })
 
-  document.getElementById('btn-pick-intro')?.addEventListener('click', async () => {
-    const fp = await window.api.pickAudioFile()
-    if (fp) {
-      patchSettings({ editorIntroPath: fp })
-      updateIntroOutroDisplay()
-    }
-  })
-  document.getElementById('btn-clear-intro')?.addEventListener('click', () => {
-    patchSettings({ editorIntroPath: undefined })
-    updateIntroOutroDisplay()
-  })
-  document.getElementById('btn-pick-outro')?.addEventListener('click', async () => {
-    const fp = await window.api.pickAudioFile()
-    if (fp) {
-      patchSettings({ editorOutroPath: fp })
-      updateIntroOutroDisplay()
-    }
-  })
-  document.getElementById('btn-clear-outro')?.addEventListener('click', () => {
-    patchSettings({ editorOutroPath: undefined })
-    updateIntroOutroDisplay()
-  })
   document.getElementById('pattern-select')?.addEventListener('change', updateFilenamePreview)
   document.querySelectorAll('input[name="format"]').forEach(r =>
     r.addEventListener('change', () => { toggleMp3Quality(); updateFilenamePreview() })
@@ -65,26 +43,6 @@ export function applyFilesSettingsToUI(): void {
   if (trimEl) trimEl.checked = !!settings.trimSilence
   toggleMp3Quality()
   updateFilenamePreview()
-  updateIntroOutroDisplay()
-}
-
-function updateIntroOutroDisplay(): void {
-  const introEl = document.getElementById('intro-path-display')
-  const outroEl = document.getElementById('outro-path-display')
-  const clrIntro = document.getElementById('btn-clear-intro')
-  const clrOutro = document.getElementById('btn-clear-outro')
-  if (introEl) {
-    const name = settings.editorIntroPath?.split(/[/\\]/).pop() ?? ''
-    introEl.textContent = name || 'Ingen fil valgt'
-    introEl.style.color = name ? '' : 'var(--text3)'
-    if (clrIntro) clrIntro.style.display = name ? '' : 'none'
-  }
-  if (outroEl) {
-    const name = settings.editorOutroPath?.split(/[/\\]/).pop() ?? ''
-    outroEl.textContent = name || 'Ingen fil valgt'
-    outroEl.style.color = name ? '' : 'var(--text3)'
-    if (clrOutro) clrOutro.style.display = name ? '' : 'none'
-  }
 }
 
 export function toggleMp3Quality(): void {

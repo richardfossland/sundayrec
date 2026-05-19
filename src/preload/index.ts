@@ -58,6 +58,7 @@ contextBridge.exposeInMainWorld('api', {
   editorPickOutputFolder: ()                 => ipcRenderer.invoke('editor-pick-output-folder'),
   editorReadMeta:         (filePath: string) => ipcRenderer.invoke('editor-read-meta', filePath),
   editorSaveMeta:         (filePath: string, metadata: unknown) => ipcRenderer.invoke('editor-save-meta', filePath, metadata),
+  editorDetectSegments:   (filePath: string) => ipcRenderer.invoke('editor-detect-segments', filePath),
 
   pickAudioFile: () => ipcRenderer.invoke('pick-audio-file'),
 
