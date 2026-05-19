@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Notification, dialog, shell, systemPreferences } from 'electron'
+import { app, BrowserWindow, ipcMain, Notification, dialog, shell, systemPreferences, powerMonitor } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import * as store from './store'
@@ -25,6 +25,16 @@ app.setName('SundayRec')
 
 if (!app.isPackaged && process.platform === 'darwin' && app.dock) {
   app.dock.setIcon(path.join(__dirname, '../../assets/icon.png'))
+}
+
+const WAKE_NOTIFY_LABELS: Record<string, [string, string]> = {
+  no: ['SundayRec — vekket for opptak', 'Opptak starter kl. {time}'],
+  en: ['SundayRec — woke for recording', 'Recording starts at {time}'],
+  de: ['SundayRec — geweckt für Aufnahme', 'Aufnahme beginnt um {time}'],
+  sv: ['SundayRec — väckt för inspelning', 'Inspelning startar kl. {time}'],
+  da: ['SundayRec — vækket til optagelse', 'Optagelse starter kl. {time}'],
+  pl: ['SundayRec — wybudzono do nagrania', 'Nagranie zaczyna się o {time}'],
+  fr: ['SundayRec — réveillé pour enregistrement', "L'enregistrement commence à {time}"],
 }
 
 const IMMINENT_LABELS: Record<string, [string, string, string, string]> = {
@@ -162,7 +172,36 @@ app.whenReady().then(async () => {
   setupIPC()
   cleanupOldRecordings()
   store.pruneHistory()
-  wake.reschedule(scheduler.getUpcomingDates(), mainWindow).catch(err => console.error('[wake] reschedule error:', err))
+  const initialUpcoming = scheduler.getUpcomingDates()
+  wake.reschedule(initialUpcoming, mainWindow).catch(err => console.error('[wake] reschedule error:', err))
+  tray.setNextRecording(initialUpcoming[0] ?? null)
+
+  // On wake from sleep: check for missed recordings, refresh OS wake list, notify user
+  powerMonitor.on('resume', () => {
+    scheduler.checkMissedRecordings()
+    const upcoming = scheduler.getUpcomingDates()
+    wake.reschedule(upcoming, mainWindow).catch(err => console.error('[wake] resume reschedule error:', err))
+    tray.setNextRecording(upcoming[0] ?? null)
+
+    // Show notification if a recording is imminent (within 15 min)
+    const next = upcoming[0]
+    if (next && Notification.isSupported()) {
+      const minsUntil = (next.getTime() - Date.now()) / 60000
+      if (minsUntil >= 0 && minsUntil <= 15) {
+        const lang = store.get('language') ?? 'no'
+        const lbl  = WAKE_NOTIFY_LABELS[lang] ?? WAKE_NOTIFY_LABELS.no
+        const timeStr = next.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+        new Notification({ title: lbl[0], body: lbl[1].replace('{time}', timeStr) }).show()
+      }
+    }
+  })
+
+  // Refresh OS wake schedules every 6 hours so the list stays current
+  setInterval(() => {
+    const upcoming = scheduler.getUpcomingDates()
+    wake.reschedule(upcoming, mainWindow).catch(err => console.error('[wake] periodic reschedule error:', err))
+    tray.setNextRecording(upcoming[0] ?? null)
+  }, 6 * 60 * 60 * 1000)
 
   if (store.get('launchAtLogin')) {
     if (process.platform === 'win32') {
@@ -265,7 +304,9 @@ function setupIPC(): void {
     store.setAll(settings)
     scheduler.reschedule()
     app.setLoginItemSettings({ openAtLogin: !!settings.launchAtLogin, openAsHidden: true })
-    wake.reschedule(scheduler.getUpcomingDates(), mainWindow).catch(err => console.error('[wake] reschedule error:', err))
+    const upcomingAfterSave = scheduler.getUpcomingDates()
+    wake.reschedule(upcomingAfterSave, mainWindow).catch(err => console.error('[wake] reschedule error:', err))
+    tray.setNextRecording(upcomingAfterSave[0] ?? null)
     return true
   })
 

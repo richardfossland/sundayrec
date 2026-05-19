@@ -8,6 +8,7 @@ let win: BrowserWindow | null = null
 let isRecording = false
 let hasError    = false
 let themeDebounce: ReturnType<typeof setTimeout> | null = null
+let nextRecording: Date | null = null
 
 const TRAY_LABELS: Record<string, [string, string, string, string, string, string, string]> = {
   //                  recording          error                    ready       open          stop          start         quit
@@ -30,6 +31,16 @@ const TOOLTIP: Record<string, string> = {
   fr: "SundayRec — s'exécute en arrière-plan"
 }
 
+const NEXT_LABEL: Record<string, string> = {
+  no: 'Neste opptak',
+  en: 'Next recording',
+  de: 'Nächste Aufnahme',
+  sv: 'Nästa inspelning',
+  da: 'Næste optagelse',
+  pl: 'Następne nagranie',
+  fr: 'Prochain enregistrement',
+}
+
 export function create(mainWindow: BrowserWindow): void {
   win = mainWindow
 
@@ -39,8 +50,7 @@ export function create(mainWindow: BrowserWindow): void {
   if (process.platform === 'darwin') icon = icon.resize({ width: 18, height: 18 })
   tray = new Tray(icon)
 
-  const lang = store.get('language') ?? 'no'
-  tray.setToolTip(TOOLTIP[lang] ?? TOOLTIP.no)
+  updateTooltip()
 
   tray.on('click', () => {
     if (!win) return
@@ -59,6 +69,19 @@ export function create(mainWindow: BrowserWindow): void {
   updateMenu()
 }
 
+function updateTooltip(): void {
+  if (!tray) return
+  const lang    = store.get('language') ?? 'no'
+  let tooltip   = TOOLTIP[lang] ?? TOOLTIP.no
+  if (nextRecording) {
+    const dateStr = nextRecording.toLocaleString(undefined, {
+      weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    })
+    tooltip += `\n${NEXT_LABEL[lang] ?? NEXT_LABEL.en}: ${dateStr}`
+  }
+  tray.setToolTip(tooltip)
+}
+
 function updateMenu(): void {
   if (!tray) return
 
@@ -68,13 +91,19 @@ function updateMenu(): void {
 
   const statusLabel = isRecording ? recLbl : hasError ? errLbl : readyLbl
 
-  const menu = Menu.buildFromTemplate([
+  const nextLabel = nextRecording
+    ? nextRecording.toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' })
+    : null
+
+  const menuItems: Electron.MenuItemConstructorOptions[] = [
     { label: statusLabel, enabled: false },
+  ]
+  if (nextLabel && !isRecording) {
+    menuItems.push({ label: `${NEXT_LABEL[lang] ?? NEXT_LABEL.en}: ${nextLabel}`, enabled: false })
+  }
+  menuItems.push(
     { type: 'separator' },
-    {
-      label: openLbl,
-      click: () => { win?.show(); win?.focus() }
-    },
+    { label: openLbl, click: () => { win?.show(); win?.focus() } },
     { type: 'separator' },
     {
       label: isRecording ? stopLbl : startLbl,
@@ -90,7 +119,9 @@ function updateMenu(): void {
     },
     { type: 'separator' },
     { label: quitLbl, click: () => app.quit() }
-  ])
+  )
+
+  const menu = Menu.buildFromTemplate(menuItems)
 
   tray.setContextMenu(menu)
 
@@ -122,5 +153,11 @@ export function setRecording(active: boolean): void {
 
 export function setError(active: boolean): void {
   hasError = active
+  updateMenu()
+}
+
+export function setNextRecording(date: Date | null): void {
+  nextRecording = date
+  updateTooltip()
   updateMenu()
 }

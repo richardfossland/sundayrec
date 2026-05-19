@@ -232,6 +232,7 @@ body.platform-win32 ::-webkit-scrollbar-thumb { border-radius: 4px; }
 .next-label { font-size: 10px; font-weight: 700; letter-spacing: .6px; color: var(--text3); margin-bottom: 3px; }
 .next-date { font-size: 14px; font-weight: 700; }
 .next-countdown { font-size: 12px; color: var(--accent2); margin-top: 2px; }
+.next-wake-badge { font-size: 10px; color: var(--text3); margin-top: 5px; opacity: 0.85; }
 .btn-fix {
   padding: 8px 14px;
   background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3);
@@ -1164,19 +1165,124 @@ select.form-input {
 .update-progress-wrap { height: 4px; background: var(--surface2); border-radius: 2px; overflow: hidden; margin-bottom: 8px; }
 .update-progress-bar  { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 2px; width: 0%; transition: width .3s; }
 
-/* ── Wake status ────────────────────────────────────────────────── */
-.wake-status-row { display: flex; align-items: center; gap: 8px; padding: 6px 0 6px 2px; font-size: 12px; color: var(--text2); }
+/* ── Wake main card ─────────────────────────────────────────────── */
+.wake-main-card {
+  border-color: rgba(240,187,71,.25);
+  background: linear-gradient(160deg, rgba(240,187,71,.04) 0%, transparent 60%);
+}
+.wake-main-header {
+  display: flex; align-items: flex-start; gap: 14px;
+}
+.wake-main-icon {
+  width: 38px; height: 38px; flex-shrink: 0;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--rsm);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent);
+}
+.wake-main-text { flex: 1; min-width: 0; }
+.wake-main-title { font-size: 15px; font-weight: 700; margin-bottom: 3px; letter-spacing: -.2px; }
+.wake-main-desc  { font-size: 12px; color: var(--text2); line-height: 1.5; }
+
+/* ── Wake flow diagram ──────────────────────────────────────────── */
+.wake-flow {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--rsm); padding: 14px 12px; margin: 18px 0 14px;
+}
+.wake-flow-step {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  flex: 1; text-align: center;
+}
+.wake-flow-icon { font-size: 20px; line-height: 1; opacity: .55; }
+.wake-flow-step-wake .wake-flow-icon { opacity: 1; }
+.wake-flow-step-rec  .wake-flow-icon { opacity: 1; }
+.wake-flow-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .5px; color: var(--text3); line-height: 1.2;
+}
+.wake-flow-step-wake .wake-flow-label { color: var(--accent2); }
+.wake-flow-step-rec  .wake-flow-label { color: #f87171; }
+.wake-flow-arr { font-size: 16px; color: var(--text4); flex-shrink: 0; }
+
+/* ── Wake section sub-headers ───────────────────────────────────── */
+.wake-section-hd {
+  font-size: 10px; font-weight: 700; letter-spacing: .7px;
+  color: var(--text3); margin: 14px 0 5px; text-transform: uppercase;
+}
+
+/* ── Wake status row ─────────────────────────────────────────────── */
+.wake-status-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; color: var(--text2); }
 .wake-status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text3); flex-shrink: 0; }
-.wake-status-dot.ok    { background: #4ade80; }
-.wake-status-dot.error { background: #f87171; }
+.wake-status-dot.ok    { background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,.5); }
+.wake-status-dot.error { background: #f87171; box-shadow: 0 0 6px rgba(248,113,113,.4); }
 .wake-status-dot.off   { background: var(--text3); }
 .wake-status-text { flex: 1; }
 .btn-sm { padding: 3px 10px; font-size: 11px; }
 
 /* ── Sleep config panel ─────────────────────────────────────────── */
-.sleep-config-panel { margin-top: 4px; padding: 4px 2px 2px; }
+.sleep-config-panel { margin-top: 2px; }
 .sleep-config-loading { font-size: 12px; color: var(--text3); padding: 4px 0; }
-.sleep-config-detail { font-size: 11px; color: var(--text3); line-height: 1.5; padding: 4px 0 0; }
+.sleep-config-detail  { font-size: 11px; color: var(--text3); line-height: 1.5; padding: 4px 0 0; }
+
+/* ── Hibernate collapsible ──────────────────────────────────────── */
+.wake-hibernate-info {
+  margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px;
+}
+.wake-hibernate-header {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer; user-select: none;
+  font-size: 12px; color: var(--text2); padding: 2px 0;
+  transition: color .15s;
+}
+.wake-hibernate-header:hover { color: var(--text); }
+.wake-hibernate-icon { font-size: 14px; flex-shrink: 0; }
+.wake-hibernate-chevron {
+  margin-left: auto; font-size: 16px; color: var(--text3);
+  transition: transform .2s; flex-shrink: 0;
+}
+.wake-hibernate-body { margin-top: 14px; }
+
+/* ── Sleep mode grid ────────────────────────────────────────────── */
+.wake-sleep-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  margin-bottom: 16px;
+}
+.wake-sleep-mode {
+  border-radius: var(--rsm); padding: 10px 8px 8px;
+  background: var(--surface2); border: 1px solid var(--border);
+  text-align: center;
+}
+.wake-sleep-ok   { border-color: rgba(34,197,94,.25); }
+.wake-sleep-warn { border-color: rgba(245,158,11,.25); }
+.wake-sleep-no   { border-color: rgba(239,68,68,.15); opacity: .65; }
+.wake-sleep-mode-icon  { font-size: 18px; margin-bottom: 5px; }
+.wake-sleep-mode-title { font-size: 11px; font-weight: 700; margin-bottom: 3px; }
+.wake-sleep-mode-desc  { font-size: 10px; color: var(--text2); line-height: 1.4; margin-bottom: 6px; }
+.wake-sleep-badge      { font-size: 10px; font-weight: 700; letter-spacing: .2px; }
+.wake-sleep-badge-ok   { color: var(--green); }
+.wake-sleep-badge-warn { color: var(--orange); }
+.wake-sleep-badge-no   { color: var(--red); }
+
+/* ── Platform-specific instructions ────────────────────────────── */
+.wake-platform-section { margin-top: 14px; display: none; }
+body.platform-darwin #wake-instructions-mac { display: block; }
+body.platform-win32  #wake-instructions-win { display: block; }
+.wake-platform-title { font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+.wake-steps { font-size: 12px; color: var(--text2); padding-left: 18px; line-height: 1.9; }
+.wake-steps strong { color: var(--text); }
+.wake-code-block {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 11px;
+  background: var(--surface3); border: 1px solid var(--border2);
+  border-radius: var(--rxs); padding: 8px 12px;
+  color: var(--accent2); margin: 8px 0; word-break: break-all;
+  user-select: all;
+}
+.wake-step-note { font-size: 11px; color: var(--text3); line-height: 1.5; margin-top: 6px; }
+
+/* ── Slot duration display ──────────────────────────────────────── */
+.slot-duration-display { font-size: 12px; margin: 6px 0 2px; padding: 2px 0; }
 
 /* ── Compatibility table ───────────────────────────────────────── */
 .compat-card { padding-bottom: 0; }

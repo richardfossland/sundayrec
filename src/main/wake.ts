@@ -1,5 +1,5 @@
 import { powerSaveBlocker } from 'electron'
-import { execFileSync, execFile } from 'child_process'
+import { execFile } from 'child_process'
 import { promisify } from 'util'
 import type { BrowserWindow } from 'electron'
 
@@ -39,9 +39,9 @@ function updateBlocker(upcomingDates: Date[]): void {
   }
 }
 
-function scheduleMac(wakePoints: Date[], allowAdmin: boolean): WakeResult {
+async function scheduleMac(wakePoints: Date[], allowAdmin: boolean): Promise<WakeResult> {
   try {
-    execFileSync('pmset', ['schedule', 'cancelall', 'SundayRec'], { stdio: 'pipe', timeout: 3000 })
+    await execFileAsync('pmset', ['schedule', 'cancelall', 'SundayRec'], { timeout: 3000 })
   } catch {}
 
   if (!wakePoints.length) return { ok: true, count: 0, nextWake: null }
@@ -49,7 +49,7 @@ function scheduleMac(wakePoints: Date[], allowAdmin: boolean): WakeResult {
   let scheduled = 0
   for (const d of wakePoints) {
     try {
-      execFileSync('pmset', ['schedule', 'wake', formatPmsetDate(d), 'SundayRec'], { stdio: 'pipe', timeout: 5000 })
+      await execFileAsync('pmset', ['schedule', 'wake', formatPmsetDate(d), 'SundayRec'], { timeout: 5000 })
       scheduled++
     } catch {}
   }
@@ -61,8 +61,8 @@ function scheduleMac(wakePoints: Date[], allowAdmin: boolean): WakeResult {
     const cmds = wakePoints
       .map(d => `pmset schedule wake \\"${formatPmsetDate(d)}\\" SundayRec`)
       .join(' && ')
-    execFileSync('osascript', ['-e', `do shell script "${cmds}" with administrator privileges`], {
-      stdio: 'pipe', timeout: 30000
+    await execFileAsync('osascript', ['-e', `do shell script "${cmds}" with administrator privileges`], {
+      timeout: 30000
     })
     return { ok: true, count: wakePoints.length, nextWake: wakePoints[0].toISOString() }
   } catch (e) {
@@ -128,7 +128,7 @@ async function scheduleOsWakes(upcomingDates: Date[], allowAdmin: boolean): Prom
     .map(d => new Date(d.getTime() - LEAD_MINUTES * 60 * 1000))
     .filter(d => d > now)
 
-  if (process.platform === 'darwin') return scheduleMac(wakePoints, allowAdmin)
+  if (process.platform === 'darwin') return await scheduleMac(wakePoints, allowAdmin)
   if (process.platform === 'win32')  return scheduleWindows(wakePoints)
   return { ok: false, reason: 'unsupported' }
 }
@@ -199,8 +199,8 @@ export async function fixMacSleep(): Promise<{ ok: boolean; message?: string }> 
   // Disable autopoweroff and increase standby delay so Mac stays in sleep (not powered off)
   const cmd = 'pmset -a autopoweroff 0; pmset -a standbydelay 86400'
   try {
-    execFileSync('osascript', ['-e', `do shell script "${cmd}" with administrator privileges`], {
-      stdio: 'pipe', timeout: 30000
+    await execFileAsync('osascript', ['-e', `do shell script "${cmd}" with administrator privileges`], {
+      timeout: 30000
     })
     return { ok: true }
   } catch (e) {

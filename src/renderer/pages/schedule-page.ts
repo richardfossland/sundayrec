@@ -18,25 +18,20 @@ export function setupSchedulePage(): void {
     if (editor) editor.style.display = 'none'
   })
   document.getElementById('btn-schedule-save')?.addEventListener('click', saveScheduleSettings)
-  document.getElementById('btn-adv-toggle')?.addEventListener('click', () => {
-    const section = document.getElementById('adv-section')
-    const chevron = document.getElementById('adv-chevron')
-    const btn     = document.getElementById('btn-adv-toggle')
-    const open    = section?.style.display !== 'none'
-    if (section) section.style.display = open ? 'none' : 'block'
-    btn?.setAttribute('aria-expanded', String(!open))
-    if (chevron) chevron.style.transform = open ? '' : 'rotate(180deg)'
-  })
   document.getElementById('opt-silence')?.addEventListener('change', function (this: HTMLInputElement) {
     const silCfg = document.getElementById('silence-config')
     if (silCfg) silCfg.style.display = this.checked ? 'block' : 'none'
   })
   document.getElementById('opt-wake')?.addEventListener('change', function (this: HTMLInputElement) {
-    const wakeRow   = document.getElementById('wake-status-row')
-    const sleepPanel = document.getElementById('sleep-config-panel')
-    if (wakeRow)    wakeRow.style.display    = this.checked ? 'flex'  : 'none'
-    if (sleepPanel) sleepPanel.style.display = this.checked ? 'block' : 'none'
+    setWakeDetailsVisible(this.checked)
     if (this.checked) void loadSleepConfig()
+  })
+  document.getElementById('wake-hibernate-toggle')?.addEventListener('click', () => {
+    const body    = document.getElementById('wake-hibernate-body')
+    const chevron = document.getElementById('wake-hibernate-chevron')
+    const open    = body?.style.display !== 'none'
+    if (body)    body.style.display      = open ? 'none' : 'block'
+    if (chevron) chevron.style.transform = open ? '' : 'rotate(90deg)'
   })
   document.getElementById('btn-schedule-wake')?.addEventListener('click', async () => {
     const btn = document.getElementById('btn-schedule-wake') as HTMLButtonElement | null
@@ -86,10 +81,7 @@ export function applyScheduleSettingsToUI(): void {
   const manualMaxSel = document.getElementById('opt-manual-max')       as HTMLSelectElement | null
   if (wakeEl) {
     wakeEl.checked = !!settings.wakeFromSleep
-    const wakeRow    = document.getElementById('wake-status-row')
-    const sleepPanel = document.getElementById('sleep-config-panel')
-    if (wakeRow)    wakeRow.style.display    = settings.wakeFromSleep ? 'flex'  : 'none'
-    if (sleepPanel) sleepPanel.style.display = settings.wakeFromSleep ? 'block' : 'none'
+    setWakeDetailsVisible(!!settings.wakeFromSleep)
     if (settings.wakeFromSleep) void loadSleepConfig()
   }
   if (protectEl)    protectEl.checked   = settings.protectRecording !== false
@@ -253,11 +245,15 @@ function updateSlotDurationDisplay(): void {
   durEl.style.color = warn ? 'var(--red, #f87171)' : 'var(--text3)'
 }
 
+function setWakeDetailsVisible(visible: boolean): void {
+  const details = document.getElementById('wake-details')
+  if (details) details.style.display = visible ? 'block' : 'none'
+}
+
 function setWakeStatus(cls: string, key: string, fallback: string, count?: number, nextWake?: string | null): void {
-  const dot  = document.getElementById('wake-status-dot')
-  const txt  = document.getElementById('wake-status-text')
-  const row  = document.getElementById('wake-status-row')
-  if (!dot || !txt || !row) return
+  const dot = document.getElementById('wake-status-dot')
+  const txt = document.getElementById('wake-status-text')
+  if (!dot || !txt) return
   dot.className = `wake-status-dot ${cls}`
   let text = t(key) || fallback
   if (count != null) text = text.replace('{n}', String(count))
@@ -267,7 +263,6 @@ function setWakeStatus(cls: string, key: string, fallback: string, count?: numbe
     text += ` — ${dateStr}`
   }
   txt.textContent = text
-  row.style.display = 'flex'
 }
 
 function wakeResultToStatus(result: unknown): void {

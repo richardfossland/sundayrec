@@ -48,7 +48,8 @@
     "deviceMissing": "Ikke fundet",
     "defaultFolder": "Dokumenter/SundayRec",
     "recordingsSaved": "optagelser gemt",
-    "reconnectDevice": "Tilslut {name} via USB"
+    "reconnectDevice": "Tilslut {name} via USB",
+    "wakesBefore": "Computeren vækkes automatisk kl. {time}"
   },
   "update": {
     "available": "Ny version {v} tilgængelig — henter…",
@@ -175,7 +176,14 @@
     "silenceThresholdLabel": "GRÆNSE (dBFS)",
     "silenceTimeoutLabel": "VARIGHED FØR STOP",
     "exportIcal": "Eksportér til iCal",
-    "icalFilename": "SundayRec-tidsplan"
+    "icalFilename": "SundayRec-tidsplan",
+    "wakeMainTitle": "Automatisk opvågning",
+    "wakeMainDesc": "Vækker maskinen og starter optagelse automatisk — selv hvis maskinen sover",
+    "flowSleep": "Maskine sover",
+    "flowWake": "Vækkes 10 min før",
+    "flowRecord": "Optagelse starter",
+    "wakeScheduledLabel": "PLANLAGTE OPVÅGNINGER",
+    "sysSettingsLabel": "SYSTEMINDSTILLINGER"
   },
   "calendar": {
     "title": "Kirkekalender",

@@ -104,6 +104,19 @@ async function loadNextRecording(prefetchedNext?: { date: string } | null): Prom
   }
   tick()
   countdownTimer = setInterval(tick, 1000)
+
+  const wakeBadge = document.getElementById('next-wake-badge')
+  if (wakeBadge) {
+    if (settings.wakeFromSleep) {
+      const wakeTime = new Date(d.getTime() - 10 * 60 * 1000)
+      const locale   = currentLang === 'no' ? 'nb-NO' : currentLang
+      const wakeStr  = wakeTime.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
+      wakeBadge.textContent = t('home.wakesBefore', 'Maskinen vekkes automatisk kl. {time}').replace('{time}', wakeStr)
+      wakeBadge.style.display = ''
+    } else {
+      wakeBadge.style.display = 'none'
+    }
+  }
 }
 
 async function loadDiskSpace(): Promise<void> {

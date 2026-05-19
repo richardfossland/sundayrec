@@ -213,20 +213,24 @@ export function getUpcomingDates(days = 14): Date[] {
   return dates.sort((a, b) => a.getTime() - b.getTime())
 }
 
+// 15-minute window: machine wakes 10 min before recording, and startup may be slow
+const MISSED_WINDOW_MS = 15 * 60000
+
 export function checkMissedRecordings(): void {
   if (!mainWindow) return
+  if (recorder.isActive()) return
   const slots    = store.get('slots')             ?? []
   const specials = store.get('specialRecordings') ?? []
   const now      = new Date()
 
   slots.forEach(slot => {
-    if (slotActiveNow(slot.start, slot.stop, slot.days ?? [], now)) {
+    if (slotActiveNow(slot.start, slot.stop, slot.days ?? [], now, MISSED_WINDOW_MS)) {
       triggerStart(slot).catch(err => console.error('[scheduler] missed slot start error:', err))
     }
   })
 
   specials.forEach(special => {
-    if (specialActiveNow(special.date, special.start, special.stop, now)) {
+    if (specialActiveNow(special.date, special.start, special.stop, now, MISSED_WINDOW_MS)) {
       triggerStart(special, special.name).catch(err => console.error('[scheduler] missed special start error:', err))
     }
   })

@@ -48,7 +48,8 @@
     "deviceMissing": "Not found",
     "reconnectDevice": "Reconnect {name} via USB",
     "defaultFolder": "Documents/SundayRec",
-    "recordingsSaved": "recordings saved"
+    "recordingsSaved": "recordings saved",
+    "wakesBefore": "Machine wakes automatically at {time}"
   },
   "update": {
     "available": "New version {v} available — downloading…",
@@ -175,7 +176,14 @@
     "silenceThresholdLabel": "THRESHOLD (dBFS)",
     "silenceTimeoutLabel": "DURATION BEFORE STOP",
     "exportIcal": "Export to iCal",
-    "icalFilename": "SundayRec-schedule"
+    "icalFilename": "SundayRec-schedule",
+    "wakeMainTitle": "Automatic wake-up",
+    "wakeMainDesc": "Wakes the machine and starts recording automatically — even when asleep",
+    "flowSleep": "Machine asleep",
+    "flowWake": "Wakes 10 min early",
+    "flowRecord": "Recording starts",
+    "wakeScheduledLabel": "SCHEDULED WAKE-UPS",
+    "sysSettingsLabel": "SYSTEM SETTINGS"
   },
   "calendar": {
     "title": "Church Calendar",

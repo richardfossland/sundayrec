@@ -48,7 +48,8 @@
     "deviceMissing": "Introuvable",
     "defaultFolder": "Documents/SundayRec",
     "recordingsSaved": "enregistrements sauvegardés",
-    "reconnectDevice": "Connecter {name} via USB"
+    "reconnectDevice": "Connecter {name} via USB",
+    "wakesBefore": "L'ordinateur se réveille automatiquement à {time}"
   },
   "update": {
     "available": "Nouvelle version {v} disponible — téléchargement…",
@@ -175,7 +176,14 @@
     "silenceThresholdLabel": "SEUIL (dBFS)",
     "silenceTimeoutLabel": "DURÉE AVANT ARRÊT",
     "exportIcal": "Exporter vers iCal",
-    "icalFilename": "SundayRec-planning"
+    "icalFilename": "SundayRec-planning",
+    "wakeMainTitle": "Réveil automatique",
+    "wakeMainDesc": "Réveille l'ordinateur et démarre l'enregistrement automatiquement — même en veille",
+    "flowSleep": "Ordinateur en veille",
+    "flowWake": "Réveil 10 min avant",
+    "flowRecord": "Enregistrement démarre",
+    "wakeScheduledLabel": "RÉVEILS PLANIFIÉS",
+    "sysSettingsLabel": "PARAMÈTRES SYSTÈME"
   },
   "calendar": {
     "title": "Calendrier liturgique",

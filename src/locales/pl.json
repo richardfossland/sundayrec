@@ -48,7 +48,8 @@
     "deviceMissing": "Nie znaleziono",
     "defaultFolder": "Dokumenty/SundayRec",
     "recordingsSaved": "nagrań zapisano",
-    "reconnectDevice": "Podłącz {name} przez USB"
+    "reconnectDevice": "Podłącz {name} przez USB",
+    "wakesBefore": "Komputer obudzi się automatycznie o {time}"
   },
   "update": {
     "available": "Nowa wersja {v} dostępna — pobieranie…",
@@ -175,7 +176,14 @@
     "silenceThresholdLabel": "PRÓG (dBFS)",
     "silenceTimeoutLabel": "CZAS PRZED ZATRZYMANIEM",
     "exportIcal": "Eksportuj do iCal",
-    "icalFilename": "SundayRec-harmonogram"
+    "icalFilename": "SundayRec-harmonogram",
+    "wakeMainTitle": "Automatyczne wybudzenie",
+    "wakeMainDesc": "Budzi komputer i rozpoczyna nagrywanie automatycznie — nawet gdy śpi",
+    "flowSleep": "Komputer śpi",
+    "flowWake": "Budzi się 10 min wcześniej",
+    "flowRecord": "Nagranie startuje",
+    "wakeScheduledLabel": "ZAPLANOWANE WYBUDZENIA",
+    "sysSettingsLabel": "USTAWIENIA SYSTEMU"
   },
   "calendar": {
     "title": "Kalendarz kościelny",

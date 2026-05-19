@@ -46,7 +46,7 @@ jobs:
         run: npm ci
 
       - name: Build, sign, and notarize
-        run: npx electron-vite build && npx electron-builder --mac --publish always
+        run: npx electron-vite build && npx electron-builder --mac --publish onTagOrDraft
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.MAC_CERTS }}
@@ -71,7 +71,7 @@ jobs:
         run: npm ci
 
       - name: Build and sign
-        run: npm run build:win -- --publish always
+        run: npm run build:win -- --publish onTagOrDraft
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
