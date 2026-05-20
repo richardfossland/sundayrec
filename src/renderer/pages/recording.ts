@@ -28,11 +28,8 @@ import { showEditorPrompt } from './editor-page'
 import type { RecordingOpts } from '../../types'
 
 let monitorSession:    MonitorSession | null = null
-let silenceInterval:   ReturnType<typeof setInterval> | null = null
-let splitTimer:        ReturnType<typeof setTimeout>  | null = null
 let recTimerIval:      ReturnType<typeof setInterval> | null = null
 let signalCheckTimer:  ReturnType<typeof setTimeout>  | null = null
-let autoRestartOpts:   RecordingOpts | null = null
 export let isRecording = false
 
 let recStartTime = 0
@@ -114,14 +111,10 @@ export function setupRecording(): void {
       stopMonitoring().catch(err => console.error('[recording] monitoring stop error:', err)).finally(() => hideOverlay())
     }),
     window.api.on('recording-finished', (entry) => {
-      hideOverlay()
+      const rec = entry as { path?: string; splitRestart?: boolean } | undefined
+      if (!rec?.splitRestart) hideOverlay()
       loadRecentHistory()
-      const rec = entry as { path?: string } | undefined
-      if (rec?.path && settings.askOpenEditor !== false) showEditorPrompt(rec.path)
-      if (autoRestartOpts) {
-        const opts = autoRestartOpts; autoRestartOpts = null
-        setTimeout(() => startRecordingWithOpts(opts), 1000)
-      }
+      if (rec?.path && !rec.splitRestart && settings.askOpenEditor !== false) showEditorPrompt(rec.path)
     }),
     window.api.on('recording-error', (data) => {
       const d = data as { error?: string; message?: string } | undefined
@@ -167,16 +160,16 @@ async function openManualModal(): Promise<void> {
 }
 
 async function handleManualStart(): Promise<void> {
-  const btn    = document.getElementById('btn-manual-start') as HTMLButtonElement | null
+  const btn = document.getElementById('btn-manual-start') as HTMLButtonElement | null
+  const mm  = document.getElementById('modal-manual')
   if (btn) btn.disabled = true
 
-  const devSel   = document.getElementById('manual-device')  as HTMLSelectElement | null
-  const nameEl   = document.getElementById('manual-filename') as HTMLInputElement  | null
-  const deviceId = devSel?.value ?? settings.deviceId ?? null
+  const devSel      = document.getElementById('manual-device')  as HTMLSelectElement | null
+  const nameEl      = document.getElementById('manual-filename') as HTMLInputElement  | null
+  // Use || so an empty dropdown value falls back to the stored deviceId
+  const deviceId    = devSel?.value || settings.deviceId || null
   const devChannels = deviceId ? (settings.deviceChannels?.[deviceId] ?? null) : null
-
-  // Look up deviceName from the select's selected option text
-  const deviceName = devSel?.options[devSel.selectedIndex]?.textContent ?? settings.deviceName ?? null
+  const deviceName  = devSel?.options[devSel?.selectedIndex ?? 0]?.textContent ?? settings.deviceName ?? null
 
   const opts: RecordingOpts = {
     ...settings,
@@ -187,39 +180,52 @@ async function handleManualStart(): Promise<void> {
     channelR:    devChannels?.channelR ?? 1,
     maxMinutes:  settings.manualMaxMinutes || undefined
   }
-  const mm = document.getElementById('modal-manual'); if (mm) mm.style.display = 'none'
 
-  const res = await window.api.startRecordingNow(opts)
+  // Do NOT close the modal before we know if the recording started —
+  // closing first makes error messages invisible to the user.
+  let res: { ok?: boolean; error?: string } | null = null
+  try {
+    res = await window.api.startRecordingNow(opts)
+  } catch (err) {
+    if (mm) mm.style.display = 'none'
+    showGlobalError(err instanceof Error ? err.message : String(err))
+    if (btn) btn.disabled = false
+    return
+  }
+
   if (res?.ok) {
+    if (mm) mm.style.display = 'none'
     showOverlay(opts)
     try { await startMonitoring(opts) }
     catch (err) {
       try { await stopMonitoring() } catch {}
-      window.api.notifyError({ error: translateAudioError(err as Error) })
       await window.api.stopRecordingNow()
       hideOverlay()
+      showGlobalError(translateAudioError(err as Error))
     }
   } else {
+    // Keep modal open so the error is visible on the button
     const errMsg = res?.error ? translateNativeError(res.error) : t('general.unknownError', 'ukjent feil')
-    flashMsg(document.getElementById('btn-manual-start'), '✕ ' + errMsg, false)
+    flashMsg(btn, '✕ ' + errMsg, false)
   }
   if (btn) btn.disabled = false
 }
 
 export async function startRecordingWithOpts(opts: RecordingOpts): Promise<void> {
-  const res = await window.api.startRecordingNow(opts)
+  let res: { ok?: boolean; error?: string } | null = null
+  try { res = await window.api.startRecordingNow(opts) } catch { return }
   if (!res?.ok) {
-    if (res?.error) window.api.notifyError({ error: translateNativeError(res.error) })
+    const errMsg = res?.error ? translateNativeError(res.error) : t('general.unknownError', 'ukjent feil')
+    showGlobalError(errMsg)
     return
   }
   showOverlay(opts)
   try { await startMonitoring(opts) }
   catch (err) {
-    autoRestartOpts = null
     try { await stopMonitoring() } catch {}
-    window.api.notifyError({ error: translateAudioError(err as Error) })
     await window.api.stopRecordingNow()
     hideOverlay()
+    showGlobalError(translateAudioError(err as Error))
   }
 }
 
@@ -312,39 +318,6 @@ async function startMonitoring(opts: RecordingOpts): Promise<void> {
     if (cR && recVu.smR > -0.5) cR.classList.add('clip')
   })
 
-  // Silence detection — operates on monitoring stream
-  if (opts.stopOnSilence) {
-    const silenceAn   = monitorSession.audioCtx.createAnalyser(); silenceAn.fftSize = 2048
-    monitorSession.vuAnalyserL.connect(silenceAn)
-    const threshDb    = opts.silenceThreshold ?? -50
-    const timeoutMs   = (opts.silenceTimeoutMinutes ?? 5) * 60000
-    let   silenceStart: number | null = null
-    silenceInterval = setInterval(() => {
-      if (!isRecording) { clearInterval(silenceInterval!); silenceInterval = null; return }
-      const buf = new Float32Array(silenceAn.fftSize)
-      silenceAn.getFloatTimeDomainData(buf)
-      const rms = Math.sqrt(buf.reduce((s, v) => s + v * v, 0) / buf.length)
-      const db  = rms > 0 ? 20 * Math.log10(rms) : -Infinity
-      if (db < threshDb) {
-        if (!silenceStart) silenceStart = Date.now()
-        else if (Date.now() - silenceStart > timeoutMs) {
-          clearInterval(silenceInterval!); silenceInterval = null
-          doStopRecording()
-        }
-      } else { silenceStart = null }
-    }, 5000)
-  }
-
-  // Interval split — stop and auto-restart after N minutes
-  if (opts.splitMinutes && opts.splitMinutes > 0) {
-    splitTimer = setTimeout(() => {
-      const ts = new Date().toTimeString().slice(0, 5).replace(':', '')
-      autoRestartOpts = { ...opts, splitTimestamp: ts }
-      splitTimer = null
-      doStopRecording()
-    }, opts.splitMinutes * 60000)
-  }
-
   // Signal check — warn if input is near-silent 15 s into recording
   const analyserRef = monitorSession.vuAnalyserL
   signalCheckTimer = setTimeout(() => {
@@ -372,8 +345,6 @@ async function startMonitoring(opts: RecordingOpts): Promise<void> {
 
 async function stopMonitoring(): Promise<void> {
   stopVuState(recVu)
-  if (silenceInterval)  { clearInterval(silenceInterval);  silenceInterval  = null }
-  if (splitTimer)       { clearTimeout(splitTimer);        splitTimer       = null }
   if (recTimerIval)     { clearInterval(recTimerIval);     recTimerIval     = null }
   if (signalCheckTimer) { clearTimeout(signalCheckTimer);  signalCheckTimer = null }
 

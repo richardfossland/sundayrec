@@ -173,6 +173,8 @@ interface Session {
   prerollRaw:       string | null
   prerollMs:        number
   segments:         string[]  // all output paths in order (reconnect segments appended)
+  splitTimer:       ReturnType<typeof setTimeout> | null
+  splitAutoRestart: boolean
 }
 
 let activeSession:       Session | null      = null
@@ -327,6 +329,7 @@ export async function startSession(
     prerollRaw: prerollData?.rawPath ?? null,
     prerollMs:  prerollData?.trimMs  ?? 0,
     segments:   [outputPath],
+    splitTimer: null, splitAutoRestart: false,
   }
 
   // Persist recovery info so a crash restart can salvage the partial file
@@ -335,6 +338,22 @@ export async function startSession(
   // Auto-stop after maxMinutes if set
   if (settings.maxMinutes) {
     activeSession.maxTimer = setTimeout(() => stopSession(), settings.maxMinutes * 60000)
+  }
+
+  // Silence detection — ffmpeg silencedetect filter fires onSilenceEnd after sustained quiet
+  handle.onSilenceEnd = () => {
+    console.log('[recorder] Silence timeout reached — stopping session')
+    stopSession()
+  }
+
+  // Interval split — stop and auto-restart after N minutes (handled entirely in main)
+  if (settings.splitMinutes && settings.splitMinutes > 0) {
+    const sess = activeSession
+    sess.splitTimer = setTimeout(() => {
+      sess.splitTimer = null
+      sess.splitAutoRestart = true
+      stopSession()
+    }, settings.splitMinutes * 60000)
   }
 
   // Prevent system suspension + display sleep during active recording.
@@ -392,7 +411,8 @@ export function stopSession(): void {
   if (!activeSession || activeSession.stopping) return
   const session = activeSession
   session.stopping = true
-  if (session.maxTimer) clearTimeout(session.maxTimer)
+  if (session.maxTimer)   clearTimeout(session.maxTimer)
+  if (session.splitTimer) clearTimeout(session.splitTimer)
   stopCapture(session.handle).then(() => {
     // finishSession will be called via handle.onExit
   }).catch(err => {
@@ -492,6 +512,38 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
     status:    'ok'
   }
   store.addHistory(entry)
+
+  // Cloud auto-upload (fire-and-forget)
+  import('./cloud').then(c => c.autoUploadAfterRecording(session.outputPath, session.win)).catch(err =>
+    console.error('[recorder] cloud upload error:', err)
+  )
+
+  // Split auto-restart: start new session in main, send overlay events to renderer
+  if (session.splitAutoRestart) {
+    const ts       = new Date().toTimeString().slice(0, 5).replace(':', '')
+    const nextOpts = { ...session.settings, splitTimestamp: ts }
+
+    if (store.get('notifyStop') !== false) {
+      notify('SundayRec', `${getNL().done}: ${path.basename(session.outputPath)}`)
+    }
+
+    // Stop renderer monitoring, notify history, then start new session
+    safeSend(session.win, 'recording-overlay-stop', {})
+    safeSend(session.win, 'recording-finished', { ...entry, splitRestart: true })
+
+    const nextResult = await startSession(nextOpts, session.win)
+    if ('ok' in nextResult) {
+      safeSend(session.win, 'recording-overlay-start', nextOpts)
+    } else {
+      const msg = localizeError(nextResult.error)
+      safeSend(session.win, 'recording-error', { error: nextResult.error, message: msg })
+      notify(getNL().err, msg)
+      notifyIdle()
+      sessionEndCallback?.()
+    }
+    return
+  }
+
   safeSend(session.win, 'recording-finished', entry)
 
   if (store.get('notifyStop') !== false) {

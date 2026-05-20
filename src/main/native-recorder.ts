@@ -262,6 +262,12 @@ function buildAudioFilters(opts: RecordingOpts): string {
     filters.push('silenceremove=start_periods=1:start_duration=0.1:start_threshold=-50dB:stop_periods=-1:stop_duration=1:stop_threshold=-50dB')
   }
 
+  // Silence-end detection — emits silence_start/end events to stderr, parsed in startCapture
+  if (opts.stopOnSilence) {
+    const noiseDb = Math.max(-70, Math.min(-10, Number(opts.silenceThreshold ?? -50)))
+    filters.push(`silencedetect=noise=${noiseDb}dB:duration=1`)
+  }
+
   return filters.join(',')
 }
 
@@ -284,8 +290,10 @@ export interface NativeHandle {
   outputPath:  string
   startTime:   number
   bytesWritten: number
+  format:      string
   onExit:      ((code: number | null) => void) | null
   onProgress:  ((bytes: number) => void) | null
+  onSilenceEnd: (() => void) | null
 }
 
 // ── Start / stop ────────────────────────────────────────────────────────────
@@ -343,8 +351,11 @@ export async function startCapture(
   const outChannels = (opts.channels === 'stereo') ? 2 : 1
   const afChain     = buildAudioFilters(opts)
 
+  // WASAPI and non-Windows use stdin for a clean 'q' stop; DirectShow ignores stdin
+  const useStdin = input.format === 'wasapi' || process.platform !== 'win32'
+
   const args: string[] = [
-    '-nostdin', '-hide_banner',
+    ...(useStdin ? [] : ['-nostdin']), '-hide_banner',
     '-f', input.format,
     '-i', input.device,
     '-ar', String(sampleRate),
@@ -364,15 +375,33 @@ export async function startCapture(
     proc, outputPath,
     startTime: Date.now(),
     bytesWritten: 0,
+    format: input.format,
     onExit: null,
-    onProgress: null
+    onProgress: null,
+    onSilenceEnd: null,
   }
 
   let stderrBuf = ''
+  let silenceTimer: ReturnType<typeof setTimeout> | null = null
+  const silenceTimeoutMs = (opts.silenceTimeoutMinutes ?? 5) * 60 * 1000
 
   proc.stderr?.on('data', (d: Buffer) => {
     const chunk = d.toString()
     stderrBuf  += chunk
+
+    if (opts.stopOnSilence) {
+      if (chunk.includes('silence_start')) {
+        if (!silenceTimer) {
+          silenceTimer = setTimeout(() => {
+            silenceTimer = null
+            handle.onSilenceEnd?.()
+          }, silenceTimeoutMs)
+        }
+      } else if (chunk.includes('silence_end')) {
+        if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null }
+      }
+    }
+
     const m = chunk.match(/size=\s*(\d+)kB/)
     if (m) {
       handle.bytesWritten = parseInt(m[1]) * 1024
@@ -385,6 +414,7 @@ export async function startCapture(
   })
 
   proc.on('close', code => {
+    if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null }
     console.log('[native-recorder] ffmpeg exited, code:', code)
     handle.onExit?.(code)
   })
@@ -422,24 +452,24 @@ export async function stopCapture(handle: NativeHandle): Promise<void> {
   return new Promise(resolve => {
     handle.proc.once('close', resolve)
 
-    if (process.platform === 'win32') {
-      // DirectShow on Windows does not reliably flush when ffmpeg receives stdin 'q'.
-      // SIGTERM causes Windows to call TerminateProcess which flushes the codec buffer
-      // in the same way as CTRL+C — the file is written cleanly.
-      try { handle.proc.kill('SIGTERM') } catch {}
-    } else {
-      // macOS / Linux: send 'q' via stdin for a clean codec flush + container finalization
+    // WASAPI (Windows) and non-Windows use graceful 'q' via stdin — ffmpeg flushes codec
+    // and finalises container before exiting. DirectShow ignores stdin 'q', so SIGTERM is
+    // the only reliable stop (Windows TerminateProcess flushes the codec buffer cleanly).
+    const useGraceful = handle.format === 'wasapi' || process.platform !== 'win32'
+
+    if (useGraceful) {
       try {
         handle.proc.stdin?.write('q')
         handle.proc.stdin?.end()
       } catch {}
 
-      // Force kill if ffmpeg doesn't respond within 10 seconds
       const killer = setTimeout(() => {
         try { handle.proc.kill('SIGTERM') } catch {}
       }, 10000)
 
       handle.proc.once('close', () => clearTimeout(killer))
+    } else {
+      try { handle.proc.kill('SIGTERM') } catch {}
     }
   })
 }
