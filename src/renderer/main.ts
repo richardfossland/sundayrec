@@ -155,17 +155,6 @@ async function init(): Promise<void> {
   setupClipReset()
   setupSettingsTabs()
 
-  // Sidebar collapse toggle
-  const sidebar = document.getElementById('sidebar')
-  const toggleBtn = document.getElementById('btn-sidebar-toggle')
-  if (sidebar && toggleBtn) {
-    if (localStorage.getItem('sidebar-collapsed') === '1') sidebar.classList.add('collapsed')
-    toggleBtn.addEventListener('click', () => {
-      sidebar.classList.toggle('collapsed')
-      localStorage.setItem('sidebar-collapsed', sidebar.classList.contains('collapsed') ? '1' : '0')
-    })
-  }
-
   window.openEditorWithFile = openEditorWithFile
 
   // Fetch app version from main (sandbox-safe — no fs/path in preload)

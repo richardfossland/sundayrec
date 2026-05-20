@@ -375,11 +375,13 @@ async function loadFile(fp: string): Promise<void> {
     if (clipTimes.length > 0) clipBadge.textContent = `⚠ ${clipTimes.length} klipp`
   }
 
-  syncCanvasSize()
-  drawWaveform()
-  drawMinimap()
-  updateMinimapViewport()
   showState('workspace')
+  requestAnimationFrame(() => {
+    syncCanvasSize()
+    drawWaveform()
+    drawMinimap()
+    updateMinimapViewport()
+  })
 }
 
 async function reloadIntroOutro(): Promise<void> {
@@ -650,12 +652,13 @@ function computePeaks(buf: AudioBuffer): Float32Array {
 function syncCanvasSize(): void {
   if (!canvas) return
   const dpr = window.devicePixelRatio || 1
-  const w   = canvas.parentElement!.clientWidth
   const h   = 200
-  canvas.style.width  = w + 'px'
   canvas.style.height = h + 'px'
-  canvas.width  = w * dpr
-  canvas.height = h * dpr
+  // Read width from CSS (width: 100%) — never write canvas.style.width
+  const w = canvas.clientWidth || canvas.parentElement!.getBoundingClientRect().width
+  if (!w) return
+  canvas.width  = Math.round(w * dpr)
+  canvas.height = Math.round(h * dpr)
 }
 
 function drawWaveform(): void {

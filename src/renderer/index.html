@@ -24,9 +24,6 @@
       </svg>
       <span class="logo-text">SundayRec</span>
     </div>
-    <button id="btn-sidebar-toggle" class="btn-sidebar-toggle" title="Skjul meny">
-      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-    </button>
   </div>
   <ul>
     <li><a href="#" class="nav-link active" data-page="home">
@@ -942,17 +939,24 @@
         <span class="editor-kbd-hint"><span class="kbd">Esc</span> Stopp</span>
       </div>
 
+      <!-- Main waveform canvas -->
+      <div class="editor-canvas-wrap" id="editor-canvas-wrap">
+        <canvas id="editor-canvas" class="editor-canvas"></canvas>
+      </div>
+
       <!-- Intro/Outro panel -->
       <div class="editor-chapters-panel">
         <div class="editor-chapters-header">
           <div class="editor-chapters-title">Intro &amp; Outro</div>
           <label class="editor-io-include-label">
-            <input type="checkbox" id="editor-include-io" />
-            <span class="toggle-track" style="transform:scale(.8);transform-origin:right center"></span>
+            <span class="toggle" style="transform:scale(.8);transform-origin:right center;cursor:pointer">
+              <input type="checkbox" id="editor-include-io" />
+              <span class="toggle-track"></span>
+            </span>
             <span style="font-size:12px;font-weight:400;color:var(--text2)">Inkluder ved eksport</span>
           </label>
         </div>
-        <div style="background:var(--surface1);padding:10px 12px;display:flex;flex-direction:column;gap:8px">
+        <div style="background:var(--surface);padding:10px 12px;display:flex;flex-direction:column;gap:8px">
           <div class="editor-io-file-row">
             <span class="editor-io-file-label">INTRO</span>
             <span class="editor-io-file-path" id="editor-intro-display">Ingen fil valgt</span>
@@ -966,11 +970,6 @@
             <button class="btn-ghost btn-sm" id="btn-editor-clear-outro" style="display:none">✕</button>
           </div>
         </div>
-      </div>
-
-      <!-- Main waveform canvas -->
-      <div class="editor-canvas-wrap" id="editor-canvas-wrap">
-        <canvas id="editor-canvas" class="editor-canvas"></canvas>
       </div>
 
       <!-- Processing panel -->
