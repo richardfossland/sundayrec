@@ -568,6 +568,48 @@ function setupIPC(): void {
     return detectSegments(filePath)
   })
 
+  ipcMain.handle('list-asio-drivers', async () => {
+    const { listAsioDrivers } = await import('./native-recorder')
+    return listAsioDrivers()
+  })
+
+  // ── Cloud backup ──────────────────────────────────────────────────────────
+  ipcMain.handle('cloud-connect', async (_, service: string) => {
+    const cloud = await import('./cloud')
+    return cloud.connectService(service as import('../types').CloudServiceId)
+  })
+
+  ipcMain.handle('cloud-disconnect', (_, service: string) => {
+    import('./cloud').then(c => c.disconnectService(service as import('../types').CloudServiceId))
+  })
+
+  ipcMain.handle('cloud-status', async () => {
+    const cloud = await import('./cloud')
+    return cloud.getStatus()
+  })
+
+  ipcMain.handle('cloud-upload-file', async (_, service: string, filePath: string, metadata?: unknown) => {
+    if (typeof filePath !== 'string' || !isAllowedAudioPath(filePath)) return { ok: false, error: 'invalid_path' }
+    try {
+      const cloud = await import('./cloud')
+      await cloud.uploadFile(service as import('../types').CloudServiceId, filePath, metadata as import('../types').RecordingMetadata | undefined)
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
+
+  ipcMain.handle('cloud-list-folders', async (_, service: string, parentId?: string) => {
+    try {
+      const cloud = await import('./cloud')
+      return cloud.listFolders(service as import('../types').CloudServiceId, parentId)
+    } catch { return [] }
+  })
+
+  ipcMain.handle('cloud-set-folder', (_, service: string, folderId: string, folderName: string, folderPath?: string) => {
+    import('./cloud').then(c => c.setFolder(service as import('../types').CloudServiceId, folderId, folderName, folderPath))
+  })
+
 }
 
 function notify(title: string, body: string): void {

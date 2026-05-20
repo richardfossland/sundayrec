@@ -61,6 +61,13 @@ declare global {
       editorSaveMeta:         (filePath: string, metadata: unknown) => Promise<boolean>
       editorDetectSegments:   (filePath: string) => Promise<{ start: number; end: number; duration: number; label: string; type: string }[]>
       pickAudioFile:          ()                 => Promise<string | null>
+      listAsioDrivers:        ()                 => Promise<string[]>
+      cloudConnect:     (service: string) => Promise<{ ok: boolean; accountName?: string; error?: string }>
+      cloudDisconnect:  (service: string) => Promise<void>
+      cloudStatus:      ()                => Promise<Record<string, unknown>>
+      cloudUploadFile:  (service: string, filePath: string, metadata?: unknown) => Promise<{ ok: boolean; error?: string }>
+      cloudListFolders: (service: string, parentId?: string) => Promise<{ id: string; name: string; path?: string }[]>
+      cloudSetFolder:   (service: string, folderId: string, folderName: string, folderPath?: string) => Promise<void>
     }
     appVersion?: string
   }

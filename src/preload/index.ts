@@ -62,6 +62,15 @@ contextBridge.exposeInMainWorld('api', {
 
   pickAudioFile: () => ipcRenderer.invoke('pick-audio-file'),
 
+  listAsioDrivers: () => ipcRenderer.invoke('list-asio-drivers'),
+
+  cloudConnect:     (service: string) => ipcRenderer.invoke('cloud-connect', service),
+  cloudDisconnect:  (service: string) => ipcRenderer.invoke('cloud-disconnect', service),
+  cloudStatus:      ()                => ipcRenderer.invoke('cloud-status'),
+  cloudUploadFile:  (service: string, filePath: string, metadata?: unknown) => ipcRenderer.invoke('cloud-upload-file', service, filePath, metadata),
+  cloudListFolders: (service: string, parentId?: string) => ipcRenderer.invoke('cloud-list-folders', service, parentId),
+  cloudSetFolder:   (service: string, folderId: string, folderName: string, folderPath?: string) => ipcRenderer.invoke('cloud-set-folder', service, folderId, folderName, folderPath),
+
   checkForUpdates: ()        => ipcRenderer.invoke('check-for-updates'),
   installUpdate:   ()        => ipcRenderer.invoke('install-update'),
 

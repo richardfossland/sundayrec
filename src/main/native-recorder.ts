@@ -93,6 +93,31 @@ export async function listFfmpegDevices(): Promise<FfmpegDevice[]> {
   })
 }
 
+// ── WASAPI detection (cached for process lifetime) ──────────────────────────
+
+let _wasapiAvailable: boolean | null = null
+
+async function probeWasapiAvailable(): Promise<boolean> {
+  if (_wasapiAvailable !== null) return _wasapiAvailable
+  return new Promise(resolve => {
+    const proc = spawn(ffmpegBin, ['-devices', '-hide_banner'], {
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+    let output = ''
+    proc.stdout?.on('data', (d: Buffer) => { output += d.toString() })
+    proc.stderr?.on('data', (d: Buffer) => { output += d.toString() })
+    let settled = false
+    const done = (result: boolean) => {
+      if (settled) return
+      settled = true
+      _wasapiAvailable = result
+      resolve(result)
+    }
+    proc.on('close', () => done(output.toLowerCase().includes('wasapi')))
+    setTimeout(() => { try { proc.kill() } catch {}; done(false) }, 3000)
+  })
+}
+
 // ── Device input resolution ─────────────────────────────────────────────────
 
 function bestMatch(devices: FfmpegDevice[], name: string): FfmpegDevice | undefined {
@@ -119,20 +144,64 @@ function bestMatch(devices: FfmpegDevice[], name: string): FfmpegDevice | undefi
   return undefined
 }
 
+// ── ASIO driver enumeration (Windows registry) ─────────────────────────────
+
+export async function listAsioDrivers(): Promise<string[]> {
+  if (process.platform !== 'win32') return []
+  return new Promise(resolve => {
+    const proc = spawn('powershell', [
+      '-NoProfile', '-NonInteractive', '-Command',
+      'Get-ChildItem "HKLM:\\SOFTWARE\\ASIO" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty PSChildName'
+    ], { stdio: ['ignore', 'pipe', 'ignore'] })
+    let stdout = ''
+    proc.stdout?.on('data', (d: Buffer) => { stdout += d.toString() })
+    const done = () => {
+      const drivers = stdout.trim().split('\n')
+        .map(s => s.trim()).filter(s => s.length > 0)
+      resolve(drivers)
+    }
+    proc.on('close', done)
+    proc.on('error', () => resolve([]))
+    setTimeout(() => { try { proc.kill() } catch {}; resolve([]) }, 5000)
+  })
+}
+
+// ── Device input resolution ─────────────────────────────────────────────────
+
 export async function resolveDeviceInput(
   opts: RecordingOpts
 ): Promise<{ format: string; device: string; resolvedName: string } | null> {
   const name = (opts.deviceName ?? '').trim()
 
   if (process.platform === 'win32') {
-    // Always enumerate so we validate the name actually exists in DirectShow
+    // ASIO device selected — currently recorded via WASAPI/DirectShow fallback.
+    // Full ASIO capture (naudiodon) can be dropped in here later without UI changes.
+    if ((opts.deviceId ?? '').startsWith('asio::')) {
+      const driverName = (opts.deviceId as string).slice(6)
+      const devices    = await listFfmpegDevices()
+      const match      = devices.length ? (bestMatch(devices, driverName) ?? devices[0]) : null
+      if (!match) return null
+      const api = await probeWasapiAvailable() ? 'WASAPI' : 'DirectShow'
+      console.warn(`[native-recorder] ASIO driver "${driverName}" selected — using ${api}: "${match.name}"`)
+      if (api === 'WASAPI') {
+        return { format: 'wasapi', device: match.name, resolvedName: match.name }
+      }
+      return { format: 'dshow', device: `audio="${match.name}"`, resolvedName: match.name }
+    }
+
     const devices = await listFfmpegDevices()
     if (!devices.length) return null
     const match = bestMatch(devices, name)
     if (!match) {
-      console.warn(`[native-recorder] No DirectShow device matching "${name}" — using first device: "${devices[0].name}"`)
+      console.warn(`[native-recorder] No device matching "${name}" — using first device: "${devices[0].name}"`)
     }
     const resolved = match ?? devices[0]
+    // WASAPI is the modern Windows audio API: lower latency, more stable than DirectShow.
+    // It accepts the same device friendly names as DirectShow enumeration.
+    if (await probeWasapiAvailable()) {
+      console.log('[native-recorder] using WASAPI for device:', resolved.name)
+      return { format: 'wasapi', device: resolved.name, resolvedName: resolved.name }
+    }
     return { format: 'dshow', device: `audio="${resolved.name}"`, resolvedName: resolved.name }
   }
 
@@ -229,7 +298,8 @@ function classifyFfmpegError(stderr: string): string {
     s.includes('could not find') || s.includes('not found') ||
     s.includes('no devices found') || s.includes('invalid argument') ||
     s.includes('no such audio device') || s.includes('failed to find') ||
-    s.includes('cannot find')
+    s.includes('cannot find') || s.includes('the handle is invalid') ||
+    s.includes('no audio endpoint') || s.includes('element not found')
   ) {
     return 'device_not_found'
   }
@@ -237,21 +307,26 @@ function classifyFfmpegError(stderr: string): string {
     s.includes('access is denied') || s.includes('permission') ||
     s.includes('not permitted') || s.includes('avfoundation: video not enabled') ||
     s.includes('authorization') || s.includes('microphone access') ||
-    s.includes('privacy') || s.includes('tcm_access')
+    s.includes('privacy') || s.includes('tcm_access') ||
+    s.includes('e_accessdenied')
   ) {
     return 'device_permission_denied'
   }
   if (
     s.includes('already in use') || s.includes('device busy') ||
     s.includes('being used by another') || s.includes('resource busy') ||
-    s.includes('device or resource busy')
+    s.includes('device or resource busy') || s.includes('audclnt_e_device_in_use') ||
+    s.includes('audclnt_e_exclusive_mode_not_allowed')
   ) {
     return 'device_busy'
   }
   if (s.includes('no space left') || s.includes('disk full') || s.includes('enospc')) {
     return 'disk_full'
   }
-  if (s.includes('broken pipe') || s.includes('i/o error') || s.includes('input/output')) {
+  if (
+    s.includes('broken pipe') || s.includes('i/o error') || s.includes('input/output') ||
+    s.includes('unplugged') || s.includes('audclnt_e_device_invalidated')
+  ) {
     return 'device_disconnected'
   }
   return 'device_error'

@@ -86,11 +86,9 @@ function buildWinTaskDefs(wakePoints: Date[], elevated: boolean): string {
   }).join('; ')
 }
 
-function classifyWinError(msg: string): string {
+function classifyWinError(msg: string): WakeResult['reason'] {
   if (/access.?denied|unauthorized|privilege/i.test(msg)) return 'permission'
-  if (/not.?found|cannot find/i.test(msg))                 return 'not_found'
-  if (/invalid|format/i.test(msg))                         return 'invalid_format'
-  return 'permission'
+  return 'error'
 }
 
 async function scheduleWindows(wakePoints: Date[]): Promise<WakeResult> {

@@ -112,12 +112,19 @@ async function saveAudioSettings(): Promise<void> {
 export async function renderDeviceList(containerId: string): Promise<void> {
   const container = document.getElementById(containerId)
   if (!container) return
-  const devices = await getAudioDevices()
+
+  const [devices, asioDrivers] = await Promise.all([
+    getAudioDevices(),
+    window.api.listAsioDrivers().catch(() => [] as string[])
+  ])
+
   container.innerHTML = ''
-  if (!devices.length) {
+  if (!devices.length && !asioDrivers.length) {
     container.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:8px 0">${t('audio.noDevices')}</div>`
     return
   }
+
+  // ── Standard Web Audio devices ─────────────────────────────────────────────
   devices.forEach(d => {
     const builtIn  = /built-in|innebygd|default/i.test(d.label)
     const selected = d.deviceId === (settings.deviceId ?? 'default')
@@ -127,7 +134,7 @@ export async function renderDeviceList(containerId: string): Promise<void> {
     card.dataset.deviceLabel  = d.label
     const subBase = builtIn ? t('audio.internal','Innebygd') : 'USB / Ekstern'
     card.innerHTML = `
-      <div class="device-icon">${builtIn ? '🎙️' : '🎛️'}</div>
+      <div class="device-icon">${builtIn ? '🎙' : '🎛'}</div>
       <div>
         <div class="device-name">${escHtml(d.label || 'Ukjent enhet')}</div>
         <div class="device-sub" data-sub-base="${escHtml(subBase)}">${escHtml(subBase)}</div>
@@ -139,24 +146,54 @@ export async function renderDeviceList(containerId: string): Promise<void> {
       patchSettings({ deviceId: d.deviceId, deviceName: d.label })
       const count = await detectDeviceChannels(d.deviceId)
       detectedChannelCount = count
-      // Update sub-label with detected channel count
       const subEl = card.querySelector('.device-sub') as HTMLElement | null
       if (subEl) subEl.textContent = `${subBase} · ${count} ${t('audio.channelCount', 'kanaler')}`
-      // Reset to stored channel values for this device, or defaults
       const stored = settings.deviceChannels?.[d.deviceId]
       updateChannelSelector(count, stored?.channelL ?? 0, stored?.channelR ?? 1)
     })
     container.appendChild(card)
   })
 
-  // Probe current device for channel count and show in selected card
+  // ── ASIO drivers (Windows only) ────────────────────────────────────────────
+  if (asioDrivers.length > 0) {
+    const hdr = document.createElement('div')
+    hdr.style.cssText = 'color:var(--text3);font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:12px 0 4px'
+    hdr.textContent = t('audio.asioSection', 'ASIO — Profesjonell')
+    container.appendChild(hdr)
+
+    asioDrivers.forEach(driverName => {
+      const asioId  = `asio::${driverName}`
+      const selected = settings.deviceId === asioId
+      const card    = document.createElement('div')
+      card.className           = 'device-card' + (selected ? ' selected' : '')
+      card.dataset.deviceId    = asioId
+      card.dataset.deviceLabel = driverName
+      card.innerHTML = `
+        <div class="device-icon">🎛</div>
+        <div>
+          <div class="device-name">${escHtml(driverName)}</div>
+          <div class="device-sub">ASIO-driver</div>
+        </div>
+        <span class="device-badge ok">ASIO</span>`
+      card.addEventListener('click', () => {
+        container.querySelectorAll('.device-card').forEach(c => c.classList.remove('selected'))
+        card.classList.add('selected')
+        patchSettings({ deviceId: asioId, deviceName: driverName })
+        // ASIO drivers expose many channels; show selector at 16 ch as a safe default
+        updateChannelSelector(16, 0, 1)
+        detectedChannelCount = 16
+      })
+      container.appendChild(card)
+    })
+  }
+
+  // Probe current (non-ASIO) device for channel count
   const devId = settings.deviceId ?? (devices[0]?.deviceId ?? null)
-  if (devId) {
+  if (devId && !devId.startsWith('asio::')) {
     detectDeviceChannels(devId).then(count => {
       detectedChannelCount = count
       const stored = settings.deviceChannels?.[devId]
       updateChannelSelector(count, stored?.channelL ?? 0, stored?.channelR ?? 1)
-      // Update selected card sub-label
       const selCard = container.querySelector('.device-card.selected') as HTMLElement | null
       const subEl   = selCard?.querySelector('.device-sub') as HTMLElement | null
       if (subEl) {
@@ -164,6 +201,10 @@ export async function renderDeviceList(containerId: string): Promise<void> {
         subEl.textContent = `${base} · ${count} ${t('audio.channelCount', 'kanaler')}`
       }
     })
+  } else if (devId?.startsWith('asio::')) {
+    const stored = settings.deviceChannels?.[devId]
+    updateChannelSelector(16, stored?.channelL ?? 0, stored?.channelR ?? 1)
+    detectedChannelCount = 16
   }
 }
 
@@ -189,7 +230,9 @@ function updateChannelSelector(count: number, chL: number, chR: number): void {
 
 async function startMonitoring(): Promise<void> {
   try {
-    const devId  = settings.deviceId && settings.deviceId !== 'default' ? settings.deviceId : null
+    // ASIO device IDs (asio::DriverName) are not valid getUserMedia IDs — use default input for monitoring
+    const rawId  = settings.deviceId
+    const devId  = rawId && rawId !== 'default' && !rawId.startsWith('asio::') ? rawId : null
     const stored = settings.deviceId ? (settings.deviceChannels?.[settings.deviceId] ?? null) : null
     const chL    = stored?.channelL ?? 0
     const chR    = stored?.channelR ?? 1

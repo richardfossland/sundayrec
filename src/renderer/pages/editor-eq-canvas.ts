@@ -96,7 +96,7 @@ let dragState: { id: number; startX: number; startY: number; startFreq: number; 
 
 let cvs:          HTMLCanvasElement | null = null
 let analyserNode: AnalyserNode | null = null
-let analyserData: Float32Array | null = null
+let analyserData: Float32Array<ArrayBuffer> | null = null
 let rafId         = 0
 let onChangeCallback: (() => void) | null = null
 

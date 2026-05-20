@@ -221,7 +221,7 @@ export function setupEditorPage(): void {
   for (const [id, field] of metaFields) {
     $(id)?.addEventListener('input', () => {
       const el = $(id) as HTMLInputElement | HTMLTextAreaElement | null
-      if (el) (meta as Record<string, unknown>)[field] = el.value
+      if (el) (meta as unknown as Record<string, unknown>)[field] = el.value
       metaDirty = true
     })
   }

@@ -47,7 +47,7 @@ let state: ProcessingSettings = buildDefault()
 function buildDefault(): ProcessingSettings {
   return {
     normalize:       { enabled: false, mode: 'peak', target: -1.0, gainDb: 0 },
-    compressor:      { enabled: false, preset: 'church', ...COMP_PRESETS.church },
+    compressor:      { enabled: false, preset: 'church', ...COMP_PRESETS.church } as ProcessingSettings['compressor'],
     eq:              { enabled: false },
     limiter:         { enabled: false, ceiling: -0.3 },
     noiseReduction:  { enabled: false, level: 1 },
