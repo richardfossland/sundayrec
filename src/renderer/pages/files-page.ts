@@ -74,14 +74,20 @@ export function updateFilenamePreview(): void {
 async function saveFilesSettings(): Promise<void> {
   const autoDelEl   = document.getElementById('opt-auto-delete') as HTMLInputElement | null
   const autoDelDays = document.getElementById('auto-delete-days') as HTMLInputElement | null
+  const days = autoDelEl?.checked ? (+(autoDelDays?.value ?? '') || 90) : 0
+
+  if (days > 0 && days < 30) {
+    const msg = `Opptak eldre enn ${days} dager slettes automatisk og kan ikke gjenopprettes. Er du sikker?`
+    if (!confirm(msg)) return
+  }
+
   patchSettings({
     saveFolder:      (document.getElementById('save-folder') as HTMLInputElement | null)?.value ?? '',
     filenamePattern: ((document.getElementById('pattern-select') as HTMLSelectElement | null)?.value ?? 'date') as FilenamePattern,
     format:          ((document.querySelector('input[name="format"]:checked')  as HTMLInputElement | null)?.value ?? 'mp3') as FileFormat,
     bitrate:         (document.querySelector('input[name="bitrate"]:checked') as HTMLInputElement | null)?.value ?? '192',
-    autoDeleteDays:  autoDelEl?.checked ? (+(autoDelDays?.value ?? '') || 90) : 0,
+    autoDeleteDays:  days,
     trimSilence:     !!(document.getElementById('opt-trim-silence') as HTMLInputElement | null)?.checked,
-    // intro/outro paths are saved immediately on pick, no need to re-read here
   })
   await window.api.saveSettings(settings)
   flashSaved(document.getElementById('btn-files-save'))

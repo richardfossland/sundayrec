@@ -53,6 +53,7 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
     stuck_recording:          'Opptaket stoppet — ingen lyd fra enheten i 60 sekunder',
     save_folder_permission:   'Ingen tilgang til lagringsmappen — sjekk at mappen er skrivbar',
     save_folder_error:        'Kan ikke opprette lagringsmappe — sjekk diskplass og tillatelser',
+    already_recording:        'Et manuelt opptak er allerede i gang — planlagt opptak startet ikke',
   },
   en: {
     device_disconnected:      'Audio device disconnected during recording',
@@ -67,6 +68,7 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
     stuck_recording:          'Recording stalled — no audio from device for 60 seconds',
     save_folder_permission:   'No write access to save folder — check folder permissions',
     save_folder_error:        'Cannot create save folder — check disk space and permissions',
+    already_recording:        'A manual recording is already in progress — scheduled recording did not start',
   },
   de: {
     device_disconnected:      'Audiogerät während der Aufnahme getrennt',

@@ -18,6 +18,8 @@ const ALLOWED_CHANNELS = [
   'update-error',
   'wake-schedule-result',
   'editor-export-progress',
+  'cloud-upload-progress',
+  'cloud-upload-done',
 ] as const
 
 type AllowedChannel = typeof ALLOWED_CHANNELS[number]

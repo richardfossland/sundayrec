@@ -131,6 +131,14 @@ export function setupRecording(): void {
     window.api.on('recording-reconnected',  () => hideReconnectBanner()),
     window.api.on('tray-start-recording',   () => openManualModal()),
     window.api.on('tray-stop-recording',    () => doStopRecording()),
+    window.api.on('cloud-upload-done', (data) => {
+      const d = data as { service?: string; ok?: boolean; error?: string } | undefined
+      if (!d?.ok) {
+        const names: Record<string, string> = { 'google-drive': 'Google Drive', 'dropbox': 'Dropbox', 'onedrive': 'OneDrive' }
+        const svc = names[d?.service ?? ''] ?? d?.service ?? 'Sky'
+        showGlobalError(`${svc}: ${d?.error ?? t('general.unknownError', 'ukjent feil')}`)
+      }
+    }),
   ]
   window.addEventListener('beforeunload', () => ipcCleanups.forEach(fn => fn?.()))
 }

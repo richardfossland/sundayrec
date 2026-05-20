@@ -142,9 +142,13 @@ export function getHistory(): RecordingEntry[] {
   return store.get('recordingHistory') ?? []
 }
 
+let _lastHistoryTs = 0
 export function addHistory(entry: RecordingEntry): void {
+  const now = Date.now()
+  const ts  = now > _lastHistoryTs ? now : _lastHistoryTs + 1
+  _lastHistoryTs = ts
   const history = getHistory()
-  history.unshift({ ...entry, timestamp: Date.now() })
+  history.unshift({ ...entry, timestamp: ts })
   store.set('recordingHistory', history.slice(0, 200))
 }
 

@@ -159,7 +159,11 @@ async function triggerStart(slot: ScheduleSlot | SpecialRecording, overrideName?
     const nl   = recorder.NOTIFY_LABELS[lang] ?? recorder.NOTIFY_LABELS.no
     const msg  = recorder.localizeError(result.error)
     if (Notification.isSupported()) new Notification({ title: nl.err, body: msg }).show()
-    mainWindow.webContents.send('recording-error', { error: result.error, message: msg })
+    // Don't show an error banner when a manual recording is already active —
+    // the UI correctly shows the in-progress recording; a banner would be confusing.
+    if (result.error !== 'already_recording') {
+      mainWindow.webContents.send('recording-error', { error: result.error, message: msg })
+    }
     return
   }
 
