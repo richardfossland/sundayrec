@@ -28,7 +28,6 @@ import { spawn } from 'child_process'
 import { app, Notification, powerSaveBlocker, systemPreferences } from 'electron'
 import type { BrowserWindow } from 'electron'
 import crypto from 'crypto'
-import ffmpegLegacy from 'fluent-ffmpeg'
 import * as store from './store'
 import * as tray from './tray'
 import * as mailer from './mailer'
@@ -767,11 +766,11 @@ export function recoverCrashedSession(): void {
   fs.mkdirSync(path.dirname(out), { recursive: true })
 
   // Use -c copy to remux without re-encoding — fixes container headers in partial files
-  ffmpegLegacy.setFfmpegPath(ffmpegBin)
-  ffmpegLegacy(filePath)
-    .outputOptions(['-c', 'copy', '-y'])
-    .output(out)
-    .on('end', () => {
+  const proc = spawn(ffmpegBin, ['-nostdin', '-hide_banner', '-i', filePath, '-c', 'copy', '-y', out], {
+    stdio: ['ignore', 'ignore', 'pipe']
+  })
+  proc.on('close', code => {
+    if (code === 0) {
       unlinkSilent(filePath)
       const durationSec = Math.round((Date.now() - recovery.startTime) / 1000)
       const recDate     = new Date(recovery.startTime)
@@ -784,16 +783,15 @@ export function recoverCrashedSession(): void {
         status:    'ok'
       })
       notify('SundayRec', getNL().recovered.replace('{file}', path.basename(out)))
-    })
-    .on('error', () => {
+    } else {
       // -c copy failed (very corrupt file); try to keep what we have
       console.error('[recorder] recovery remux failed for', filePath)
       try {
         fs.renameSync(filePath, out)
         notify('SundayRec', getNL().recovered.replace('{file}', path.basename(out)))
       } catch {}
-    })
-    .run()
+    }
+  })
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

@@ -2,34 +2,13 @@ import path from 'path'
 import fs from 'fs'
 import os from 'os'
 import { spawn } from 'child_process'
-import { app } from 'electron'
-import ffmpegStatic from 'ffmpeg-static'
-import ffmpeg from 'fluent-ffmpeg'
+import type { ChildProcess } from 'child_process'
+import { ffmpegBin } from './native-recorder'
 import { codecFor } from './recorder-utils'
 import * as store from './store'
 import type { RecordingMetadata } from '../types'
 
 const MAX_EDIT_MS = 10 * 60 * 1000   // kill ffmpeg after 10 minutes
-
-let ffmpegPath = ffmpegStatic as string
-if (app.isPackaged) {
-  const normalized = ffmpegPath.replace(/\\/g, '/')
-  const asarIdx = normalized.indexOf('app.asar/')
-  if (asarIdx !== -1) {
-    ffmpegPath = path.join(
-      normalized.slice(0, asarIdx).replace(/\//g, path.sep),
-      'app.asar.unpacked',
-      normalized.slice(asarIdx + 'app.asar/'.length).replace(/\//g, path.sep)
-    )
-  } else {
-    ffmpegPath = ffmpegPath.replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep)
-  }
-  if (!fs.existsSync(ffmpegPath)) {
-    console.error('[ffmpeg] Unpacked binary not found at', ffmpegPath, '— falling back to system PATH')
-    ffmpegPath = 'ffmpeg'
-  }
-}
-ffmpeg.setFfmpegPath(ffmpegPath)
 
 // Atomically replace targetPath with tempPath, keeping the original safe until swap completes.
 // On POSIX: rename() replaces the target atomically (no gap where file is missing).
@@ -44,7 +23,6 @@ async function safeReplaceFile(tempPath: string, targetPath: string): Promise<vo
   try {
     await fs.promises.rename(tempPath, targetPath)
   } catch (err) {
-    // Restore original if rename failed
     await fs.promises.rename(bakPath, targetPath).catch(() => {})
     throw err
   }
@@ -87,6 +65,50 @@ export interface EditorExportParams {
   onProgress?:  (percent: number) => void
 }
 
+// ── ffmpeg spawn helper ───────────────────────────────────────────────────────
+
+interface FfmpegHandle {
+  proc:    ChildProcess
+  promise: Promise<void>
+}
+
+function spawnFfmpeg(
+  args: string[],
+  durationSec: number,
+  onProgress?: (pct: number) => void
+): FfmpegHandle {
+  const proc = spawn(ffmpegBin, ['-nostdin', '-hide_banner', ...args], {
+    stdio: ['ignore', 'ignore', 'pipe']
+  })
+  const promise = new Promise<void>((resolve, reject) => {
+    let stderr = ''
+    proc.stderr?.on('data', (d: Buffer) => {
+      stderr += d.toString()
+      if (onProgress && durationSec > 0) {
+        const m = stderr.slice(-300).match(/time=(\d+):(\d+):([\d.]+)/)
+        if (m) {
+          const t = parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseFloat(m[3])
+          onProgress(Math.min(98, Math.round((t / durationSec) * 100)))
+        }
+      }
+    })
+    proc.on('close', code => {
+      if (code === 0) resolve()
+      else reject(new Error(stderr.slice(-500)))
+    })
+  })
+  return { proc, promise }
+}
+
+function codecArgs(fmt: string, bitrate?: number, bitDepth?: 16 | 24): string[] {
+  if (fmt === 'wav')  return ['-c:a', bitDepth === 24 ? 'pcm_s24le' : 'pcm_s16le']
+  if (fmt === 'flac') return ['-c:a', 'flac']
+  if (fmt === 'aac')  return ['-c:a', 'aac', '-b:a', `${bitrate ?? 192}k`]
+  return ['-c:a', 'libmp3lame', '-b:a', `${bitrate ?? 192}k`]
+}
+
+// ── saveEdited ────────────────────────────────────────────────────────────────
+
 export async function saveEdited(params: EditorSaveParams): Promise<EditorSaveResult> {
   const { inputPath, cutRegions, duration, mode } = params
 
@@ -98,7 +120,6 @@ export async function saveEdited(params: EditorSaveParams): Promise<EditorSaveRe
   const rawExt = path.extname(inputPath).slice(1).toLowerCase()
   const ext    = ['mp3', 'wav', 'flac', 'aac'].includes(rawExt) ? rawExt : 'mp3'
 
-  // Compute keep segments (inverse of cut regions)
   const sorted = [...cutRegions].sort((a, b) => a.start - b.start)
   const keeps: { start: number; end: number }[] = []
   let cursor = 0
@@ -107,10 +128,8 @@ export async function saveEdited(params: EditorSaveParams): Promise<EditorSaveRe
     cursor = Math.max(cursor, c.end)
   }
   if (cursor < duration - 0.05) keeps.push({ start: cursor, end: duration })
-
   if (!keeps.length) return { ok: false, error: 'no_audio_remaining' }
 
-  // Output path
   let outPath: string
   let tempPath: string | null = null
 
@@ -131,66 +150,55 @@ export async function saveEdited(params: EditorSaveParams): Promise<EditorSaveRe
 
   const s = store.getAll()
 
-  return new Promise(resolve => {
-    let settled = false
-    const finish = (result: EditorSaveResult) => {
-      if (settled) return
-      settled = true
-      clearTimeout(killTimer)
-      resolve(result)
+  let args: string[]
+  if (keeps.length === 1) {
+    const seg = keeps[0]
+    args = [
+      '-i', inputPath,
+      '-af', `atrim=start=${seg.start.toFixed(4)}:end=${seg.end.toFixed(4)},asetpts=PTS-STARTPTS`,
+      ...codecArgs(ext, +(s.bitrate ?? 192)),
+      '-y', outPath,
+    ]
+  } else {
+    const parts = keeps.map((seg, i) =>
+      `[0:a]atrim=start=${seg.start.toFixed(4)}:end=${seg.end.toFixed(4)},asetpts=PTS-STARTPTS[seg${i}]`
+    )
+    const inputs = keeps.map((_, i) => `[seg${i}]`).join('')
+    parts.push(`${inputs}concat=n=${keeps.length}:v=0:a=1[out]`)
+    args = [
+      '-i', inputPath,
+      '-filter_complex', parts.join(';'),
+      '-map', '[out]',
+      ...codecArgs(ext, +(s.bitrate ?? 192)),
+      '-y', outPath,
+    ]
+  }
+
+  const { proc, promise } = spawnFfmpeg(args, duration)
+  const killTimer = setTimeout(() => {
+    try { proc.kill('SIGTERM') } catch {}
+    if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
+  }, MAX_EDIT_MS)
+
+  try {
+    await promise
+    clearTimeout(killTimer)
+    if (mode === 'replace' && tempPath) {
+      await safeReplaceFile(tempPath, inputPath)
+      return { ok: true, outputPath: inputPath }
     }
-
-    const cmd = ffmpeg(inputPath)
-
-    // Guard against hung ffmpeg — kill after 10 minutes
-    const killTimer = setTimeout(() => {
-      try { cmd.kill('SIGTERM') } catch {}
-      if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
-      finish({ ok: false, error: 'timeout' })
-    }, MAX_EDIT_MS)
-
-    if (keeps.length === 1) {
-      const seg = keeps[0]
-      cmd.audioFilters(
-        `atrim=start=${seg.start.toFixed(4)}:end=${seg.end.toFixed(4)},asetpts=PTS-STARTPTS`
-      )
-    } else {
-      const parts = keeps.map((seg, i) =>
-        `[0:a]atrim=start=${seg.start.toFixed(4)}:end=${seg.end.toFixed(4)},asetpts=PTS-STARTPTS[seg${i}]`
-      )
-      const inputs = keeps.map((_, i) => `[seg${i}]`).join('')
-      parts.push(`${inputs}concat=n=${keeps.length}:v=0:a=1[out]`)
-      cmd.complexFilter(parts.join(';')).addOutputOption('-map', '[out]')
-    }
-
-    cmd.audioCodec(codecFor(ext))
-    if (ext === 'mp3' || ext === 'aac') {
-      cmd.audioBitrate(String(s.bitrate ?? '192') + 'k')
-    }
-
-    cmd
-      .output(outPath)
-      .on('end', async () => {
-        if (mode === 'replace' && tempPath) {
-          try {
-            await safeReplaceFile(tempPath, inputPath)
-            finish({ ok: true, outputPath: inputPath })
-          } catch (err) {
-            finish({ ok: false, error: (err as Error).message })
-          }
-        } else {
-          finish({ ok: true, outputPath: outPath })
-        }
-      })
-      .on('error', (err: Error) => {
-        if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
-        finish({ ok: false, error: err.message })
-      })
-      .run()
-  })
+    return { ok: true, outputPath: outPath }
+  } catch (err) {
+    clearTimeout(killTimer)
+    if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
+    const msg = (err as Error).message
+    if (msg.includes('timeout')) return { ok: false, error: 'timeout' }
+    return { ok: false, error: msg }
+  }
 }
 
-// ── Full export with format + processing + intro/outro + metadata ─────────
+// ── exportEdited ──────────────────────────────────────────────────────────────
+
 export async function exportEdited(params: EditorExportParams): Promise<EditorSaveResult> {
   const { inputPath, cutRegions, duration, mode, outputFolder, outputFilename,
           outputFormat, outputBitrate, outputBitDepth, processing,
@@ -203,7 +211,6 @@ export async function exportEdited(params: EditorExportParams): Promise<EditorSa
 
   const fmt = (['mp3', 'wav', 'flac', 'aac'] as const).includes(outputFormat as 'mp3') ? outputFormat : 'mp3'
 
-  // Build keep segments
   const sorted = [...cutRegions].sort((a, b) => a.start - b.start)
   const keeps: { start: number; end: number }[] = []
   let cursor = 0
@@ -214,11 +221,9 @@ export async function exportEdited(params: EditorExportParams): Promise<EditorSa
   if (cursor < duration - 0.05) keeps.push({ start: cursor, end: duration })
   if (!keeps.length) return { ok: false, error: 'no_audio_remaining' }
 
-  // Validate intro/outro paths
   const hasIntro = !!(introPath && fs.existsSync(introPath))
   const hasOutro = !!(outroPath && fs.existsSync(outroPath))
 
-  // Compute output path
   let outPath: string
   let tempPath: string | null = null
 
@@ -244,92 +249,67 @@ export async function exportEdited(params: EditorExportParams): Promise<EditorSa
 
   fs.mkdirSync(path.dirname(outPath), { recursive: true })
 
-  // Build ffmpeg metadata file for chapters (if any)
+  // ffmpeg metadata file for chapters
   let metaFilePath: string | null = null
   if (metadata?.chapters?.length) {
     metaFilePath = path.join(os.tmpdir(), `sundayrec_meta_${Date.now()}.txt`)
     const lines = [';FFMETADATA1']
-    if (metadata.title)   lines.push(`title=${metadata.title}`)
-    if (metadata.speaker) lines.push(`artist=${metadata.speaker}`)
+    if (metadata.title)       lines.push(`title=${metadata.title}`)
+    if (metadata.speaker)     lines.push(`artist=${metadata.speaker}`)
     if (metadata.description) lines.push(`comment=${metadata.description}`)
-
-    // Chapters (timebase 1/1000 = milliseconds)
     for (let i = 0; i < metadata.chapters.length; i++) {
       const ch    = metadata.chapters[i]
       const next  = metadata.chapters[i + 1]
-      const start = Math.round((ch.time + (hasIntro && introPath ? 0 : 0)) * 1000)
+      const start = Math.round(ch.time * 1000)
       const end   = next ? Math.round(next.time * 1000) - 1 : Math.round(duration * 1000)
       lines.push('[CHAPTER]', 'TIMEBASE=1/1000', `START=${start}`, `END=${end}`, `title=${ch.title}`)
     }
     fs.writeFileSync(metaFilePath, lines.join('\n'), 'utf8')
   }
 
-  return new Promise(resolve => {
-    let settled = false
-    let killTimer: ReturnType<typeof setTimeout> | null = null
+  const procFilters = processing.ffmpegFilters ?? []
 
-    const finish = (result: EditorSaveResult) => {
-      if (settled) return
-      settled = true
-      if (killTimer) clearTimeout(killTimer)
-      if (metaFilePath) fs.promises.unlink(metaFilePath!).catch(() => {})
-      resolve(result)
-    }
+  // Input index tracking
+  const mainInputIdx = hasIntro ? 1 : 0
+  const outroInputIdx = mainInputIdx + 1
+  const metaInputIdx  = outroInputIdx + (hasOutro ? 1 : 0)
 
-    const procFilters = processing.ffmpegFilters ?? []
+  // Build -i flags
+  const inputArgs: string[] = []
+  if (hasIntro)   inputArgs.push('-i', introPath!)
+  inputArgs.push('-i', inputPath)
+  if (hasOutro)   inputArgs.push('-i', outroPath!)
+  if (metaFilePath) inputArgs.push('-i', metaFilePath)
 
-    // ── Simple case: single segment, no processing, no intro/outro ──
-    if (keeps.length === 1 && procFilters.length === 0 && !hasIntro && !hasOutro) {
-      const seg = keeps[0]
-      const mainCmd = ffmpeg(inputPath)
-      killTimer = setTimeout(() => {
-        try { mainCmd.kill('SIGTERM') } catch {}
-        if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
-        finish({ ok: false, error: 'timeout' })
-      }, MAX_EDIT_MS)
-      mainCmd.audioFilters(`atrim=start=${seg.start.toFixed(4)}:end=${seg.end.toFixed(4)},asetpts=PTS-STARTPTS`)
-      mainCmd.on('progress', p => { params.onProgress?.(Math.min(98, p.percent ?? 0)) })
-      applyCodec(mainCmd, fmt, outputBitrate, outputBitDepth)
-      if (metaFilePath) mainCmd.input(metaFilePath).addOutputOption('-map_metadata', '1')
-      if (metadata?.title)   mainCmd.outputOptions('-metadata', `title=${metadata.title}`)
-      if (metadata?.speaker) mainCmd.outputOptions('-metadata', `artist=${metadata.speaker}`)
-      mainCmd.output(outPath)
-        .on('end', async () => {
-          if (mode === 'replace' && tempPath) {
-            try { await safeReplaceFile(tempPath, inputPath); finish({ ok: true, outputPath: inputPath }) }
-            catch (err) { finish({ ok: false, error: (err as Error).message }) }
-          } else { finish({ ok: true, outputPath: outPath }) }
-        })
-        .on('error', (err: Error) => {
-          if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
-          finish({ ok: false, error: err.message })
-        })
-        .run()
-      return
-    }
+  // Metadata output options
+  const metaArgs: string[] = []
+  if (metaFilePath) metaArgs.push('-map_metadata', String(metaInputIdx))
+  if (metadata?.title)       metaArgs.push('-metadata', `title=${metadata.title}`)
+  if (metadata?.speaker)     metaArgs.push('-metadata', `artist=${metadata.speaker}`)
+  if (metadata?.description) metaArgs.push('-metadata', `comment=${metadata.description}`)
 
-    // ── Complex case: multiple segments, processing, or intro/outro ──
-    const cmd = ffmpeg()
-    killTimer = setTimeout(() => {
-      try { cmd.kill('SIGTERM') } catch {}
-      if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
-      finish({ ok: false, error: 'timeout' })
-    }, MAX_EDIT_MS)
+  let args: string[]
 
-    let mainInputIdx = 0
-    if (hasIntro) { cmd.input(introPath!); mainInputIdx = 1 }
-    cmd.input(inputPath)
-    const mainRef = `[${mainInputIdx}:a]`
-    if (hasOutro) { cmd.input(outroPath!); }
-
-    // Build main content filter (cuts + processing)
+  if (keeps.length === 1 && procFilters.length === 0 && !hasIntro && !hasOutro) {
+    // Simple case: single segment, no processing, no intro/outro
+    const seg = keeps[0]
+    args = [
+      ...inputArgs,
+      '-af', `atrim=start=${seg.start.toFixed(4)}:end=${seg.end.toFixed(4)},asetpts=PTS-STARTPTS`,
+      ...metaArgs,
+      ...codecArgs(fmt, outputBitrate, outputBitDepth),
+      '-y', outPath,
+    ]
+  } else {
+    // Complex case: multi-segment, processing, or intro/outro
+    const mainRef  = `[${mainInputIdx}:a]`
     const filterParts: string[] = []
 
     if (keeps.length === 1) {
       const seg = keeps[0]
       const chainFilters = [
         `${mainRef}atrim=start=${seg.start.toFixed(4)}:end=${seg.end.toFixed(4)},asetpts=PTS-STARTPTS`,
-        ...procFilters
+        ...procFilters,
       ]
       filterParts.push(chainFilters.join(',') + '[main_out]')
     } else {
@@ -345,15 +325,12 @@ export async function exportEdited(params: EditorExportParams): Promise<EditorSa
       }
     }
 
-    // Build concat list: intro + main + outro
     const concatParts: string[] = []
     if (hasIntro) concatParts.push('[0:a]aformat=sample_fmts=fltp[intro_fmt]')
     concatParts.push(...filterParts)
-    if (hasOutro) {
-      const outroIdx = hasIntro ? 2 : 1
-      concatParts.push(`[${outroIdx}:a]aformat=sample_fmts=fltp[outro_fmt]`)
-    }
+    if (hasOutro) concatParts.push(`[${outroInputIdx}:a]aformat=sample_fmts=fltp[outro_fmt]`)
 
+    let mapArg: string
     if (hasIntro || hasOutro) {
       const concatInputs = [
         ...(hasIntro ? ['[intro_fmt]'] : []),
@@ -362,43 +339,53 @@ export async function exportEdited(params: EditorExportParams): Promise<EditorSa
       ].join('')
       const n = (hasIntro ? 1 : 0) + 1 + (hasOutro ? 1 : 0)
       concatParts.push(`${concatInputs}concat=n=${n}:v=0:a=1[final_out]`)
-      cmd.complexFilter(concatParts.join(';')).addOutputOption('-map', '[final_out]')
+      mapArg = '[final_out]'
     } else {
-      cmd.complexFilter(filterParts.join(';')).addOutputOption('-map', '[main_out]')
+      mapArg = '[main_out]'
     }
 
-    // Metadata tags
-    if (metadata?.title)       cmd.outputOptions('-metadata', `title=${metadata.title}`)
-    if (metadata?.speaker)     cmd.outputOptions('-metadata', `artist=${metadata.speaker}`)
-    if (metadata?.description) cmd.outputOptions('-metadata', `comment=${metadata.description}`)
-    if (metaFilePath)          { cmd.input(metaFilePath); cmd.addOutputOption('-map_metadata', String(hasIntro ? 3 : hasOutro ? 2 : 1)) }
+    args = [
+      ...inputArgs,
+      '-filter_complex', concatParts.join(';'),
+      '-map', mapArg,
+      ...metaArgs,
+      ...codecArgs(fmt, outputBitrate, outputBitDepth),
+      '-y', outPath,
+    ]
+  }
 
-    applyCodec(cmd, fmt, outputBitrate, outputBitDepth)
-    cmd.on('progress', p => { params.onProgress?.(Math.min(98, p.percent ?? 0)) })
+  const { proc, promise } = spawnFfmpeg(args, duration, params.onProgress)
+  const killTimer = setTimeout(() => {
+    try { proc.kill('SIGTERM') } catch {}
+    if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
+  }, MAX_EDIT_MS)
 
-    cmd
-      .output(outPath)
-      .on('end', async () => {
-        if (mode === 'replace' && tempPath) {
-          try { await safeReplaceFile(tempPath, inputPath); finish({ ok: true, outputPath: inputPath }) }
-          catch (err) { finish({ ok: false, error: (err as Error).message }) }
-        } else { finish({ ok: true, outputPath: outPath }) }
-      })
-      .on('error', (err: Error) => {
-        if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
-        finish({ ok: false, error: err.message })
-      })
-      .run()
-  })
+  try {
+    await promise
+    clearTimeout(killTimer)
+    if (metaFilePath) fs.promises.unlink(metaFilePath).catch(() => {})
+    if (mode === 'replace' && tempPath) {
+      await safeReplaceFile(tempPath, inputPath)
+      return { ok: true, outputPath: inputPath }
+    }
+    return { ok: true, outputPath: outPath }
+  } catch (err) {
+    clearTimeout(killTimer)
+    if (metaFilePath) fs.promises.unlink(metaFilePath).catch(() => {})
+    if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
+    const msg = (err as Error).message
+    if (msg.includes('timeout')) return { ok: false, error: 'timeout' }
+    return { ok: false, error: msg }
+  }
 }
 
-// ── Segment detection ─────────────────────────────────────────────────────
+// ── Segment detection ─────────────────────────────────────────────────────────
 
 export interface AudioSegment {
-  start:    number   // seconds
+  start:    number
   end:      number
   duration: number
-  label:    string   // suggested chapter name
+  label:    string
   type:     'sermon' | 'section'
 }
 
@@ -409,13 +396,12 @@ export async function detectSegments(filePath: string): Promise<AudioSegment[]> 
       if (done) return; done = true; resolve(result)
     }
 
-    const args = [
-      '-hide_banner',
-      '-i', filePath,
+    const proc = spawn(ffmpegBin, [
+      '-hide_banner', '-i', filePath,
       '-af', 'silencedetect=noise=-35dB:duration=2',
       '-f', 'null', '-'
-    ]
-    const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] })
+    ], { stdio: ['ignore', 'ignore', 'pipe'] })
+
     let stderr = ''
     proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
 
@@ -439,7 +425,6 @@ export async function detectSegments(filePath: string): Promise<AudioSegment[]> 
         : 0
       if (totalDur === 0) { finish([]); return }
 
-      // Build content segments (periods between silences), min 30 s
       const segments: AudioSegment[] = []
       let cursor = 0
       for (const sil of silences) {
@@ -450,7 +435,6 @@ export async function detectSegments(filePath: string): Promise<AudioSegment[]> 
       const lastDur = totalDur - cursor
       if (lastDur >= 30) segments.push({ start: cursor, end: totalDur, duration: lastDur, label: '', type: 'section' })
 
-      // Longest segment starting after 5 min = likely sermon
       const candidates = segments.filter(s => s.start >= 300)
       const sermonSeg  = (candidates.length > 0 ? candidates : segments)
         .reduce<AudioSegment | null>((best, s) => (!best || s.duration > best.duration) ? s : best, null)
@@ -468,18 +452,6 @@ export async function detectSegments(filePath: string): Promise<AudioSegment[]> 
       finish(segments)
     })
 
-    setTimeout(() => { try { proc.kill() } catch {} ; finish([]) }, 30000)
+    setTimeout(() => { try { proc.kill() } catch {}; finish([]) }, 30000)
   })
-}
-
-function applyCodec(cmd: ReturnType<typeof ffmpeg>, fmt: string, bitrate?: number, bitDepth?: 16 | 24): void {
-  if (fmt === 'wav') {
-    cmd.audioCodec(bitDepth === 24 ? 'pcm_s24le' : 'pcm_s16le')
-  } else if (fmt === 'flac') {
-    cmd.audioCodec('flac')
-  } else if (fmt === 'aac') {
-    cmd.audioCodec('aac').audioBitrate(String(bitrate ?? 192) + 'k')
-  } else {
-    cmd.audioCodec('libmp3lame').audioBitrate(String(bitrate ?? 192) + 'k')
-  }
 }
