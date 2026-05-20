@@ -58,7 +58,7 @@ jobs:
   # ── Windows: unsigned build (Azure Trusted Signing when credentials are set) ──
   build-win:
     needs: test
-    runs-on: windows-latest
+    runs-on: windows-2025
     steps:
       - uses: actions/checkout@v5
 
