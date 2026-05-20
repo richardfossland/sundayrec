@@ -19,6 +19,7 @@ export interface MonitorSession {
   vuAnalyserL: AnalyserNode
   vuAnalyserR: AnalyserNode
   inputRouter: AudioNode
+  src:         MediaStreamAudioSourceNode
   opts:        RecordingOpts
 }
 
@@ -110,7 +111,7 @@ export async function startMonitorStream(opts: RecordingOpts): Promise<MonitorSe
   const stream = await getUserMediaWithFallback(realDeviceId, constraints)
 
   const requestedRate = opts.sampleRate ?? 48000
-  const audioCtx = new AudioContext({ latencyHint: 'playback', sampleRate: requestedRate })
+  const audioCtx = new AudioContext({ latencyHint: 'interactive', sampleRate: requestedRate })
   if (audioCtx.sampleRate !== requestedRate) {
     console.warn(`[monitor] Requested ${requestedRate}Hz but got ${audioCtx.sampleRate}Hz`)
   }
@@ -126,7 +127,7 @@ export async function startMonitorStream(opts: RecordingOpts): Promise<MonitorSe
   vuSplitter.connect(vuAnalyserL, 0)
   vuSplitter.connect(vuAnalyserR, 1)
 
-  return { stream, audioCtx, vuAnalyserL, vuAnalyserR, inputRouter, opts }
+  return { stream, audioCtx, vuAnalyserL, vuAnalyserR, inputRouter, src, opts }
 }
 
 export async function stopMonitorStream(session: MonitorSession): Promise<void> {
@@ -135,7 +136,7 @@ export async function stopMonitorStream(session: MonitorSession): Promise<void> 
 }
 
 export async function reconnectMonitorStream(session: MonitorSession): Promise<boolean> {
-  const { opts, audioCtx, inputRouter } = session
+  const { opts, audioCtx, inputRouter, src: oldSrc } = session
   const realDeviceId = opts.deviceId && opts.deviceId !== 'default' ? opts.deviceId : null
   const chL = opts.channelL ?? 0
   const chR = opts.channelR ?? 1
@@ -154,7 +155,10 @@ export async function reconnectMonitorStream(session: MonitorSession): Promise<b
     })
     const newSrc    = audioCtx.createMediaStreamSource(newStream)
     const newRouter = buildInputRouter(audioCtx, newSrc, newStream, chL, chR)
-    inputRouter.disconnect()
+    // Disconnect old graph before replacing; oldSrc.disconnect() covers both the
+    // simple case (inputRouter === src) and the splitter/merger path
+    try { oldSrc.disconnect() }     catch {}
+    try { inputRouter.disconnect() } catch {}
     const vuSplitter = audioCtx.createChannelSplitter(2)
     newRouter.connect(vuSplitter)
     vuSplitter.connect(session.vuAnalyserL, 0)
@@ -162,6 +166,7 @@ export async function reconnectMonitorStream(session: MonitorSession): Promise<b
     session.stream.getTracks().forEach(t => { t.onended = null; t.stop() })
     session.stream      = newStream
     session.inputRouter = newRouter
+    session.src         = newSrc
     return true
   } catch {
     return false

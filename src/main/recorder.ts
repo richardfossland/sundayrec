@@ -52,6 +52,8 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
     disk_full:                'Disken er full — frigjør plass og prøv igjen',
     ffmpeg_missing:           'Intern feil: opptaksbinær mangler — reinstaller appen',
     stuck_recording:          'Opptaket stoppet — ingen lyd fra enheten i 60 sekunder',
+    save_folder_permission:   'Ingen tilgang til lagringsmappen — sjekk at mappen er skrivbar',
+    save_folder_error:        'Kan ikke opprette lagringsmappe — sjekk diskplass og tillatelser',
   },
   en: {
     device_disconnected:      'Audio device disconnected during recording',
@@ -64,6 +66,8 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
     disk_full:                'Disk is full — free up space and try again',
     ffmpeg_missing:           'Internal error: recording binary missing — reinstall the app',
     stuck_recording:          'Recording stalled — no audio from device for 60 seconds',
+    save_folder_permission:   'No write access to save folder — check folder permissions',
+    save_folder_error:        'Cannot create save folder — check disk space and permissions',
   },
   de: {
     device_disconnected:      'Audiogerät während der Aufnahme getrennt',
@@ -76,6 +80,8 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
     disk_full:                'Datenträger voll — Speicher freigeben',
     ffmpeg_missing:           'Interner Fehler: Aufnahme-Binary fehlt — App neu installieren',
     stuck_recording:          'Aufnahme hängt — kein Audio von Gerät seit 60 Sekunden',
+    save_folder_permission:   'Kein Schreibzugriff auf Speicherordner — Berechtigungen prüfen',
+    save_folder_error:        'Speicherordner konnte nicht erstellt werden — Speicherplatz prüfen',
   },
   sv: {
     device_disconnected:      'Ljudenheten kopplades från under inspelning',
@@ -88,6 +94,8 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
     disk_full:                'Disken är full — frigör utrymme och försök igen',
     ffmpeg_missing:           'Internt fel: inspelningsbinär saknas — ominstallera appen',
     stuck_recording:          'Inspelningen fastnade — inget ljud från enhet på 60 sekunder',
+    save_folder_permission:   'Ingen skrivbehörighet för lagringsmappen — kontrollera behörigheter',
+    save_folder_error:        'Kan inte skapa lagringsmappen — kontrollera diskutrymme',
   },
   da: {
     device_disconnected:      'Lydenheden blev frakoblet under optagelse',
@@ -100,6 +108,8 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
     disk_full:                'Disken er fuld — frigør plads og prøv igen',
     ffmpeg_missing:           'Intern fejl: optagelsesbinær mangler — geninstaller appen',
     stuck_recording:          'Optagelsen gik i stå — intet lyd fra enhed i 60 sekunder',
+    save_folder_permission:   'Ingen skriveadgang til lagringsmappe — tjek mappetilladelser',
+    save_folder_error:        'Kan ikke oprette lagringsmappe — tjek diskplads',
   },
   pl: {
     device_disconnected:      'Urządzenie audio rozłączone podczas nagrywania',
@@ -112,6 +122,8 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
     disk_full:                'Dysk jest pełny — zwolnij miejsce i spróbuj ponownie',
     ffmpeg_missing:           'Błąd wewnętrzny: brak pliku nagrywania — zainstaluj ponownie',
     stuck_recording:          'Nagrywanie utknęło — brak dźwięku z urządzenia przez 60 sekund',
+    save_folder_permission:   'Brak dostępu do folderu zapisu — sprawdź uprawnienia',
+    save_folder_error:        'Nie można utworzyć folderu zapisu — sprawdź miejsce na dysku',
   },
   fr: {
     device_disconnected:      "Périphérique audio déconnecté pendant l'enregistrement",
@@ -124,6 +136,8 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
     disk_full:                'Disque plein — libérez de l\'espace et réessayez',
     ffmpeg_missing:           'Erreur interne : binaire manquant — réinstallez l\'application',
     stuck_recording:          'Enregistrement bloqué — aucun audio depuis 60 secondes',
+    save_folder_permission:   "Pas d'accès en écriture au dossier — vérifiez les permissions",
+    save_folder_error:        "Impossible de créer le dossier d'enregistrement — vérifiez l'espace disque",
   },
 }
 
@@ -145,19 +159,21 @@ export const NOTIFY_LABELS: Record<string, { done: string; err: string; recovere
 // ── Session state ────────────────────────────────────────────────────────────
 
 interface Session {
-  settings:       RecordingOpts
-  outputPath:     string
-  sessionId:      string
-  handle:         NativeHandle
-  startTime:      number
-  win:            BrowserWindow
-  maxTimer:       ReturnType<typeof setTimeout> | null
-  stuckTimer:     ReturnType<typeof setInterval> | null
-  lastProgressAt: number
-  stopping:       boolean
-  reconnectCount: number
-  prerollRaw:     string | null
-  prerollMs:      number
+  settings:         RecordingOpts
+  outputPath:       string
+  sessionId:        string
+  handle:           NativeHandle
+  startTime:        number
+  sessionStartTime: number   // original start — never updated on reconnect
+  win:              BrowserWindow
+  maxTimer:         ReturnType<typeof setTimeout> | null
+  stuckTimer:       ReturnType<typeof setInterval> | null
+  lastProgressAt:   number
+  stopping:         boolean
+  reconnectCount:   number
+  prerollRaw:       string | null
+  prerollMs:        number
+  segments:         string[]  // all output paths in order (reconnect segments appended)
 }
 
 let activeSession:       Session | null      = null
@@ -304,12 +320,14 @@ export async function startSession(
 
   activeSession = {
     settings, outputPath, sessionId, handle,
-    startTime: handle.startTime,
+    startTime:        handle.startTime,
+    sessionStartTime: handle.startTime,
     win, maxTimer: null, stuckTimer: null,
     lastProgressAt: Date.now(),
     stopping: false, reconnectCount: 0,
     prerollRaw: prerollData?.rawPath ?? null,
     prerollMs:  prerollData?.trimMs  ?? 0,
+    segments:   [outputPath],
   }
 
   // Persist recovery info so a crash restart can salvage the partial file
@@ -392,41 +410,80 @@ function finishSession(session: Session): void {
   stopBlockers()
   store.set('activeRecovery', null)
 
-  const durationSec = Math.round((Date.now() - session.startTime) / 1000)
-  const recDate     = new Date(session.startTime)
-  const exists      = fs.existsSync(session.outputPath)
-  const size        = exists ? fs.statSync(session.outputPath).size : 0
+  // Use the original session start so duration/date are correct even after reconnects
+  const durationSec = Math.round((Date.now() - session.sessionStartTime) / 1000)
+  const recDate     = new Date(session.sessionStartTime)
 
-  if (!exists || size < 1000) {
-    const msg = localizeError('empty_output')
-    safeSend(session.win, 'recording-error', { error: 'empty_output', message: msg })
-    tray.setRecording(false)
-    tray.setError(true)
-    notify(getNL().err, msg)
-    notifyIdle()
-    sessionEndCallback?.()
-    return
+  // For single-segment sessions, guard against a completely empty output.
+  // Multi-segment sessions: at least one earlier segment has data; let mergeSegments validate.
+  if (session.segments.length === 1) {
+    const exists = fs.existsSync(session.outputPath)
+    const size   = exists ? fs.statSync(session.outputPath).size : 0
+    if (!exists || size < 1000) {
+      const msg = localizeError('empty_output')
+      safeSend(session.win, 'recording-error', { error: 'empty_output', message: msg })
+      tray.setRecording(false)
+      tray.setError(true)
+      notify(getNL().err, msg)
+      notifyIdle()
+      sessionEndCallback?.()
+      return
+    }
   }
 
   tray.setRecording(false)
 
-  // Apply pre-roll (encode + concat) — async, notifies renderer when done
   finishSessionAsync(session, durationSec, recDate).catch(err =>
     console.error('[recorder] finishSessionAsync error:', err)
   )
 }
 
 async function finishSessionAsync(session: Session, durationSec: number, recDate: Date): Promise<void> {
+  // Step 1: Pre-roll always prepends to the very first segment (the start of the recording).
+  // Previously this targeted session.outputPath which after reconnects pointed to the last
+  // segment — applying pre-roll mid-recording was wrong. segments[0] is always the correct target.
   if (session.prerollRaw && session.prerollMs > 0) {
     try {
-      await applyPreroll(session.prerollRaw, session.prerollMs, session.outputPath, session.settings)
+      await applyPreroll(session.prerollRaw, session.prerollMs, session.segments[0], session.settings)
     } catch (err) {
       console.error('[recorder] pre-roll concat failed — continuing without pre-roll:', err)
-      // Clean up orphaned raw file if concat failed
       fs.promises.unlink(session.prerollRaw).catch(() => {})
     }
   }
 
+  // Step 2: Merge reconnect segments (if any) into a single file at segments[0].
+  if (session.segments.length > 1) {
+    const ok = await mergeSegments(session.segments)
+    if (ok) {
+      session.outputPath = session.segments[0]
+    } else {
+      // Merge failed — add individual history entries so no data is lost
+      console.error('[recorder] segment merge failed — adding individual segments to history')
+      for (const segPath of session.segments) {
+        try {
+          if (!fs.existsSync(segPath) || fs.statSync(segPath).size < 1000) continue
+        } catch { continue }
+        const segEntry: RecordingEntry = {
+          date:      localDateStr(recDate),
+          startTime: recDate.toTimeString().slice(0, 5),
+          duration:  '—',
+          filename:  path.basename(segPath),
+          path:      segPath,
+          status:    'ok'
+        }
+        store.addHistory(segEntry)
+        safeSend(session.win, 'recording-finished', segEntry)
+      }
+      if (store.get('notifyStop') !== false) {
+        notify('SundayRec', `${getNL().done}: ${path.basename(session.segments[0])}`)
+      }
+      notifyIdle()
+      sessionEndCallback?.()
+      return
+    }
+  }
+
+  // Step 3: Single history entry for the (now possibly merged) recording
   const entry: RecordingEntry = {
     date:      localDateStr(recDate),
     startTime: recDate.toTimeString().slice(0, 5),
@@ -526,6 +583,65 @@ async function applyPreroll(
   }
 }
 
+// ── Reconnect segment merge ──────────────────────────────────────────────────
+
+// After a session with reconnects we have N separate files (segments[0..n]).
+// This function concatenates them losslessly (-c copy) into segments[0] and
+// deletes segments[1..n]. Returns true on success, false if ffmpeg failed.
+async function mergeSegments(segments: string[]): Promise<boolean> {
+  const targetPath = segments[0]
+  const ext        = path.extname(targetPath)
+  const dir        = path.dirname(targetPath)
+  const base       = path.basename(targetPath, ext)
+  const concatList = path.join(dir, `${base}_merge.txt`)
+  const tempPath   = path.join(dir, `${base}_merge_tmp${ext}`)
+
+  try {
+    const escPath = (p: string) =>
+      (process.platform === 'win32' ? p.replace(/\\/g, '/') : p).replace(/'/g, "'\\''")
+    await fs.promises.writeFile(
+      concatList,
+      segments.map(s => `file '${escPath(s)}'`).join('\n') + '\n',
+      'utf8'
+    )
+
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn(ffmpegBin, [
+        '-nostdin', '-hide_banner',
+        '-f', 'concat', '-safe', '0',
+        '-i', concatList,
+        '-c', 'copy', '-y', tempPath,
+      ], { stdio: ['ignore', 'ignore', 'pipe'] })
+      let stderr = ''
+      proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+      proc.on('close', code => {
+        if (code === 0) resolve()
+        else reject(new Error(`merge failed (${code}): ${stderr.slice(-500)}`))
+      })
+    })
+
+    if (process.platform === 'win32') {
+      fs.copyFileSync(tempPath, targetPath)
+      fs.unlinkSync(tempPath)
+    } else {
+      fs.renameSync(tempPath, targetPath)
+    }
+
+    for (const seg of segments.slice(1)) {
+      fs.promises.unlink(seg).catch(() => {})
+    }
+
+    console.log(`[recorder] merged ${segments.length} reconnect segments → ${path.basename(targetPath)}`)
+    return true
+  } catch (err) {
+    console.error('[recorder] mergeSegments failed:', err)
+    fs.promises.unlink(tempPath).catch(() => {})
+    return false
+  } finally {
+    fs.promises.unlink(concatList).catch(() => {})
+  }
+}
+
 // ── Watchdog: reconnect after unexpected ffmpeg death ───────────────────────
 
 // 10 attempts with exponential backoff: 2s, 3s, 4s, 5s, 5s… ≈ 50 s total window
@@ -569,10 +685,11 @@ function startWatchdog(session: Session): void {
 
     // Reconnect succeeded — update session in place
     console.log('[recorder] Reconnected! New segment:', newPath)
-    session.outputPath    = newPath
-    session.handle        = result
-    session.startTime     = result.startTime
+    session.outputPath     = newPath
+    session.handle         = result
+    session.startTime      = result.startTime
     session.lastProgressAt = Date.now()
+    session.segments.push(newPath)
     store.set('activeRecovery', { outputPath: newPath, startTime: result.startTime, sessionId: session.sessionId })
 
     result.onProgress = bytes => {

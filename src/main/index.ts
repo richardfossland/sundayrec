@@ -331,7 +331,11 @@ function setupIPC(): void {
     if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return false
     store.setAll(settings)
     scheduler.reschedule()
-    app.setLoginItemSettings({ openAtLogin: !!settings.launchAtLogin, openAsHidden: true })
+    if (process.platform === 'win32') {
+      app.setLoginItemSettings({ openAtLogin: !!settings.launchAtLogin, path: process.execPath, args: settings.launchAtLogin ? ['--hidden'] : [] })
+    } else {
+      app.setLoginItemSettings({ openAtLogin: !!settings.launchAtLogin, openAsHidden: true })
+    }
     const upcomingAfterSave = scheduler.getUpcomingDates()
     wake.reschedule(upcomingAfterSave, mainWindow).catch(err => console.error('[wake] reschedule error:', err))
     tray.setNextRecording(upcomingAfterSave[0] ?? null)

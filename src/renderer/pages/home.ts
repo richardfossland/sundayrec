@@ -8,10 +8,25 @@ let countdownTimer: ReturnType<typeof setInterval> | null = null
 let fullHistory: RecordingEntry[] = []
 
 export function setupHome(): void {
-  document.getElementById('btn-go-audio-page')?.addEventListener('click', e => { e.preventDefault(); window.showPage('settings') })
-  document.getElementById('btn-go-audio-fmt')?.addEventListener('click',  e => { e.preventDefault(); window.showPage('settings') })
-  document.getElementById('btn-go-general-page')?.addEventListener('click', e => { e.preventDefault(); window.showPage('settings') })
-  document.getElementById('btn-how-to-fix')?.addEventListener('click', () => window.showPage('settings'))
+  document.getElementById('btn-go-audio-page')?.addEventListener('click', e => {
+    e.preventDefault()
+    window.showPage('settings')
+    document.querySelector<HTMLElement>('#settings-tabs .inner-tab[data-tab="settings-audio"]')?.click()
+  })
+  document.getElementById('btn-go-audio-fmt')?.addEventListener('click', e => {
+    e.preventDefault()
+    window.showPage('settings')
+    document.querySelector<HTMLElement>('#settings-tabs .inner-tab[data-tab="settings-files"]')?.click()
+  })
+  document.getElementById('btn-go-general-page')?.addEventListener('click', e => {
+    e.preventDefault()
+    window.showPage('settings')
+    document.querySelector<HTMLElement>('#settings-tabs .inner-tab[data-tab="settings-files"]')?.click()
+  })
+  document.getElementById('btn-how-to-fix')?.addEventListener('click', () => {
+    window.showPage('settings')
+    document.querySelector<HTMLElement>('#settings-tabs .inner-tab[data-tab="settings-audio"]')?.click()
+  })
 
   document.getElementById('btn-prune-history')?.addEventListener('click', async e => {
     e.preventDefault()
@@ -191,11 +206,10 @@ function updateHistoryStats(history: RecordingEntry[]): void {
   if (countEl) countEl.textContent = `${ok.length} ${t('history.totalCount', 'opptak')}`
   let totalSec = 0
   for (const r of ok) {
-    const parts = (r.duration || '0').split(':').map(Number)
-    if (parts.some(isNaN)) continue
-    if (parts.length === 3)      totalSec += parts[0] * 3600 + parts[1] * 60 + parts[2]
-    else if (parts.length === 2) totalSec += parts[0] * 60 + parts[1]
-    else                         totalSec += parts[0]
+    // formatDuration returns "Xt Ym" (e.g. "1t 30m" or "75m")
+    const m = (r.duration || '').match(/^(?:(\d+)t\s*)?(\d+)m$/)
+    if (!m) continue
+    totalSec += (parseInt(m[1] ?? '0') || 0) * 3600 + parseInt(m[2]) * 60
   }
   const th = Math.floor(totalSec / 3600), tm = Math.round((totalSec % 3600) / 60)
   if (durationEl) durationEl.textContent = th > 0
@@ -255,7 +269,7 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
       showNoteModal(r.note ?? '', async (newNote: string) => {
         r.note = newNote.trim() || undefined
         await window.api.updateHistoryNote(r.timestamp!, newNote.trim())
-        const fileCell = tr.cells[3]
+        const fileCell = tr.cells[2]
         const existing = fileCell.querySelector('.hist-note')
         if (existing) existing.remove()
         if (r.note) {
@@ -291,7 +305,7 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
     cells.forEach((text, i) => {
       const td = document.createElement('td')
       td.textContent = text
-      if (i === 3) {
+      if (i === 2) {
         if (r.path) td.title = r.path
         if (r.note) {
           td.appendChild(Object.assign(document.createElement('div'), { className: 'hist-note', textContent: r.note }))

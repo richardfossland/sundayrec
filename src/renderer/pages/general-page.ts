@@ -179,7 +179,11 @@ async function saveGeneralSettings(): Promise<void> {
   })
   await window.api.saveSettings(settings)
   if (newLang !== currentLang) loadLocale(newLang)
-  flashSaved(document.getElementById('btn-general-save'))
+  const activeTab = document.querySelector<HTMLElement>('#settings-tabs .inner-tab.active')?.dataset.tab
+  const flashBtn = activeTab === 'settings-notifications'
+    ? document.getElementById('btn-varsler-save')
+    : document.getElementById('btn-general-save')
+  flashSaved(flashBtn)
 }
 
 function toggleEmailSection(): void {

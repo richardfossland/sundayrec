@@ -133,12 +133,16 @@ export async function stop(): Promise<void> {
 async function stopProc(proc: ChildProcess): Promise<void> {
   if (proc.exitCode !== null) return
   return new Promise(resolve => {
-    proc.once('close', () => resolve())
+    let killer: ReturnType<typeof setTimeout> | null = null
+    proc.once('close', () => {
+      if (killer) clearTimeout(killer)
+      resolve()
+    })
     if (process.platform === 'win32') {
       try { proc.kill('SIGTERM') } catch {}
     } else {
       try { proc.stdin?.write('q'); proc.stdin?.end() } catch {}
-      setTimeout(() => { try { proc.kill('SIGTERM') } catch {} }, 5000)
+      killer = setTimeout(() => { try { proc.kill('SIGTERM') } catch {} }, 5000)
     }
   })
 }

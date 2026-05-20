@@ -185,6 +185,7 @@ async function saveSpecial(): Promise<void> {
   const start = startEl?.value || '11:00'
   const stop  = stopEl?.value  || '12:00'
   if (!date) { flashMsg(document.getElementById('btn-add-special'), '✕ ' + t('calendar.errNoDate', 'Velg en dato først'), false); return }
+  if (!start || !stop || start === stop) { flashMsg(document.getElementById('btn-add-special'), '✕ ' + t('schedule.errTimes', 'Ugyldig tidspunkt'), false); return }
   if (!settings.specialRecordings) settings.specialRecordings = []
   lastStart = start; lastStop = stop
 

@@ -69,12 +69,6 @@ export function applyAudioSettingsToUI(): void {
   setVal('comp-ratio',     settings.compRatio     ?? 4)
   setVal('comp-attack',    settings.compAttack    ?? 10)
   setVal('comp-release',   settings.compRelease   ?? 200)
-  updateSliderLabel('comp-threshold', 'comp-threshold-val', ' dB')
-  const crEl  = document.getElementById('comp-ratio') as HTMLInputElement | null
-  const crLbl = document.getElementById('comp-ratio-val')
-  if (crEl && crLbl) crLbl.textContent = crEl.value + ':1'
-  updateSliderLabel('comp-attack',  'comp-attack-val',  ' ms')
-  updateSliderLabel('comp-release', 'comp-release-val', ' ms')
 }
 
 function updateVolumeLabel(): void {
