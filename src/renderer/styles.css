@@ -681,6 +681,17 @@ body.platform-win32 ::-webkit-scrollbar-thumb { border-radius: 4px; }
 .card-desc  { font-size: 13px; color: var(--text2); margin-bottom: 14px; line-height: 1.6; }
 .card-hdr   { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 
+/* Setting highlight — pulsing glow when navigating from home Endre button */
+@keyframes settingPulse {
+  0%   { box-shadow: 0 0 0 0   rgba(240,187,71,.0),  0 2px 12px rgba(0,0,0,.25); border-color: var(--border); }
+  20%  { box-shadow: 0 0 0 3px rgba(240,187,71,.55), 0 0 28px rgba(240,187,71,.2); border-color: var(--accent-border); }
+  60%  { box-shadow: 0 0 0 2px rgba(240,187,71,.35), 0 0 16px rgba(240,187,71,.12); border-color: var(--accent-border); }
+  100% { box-shadow: 0 0 0 0   rgba(240,187,71,.0),  0 2px 12px rgba(0,0,0,.25); border-color: var(--border); }
+}
+.card.setting-highlight {
+  animation: settingPulse 1.4s ease-out 3;
+}
+
 /* ── Forms ─────────────────────────────────────────────────────── */
 .form-label {
   display: block; font-size: 11px; font-weight: 600; letter-spacing: .5px;
@@ -915,6 +926,56 @@ select.form-input {
 .planned-date { font-size: 11px; color: var(--text3); margin-top: 2px; }
 .planned-del  { cursor: pointer; color: var(--text3); font-size: 16px; transition: color .15s; flex-shrink: 0; }
 .planned-del:hover { color: var(--red); }
+
+/* ══ RESPONSIVE — intermediate (≤ 980px window) ═══════════════════════
+   Content area ≈ 700px. Reduce padding, keep 3-column info strip but tighten.
+   ════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 980px) {
+  #main { padding: 22px 22px; }
+  body.platform-darwin #main { padding-top: 38px; }
+
+  /* Hero: tighten spacing */
+  .hero { padding: 16px 18px; gap: 14px; margin-bottom: 16px; }
+  .hero-title { font-size: 15px; }
+  .next-date  { font-size: 13px; }
+
+  /* Info cards: reduce padding so text has more room */
+  .info-card { padding: 11px 12px; gap: 10px; }
+  .info-card-icon { width: 26px; height: 26px; }
+
+  /* Calendar: right panel wraps below and goes full-width */
+  .cal-right { width: 100%; flex: 1 1 100%; }
+}
+
+/* ══ RESPONSIVE — compact (≤ 880px window) ════════════════════════════
+   Content area ≈ 620px. Switch info strip to 2-column, reduce more padding.
+   ════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 880px) {
+  #main { padding: 18px 18px; }
+  body.platform-darwin #main { padding-top: 34px; }
+
+  /* Hero: hide next-recording block — too cramped */
+  .hero-next { display: none; }
+  .hero { padding: 14px 16px; gap: 12px; margin-bottom: 14px; }
+
+  /* Info strip → 2-column grid; storage card spans full width */
+  .info-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .info-strip .info-card:last-child { grid-column: 1 / -1; }
+  .info-card { min-width: 0; }
+
+  /* Hide "Endre" action buttons — navigation via sidebar still works */
+  .info-card-action { display: none; }
+
+  /* VU section: reduce padding */
+  .vu-section { padding: 12px; margin-bottom: 16px; }
+
+  /* Section header + history search */
+  .section-header { margin-bottom: 10px; }
+}
 
 /* ── Calendar responsive (narrow window) ──────────────────────── */
 @media (max-width: 900px) {

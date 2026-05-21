@@ -7,21 +7,36 @@ import { getAudioDevices } from '../audio/capture'
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 let fullHistory: RecordingEntry[] = []
 
+function highlightCard(card: HTMLElement | null): void {
+  if (!card) return
+  card.classList.remove('setting-highlight')
+  void card.offsetWidth // restart animation if already active
+  card.classList.add('setting-highlight')
+  requestAnimationFrame(() => card.scrollIntoView({ behavior: 'smooth', block: 'center' }))
+  setTimeout(() => card.classList.remove('setting-highlight'), 4400)
+}
+
 export function setupHome(): void {
   document.getElementById('btn-go-audio-page')?.addEventListener('click', e => {
     e.preventDefault()
     window.showPage('settings')
     document.querySelector<HTMLElement>('#settings-tabs .inner-tab[data-tab="settings-audio"]')?.click()
+    requestAnimationFrame(() =>
+      highlightCard(document.querySelector('#settings-audio .card')))
   })
   document.getElementById('btn-go-audio-fmt')?.addEventListener('click', e => {
     e.preventDefault()
     window.showPage('settings')
     document.querySelector<HTMLElement>('#settings-tabs .inner-tab[data-tab="settings-files"]')?.click()
+    requestAnimationFrame(() =>
+      highlightCard(document.getElementById('format-group')?.closest('.card') as HTMLElement ?? null))
   })
   document.getElementById('btn-go-general-page')?.addEventListener('click', e => {
     e.preventDefault()
     window.showPage('settings')
     document.querySelector<HTMLElement>('#settings-tabs .inner-tab[data-tab="settings-files"]')?.click()
+    requestAnimationFrame(() =>
+      highlightCard(document.querySelector('#settings-files .card')))
   })
   document.getElementById('btn-how-to-fix')?.addEventListener('click', () => {
     window.showPage('settings')
