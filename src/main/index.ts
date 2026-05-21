@@ -24,6 +24,15 @@ process.on('unhandledRejection', (reason) => {
 
 app.setName('SundayRec')
 
+// Prevent multiple instances — must be registered before requestSingleInstanceLock
+app.on('second-instance', () => {
+  if (mainWindow) { mainWindow.show(); mainWindow.focus() }
+})
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+  process.exit(0)
+}
+
 if (!app.isPackaged && process.platform === 'darwin' && app.dock) {
   app.dock.setIcon(path.join(__dirname, '../../assets/icon.png'))
 }
@@ -293,9 +302,6 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-app.on('second-instance', (_event, _argv) => {
-  if (mainWindow) { mainWindow.show(); mainWindow.focus() }
-})
 
 app.on('render-process-gone', (_event, _webContents, details) => {
   console.error('[SundayRec] Renderer process gone:', details.reason, 'exitCode:', details.exitCode)

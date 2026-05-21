@@ -27,6 +27,7 @@ interface PrerollHandle {
   proc:      ChildProcess
   filePath:  string
   startTime: number
+  format:    string
 }
 
 let isActive      = false
@@ -73,7 +74,7 @@ async function startLoop(opts: RecordingOpts): Promise<void> {
     detached: false
   })
 
-  activePreroll = { proc, filePath, startTime: Date.now() }
+  activePreroll = { proc, filePath, startTime: Date.now(), format: input.format }
   console.log('[preroll] started →', filePath)
 
   proc.on('close', () => {
@@ -96,7 +97,7 @@ export async function harvest(seconds: number): Promise<{ rawPath: string; trimM
   const handle = activePreroll
   activePreroll = null
 
-  await stopProc(handle.proc)
+  await stopProc(handle.proc, handle.format)
 
   if (!fs.existsSync(handle.filePath)) return null
   const stat = fs.statSync(handle.filePath)
@@ -126,11 +127,11 @@ export async function stop(): Promise<void> {
   if (!activePreroll) return
   const handle = activePreroll
   activePreroll = null
-  await stopProc(handle.proc)
+  await stopProc(handle.proc, handle.format)
   fs.promises.unlink(handle.filePath).catch(() => {})
 }
 
-async function stopProc(proc: ChildProcess): Promise<void> {
+async function stopProc(proc: ChildProcess, format?: string): Promise<void> {
   if (proc.exitCode !== null) return
   return new Promise(resolve => {
     let killer: ReturnType<typeof setTimeout> | null = null
@@ -138,11 +139,14 @@ async function stopProc(proc: ChildProcess): Promise<void> {
       if (killer) clearTimeout(killer)
       resolve()
     })
-    if (process.platform === 'win32') {
-      try { proc.kill('SIGTERM') } catch {}
-    } else {
+    // WASAPI (Windows) and non-Windows: use graceful 'q' so ffmpeg finalises the WAV header.
+    // DirectShow ignores stdin — must use SIGTERM (TerminateProcess).
+    const useGraceful = format === 'wasapi' || process.platform !== 'win32'
+    if (useGraceful) {
       try { proc.stdin?.write('q'); proc.stdin?.end() } catch {}
       killer = setTimeout(() => { try { proc.kill('SIGTERM') } catch {} }, 5000)
+    } else {
+      try { proc.kill('SIGTERM') } catch {}
     }
   })
 }
