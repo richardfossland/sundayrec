@@ -856,6 +856,7 @@ select.form-input {
   min-height: 84px; display: flex; flex-direction: column; align-items: center;
   padding: 6px 4px; border-radius: 8px; cursor: pointer;
   position: relative; transition: background .12s; border: 1px solid transparent;
+  min-width: 0; overflow: hidden;
 }
 .cal-day:hover { background: rgba(255,255,255,.05); }
 .cal-day.other-month { opacity: .25; pointer-events: none; }
@@ -908,6 +909,15 @@ select.form-input {
 .planned-date { font-size: 11px; color: var(--text3); margin-top: 2px; }
 .planned-del  { cursor: pointer; color: var(--text3); font-size: 16px; transition: color .15s; flex-shrink: 0; }
 .planned-del:hover { color: var(--red); }
+
+/* ── Calendar responsive (narrow window) ──────────────────────── */
+@media (max-width: 900px) {
+  .cal-card { min-width: 0; }
+  .cal-day { min-height: 68px; padding: 4px 2px; }
+  .cal-day-num { width: 22px; height: 22px; font-size: 11px; }
+  .cal-chip { font-size: 9px; padding: 1px 3px; }
+  .cal-weekdays span { font-size: 9px; }
+}
 
 /* ── Audio test section ────────────────────────────────────────── */
 .audio-test-section {

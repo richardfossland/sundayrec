@@ -242,7 +242,7 @@ export async function startRecordingWithOpts(opts: RecordingOpts): Promise<void>
 function translateAudioError(err: Error): string {
   switch (err.name) {
     case 'NotAllowedError':      return t('recording.errorPermission',    'Mikrofontilgang nektet — sjekk systeminnstillingene')
-    case 'NotFoundError':        return t('recording.errorDeviceNotFound', 'Lydenheten ble ikke funnet — sjekk USB-tilkoblingen')
+    case 'NotFoundError':        return t('recording.errorDeviceNotFound', 'Lydenheten ble ikke funnet — sjekk lydkort og tillatelser')
     case 'OverconstrainedError': return t('recording.errorOverconstrained','Lydenheten støtter ikke valgte innstillinger')
     case 'NotReadableError':     return t('recording.errorNotReadable',    'Lydenheten er i bruk av et annet program')
     default:                     return err.message
@@ -253,7 +253,7 @@ function translateAudioError(err: Error): string {
 export function translateNativeError(code: string): string {
   switch (code) {
     case 'no_device':
-    case 'device_not_found':     return t('recording.errorDeviceNotFound', 'Lydenheten ble ikke funnet — sjekk USB-tilkoblingen')
+    case 'device_not_found':     return t('recording.errorDeviceNotFound', 'Lydenheten ble ikke funnet — sjekk lydkort og tillatelser')
     case 'device_permission_denied': return t('recording.errorPermission', 'Tilgang til lydenheten ble nektet — sjekk systeminnstillingene')
     case 'device_busy':          return t('recording.errorNotReadable',    'Lydenheten er i bruk av et annet program — lukk DAW eller lydprogram')
     case 'device_error':         return t('recording.errorDeviceError',    'Feil ved åpning av lydenhet — prøv å koble til på nytt')

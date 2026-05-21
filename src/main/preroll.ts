@@ -58,7 +58,7 @@ async function startLoop(opts: RecordingOpts): Promise<void> {
   const outCh     = (opts.channels ?? 'stereo') === 'stereo' ? 2 : 1
 
   const args = [
-    '-nostdin', '-hide_banner',
+    '-hide_banner',
     '-f',  input.format,
     '-i',  input.device,
     '-ar', String(opts.sampleRate ?? 48000),

@@ -42,7 +42,7 @@ import type { RecordingOpts, RecordingEntry } from '../types'
 const ERROR_REASONS: Record<string, Record<string, string>> = {
   no: {
     device_disconnected:      'Lydenheten ble koblet fra under opptak',
-    device_not_found:         'Lydenheten ble ikke funnet — sjekk USB',
+    device_not_found:         'Lydenheten ble ikke funnet — sjekk lydkort og tillatelser',
     device_permission_denied: 'Mikrofontilgang nektet — sjekk Personvern & sikkerhet',
     device_busy:              'Lydenheten er opptatt av et annet program',
     device_error:             'Feil med lydenheten — prøv å koble til på nytt',
@@ -57,7 +57,7 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
   },
   en: {
     device_disconnected:      'Audio device disconnected during recording',
-    device_not_found:         'Audio device not found — check USB connection',
+    device_not_found:         'Audio device not found — check sound settings',
     device_permission_denied: 'Microphone access denied — check Privacy & Security',
     device_busy:              'Audio device is in use by another application',
     device_error:             'Audio device error — try reconnecting',
@@ -72,7 +72,7 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
   },
   de: {
     device_disconnected:      'Audiogerät während der Aufnahme getrennt',
-    device_not_found:         'Audiogerät nicht gefunden — USB prüfen',
+    device_not_found:         'Audiogerät nicht gefunden — Audioeinstellungen prüfen',
     device_permission_denied: 'Mikrofonzugriff verweigert — Datenschutz prüfen',
     device_busy:              'Audiogerät von anderem Programm belegt',
     device_error:             'Fehler am Audiogerät — neu anschließen',
@@ -86,7 +86,7 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
   },
   sv: {
     device_disconnected:      'Ljudenheten kopplades från under inspelning',
-    device_not_found:         'Ljudenheten hittades inte — kontrollera USB',
+    device_not_found:         'Ljudenheten hittades inte — kontrollera ljudinställningar',
     device_permission_denied: 'Mikrofonåtkomst nekad — kontrollera Integritet',
     device_busy:              'Ljudenheten används av ett annat program',
     device_error:             'Fel på ljudenheten — försök koppla om',
@@ -100,7 +100,7 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
   },
   da: {
     device_disconnected:      'Lydenheden blev frakoblet under optagelse',
-    device_not_found:         'Lydenheden blev ikke fundet — tjek USB',
+    device_not_found:         'Lydenheden blev ikke fundet — tjek lydindstillinger',
     device_permission_denied: 'Mikrofonadgang nægtet — tjek Privatliv',
     device_busy:              'Lydenheden bruges af et andet program',
     device_error:             'Fejl på lydenheden — prøv at tilslutte igen',
@@ -114,7 +114,7 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
   },
   pl: {
     device_disconnected:      'Urządzenie audio rozłączone podczas nagrywania',
-    device_not_found:         'Urządzenie audio nie znalezione — sprawdź USB',
+    device_not_found:         'Urządzenie audio nie znalezione — sprawdź ustawienia dźwięku',
     device_permission_denied: 'Odmowa dostępu do mikrofonu — sprawdź Prywatność',
     device_busy:              'Urządzenie audio zajęte przez inny program',
     device_error:             'Błąd urządzenia audio — spróbuj podłączyć ponownie',
@@ -128,7 +128,7 @@ const ERROR_REASONS: Record<string, Record<string, string>> = {
   },
   fr: {
     device_disconnected:      "Périphérique audio déconnecté pendant l'enregistrement",
-    device_not_found:         'Périphérique audio introuvable — vérifiez USB',
+    device_not_found:         "Périphérique audio introuvable — vérifiez les paramètres audio",
     device_permission_denied: 'Accès microphone refusé — vérifiez Confidentialité',
     device_busy:              'Périphérique audio utilisé par une autre application',
     device_error:             'Erreur périphérique audio — reconnectez-le',
@@ -296,7 +296,7 @@ export async function startSession(
   const prerollWasActive = preroll.isRunning()
   await preroll.stop()
   if (prerollWasActive && process.platform === 'darwin') {
-    await new Promise<void>(resolve => setTimeout(resolve, 300))
+    await new Promise<void>(resolve => setTimeout(resolve, 500))
   }
 
   const preflightError = await preflightCheck(settings)
