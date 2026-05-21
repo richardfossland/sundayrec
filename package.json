@@ -86,7 +86,9 @@
       "hardenedRuntime": true,
       "entitlements": "assets/entitlements.mac.plist",
       "entitlementsInherit": "assets/entitlements.mac.plist",
-      "notarize": true
+      "notarize": {
+        "teamId": "784GN847G4"
+      }
     },
     "win": {
       "icon": "assets/icon.ico",

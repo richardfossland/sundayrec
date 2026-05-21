@@ -55,6 +55,18 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
+      - name: Verify code signature and notarization
+        run: |
+          DMG=$(find release -name "*.dmg" | head -1)
+          if [ -z "$DMG" ]; then echo "ERROR: No DMG found in release/"; exit 1; fi
+          echo "DMG: $DMG"
+          hdiutil attach "$DMG" -mountpoint /tmp/dmg_verify -nobrowse -quiet
+          APP=$(find /tmp/dmg_verify -name "*.app" -maxdepth 1 | head -1)
+          echo "App: $APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          spctl --assess --verbose "$APP"
+          hdiutil detach /tmp/dmg_verify -quiet
+
   # ── Windows: unsigned build (Azure Trusted Signing when credentials are set) ──
   build-win:
     needs: test
