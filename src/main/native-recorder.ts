@@ -63,7 +63,9 @@ export async function listFfmpegDevices(): Promise<FfmpegDevice[]> {
     const proc = spawn(ffmpegBin, args, { stdio: ['ignore', 'ignore', 'pipe'] })
     let stderr = ''
     proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+    let settled = false
     const done = () => {
+      if (settled) return; settled = true
       const devices: FfmpegDevice[] = []
       if (process.platform === 'win32') {
         // Only match actual device name lines; skip "Alternative name" entries
@@ -94,7 +96,7 @@ export async function listFfmpegDevices(): Promise<FfmpegDevice[]> {
       resolve(devices)
     }
     proc.on('close', done)
-    setTimeout(() => { try { proc.kill() } catch {} ; done() }, 5000)
+    setTimeout(() => { if (!settled) { try { proc.kill() } catch {}; done() } }, 5000)
   })
 }
 
@@ -160,14 +162,17 @@ export async function listAsioDrivers(): Promise<string[]> {
     ], { stdio: ['ignore', 'pipe', 'ignore'] })
     let stdout = ''
     proc.stdout?.on('data', (d: Buffer) => { stdout += d.toString() })
-    const done = () => {
+    let settled = false
+    const done = (result?: string[]) => {
+      if (settled) return; settled = true
+      if (result) { resolve(result); return }
       const drivers = stdout.trim().split('\n')
         .map(s => s.trim()).filter(s => s.length > 0)
       resolve(drivers)
     }
-    proc.on('close', done)
-    proc.on('error', () => resolve([]))
-    setTimeout(() => { try { proc.kill() } catch {}; resolve([]) }, 5000)
+    proc.on('close', () => done())
+    proc.on('error', () => done([]))
+    setTimeout(() => { if (!settled) { try { proc.kill() } catch {}; done([]) } }, 5000)
   })
 }
 
@@ -455,7 +460,7 @@ export async function startCapture(
       // Any exit during startup window — success (code 0) or failure — is treated as error.
       // A capture process that exits within 2 s wrote nothing useful.
       const classified = classifyFfmpegError(stderrBuf)
-      resolve(classified || (code !== 0 ? 'device_error' : 'device_error'))
+      resolve(classified || 'device_error')
     })
   })
 

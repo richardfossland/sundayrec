@@ -46,10 +46,17 @@ export async function start(opts: RecordingOpts): Promise<void> {
 async function startLoop(opts: RecordingOpts): Promise<void> {
   if (!isActive) return
 
-  const input = await resolveDeviceInput(opts)
+  let input: Awaited<ReturnType<typeof resolveDeviceInput>>
+  try {
+    input = await resolveDeviceInput(opts)
+  } catch (err) {
+    console.error('[preroll] device resolution error:', err)
+    if (isActive) setTimeout(() => startLoop(opts).catch(e => console.error('[preroll] loop error:', e)), 30000)
+    return
+  }
   if (!input) {
     // Device not available — retry in 30 s
-    if (isActive) setTimeout(() => startLoop(opts), 30000)
+    if (isActive) setTimeout(() => startLoop(opts).catch(e => console.error('[preroll] loop error:', e)), 30000)
     return
   }
   if (!isActive) return
@@ -81,7 +88,7 @@ async function startLoop(opts: RecordingOpts): Promise<void> {
     if (activePreroll?.filePath === filePath) activePreroll = null
     if (isActive) {
       // Auto-restart after natural 90 s cap (or unexpected exit)
-      setTimeout(() => startLoop(opts), 200)
+      setTimeout(() => startLoop(opts).catch(e => console.error('[preroll] loop error:', e)), 200)
     }
   })
 }

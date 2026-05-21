@@ -103,6 +103,9 @@ export async function sendTest(settings: Settings, smtpPass: string): Promise<vo
     host: settings.emailSmtp,
     port: settings.emailSmtpPort || 587,
     secure: settings.emailSmtpPort === 465,
+    connectionTimeout: 15000,
+    greetingTimeout:   15000,
+    socketTimeout:     30000,
     auth: settings.emailSmtpUser
       ? { user: settings.emailSmtpUser, pass: smtpPass }
       : undefined
@@ -123,6 +126,9 @@ export async function sendError(settings: Settings, smtpPass: string, errorMessa
     host: settings.emailSmtp,
     port: settings.emailSmtpPort || 587,
     secure: settings.emailSmtpPort === 465,
+    connectionTimeout: 15000,
+    greetingTimeout:   15000,
+    socketTimeout:     30000,
     auth: settings.emailSmtpUser
       ? { user: settings.emailSmtpUser, pass: smtpPass }
       : undefined

@@ -599,8 +599,9 @@ function setupIPC(): void {
     return cloud.connectService(service as import('../types').CloudServiceId)
   })
 
-  ipcMain.handle('cloud-disconnect', (_, service: string) => {
-    import('./cloud').then(c => c.disconnectService(service as import('../types').CloudServiceId))
+  ipcMain.handle('cloud-disconnect', async (_, service: string) => {
+    const cloud = await import('./cloud')
+    return cloud.disconnectService(service as import('../types').CloudServiceId)
   })
 
   ipcMain.handle('cloud-status', async () => {
@@ -626,8 +627,9 @@ function setupIPC(): void {
     } catch { return [] }
   })
 
-  ipcMain.handle('cloud-set-folder', (_, service: string, folderId: string, folderName: string, folderPath?: string) => {
-    import('./cloud').then(c => c.setFolder(service as import('../types').CloudServiceId, folderId, folderName, folderPath))
+  ipcMain.handle('cloud-set-folder', async (_, service: string, folderId: string, folderName: string, folderPath?: string) => {
+    const cloud = await import('./cloud')
+    return cloud.setFolder(service as import('../types').CloudServiceId, folderId, folderName, folderPath)
   })
 
 }
