@@ -810,6 +810,13 @@ export function recoverCrashedSession(): void {
   const stat = fs.statSync(filePath)
   if (stat.size < 5000) { unlinkSilent(filePath); return }
 
+  // Estimate duration from file mtime rather than Date.now() so that a
+  // recording recovered days after a crash doesn't show a nonsensical duration.
+  // Cap at 6 hours as a sanity ceiling.
+  const estimatedEndMs = Math.min(stat.mtimeMs, Date.now())
+  const rawSec         = Math.round((estimatedEndMs - recovery.startTime) / 1000)
+  const durationSec    = Math.max(0, Math.min(rawSec, 6 * 3600))
+
   const s      = store.getAll()
   const fmt    = s.format ?? 'mp3'
   const folder = s.saveFolder ?? defaultFolder()
@@ -826,8 +833,7 @@ export function recoverCrashedSession(): void {
   proc.on('close', code => {
     if (code === 0) {
       unlinkSilent(filePath)
-      const durationSec = Math.round((Date.now() - recovery.startTime) / 1000)
-      const recDate     = new Date(recovery.startTime)
+      const recDate = new Date(recovery.startTime)
       store.addHistory({
         date:      localDateStr(recDate),
         startTime: recDate.toTimeString().slice(0, 5),

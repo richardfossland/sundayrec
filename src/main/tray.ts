@@ -52,11 +52,18 @@ export function create(mainWindow: BrowserWindow): void {
 
   updateTooltip()
 
+  // Left click always opens the window.
+  // On macOS: setContextMenu intercepts left click and click event never fires.
+  // Fix: skip setContextMenu on macOS; pop up the menu explicitly on right-click.
   tray.on('click', () => {
     if (!win) return
     if (win.isVisible()) win.focus()
     else { win.show(); win.focus() }
   })
+
+  if (process.platform === 'darwin') {
+    tray.on('right-click', () => updateMenu(true))
+  }
 
   // Update tray icon when Windows dark/light mode changes
   if (process.platform === 'win32') {
@@ -82,7 +89,7 @@ function updateTooltip(): void {
   tray.setToolTip(tooltip)
 }
 
-function updateMenu(): void {
+function updateMenu(popup = false): void {
   if (!tray) return
 
   const lang = store.get('language') ?? 'no'
@@ -127,7 +134,13 @@ function updateMenu(): void {
 
   const menu = Menu.buildFromTemplate(menuItems)
 
-  tray.setContextMenu(menu)
+  if (process.platform === 'darwin') {
+    // Don't call setContextMenu on macOS — it intercepts left click.
+    // Menu is shown via right-click → popUpContextMenu instead.
+    if (popup) tray.popUpContextMenu(menu)
+  } else {
+    tray.setContextMenu(menu)
+  }
 
   const base = isRecording ? 'tray-recording' : hasError ? 'tray-error' : 'tray-idle'
   try {

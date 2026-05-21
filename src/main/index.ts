@@ -197,13 +197,17 @@ app.whenReady().then(async () => {
   // On wake from sleep: check for missed recordings, refresh OS wake list, notify user
   powerMonitor.on('resume', () => {
     scheduler.checkMissedRecordings()
-    // Restart pre-roll after wake (it stops when the Mac sleeps)
+    // Restart pre-roll after wake. ffmpeg is killed by the OS during sleep, so
+    // isActive may still be true while the process is dead. Stop first to reset
+    // the flag, then restart after 2 s to let the audio device come back online.
     if (!recorder.isActive()) {
       const wakeSettings = store.getAll()
       if ((wakeSettings.preRollSeconds ?? 0) > 0) {
-        setTimeout(() => {
-          preroll.start(wakeSettings).catch(err => console.error('[preroll] wake restart error:', err))
-        }, 2000)
+        preroll.stop().catch(() => {}).finally(() => {
+          setTimeout(() => {
+            preroll.start(wakeSettings).catch(err => console.error('[preroll] wake restart error:', err))
+          }, 2000)
+        })
       }
     }
     const upcoming = scheduler.getUpcomingDates()

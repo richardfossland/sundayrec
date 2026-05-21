@@ -68,7 +68,10 @@ export function setupHome(): void {
     btn?.setAttribute('aria-expanded', String(!open))
   })
 
-  const onDeviceChange = (): void => { void checkStatus() }
+  const onDeviceChange = (): void => {
+    // Skip during active recording — opening getUserMedia competes with ffmpeg's AVFoundation session
+    if (!window.__isRecording) void checkStatus()
+  }
   navigator.mediaDevices.addEventListener('devicechange', onDeviceChange)
   window.addEventListener('beforeunload', () =>
     navigator.mediaDevices.removeEventListener('devicechange', onDeviceChange))

@@ -206,10 +206,9 @@ async function handleManualStart(): Promise<void> {
     showOverlay(opts)
     try { await startMonitoring(opts) }
     catch (err) {
-      try { await stopMonitoring() } catch {}
-      await window.api.stopRecordingNow()
-      hideOverlay()
-      showGlobalError(translateAudioError(err as Error))
+      // Monitoring is only for VU display — keep recording alive, just log
+      console.warn('[recording] VU monitor failed (non-fatal):', err)
+      try { stopMonitoring() } catch {}
     }
   } else {
     // Keep modal open so the error is visible on the button
@@ -230,10 +229,8 @@ export async function startRecordingWithOpts(opts: RecordingOpts): Promise<void>
   showOverlay(opts)
   try { await startMonitoring(opts) }
   catch (err) {
-    try { await stopMonitoring() } catch {}
-    await window.api.stopRecordingNow()
-    hideOverlay()
-    showGlobalError(translateAudioError(err as Error))
+    console.warn('[recording] VU monitor failed (non-fatal):', err)
+    try { stopMonitoring() } catch {}
   }
 }
 
