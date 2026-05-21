@@ -262,14 +262,27 @@ async function preflightCheck(settings: RecordingOpts): Promise<{ error: string 
       const freeKb = cols ? parseInt(cols[3]) : NaN
       if (!isNaN(freeKb) && freeKb < 200 * 1024) return { error: 'disk_full' }
     } else if (process.platform === 'win32') {
-      const m = folder.match(/^([A-Za-z]):/)
-      if (m) {
+      let freeBytes = NaN
+      const driveLetter = folder.match(/^([A-Za-z]):/)
+      if (driveLetter) {
         const { stdout } = await execAsync('powershell', [
-          '-NoProfile', '-Command', `(Get-PSDrive -Name '${m[1]}').Free`
+          '-NoProfile', '-Command', `(Get-PSDrive -Name '${driveLetter[1]}' -ErrorAction SilentlyContinue).Free`
         ], { timeout: 4000 })
-        const free = parseInt(stdout.trim())
-        if (!isNaN(free) && free < 200 * 1024 * 1024) return { error: 'disk_full' }
+        freeBytes = parseInt(stdout.trim())
+      } else {
+        // UNC/network path (\\server\share\...) — query free space via COM FileSystemObject
+        const norm = folder.replace(/\//g, '\\')
+        const unc  = norm.match(/^(\\\\[^\\]+\\[^\\]+)/)
+        if (unc) {
+          const escaped = unc[1].replace(/'/g, "''")
+          const { stdout } = await execAsync('powershell', [
+            '-NoProfile', '-Command',
+            `try{(New-Object -ComObject Scripting.FileSystemObject).GetDrive('${escaped}').FreeSpace}catch{-1}`
+          ], { timeout: 4000 })
+          freeBytes = parseInt(stdout.trim())
+        }
       }
+      if (!isNaN(freeBytes) && freeBytes >= 0 && freeBytes < 200 * 1024 * 1024) return { error: 'disk_full' }
     }
   } catch { /* disk check is best-effort */ }
 
