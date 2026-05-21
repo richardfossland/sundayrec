@@ -66,11 +66,16 @@ export async function listFfmpegDevices(): Promise<FfmpegDevice[]> {
     const done = () => {
       const devices: FfmpegDevice[] = []
       if (process.platform === 'win32') {
-        // Match lines like:  "Device Name (USB Audio)"
-        for (const m of stderr.matchAll(/"([^"]+)"/g)) {
-          const name = m[1]
-          if (!devices.find(d => d.name === name)) {
-            devices.push({ name, index: devices.length })
+        // Only match actual device name lines; skip "Alternative name" entries
+        // and @device_... GUID strings that ffmpeg also quotes.
+        for (const line of stderr.split('\n')) {
+          if (line.includes('Alternative name')) continue
+          const m = line.match(/"([^"]+)"/)
+          if (m && !m[1].startsWith('@')) {
+            const name = m[1]
+            if (!devices.find(d => d.name === name)) {
+              devices.push({ name, index: devices.length })
+            }
           }
         }
       } else {
@@ -255,6 +260,23 @@ function buildAudioFilters(opts: RecordingOpts): string {
   if (opts.limiterEnabled !== false) {
     const ceil = Math.max(-10, Math.min(0, Number(opts.limiterCeiling ?? -1)))
     filters.push(`alimiter=level_in=1:level_out=1:limit=${ceil.toFixed(1)}dB:attack=0.001:release=0.1`)
+  }
+
+  // EQ — bass / mid / treble (dB), skip when all at 0 (default)
+  const bass = Number(opts.eqBass ?? 0)
+  if (Math.abs(bass) > 0.01) {
+    const g = Math.max(-12, Math.min(12, bass))
+    filters.push(`bass=g=${g.toFixed(1)}`)
+  }
+  const mid = Number(opts.eqMid ?? 0)
+  if (Math.abs(mid) > 0.01) {
+    const g = Math.max(-12, Math.min(12, mid))
+    filters.push(`equalizer=f=1000:width_type=o:width=2:g=${g.toFixed(1)}`)
+  }
+  const treble = Number(opts.eqTreble ?? 0)
+  if (Math.abs(treble) > 0.01) {
+    const g = Math.max(-12, Math.min(12, treble))
+    filters.push(`treble=g=${g.toFixed(1)}`)
   }
 
   // Silence trim (post-process style — remove sustained silence at start/end)

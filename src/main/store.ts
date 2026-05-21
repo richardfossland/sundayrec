@@ -225,4 +225,5 @@ export function importProfile(json: string): boolean {
 
 export function reset(): void {
   store.clear()
+  _lastHistoryTs = 0
 }

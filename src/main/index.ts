@@ -170,6 +170,7 @@ app.whenReady().then(async () => {
   scheduler.init(mainWindow)
   updater.init(mainWindow)
   updater.check()
+  setInterval(() => updater.check(), 60 * 60 * 1000)
   setupIPC()
 
   // Restart pre-roll after each session ends (manual or scheduled)
@@ -294,11 +295,16 @@ app.on('second-instance', (_event, _argv) => {
 
 app.on('render-process-gone', (_event, _webContents, details) => {
   console.error('[SundayRec] Renderer process gone:', details.reason, 'exitCode:', details.exitCode)
-  // Stop pre-roll first so the audio device is released
-  preroll.stop().catch(() => {})
-  if (recorder.isActive()) {
-    console.error('[SundayRec] Recording active during renderer crash — attempting emergency stop')
-    recorder.stopSession()
+  // Recording runs entirely in the main process — do NOT stop it on renderer crash.
+  // Reload the renderer so the user gets the UI back without losing the recording.
+  try {
+    if (app.isPackaged) {
+      mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
+    } else {
+      mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'] ?? 'http://localhost:5173')
+    }
+  } catch (err) {
+    console.error('[SundayRec] Failed to reload renderer after crash:', err)
   }
 })
 
@@ -421,6 +427,10 @@ function setupIPC(): void {
       return { error: 'invalid_opts' }
     }
     const settings = { ...store.getAll(), ...(opts ?? {}) }
+    // Map manualMaxMinutes → maxMinutes so the auto-stop timer actually fires
+    if (!(settings as import('../types').RecordingOpts).maxMinutes && settings.manualMaxMinutes) {
+      (settings as import('../types').RecordingOpts).maxMinutes = settings.manualMaxMinutes
+    }
     const preRollSec = settings.preRollSeconds ?? 0
 
     // Harvest pre-roll buffer for manual recordings when enabled
@@ -619,26 +629,27 @@ function notify(title: string, body: string): void {
 async function cleanupOldRecordings(): Promise<void> {
   const days = store.get('autoDeleteDays')
   if (!days || days <= 0) return
-  const cutoff   = Date.now() - days * 86400000
-  const saveDir  = path.resolve(store.get('saveFolder') ?? app.getPath('documents'))
-  const history  = store.getHistory()
-  const toDelete: typeof history = []
-  const remaining = history.filter(entry => {
-    if (
+  const cutoff  = Date.now() - days * 86400000
+  const saveDir = path.resolve(store.get('saveFolder') ?? app.getPath('documents'))
+  const history = store.getHistory()
+  const remaining: typeof history = []
+  let changed = false
+  for (const entry of history) {
+    const shouldDelete =
       entry.timestamp && entry.timestamp < cutoff &&
       entry.path && entry.status === 'ok' &&
       path.resolve(entry.path).startsWith(saveDir + path.sep)
-    ) {
-      toDelete.push(entry)
-      return false
+    if (!shouldDelete) { remaining.push(entry); continue }
+    try {
+      await fs.promises.unlink(entry.path!)
+      changed = true  // omit from remaining — file gone
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code
+      if (code === 'ENOENT') { changed = true; continue }  // already gone
+      remaining.push(entry)  // deletion failed — keep history entry
     }
-    return true
-  })
-  if (!toDelete.length) return
-  store.set('recordingHistory', remaining)
-  for (const entry of toDelete) {
-    try { await fs.promises.unlink(entry.path!) } catch { /* already gone */ }
   }
+  if (changed) store.set('recordingHistory', remaining)
 }
 
 const ALLOWED_AUDIO_EXTS = new Set(['.mp3', '.wav', '.flac', '.aac', '.m4a', '.ogg', '.webm'])
