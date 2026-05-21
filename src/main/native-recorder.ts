@@ -259,7 +259,7 @@ function buildAudioFilters(opts: RecordingOpts): string {
   // Limiter — always on unless explicitly disabled
   if (opts.limiterEnabled !== false) {
     const ceil = Math.max(-10, Math.min(0, Number(opts.limiterCeiling ?? -1)))
-    filters.push(`alimiter=level_in=1:level_out=1:limit=${ceil.toFixed(1)}dB:attack=0.001:release=0.1`)
+    filters.push(`alimiter=level_in=1:level_out=1:limit=${ceil.toFixed(1)}dB:attack=1:release=50`)
   }
 
   // EQ — bass / mid / treble (dB), skip when all at 0 (default)
@@ -324,12 +324,15 @@ export interface NativeHandle {
 function classifyFfmpegError(stderr: string): string {
   const s = stderr.toLowerCase()
   if (
-    s.includes('no such file') || s.includes('device not found') ||
-    s.includes('could not find') || s.includes('not found') ||
-    s.includes('no devices found') || s.includes('invalid argument') ||
-    s.includes('no such audio device') || s.includes('failed to find') ||
-    s.includes('cannot find') || s.includes('the handle is invalid') ||
-    s.includes('no audio endpoint') || s.includes('element not found')
+    s.includes('device not found') ||
+    s.includes('no such audio device') || s.includes('no such audio input') ||
+    s.includes('no devices found') ||
+    s.includes('no audio endpoint') ||
+    s.includes('could not find audio') || s.includes('cannot find audio') ||
+    s.includes('failed to find audio') ||
+    s.includes('the handle is invalid') ||
+    s.includes('no audio device') || s.includes('audio device not found') ||
+    s.includes('avfoundation: device') || s.includes('no such file or directory')
   ) {
     return 'device_not_found'
   }

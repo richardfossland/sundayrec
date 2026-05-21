@@ -12,7 +12,7 @@ export function stopVU(): void {
   const fills = ['vu-l', 'vu-r'].map(id => document.getElementById(id))
   const peaks = ['vu-peak-l', 'vu-peak-r'].map(id => document.getElementById(id))
   const dbs   = ['vu-db-l', 'vu-db-r'].map(id => document.getElementById(id))
-  fills.forEach(el => { if (el) el.style.width = '0%' })
+  fills.forEach(el => { if (el) el.style.width = '100%' })
   peaks.forEach(el => { if (el) el.style.opacity = '0' })
   dbs.forEach(el   => { if (el) el.textContent = '—' })
   resetSignalStatus()

@@ -49,7 +49,7 @@ export function setVUBar(
   dbEl:   HTMLElement | null,
   db: number, peakDb: number
 ): void {
-  if (fillEl) fillEl.style.width = dbToHeight(db) + '%'
+  if (fillEl) fillEl.style.width = (100 - dbToHeight(db)) + '%'
   if (peakEl) {
     peakEl.style.left    = dbToHeight(peakDb) + '%'
     peakEl.style.opacity = peakDb > -59 ? '1' : '0'

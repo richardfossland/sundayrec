@@ -1,8 +1,18 @@
 import { t, loadLocale, currentLang } from '../i18n'
 import { settings, patchSettings } from '../state'
-import { flashSaved, flashMsg, setVal } from '../helpers'
+import { flashSaved, flashMsg, setVal, setupDirtyBar } from '../helpers'
+
+let _markGeneralClean = () => {}
+let _markVarslerClean = () => {}
+
+function markAllClean(): void { _markGeneralClean(); _markVarslerClean() }
 
 export function setupGeneralPage(): void {
+  const gBar = setupDirtyBar('settings-general')
+  const vBar = setupDirtyBar('settings-notifications')
+  _markGeneralClean = gBar.clean
+  _markVarslerClean = vBar.clean
+
   document.getElementById('btn-show-onboarding')?.addEventListener('click', () => window.showOnboarding())
   document.getElementById('opt-email-error')?.addEventListener('change', toggleEmailSection)
 
@@ -115,6 +125,7 @@ export function setupGeneralPage(): void {
 }
 
 export function applyGeneralSettingsToUI(): void {
+  markAllClean()
   setVal('language-select', settings.language ?? 'no')
   setVal('church-name',        settings.churchName        ?? '')
   setVal('responsible-person', settings.responsiblePerson ?? '')
@@ -179,6 +190,7 @@ async function saveGeneralSettings(): Promise<void> {
   })
   await window.api.saveSettings(settings)
   if (newLang !== currentLang) loadLocale(newLang)
+  markAllClean()
   const activeTab = document.querySelector<HTMLElement>('#settings-tabs .inner-tab.active')?.dataset.tab
   const flashBtn = activeTab === 'settings-notifications'
     ? document.getElementById('btn-varsler-save')

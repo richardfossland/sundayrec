@@ -98,3 +98,14 @@ export function fmtStorageHours(hours: number): string {
 export function isoDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
+
+export function setupDirtyBar(pageId: string): { clean: () => void; dirty: () => void } {
+  const pageEl = document.getElementById(pageId)
+  const footer = pageEl?.querySelector<HTMLElement>('.page-footer')
+  if (!pageEl || !footer) return { clean: () => {}, dirty: () => {} }
+  const dirty = () => footer.classList.add('dirty')
+  const clean = () => footer.classList.remove('dirty')
+  pageEl.addEventListener('input',  dirty)
+  pageEl.addEventListener('change', dirty)
+  return { clean, dirty }
+}

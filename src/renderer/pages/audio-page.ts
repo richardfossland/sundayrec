@@ -1,6 +1,6 @@
 import { t } from '../i18n'
 import { settings, patchSettings } from '../state'
-import { flashSaved, setVal, setRadio, updateSliderLabel } from '../helpers'
+import { flashSaved, setVal, setRadio, updateSliderLabel, setupDirtyBar } from '../helpers'
 import { getAudioDevices, detectDeviceChannels, buildInputRouter } from '../audio/capture'
 import { makeVuState, tickVU, stopVuState } from '../audio/vu'
 import type { DeviceChannels, ChannelMode } from '../../types'
@@ -10,6 +10,9 @@ let monitorCtx:    AudioContext  | null = null
 let monitorSrc:    MediaStreamAudioSourceNode | null = null
 let isMonitoring   = false
 let testVu = makeVuState()
+
+let _markAudioClean = () => {}
+let _markAudioDirty = () => {}
 
 let detectedChannelCount = 2
 
@@ -21,6 +24,10 @@ function updateVolGradient(): void {
 }
 
 export function setupAudioPage(): void {
+  const bar = setupDirtyBar('settings-audio')
+  _markAudioClean = bar.clean
+  _markAudioDirty = bar.dirty
+
   document.getElementById('input-volume')?.addEventListener('input', () => {
     updateVolumeLabel()
     updateVolGradient()
@@ -49,6 +56,7 @@ export function setupAudioPage(): void {
 }
 
 export function applyAudioSettingsToUI(): void {
+  _markAudioClean()
   setVal('input-volume', settings.inputVolume ?? 100)
   updateVolumeLabel()
   setRadio('channels', settings.channels ?? 'stereo')
@@ -106,6 +114,7 @@ async function saveAudioSettings(): Promise<void> {
 
   patchSettings(patch)
   await window.api.saveSettings(settings)
+  _markAudioClean()
   flashSaved(document.getElementById('btn-audio-save'))
 }
 
@@ -144,6 +153,7 @@ export async function renderDeviceList(containerId: string): Promise<void> {
       container.querySelectorAll('.device-card').forEach(c => c.classList.remove('selected'))
       card.classList.add('selected')
       patchSettings({ deviceId: d.deviceId, deviceName: d.label })
+      _markAudioDirty()
       const count = await detectDeviceChannels(d.deviceId)
       detectedChannelCount = count
       const subEl = card.querySelector('.device-sub') as HTMLElement | null
@@ -179,6 +189,7 @@ export async function renderDeviceList(containerId: string): Promise<void> {
         container.querySelectorAll('.device-card').forEach(c => c.classList.remove('selected'))
         card.classList.add('selected')
         patchSettings({ deviceId: asioId, deviceName: driverName })
+        _markAudioDirty()
         // ASIO drivers expose many channels; show selector at 16 ch as a safe default
         updateChannelSelector(16, 0, 1)
         detectedChannelCount = 16

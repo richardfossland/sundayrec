@@ -1,14 +1,22 @@
 import { settings, patchSettings } from '../state'
 import type { FileFormat, FilenamePattern } from '../../types'
-import { flashSaved, setVal, setRadio, isoDate } from '../helpers'
+import { flashSaved, setVal, setRadio, isoDate, setupDirtyBar } from '../helpers'
 import { getChurchHolidays } from '../../shared/church-calendar'
 
+let _markFilesClean = () => {}
+let _markFilesDirty = () => {}
+
 export function setupFilesPage(): void {
+  const bar = setupDirtyBar('settings-files')
+  _markFilesClean = bar.clean
+  _markFilesDirty = bar.dirty
+
   document.getElementById('btn-pick-folder')?.addEventListener('click', async () => {
     const folder = await window.api.pickFolder()
     if (folder) {
       setVal('save-folder', folder)
       patchSettings({ saveFolder: folder })
+      _markFilesDirty()
     }
   })
 
@@ -26,6 +34,7 @@ export function setupFilesPage(): void {
 }
 
 export function applyFilesSettingsToUI(): void {
+  _markFilesClean()
   setVal('save-folder', settings.saveFolder ?? '')
   const patternEl = document.getElementById('pattern-select') as HTMLSelectElement | null
   if (patternEl) patternEl.value = settings.filenamePattern ?? 'date'
@@ -90,5 +99,6 @@ async function saveFilesSettings(): Promise<void> {
     trimSilence:     !!(document.getElementById('opt-trim-silence') as HTMLInputElement | null)?.checked,
   })
   await window.api.saveSettings(settings)
+  _markFilesClean()
   flashSaved(document.getElementById('btn-files-save'))
 }

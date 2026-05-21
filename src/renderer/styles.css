@@ -126,19 +126,7 @@ body {
 
 
 /* ── macOS traffic-light zone ───────────────────────────────────── */
-/* Add a bottom border at the 28 px titlebar inset so the
-   sidebar's right-border line doesn't awkwardly cut across
-   the close/minimize/maximize buttons. */
-body.platform-darwin #sidebar { position: relative; padding-top: 28px; }
-body.platform-darwin #sidebar::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: -1px; /* -1px covers the sidebar border-right */
-  height: 28px;
-  border-bottom: 1px solid var(--border);
-  pointer-events: none;
-  z-index: 1;
-}
+body.platform-darwin #sidebar { padding-top: 28px; }
 
 /* ── Titlebar drag strip (macOS: drag + double-click to zoom) ─── */
 .titlebar-drag {
@@ -401,13 +389,21 @@ body.platform-win32 ::-webkit-scrollbar-thumb { border-radius: 4px; }
   display: flex; align-items: center; gap: 12px; margin-top: 8px; margin-bottom: 6px;
 }
 .vol-icon { width: 18px; height: 18px; color: var(--text3); flex-shrink: 0; }
-.vol-slider { flex: 1; --vol-pct: 100%; }
+.vol-slider { flex: 1; --vol-pct: 100%; height: 6px; }
 .vol-slider::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 3px;
   background: linear-gradient(to right,
     var(--accent) 0%, var(--accent) var(--vol-pct),
-    var(--border) var(--vol-pct), var(--border) 100%
+    var(--surface3) var(--vol-pct), var(--surface3) 100%
   ) !important;
 }
+.vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--accent); margin-top: -5px;
+  box-shadow: 0 0 0 3px rgba(240,187,71,.2), var(--shadow-sm);
+  transition: box-shadow .15s;
+}
+.vol-slider::-webkit-slider-thumb:hover { box-shadow: 0 0 0 5px rgba(240,187,71,.25), var(--shadow-sm); }
 .vol-badge {
   font-size: 12px; font-weight: 600; color: var(--text2);
   min-width: 36px; text-align: right;
@@ -415,11 +411,18 @@ body.platform-win32 ::-webkit-scrollbar-thumb { border-radius: 4px; }
 
 /* ── Page footer (sticky Save/Cancel bar on settings pages) ─────── */
 .page-footer {
-  display: flex; gap: 10px; align-items: center;
-  margin-top: 24px; padding: 14px 20px;
+  display: flex; gap: 8px; align-items: center;
+  padding: 0 20px;
   background: var(--surface); border-top: 1px solid var(--border);
   border-radius: var(--r);
   position: sticky; bottom: 0;
+  max-height: 0; overflow: hidden;
+  opacity: 0; pointer-events: none;
+  transition: max-height .18s ease, padding .18s ease, opacity .15s ease;
+}
+.page-footer.dirty {
+  max-height: 60px; padding: 10px 20px;
+  opacity: 1; pointer-events: auto;
 }
 
 /* ── Record button ─────────────────────────────────────────────── */
@@ -508,28 +511,31 @@ body.platform-win32 ::-webkit-scrollbar-thumb { border-radius: 4px; }
 }
 .vu-bar-track {
   flex: 1; height: 32px; border-radius: 5px;
-  background: var(--surface2); border: 1px solid rgba(255,255,255,.06);
+  background: linear-gradient(90deg,
+    #16a34a 0%, #16a34a 80%,
+    #ca8a04 80%, #ca8a04 90%,
+    #ea580c 90%, #ea580c 95%,
+    #dc2626 95%, #dc2626 100%);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.35);
   position: relative; overflow: hidden;
 }
 /* dB tick marks: -24, -12, -6 dBFS */
 .vu-bar-track::after {
   content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none;
   background-image:
-    linear-gradient(90deg, transparent 59.5%, rgba(0,0,0,.45) 59.5%, rgba(0,0,0,.45) 60.5%, transparent 60.5%),
-    linear-gradient(90deg, transparent 79.5%, rgba(0,0,0,.45) 79.5%, rgba(0,0,0,.45) 80.5%, transparent 80.5%),
-    linear-gradient(90deg, transparent 89.5%, rgba(0,0,0,.45) 89.5%, rgba(0,0,0,.45) 90.5%, transparent 90.5%);
+    linear-gradient(90deg, transparent 59.5%, rgba(0,0,0,.35) 59.5%, rgba(0,0,0,.35) 60.5%, transparent 60.5%),
+    linear-gradient(90deg, transparent 79.5%, rgba(0,0,0,.35) 79.5%, rgba(0,0,0,.35) 80.5%, transparent 80.5%),
+    linear-gradient(90deg, transparent 89.5%, rgba(0,0,0,.35) 89.5%, rgba(0,0,0,.35) 90.5%, transparent 90.5%);
 }
 .vu-bar-fill {
-  position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
-  background: linear-gradient(90deg,
-    #22c55e 0%, #4ade80 35%, #a3e635 58%,
-    #facc15 70%, #f97316 82%, #ef4444 93%, #dc2626 100%);
-  border-radius: 3px; transition: width .05s ease-out;
+  position: absolute; right: 0; top: 0; bottom: 0; width: 100%;
+  background: var(--surface2);
+  border-radius: 0 3px 3px 0; transition: width .05s ease-out; z-index: 1;
 }
 .vu-bar-peak {
   position: absolute; top: 2px; bottom: 2px; width: 2px;
-  background: rgba(255,255,255,.85); left: 0%;
-  opacity: 0; pointer-events: none;
+  background: rgba(255,255,255,.9); left: 0%;
+  opacity: 0; pointer-events: none; z-index: 3;
 }
 .vu-bar-clip {
   width: 10px; height: 32px; border-radius: 3px; flex-shrink: 0;
