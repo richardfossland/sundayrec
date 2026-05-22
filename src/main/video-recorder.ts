@@ -72,9 +72,11 @@ export async function startVideoCapture(
   //
   // macOS AVFoundation: -framerate must precede -i.
   // Windows DirectShow: -rtbufsize prevents frame drops on slow USB buses.
+  // Wall-clock timestamps on both audio and video processes allow the muxer
+  // to align the two streams by their actual capture start times.
   const inputArgs: string[] = process.platform === 'darwin'
-    ? ['-f', input.format, '-framerate', String(fps), '-i', input.device]
-    : ['-f', input.format, '-rtbufsize', '200M', '-framerate', String(fps), '-i', input.device]
+    ? ['-use_wallclock_as_timestamps', '1', '-f', input.format, '-framerate', String(fps), '-i', input.device]
+    : ['-use_wallclock_as_timestamps', '1', '-f', input.format, '-rtbufsize', '200M', '-framerate', String(fps), '-i', input.device]
 
   const args: string[] = [
     '-nostdin', '-hide_banner',
@@ -208,6 +210,10 @@ export async function muxAudioVideo(
       '-map', '1:v',
       '-c:v', 'copy',
       '-c:a', 'aac', '-b:a', '192k',
+      // Preserve wall-clock timestamps from both streams so their relative
+      // offset is maintained, then normalize the earliest start to zero.
+      '-copyts',
+      '-avoid_negative_ts', 'make_zero',
       '-movflags', '+faststart',
       '-y', outputPath,
     ], { stdio: ['ignore', 'ignore', 'pipe'] })

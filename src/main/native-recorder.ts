@@ -487,6 +487,9 @@ export async function startCapture(
 
   const args: string[] = [
     ...(useStdin ? [] : ['-nostdin']), '-hide_banner',
+    // Wall-clock timestamps allow the muxer to align audio and video by their
+    // actual capture start time when the two streams are merged into one MP4.
+    '-use_wallclock_as_timestamps', '1',
     '-f', input.format,
     '-i', input.device,
     '-ar', String(sampleRate),

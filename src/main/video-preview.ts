@@ -65,6 +65,7 @@ function buildMacInputArgs(format: string, device: string, cfg: MacConfig): stri
 /**
  * Returns true when ffmpeg stderr indicates the device doesn't support the
  * requested resolution or framerate — i.e. we should retry with a different config.
+ * Covers AVFoundation-specific errors that vary across macOS versions and device types.
  */
 function isDeviceFormatError(stderr: string): boolean {
   const s = stderr.toLowerCase()
@@ -72,7 +73,19 @@ function isDeviceFormatError(stderr: string): boolean {
     s.includes('video_size must be') ||
     s.includes('selected videosize') ||
     s.includes('supported modes:') ||
-    (s.includes('selected framerate') && s.includes('not supported'))
+    (s.includes('selected framerate') && s.includes('not supported')) ||
+    s.includes('framerate not supported') ||
+    s.includes('set capture framerate failed') ||
+    s.includes('capture framerate') ||
+    s.includes('invalid framerate') ||
+    s.includes('unsupported resolution') ||
+    s.includes('format is not supported') ||
+    s.includes('could not set format') ||
+    s.includes('failed to set format') ||
+    // AVFoundation error codes for format/framerate mismatch
+    s.includes('-11800') ||   // AVErrorUnknown (often format negotiation failure)
+    s.includes('-11810') ||   // AVErrorDeviceIsNotAvailableInBackground
+    s.includes('-11823')      // AVErrorOperationNotSupportedForAssetType
   )
 }
 
@@ -141,6 +154,21 @@ export async function startPreview(
   let buf = Buffer.alloc(0)
   const SOI = Buffer.from([0xff, 0xd8])
   const EOI = Buffer.from([0xff, 0xd9])
+  let firstFrameReceived = false
+
+  // If no frame arrives within 15 s, the device is stuck — kill and signal the renderer.
+  // This covers the case where ffmpeg opens the device but AVFoundation never delivers frames.
+  const firstFrameTimer = setTimeout(() => {
+    if (!firstFrameReceived && !handle.stopped) {
+      console.warn('[video-preview] no frame received in 15 s — killing stuck ffmpeg')
+      handle.stopped = true
+      active = null
+      try { proc.kill('SIGKILL') } catch {}
+      if (!win.isDestroyed()) {
+        try { win.webContents.send('video-preview-stopped') } catch {}
+      }
+    }
+  }, 15000)
 
   proc.stdout?.on('data', (chunk: Buffer) => {
     buf = Buffer.concat([buf, chunk])
@@ -157,6 +185,11 @@ export async function startPreview(
       const frame = buf.slice(0, eoi + 2)
       buf = buf.slice(eoi + 2)
 
+      if (!firstFrameReceived) {
+        firstFrameReceived = true
+        clearTimeout(firstFrameTimer)
+      }
+
       if (!handle.stopped && !win.isDestroyed()) {
         try { win.webContents.send('video-preview-frame', frame) } catch {}
       }
@@ -164,6 +197,7 @@ export async function startPreview(
   })
 
   proc.on('close', (code) => {
+    clearTimeout(firstFrameTimer)
     if (active === handle) active = null
 
     const elapsed = Date.now() - startMs

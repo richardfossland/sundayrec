@@ -355,10 +355,13 @@ export async function startSession(
   let videoOutputPath: string | null = null
 
   if ((settings as Settings).videoEnabled && (settings as Settings).videoDeviceName) {
-    // Stop any live preview so the device is free
+    // Stop any live preview so the device is free.
+    // Brief pause on macOS lets AVFoundation fully release the device before
+    // the recording capture session opens it. Sync is handled by wall-clock
+    // timestamps on both streams — so the actual offset is preserved in the mux.
     await stopPreview()
     if (process.platform === 'darwin') {
-      await new Promise<void>(resolve => setTimeout(resolve, 300))
+      await new Promise<void>(resolve => setTimeout(resolve, 150))
     }
 
     const audioExt  = path.extname(outputPath)

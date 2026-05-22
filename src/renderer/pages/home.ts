@@ -13,11 +13,12 @@ let fullHistory: RecordingEntry[] = []
 
 // ── Video preview state ──────────────────────────────────────────────────────
 
-let previewActive        = false
-let previewFrameUnsub:   (() => void) | undefined
-let previewStopUnsub:    (() => void) | undefined
-let previewVideoUnsub:   (() => void) | undefined
-let lastFrameTs          = 0
+let previewActive         = false
+let previewFrameUnsub:    (() => void) | undefined
+let previewStopUnsub:     (() => void) | undefined
+let previewVideoUnsub:    (() => void) | undefined
+let previewNoFrameTimer:  ReturnType<typeof setTimeout> | null = null
+let lastFrameTs           = 0
 
 type HomeVideoDevice = { name: string; index: number }
 let homeVideoDevices: HomeVideoDevice[] = []
@@ -98,6 +99,7 @@ async function applyHomeVideoDeviceSelection(): Promise<void> {
 
 export function stopVideoPreview(): void {
   previewActive = false
+  if (previewNoFrameTimer) { clearTimeout(previewNoFrameTimer); previewNoFrameTimer = null }
   previewFrameUnsub?.(); previewFrameUnsub = undefined
   previewStopUnsub?.();  previewStopUnsub  = undefined
   previewVideoUnsub?.(); previewVideoUnsub  = undefined
@@ -136,6 +138,21 @@ export function startVideoPreview(): void {
   const phTxt = document.getElementById('video-preview-placeholder-text')
   if (phTxt) phTxt.textContent = 'Starter kamera…'
 
+  // Renderer-side safety net: if no frame arrives within 20 s, show an error.
+  // The main process sends video-preview-stopped after 15 s, but this handles
+  // any IPC delivery delay or edge cases where the signal is lost.
+  if (previewNoFrameTimer) clearTimeout(previewNoFrameTimer)
+  previewNoFrameTimer = setTimeout(() => {
+    previewNoFrameTimer = null
+    if (previewActive) {
+      previewActive = false
+      if (phTxt) phTxt.textContent = 'Kamera svarte ikke — prøv å oppdatere'
+      if (phDiv) phDiv.style.display = ''
+      if (img)   img.style.display   = 'none'
+      window.api.videoPreviewStop?.()
+    }
+  }, 20000)
+
   window.api.videoPreviewStart?.({
     videoDeviceName:  settings.videoDeviceName,
     videoDeviceIndex: settings.videoDeviceIndex,
@@ -143,6 +160,7 @@ export function startVideoPreview(): void {
   })
 
   previewFrameUnsub = window.api.on('video-preview-frame', (data: unknown) => {
+    if (previewNoFrameTimer) { clearTimeout(previewNoFrameTimer); previewNoFrameTimer = null }
     const now = Date.now()
     if (now - lastFrameTs < 80) return  // ~12fps max render rate
     lastFrameTs = now
