@@ -5,7 +5,173 @@ import { startVU, stopVU } from './home-vu'
 import { getAudioDevices } from '../audio/capture'
 
 let countdownTimer: ReturnType<typeof setInterval> | null = null
+
+export function deactivateHome(): void {
+  if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null }
+}
 let fullHistory: RecordingEntry[] = []
+
+// ── Video preview state ──────────────────────────────────────────────────────
+
+let previewActive        = false
+let previewFrameUnsub:   (() => void) | undefined
+let previewStopUnsub:    (() => void) | undefined
+let previewVideoUnsub:   (() => void) | undefined
+let lastFrameTs          = 0
+
+type HomeVideoDevice = { name: string; index: number }
+let homeVideoDevices: HomeVideoDevice[] = []
+
+function updateVideoToggleButton(): void {
+  const btn   = document.getElementById('btn-video-toggle')
+  const label = document.getElementById('video-toggle-label')
+  const on    = settings.videoEnabled ?? false
+  if (!btn || !label) return
+  label.textContent = on ? 'Video på' : 'Video av'
+  btn.classList.toggle('video-toggle-on', on)
+}
+
+export async function refreshHomeVideoDevices(): Promise<void> {
+  const sel   = document.getElementById('home-video-device-select') as HTMLSelectElement | null
+  if (!sel) return
+  sel.disabled = true
+  sel.innerHTML = '<option value="">Leter etter kameraer…</option>'
+  const phTxt = document.getElementById('video-preview-placeholder-text')
+
+  try {
+    const devices = await window.api.listVideoDevices() as HomeVideoDevice[]
+    homeVideoDevices = devices
+    sel.innerHTML = ''
+
+    const blank = document.createElement('option')
+    blank.value = ''; blank.textContent = 'Velg kamera…'
+    sel.appendChild(blank)
+
+    devices.forEach(d => {
+      const opt = document.createElement('option')
+      opt.value = String(d.index)
+      opt.dataset.name = d.name
+      opt.textContent = d.name
+      sel.appendChild(opt)
+    })
+
+    if (!devices.length) {
+      if (phTxt) phTxt.textContent = 'Ingen kameraer funnet — sjekk tilkobling'
+      sel.disabled = false
+      return
+    }
+
+    const savedName = settings.videoDeviceName ?? ''
+    const match = savedName ? devices.find(d => d.name === savedName) : null
+    sel.value = match ? String(match.index) : ''
+    sel.disabled = false
+
+    if (phTxt) phTxt.textContent = sel.value ? 'Starter kamera…' : 'Velg kamera og trykk oppdater'
+  } catch {
+    sel.innerHTML = '<option value="">Feil ved lasting</option>'
+    sel.disabled = false
+  }
+}
+
+async function applyHomeVideoDeviceSelection(): Promise<void> {
+  const sel = document.getElementById('home-video-device-select') as HTMLSelectElement | null
+  if (!sel) return
+  const idx  = sel.value
+  const opt  = sel.selectedOptions[0]
+  const name = (opt?.dataset.name ?? opt?.textContent ?? '').trim() || null
+  const idxN = idx ? parseInt(idx) : null
+
+  stopVideoPreview()
+  patchSettings({ videoDeviceName: name, videoDeviceIndex: idxN })
+  await window.api.saveSettings({ ...settings })
+  loadVideoInfoStrip()
+
+  if (name) {
+    startVideoPreview()
+  } else {
+    const phDiv = document.getElementById('video-preview-placeholder')
+    const phTxt = document.getElementById('video-preview-placeholder-text')
+    if (phTxt) phTxt.textContent = 'Velg kamera og trykk oppdater'
+    if (phDiv) phDiv.style.display = ''
+  }
+}
+
+export function stopVideoPreview(): void {
+  previewActive = false
+  previewFrameUnsub?.(); previewFrameUnsub = undefined
+  previewStopUnsub?.();  previewStopUnsub  = undefined
+  previewVideoUnsub?.(); previewVideoUnsub  = undefined
+  window.api.videoPreviewStop?.()
+  const img   = document.getElementById('video-preview-img') as HTMLImageElement | null
+  const phDiv = document.getElementById('video-preview-placeholder')
+  if (img)   { img.src = ''; img.style.display = 'none' }
+  if (phDiv) { phDiv.style.display = '' }
+}
+
+export function startVideoPreview(): void {
+  const section = document.getElementById('video-preview-section')
+  updateVideoToggleButton()
+
+  if (!settings.videoEnabled) {
+    if (section) section.style.display = 'none'
+    return
+  }
+
+  // Show section regardless — even if no device yet (user can pick one inline)
+  if (section) section.style.display = ''
+
+  if (!settings.videoDeviceName) {
+    const phDiv = document.getElementById('video-preview-placeholder')
+    const phTxt = document.getElementById('video-preview-placeholder-text')
+    if (phTxt) phTxt.textContent = 'Velg kamera og trykk oppdater'
+    if (phDiv) phDiv.style.display = ''
+    return
+  }
+
+  if (previewActive) return  // already running
+  previewActive = true
+
+  const img   = document.getElementById('video-preview-img') as HTMLImageElement | null
+  const phDiv = document.getElementById('video-preview-placeholder')
+  const phTxt = document.getElementById('video-preview-placeholder-text')
+  if (phTxt) phTxt.textContent = 'Starter kamera…'
+
+  window.api.videoPreviewStart?.({
+    videoDeviceName:  settings.videoDeviceName,
+    videoDeviceIndex: settings.videoDeviceIndex,
+    videoFramerate:   settings.videoFramerate,
+  })
+
+  previewFrameUnsub = window.api.on('video-preview-frame', (data: unknown) => {
+    const now = Date.now()
+    if (now - lastFrameTs < 80) return  // ~12fps max render rate
+    lastFrameTs = now
+    const arr = data as Uint8Array
+    if (!img || arr.length < 4) return
+    let binary = ''
+    for (let i = 0; i < arr.length; i += 8192) {
+      binary += String.fromCharCode(...arr.subarray(i, Math.min(i + 8192, arr.length)))
+    }
+    img.src = `data:image/jpeg;base64,${btoa(binary)}`
+    img.style.display = ''
+    if (phDiv) phDiv.style.display = 'none'
+  })
+
+  previewStopUnsub = window.api.on('video-preview-stopped', () => {
+    previewActive = false
+    if (phTxt) phTxt.textContent = 'Kamera utilgjengelig'
+    if (phDiv) phDiv.style.display = ''
+    if (img) img.style.display = 'none'
+  })
+
+  previewVideoUnsub = window.api.on('video-progress', (data: unknown) => {
+    const d = data as { bytes: number }
+    const el = document.getElementById('video-progress-bytes')
+    if (el) el.textContent = `${(d.bytes / 1048576).toFixed(1)} MB`
+    const row = document.getElementById('video-progress-row')
+    if (row) row.style.display = ''
+  })
+}
 
 function highlightCard(card: HTMLElement | null): void {
   if (!card) return
@@ -17,6 +183,49 @@ function highlightCard(card: HTMLElement | null): void {
 }
 
 export function setupHome(): void {
+  // Video toggle button — always toggles, loads devices inline if turning on
+  document.getElementById('btn-video-toggle')?.addEventListener('click', async () => {
+    const nowEnabled = !(settings.videoEnabled ?? false)
+    patchSettings({ videoEnabled: nowEnabled })
+    await window.api.saveSettings({ ...settings })
+    updateVideoToggleButton()
+    loadVideoInfoStrip()
+
+    const pageHome = document.getElementById('page-home')
+    if (nowEnabled) {
+      pageHome?.classList.add('video-mode')
+      const section = document.getElementById('video-preview-section')
+      if (section) section.style.display = ''
+      await refreshHomeVideoDevices()
+      if (settings.videoDeviceName && !window.__isRecording) startVideoPreview()
+    } else {
+      pageHome?.classList.remove('video-mode')
+      stopVideoPreview()
+      const section = document.getElementById('video-preview-section')
+      if (section) section.style.display = 'none'
+    }
+  })
+
+  // Inline camera refresh button
+  document.getElementById('btn-home-video-refresh')?.addEventListener('click', async () => {
+    stopVideoPreview()
+    await refreshHomeVideoDevices()
+    await applyHomeVideoDeviceSelection()
+  })
+
+  // Inline camera device selector — save + restart preview on change
+  document.getElementById('home-video-device-select')?.addEventListener('change', async () => {
+    await applyHomeVideoDeviceSelection()
+  })
+
+  const goVideoSettings = (e: Event) => {
+    e.preventDefault()
+    window.showPage('settings')
+    document.querySelector<HTMLElement>('#settings-tabs .inner-tab[data-tab="settings-video"]')?.click()
+  }
+  document.getElementById('btn-go-video-source')?.addEventListener('click', goVideoSettings)
+  document.getElementById('btn-go-video-quality')?.addEventListener('click', goVideoSettings)
+
   document.getElementById('btn-go-audio-page')?.addEventListener('click', e => {
     e.preventDefault()
     window.showPage('settings')
@@ -96,6 +305,28 @@ export async function refreshHome(): Promise<void> {
   const next = await window.api.getNextRecording()
   await Promise.all([loadNextRecording(next), loadDiskSpace(), loadRecentHistory(), checkStatus(next), loadHomeInfoStrip()])
   startVU()
+
+  // Hide video progress row (only shown during active recording)
+  const progressRow = document.getElementById('video-progress-row')
+  if (progressRow) progressRow.style.display = 'none'
+
+  updateVideoToggleButton()
+  loadVideoInfoStrip()
+
+  const pageHome = document.getElementById('page-home')
+  if (settings.videoEnabled) {
+    pageHome?.classList.add('video-mode')
+    const section = document.getElementById('video-preview-section')
+    if (section) section.style.display = ''
+    refreshHomeVideoDevices().then(() => {
+      if (settings.videoDeviceName && !window.__isRecording) startVideoPreview()
+    }).catch(() => {})
+  } else {
+    pageHome?.classList.remove('video-mode')
+    stopVideoPreview()
+    const section = document.getElementById('video-preview-section')
+    if (section) section.style.display = 'none'
+  }
 }
 
 async function loadNextRecording(prefetchedNext?: { date: string } | null): Promise<void> {
@@ -390,6 +621,41 @@ async function checkStatus(prefetchedNext?: { date: string } | null): Promise<vo
       }
     }
   }
+}
+
+export function loadVideoInfoStrip(): void {
+  const strip = document.getElementById('video-info-strip')
+  if (!strip) return
+
+  if (!settings.videoEnabled) {
+    strip.style.display = 'none'
+    return
+  }
+  strip.style.display = ''
+
+  const nameEl    = document.getElementById('home-video-device-name')
+  const statusEl  = document.getElementById('home-video-device-status')
+  const qualityEl = document.getElementById('home-video-quality')
+  const modeEl    = document.getElementById('home-video-mode')
+
+  if (nameEl)   nameEl.textContent  = settings.videoDeviceName ?? '—'
+  if (statusEl) {
+    if (settings.videoDeviceName) {
+      statusEl.textContent = 'Kilde konfigurert'
+      statusEl.style.color = 'var(--green)'
+    } else {
+      statusEl.textContent = 'Ingen kamera valgt'
+      statusEl.style.color = 'var(--text3)'
+    }
+  }
+
+  const res     = settings.videoResolution ?? '720p'
+  const fps     = settings.videoFramerate  ?? 30
+  const bitrate = (settings.videoBitrate && settings.videoBitrate > 0)
+    ? ` · ${settings.videoBitrate} kbps`
+    : ''
+  if (qualityEl) qualityEl.textContent = `${res} · ${fps} fps${bitrate}`
+  if (modeEl)    modeEl.textContent    = settings.videoSeparate ? 'Separate filer (video + lyd)' : 'Kombinert MP4'
 }
 
 async function loadHomeInfoStrip(): Promise<void> {

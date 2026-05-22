@@ -111,6 +111,15 @@ export interface Settings {
   emailSmtpPassSet?: boolean  // populated by main before sending to renderer
   emailSmtpPassEnc?: string   // internal: base64-encoded safeStorage ciphertext
 
+  // Video recording
+  videoEnabled?: boolean
+  videoDeviceName?: string | null
+  videoDeviceIndex?: number | null
+  videoResolution?: '1080p' | '720p' | '480p'
+  videoBitrate?: number        // kbps (0 = auto based on resolution)
+  videoFramerate?: number      // fps, default 30
+  videoSeparate?: boolean      // true = keep audio + video as separate files; false = mux into combined MP4
+
   // Editor
   askOpenEditor?: boolean
   editorIntroPath?: string
@@ -130,6 +139,9 @@ export interface Settings {
 
   // Crash recovery (internal)
   activeRecovery?: ActiveRecovery | null
+
+  // Next expected scheduled recording — used to detect missed recordings on next launch
+  nextExpectedRecordingISO?: string | null
 
   // History (internal — never exported)
   recordingHistory?: RecordingEntry[]

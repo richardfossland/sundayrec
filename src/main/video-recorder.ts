@@ -1,0 +1,226 @@
+import { spawn } from 'child_process'
+import type { ChildProcess } from 'child_process'
+import { ffmpegBin, resolveVideoInput } from './native-recorder'
+import type { Settings } from '../types'
+
+export interface VideoHandle {
+  proc:         ChildProcess
+  outputPath:   string
+  startTime:    number
+  bytesWritten: number
+  format:       string
+  onExit:       ((code: number | null) => void) | null
+  onProgress:   ((bytes: number) => void) | null
+  onFrame:      ((frame: Buffer) => void) | null
+}
+
+function classifyVideoError(stderr: string): string {
+  const s = stderr.toLowerCase()
+  if (
+    s.includes('device not found') || s.includes('no such') || s.includes('no video') ||
+    s.includes('no capture device') || s.includes('avfoundation: device') ||
+    s.includes('could not find video') || s.includes('video device not found')
+  ) return 'device_not_found'
+  if (
+    s.includes('permission') || s.includes('access denied') || s.includes('not permitted') ||
+    s.includes('authorization') || s.includes('camera access') || s.includes('privacy')
+  ) return 'device_permission_denied'
+  if (s.includes('already in use') || s.includes('device busy') || s.includes('resource busy')) return 'device_busy'
+  if (s.includes('no space left') || s.includes('disk full') || s.includes('enospc')) return 'disk_full'
+  return 'device_error'
+}
+
+function resolutionToDimensions(res?: string): string {
+  switch (res) {
+    case '1080p': return '1920x1080'
+    case '480p':  return '854x480'
+    default:      return '1280x720'
+  }
+}
+
+function autoBitrate(res?: string): number {
+  switch (res) {
+    case '1080p': return 8000
+    case '480p':  return 1500
+    default:      return 4000
+  }
+}
+
+export async function startVideoCapture(
+  settings: Settings,
+  outputPath: string
+): Promise<VideoHandle | { error: string }> {
+  const input = await resolveVideoInput({
+    videoDeviceName:  settings.videoDeviceName  ?? null,
+    videoDeviceIndex: settings.videoDeviceIndex ?? null,
+  })
+  if (!input) return { error: 'no_device' }
+
+  const fps     = settings.videoFramerate ?? 30
+  const dims    = resolutionToDimensions(settings.videoResolution)
+  const bitrate = (settings.videoBitrate && settings.videoBitrate > 0)
+    ? settings.videoBitrate
+    : autoBitrate(settings.videoResolution)
+
+  // Capture at the device's native resolution and scale in the filter chain.
+  // This is more compatible than specifying -video_size in the input:
+  //   • Capture cards (Blackmagic ATEM Mini/Pro, Elgato Cam Link, Magewell) output
+  //     a fixed HDMI signal format — forcing a different size causes an immediate error.
+  //   • WebCams and built-in cameras generally report a default resolution; AVFoundation
+  //     and DirectShow both select it automatically when no size is requested.
+  // The libx264 output then scales from native → target via lanczos (quality-preserving).
+  //
+  // macOS AVFoundation: -framerate must precede -i.
+  // Windows DirectShow: -rtbufsize prevents frame drops on slow USB buses.
+  const inputArgs: string[] = process.platform === 'darwin'
+    ? ['-f', input.format, '-framerate', String(fps), '-i', input.device]
+    : ['-f', input.format, '-rtbufsize', '200M', '-framerate', String(fps), '-i', input.device]
+
+  const args: string[] = [
+    '-nostdin', '-hide_banner',
+    ...inputArgs,
+    // Primary output: H.264 recording file at target resolution
+    '-c:v', 'libx264',
+    '-preset', 'veryfast',
+    '-vf', `scale=${dims.replace('x', ':')}:flags=lanczos,format=yuv420p`,
+    '-b:v', `${bitrate}k`,
+    '-maxrate', `${Math.round(bitrate * 1.5)}k`,
+    '-bufsize', `${bitrate * 2}k`,
+    '-an',
+    '-y', outputPath,
+    // Secondary output: low-rate MJPEG to stdout for in-recording preview
+    '-map', '0:v',
+    '-vf', 'fps=5,scale=640:360:flags=fast_bilinear',
+    '-c:v', 'mjpeg',
+    '-q:v', '8',
+    '-f', 'mjpeg',
+    'pipe:1',
+  ]
+
+  console.log('[video-recorder] start:', ffmpegBin, args.map(a => a.includes(' ') ? `"${a}"` : a).join(' '))
+
+  const proc = spawn(ffmpegBin, args, {
+    stdio: ['ignore', 'pipe', 'pipe'],  // stdout → MJPEG preview frames
+    detached: false
+  })
+
+  const handle: VideoHandle = {
+    proc, outputPath,
+    startTime: Date.now(),
+    bytesWritten: 0,
+    format: input.format,
+    onExit: null,
+    onProgress: null,
+    onFrame: null,
+  }
+
+  // Parse MJPEG preview frames from stdout (SOI=FFD8 … EOI=FFD9)
+  let previewBuf = Buffer.alloc(0)
+  const SOI = Buffer.from([0xff, 0xd8])
+  const EOI = Buffer.from([0xff, 0xd9])
+  proc.stdout?.on('data', (chunk: Buffer) => {
+    previewBuf = Buffer.concat([previewBuf, chunk])
+    if (previewBuf.length > 4 * 1024 * 1024) previewBuf = previewBuf.slice(-2 * 1024 * 1024)
+    while (true) {
+      const soi = previewBuf.indexOf(SOI)
+      if (soi < 0) { previewBuf = Buffer.alloc(0); break }
+      if (soi > 0) previewBuf = previewBuf.slice(soi)
+      const eoi = previewBuf.indexOf(EOI, 2)
+      if (eoi < 0) break
+      const frame = previewBuf.slice(0, eoi + 2)
+      previewBuf = previewBuf.slice(eoi + 2)
+      handle.onFrame?.(frame)
+    }
+  })
+
+  let stderrBuf = ''
+  proc.stderr?.on('data', (d: Buffer) => {
+    const chunk = d.toString()
+    stderrBuf = (stderrBuf + chunk).slice(-65536)
+    const m = chunk.match(/size=\s*(\d+)kB/)
+    if (m) {
+      handle.bytesWritten = parseInt(m[1]) * 1024
+      handle.onProgress?.(handle.bytesWritten)
+    } else if (chunk.trim() && !chunk.includes('Press [q]') && !chunk.includes('time=')) {
+      console.log('[video-ffmpeg]', chunk.trimEnd())
+    }
+  })
+
+  proc.on('close', code => {
+    console.log('[video-recorder] ffmpeg exited, code:', code)
+    handle.onExit?.(code)
+  })
+
+  // DirectShow takes longer to open devices; AVFoundation also can be slow on first access
+  const startupMs = process.platform === 'win32' ? 4000 : 3000
+  const startupError = await new Promise<string | null>(resolve => {
+    const onClose = () => {
+      clearTimeout(timer)
+      const classified = classifyVideoError(stderrBuf)
+      resolve(classified || 'device_error')
+    }
+    const timer = setTimeout(() => {
+      proc.removeListener('close', onClose)
+      resolve(null)
+    }, startupMs)
+    proc.once('close', onClose)
+  })
+
+  if (startupError) return { error: startupError }
+  if (proc.exitCode !== null || proc.killed) {
+    return { error: classifyVideoError(stderrBuf) || 'device_error' }
+  }
+
+  return handle
+}
+
+export async function stopVideoCapture(handle: VideoHandle): Promise<void> {
+  if (handle.proc.exitCode !== null) return
+  return new Promise(resolve => {
+    let killer: ReturnType<typeof setTimeout> | null = null
+    handle.proc.once('close', () => {
+      if (killer) clearTimeout(killer)
+      resolve()
+    })
+    // stdin is 'ignore', so SIGTERM is the only clean stop signal
+    try { handle.proc.kill('SIGTERM') } catch {}
+    killer = setTimeout(() => {
+      try { handle.proc.kill('SIGKILL') } catch {}
+    }, 30000)
+  })
+}
+
+/**
+ * Mux a separate audio file + video file into a combined MP4.
+ * Video stream is copied losslessly; audio is transcoded to AAC for broad compatibility.
+ */
+export async function muxAudioVideo(
+  audioPath: string,
+  videoPath: string,
+  outputPath: string
+): Promise<boolean> {
+  return new Promise(resolve => {
+    const proc = spawn(ffmpegBin, [
+      '-nostdin', '-hide_banner',
+      '-i', audioPath,
+      '-i', videoPath,
+      '-map', '0:a',
+      '-map', '1:v',
+      '-c:v', 'copy',
+      '-c:a', 'aac', '-b:a', '192k',
+      '-movflags', '+faststart',
+      '-y', outputPath,
+    ], { stdio: ['ignore', 'ignore', 'pipe'] })
+    let stderr = ''
+    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+    const timeout = setTimeout(() => {
+      try { proc.kill('SIGTERM') } catch {}
+      resolve(false)
+    }, 30 * 60 * 1000)
+    proc.on('close', code => {
+      clearTimeout(timeout)
+      if (code !== 0) console.error('[video-recorder] mux failed:', stderr.slice(-500))
+      resolve(code === 0)
+    })
+  })
+}

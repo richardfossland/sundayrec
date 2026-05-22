@@ -20,6 +20,9 @@ const ALLOWED_CHANNELS = [
   'editor-export-progress',
   'cloud-upload-progress',
   'cloud-upload-done',
+  'video-preview-frame',
+  'video-preview-stopped',
+  'video-progress',
 ] as const
 
 type AllowedChannel = typeof ALLOWED_CHANNELS[number]
@@ -62,6 +65,12 @@ contextBridge.exposeInMainWorld('api', {
   editorSaveMeta:         (filePath: string, metadata: unknown) => ipcRenderer.invoke('editor-save-meta', filePath, metadata),
   editorDetectSegments:   (filePath: string) => ipcRenderer.invoke('editor-detect-segments', filePath),
 
+  editorSetVideoPath:      (filePath: string) => ipcRenderer.invoke('editor-set-video-path', filePath),
+  editorExtractAudioPeaks: (filePath: string) => ipcRenderer.invoke('editor-extract-audio-peaks', filePath),
+  editorPickVideoFile:     ()                 => ipcRenderer.invoke('editor-pick-video-file'),
+  editorSaveVideo:         (params: unknown)  => ipcRenderer.invoke('editor-save-video', params),
+  editorExportVideo:       (params: unknown)  => ipcRenderer.invoke('editor-export-video', params),
+
   pickAudioFile: () => ipcRenderer.invoke('pick-audio-file'),
 
   listAsioDrivers: () => ipcRenderer.invoke('list-asio-drivers'),
@@ -84,6 +93,10 @@ contextBridge.exposeInMainWorld('api', {
 
   notifyError:      (data: unknown) => ipcRenderer.send('recording-error', data),
   notifyWeakSignal: () => ipcRenderer.send('weak-signal'),
+
+  listVideoDevices:  () => ipcRenderer.invoke('list-video-devices'),
+  videoPreviewStart: (opts: unknown) => ipcRenderer.invoke('video-preview-start', opts),
+  videoPreviewStop:  () => ipcRenderer.invoke('video-preview-stop'),
 
   on: (channel: string, fn: (...args: unknown[]) => void) => {
     if (!ALLOWED_CHANNELS.includes(channel as AllowedChannel)) return

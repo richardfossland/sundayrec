@@ -26,6 +26,13 @@ let introDuration = 0
 let outroDuration = 0
 let includeIntroOutro = false
 
+// Video state
+const VIDEO_EXTS = new Set(['.mp4', '.mov', '.mkv', '.m4v'])
+let isVideoFile      = false
+let videoEl: HTMLVideoElement | null = null
+let videoIntroPath   = ''
+let videoOutroPath   = ''
+
 // Metadata + chapters
 let meta: RecordingMetadata = { title: '', speaker: '', description: '', chapters: [] }
 let metaDirty = false
@@ -85,6 +92,7 @@ export function setupEditorPage(): void {
   canvas    = $('editor-canvas')  as HTMLCanvasElement
   minimap   = $('editor-minimap') as HTMLCanvasElement
   minimapVp = $('editor-minimap-vp')!
+  videoEl   = $('editor-video') as HTMLVideoElement | null
 
   $('btn-editor-open')?.addEventListener('click',    () => pickAndLoad())
   $('btn-editor-change')?.addEventListener('click',  () => pickAndLoad())
@@ -205,6 +213,28 @@ export function setupEditorPage(): void {
     await reloadIntroOutro()
   })
 
+  // Video intro/outro buttons
+  $('btn-editor-pick-video-intro')?.addEventListener('click', async () => {
+    const fp = await window.api.editorPickVideoFile()
+    if (!fp) return
+    videoIntroPath = fp
+    updateVideoIntroOutroDisplay()
+  })
+  $('btn-editor-clear-video-intro')?.addEventListener('click', () => {
+    videoIntroPath = ''
+    updateVideoIntroOutroDisplay()
+  })
+  $('btn-editor-pick-video-outro')?.addEventListener('click', async () => {
+    const fp = await window.api.editorPickVideoFile()
+    if (!fp) return
+    videoOutroPath = fp
+    updateVideoIntroOutroDisplay()
+  })
+  $('btn-editor-clear-video-outro')?.addEventListener('click', () => {
+    videoOutroPath = ''
+    updateVideoIntroOutroDisplay()
+  })
+
   // Metadata panel toggle
   $('btn-meta-toggle')?.addEventListener('click', () => {
     const body = $('editor-meta-body')
@@ -302,6 +332,13 @@ export function deactivateEditor(): void {
   audioBuffer = null
   introBuffer = null
   outroBuffer = null
+  // Cleanup video element
+  if (videoEl) {
+    videoEl.pause()
+    videoEl.src = ''
+    videoEl.load()
+  }
+  isVideoFile = false
   destroyEQCanvas()
 }
 
@@ -331,25 +368,102 @@ async function loadFile(fp: string): Promise<void> {
 
   showState('loading')
 
-  const raw = await window.api.editorReadFile(fp)
-  if (!raw) { showState('empty'); return }
+  // Determine if this is a video file
+  const ext = ('.' + (fp.split('.').pop()?.toLowerCase() ?? '')).toLowerCase()
+  isVideoFile = VIDEO_EXTS.has(ext)
 
-  const u8 = raw instanceof Uint8Array ? raw : new Uint8Array(raw as ArrayBuffer)
-  const ab  = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer
+  // Show/hide video panel and video intro/outro section
+  const vPanel = $('editor-video-panel')
+  if (vPanel) vPanel.style.display = isVideoFile ? '' : 'none'
 
-  let localCtx: AudioContext | null = null
-  try {
-    localCtx = new AudioContext()
-    const buf = await localCtx.decodeAudioData(ab)
-    if (seq !== loadSeq) { localCtx.close().catch(() => {}); return }
-    audioCtx    = localCtx
-    audioBuffer = buf
-    duration    = audioBuffer.duration
-    peaks       = computePeaks(audioBuffer)
-  } catch {
-    localCtx?.close().catch(() => {})
-    showState('empty')
-    return
+  const audioIoSection = $('editor-audio-io-section')
+  const videoIoSection = $('editor-video-io-section')
+  if (audioIoSection) audioIoSection.style.display = isVideoFile ? 'none' : ''
+  if (videoIoSection) videoIoSection.style.display = isVideoFile ? '' : 'none'
+
+  if (isVideoFile) {
+    // Set video source via custom protocol (registered with registerSchemesAsPrivileged)
+    await window.api.editorSetVideoPath(fp)
+    if (videoEl) {
+      videoEl.src = 'media://current?t=' + Date.now()
+      videoEl.load()
+    }
+
+    // Extract audio at low sample rate for waveform display
+    const result = await window.api.editorExtractAudioPeaks(fp) as { data: Uint8Array | ArrayBuffer; duration: number } | null
+
+    if (seq !== loadSeq) return
+
+    if (result) {
+      const u8 = result.data instanceof Uint8Array ? result.data : new Uint8Array(result.data as ArrayBuffer)
+      const ab = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer
+
+      let localCtx: AudioContext | null = null
+      try {
+        localCtx = new AudioContext()
+        const buf = await localCtx.decodeAudioData(ab)
+        if (seq !== loadSeq) { localCtx.close().catch(() => {}); return }
+        audioCtx    = localCtx
+        audioBuffer = buf
+        duration    = result.duration > 0 ? result.duration : buf.duration
+        peaks       = computePeaks(audioBuffer)
+      } catch (err) {
+        console.warn('[editor] audio decode failed for video file, trying video-only mode', err)
+        localCtx?.close().catch(() => {})
+        // Fall through to video-only mode below
+      }
+    }
+
+    // Video-only mode: no audio track (or decode failed) — get duration from video element
+    if (!audioBuffer) {
+      try {
+        duration = await new Promise<number>((resolve, reject) => {
+          if (!videoEl) { reject(new Error('no video element')); return }
+          if (videoEl.readyState >= 1 && isFinite(videoEl.duration)) {
+            resolve(videoEl.duration); return
+          }
+          const onMeta  = () => { videoEl!.removeEventListener('error', onErr); resolve(videoEl!.duration) }
+          const onErr   = () => { videoEl!.removeEventListener('loadedmetadata', onMeta); reject(new Error('video error')) }
+          videoEl.addEventListener('loadedmetadata', onMeta, { once: true })
+          videoEl.addEventListener('error', onErr, { once: true })
+          setTimeout(() => {
+            videoEl?.removeEventListener('loadedmetadata', onMeta)
+            videoEl?.removeEventListener('error', onErr)
+            reject(new Error('timeout waiting for video metadata'))
+          }, 8000)
+        })
+        if (seq !== loadSeq) return
+        // Flat/empty peaks — waveform shows as a thin line
+        peaks = new Float32Array(Math.ceil(duration * 100))
+        console.log('[editor] video-only mode, duration:', duration.toFixed(1) + 's')
+      } catch (err) {
+        console.error('[editor] could not determine video duration:', err)
+        showState('empty')
+        return
+      }
+    }
+  } else {
+    // Audio file: existing flow
+    const raw = await window.api.editorReadFile(fp)
+    if (!raw) { showState('empty'); return }
+
+    const u8 = raw instanceof Uint8Array ? raw : new Uint8Array(raw as ArrayBuffer)
+    const ab  = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer
+
+    let localCtx: AudioContext | null = null
+    try {
+      localCtx = new AudioContext()
+      const buf = await localCtx.decodeAudioData(ab)
+      if (seq !== loadSeq) { localCtx.close().catch(() => {}); return }
+      audioCtx    = localCtx
+      audioBuffer = buf
+      duration    = audioBuffer.duration
+      peaks       = computePeaks(audioBuffer)
+    } catch {
+      localCtx?.close().catch(() => {})
+      showState('empty')
+      return
+    }
   }
 
   fitAll()
@@ -357,8 +471,8 @@ async function loadFile(fp: string): Promise<void> {
   const el = $('editor-filename')
   if (el) el.textContent = fname
 
-  // Load intro/outro buffers from settings (non-blocking)
-  loadIntroOutroBuffers(seq)
+  // Load intro/outro buffers from settings (non-blocking, audio only)
+  if (!isVideoFile) loadIntroOutroBuffers(seq)
 
   // Load metadata sidecar
   loadMetadataSidecar(fp, fname)
@@ -417,6 +531,25 @@ async function loadIntroOutroBuffers(seq: number): Promise<void> {
     if (seq === loadSeq && buf) { outroBuffer = buf; outroDuration = buf.duration }
   }
   if (seq === loadSeq) drawWaveform()
+}
+
+function updateVideoIntroOutroDisplay(): void {
+  const introEl  = $('editor-video-intro-display')
+  const outroEl  = $('editor-video-outro-display')
+  const clrIntro = $('btn-editor-clear-video-intro') as HTMLElement | null
+  const clrOutro = $('btn-editor-clear-video-outro') as HTMLElement | null
+  if (introEl) {
+    const name = videoIntroPath.split(/[/\\]/).pop() ?? ''
+    introEl.textContent = name || 'Ingen fil valgt'
+    introEl.style.color = name ? '' : 'var(--text3)'
+    if (clrIntro) clrIntro.style.display = name ? '' : 'none'
+  }
+  if (outroEl) {
+    const name = videoOutroPath.split(/[/\\]/).pop() ?? ''
+    outroEl.textContent = name || 'Ingen fil valgt'
+    outroEl.style.color = name ? '' : 'var(--text3)'
+    if (clrOutro) clrOutro.style.display = name ? '' : 'none'
+  }
 }
 
 function updateEditorIntroOutroDisplay(): void {
@@ -689,7 +822,9 @@ function drawWaveform(): void {
   ctx.beginPath(); ctx.moveTo(0, midY); ctx.lineTo(W, midY); ctx.stroke()
 
   // Current playhead time (used for "past" shading)
-  const curSec = isPlaying
+  const curSec = (isPlaying && isVideoFile && videoEl)
+    ? videoEl.currentTime
+    : isPlaying
     ? playStartSec + (audioCtx!.currentTime - playStartCtxTime)
     : playStartSec
 
@@ -1162,7 +1297,7 @@ function setupDragDrop(): void {
     const file = e.dataTransfer?.files[0]
     if (!file) return
     const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
-    if (!['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'webm'].includes(ext)) return
+    if (!['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'webm', 'mp4', 'mov', 'mkv', 'm4v'].includes(ext)) return
     const fp = (file as File & { path?: string }).path
     if (fp) loadFile(fp)
   })
@@ -1209,6 +1344,7 @@ function seekBy(secs: number): void {
   stopPlay()
   playStartSec = Math.max(0, Math.min(duration, playStartSec + secs))
   updateTimecode(playStartSec)
+  if (isVideoFile && videoEl) videoEl.currentTime = playStartSec
   // Pan viewport if playhead is outside
   if (playStartSec < vpStart || playStartSec > vpEnd) {
     const half = (vpEnd - vpStart) / 2
@@ -1460,6 +1596,7 @@ function onCanvasMove(e: MouseEvent): void {
   if (playheadDragging) {
     playStartSec = Math.max(0, Math.min(duration, sec))
     updateTimecode(playStartSec)
+    if (isVideoFile && videoEl) videoEl.currentTime = playStartSec
     drawWaveform()
     return
   }
@@ -1517,6 +1654,7 @@ function onCanvasUp(e: MouseEvent): void {
     stopPlay()
     playStartSec = Math.max(0, Math.min(duration, dragStartSec))
     updateTimecode(playStartSec)
+    if (isVideoFile && videoEl) videoEl.currentTime = playStartSec
   }
 
   dragStartSec = -1
@@ -1592,7 +1730,55 @@ function togglePlay(preview: boolean): void {
 }
 
 function startPlay(preview: boolean): void {
+  // Video-only mode: no audio buffer, but video element can still play
+  if (isVideoFile && videoEl && !audioBuffer) {
+    isPreview    = preview
+    loopStartSec = playStartSec
+    isPlaying    = true
+    videoEl.currentTime = playStartSec
+    videoEl.play().catch(() => {})
+    const onEnded = () => {
+      if (!isPlaying) return
+      if (isLooping) { stopPlay(); playStartSec = loopStartSec; startPlay(isPreview) }
+      else { isPlaying = false; cancelAnimationFrame(rafId); updatePlayIcon(); drawWaveform() }
+    }
+    videoEl.addEventListener('ended', onEnded, { once: true })
+    updatePlayIcon()
+    animate()
+    return
+  }
+
   if (!audioBuffer || !audioCtx) return
+
+  // Video playback: drive the video element, use Web Audio only for gain meter
+  if (isVideoFile && videoEl) {
+    isPreview    = preview
+    loopStartSec = playStartSec
+    isPlaying    = true
+    videoEl.currentTime = playStartSec
+    videoEl.play().catch(() => {})
+
+    // On natural end, handle loop / stop
+    const onEnded = () => {
+      if (!isPlaying) return
+      if (isLooping) {
+        stopPlay()
+        playStartSec = loopStartSec
+        startPlay(isPreview)
+      } else {
+        isPlaying = false
+        cancelAnimationFrame(rafId)
+        updatePlayIcon()
+        drawWaveform()
+      }
+    }
+    videoEl.addEventListener('ended', onEnded, { once: true })
+
+    updatePlayIcon()
+    animate()
+    return
+  }
+
   isPreview = preview
   loopStartSec = playStartSec
 
@@ -1668,6 +1854,18 @@ function startPlay(preview: boolean): void {
 }
 
 function stopPlay(): void {
+  if (isVideoFile && videoEl) {
+    if (isPlaying) {
+      playStartSec = videoEl.currentTime
+    }
+    videoEl.pause()
+    isPlaying = false
+    cancelAnimationFrame(rafId)
+    updatePlayIcon()
+    drawWaveform()
+    return
+  }
+
   for (const n of sourceNodes) { try { n.stop() } catch { /* already stopped */ } }
   sourceNodes = []
   if (isPlaying) {
@@ -1681,6 +1879,26 @@ function stopPlay(): void {
 
 function animate(): void {
   if (!isPlaying) return
+
+  if (isVideoFile && videoEl) {
+    const curSec = videoEl.currentTime
+
+    // Preview mode: skip over cut regions
+    if (isPreview) {
+      const nextCut = cuts.find(c => curSec >= c.start && curSec < c.end)
+      if (nextCut) {
+        videoEl.currentTime = nextCut.end
+        playStartSec = nextCut.end
+      }
+    }
+
+    updateTimecode(curSec)
+    autoScrollToPlayhead(curSec)
+    drawWaveform()
+    rafId = requestAnimationFrame(animate)
+    return
+  }
+
   const curSec = playStartSec + (audioCtx!.currentTime - playStartCtxTime)
   updateTimecode(curSec)
   autoScrollToPlayhead(curSec)
@@ -1721,6 +1939,13 @@ function updatePlayIcon(): void {
 // ── Export flow ────────────────────────────────────────────────────────────
 function openExportModal(): void {
   if (!filePath) return
+
+  // Show/hide format section vs video notice
+  const fmtSection   = $('export-fmt-section')
+  const videoNotice  = $('export-video-notice')
+  if (fmtSection)  fmtSection.style.display  = isVideoFile ? 'none' : ''
+  if (videoNotice) videoNotice.style.display = isVideoFile ? '' : 'none'
+
   // Update processing summary
   const summary = $('export-proc-summary')
   if (summary) {
@@ -1736,11 +1961,20 @@ function openExportModal(): void {
   const ioSummary = $('export-io-summary')
   if (ioRow && ioSummary) {
     const parts = []
-    if (includeIntroOutro && settings.editorIntroPath) {
-      parts.push('Intro: ' + (settings.editorIntroPath.split(/[/\\]/).pop() ?? ''))
-    }
-    if (includeIntroOutro && settings.editorOutroPath) {
-      parts.push('Outro: ' + (settings.editorOutroPath.split(/[/\\]/).pop() ?? ''))
+    if (!isVideoFile) {
+      if (includeIntroOutro && settings.editorIntroPath) {
+        parts.push('Intro: ' + (settings.editorIntroPath.split(/[/\\]/).pop() ?? ''))
+      }
+      if (includeIntroOutro && settings.editorOutroPath) {
+        parts.push('Outro: ' + (settings.editorOutroPath.split(/[/\\]/).pop() ?? ''))
+      }
+    } else {
+      if (includeIntroOutro && videoIntroPath) {
+        parts.push('Video-intro: ' + (videoIntroPath.split(/[/\\]/).pop() ?? ''))
+      }
+      if (includeIntroOutro && videoOutroPath) {
+        parts.push('Video-outro: ' + (videoOutroPath.split(/[/\\]/).pop() ?? ''))
+      }
     }
     ioSummary.textContent = parts.length ? parts.join(' · ') : ''
     ioRow.style.display   = parts.length ? '' : 'none'
@@ -1777,20 +2011,36 @@ async function runExport(): Promise<void> {
   // Auto-save metadata before export
   if (metaDirty) await saveMetadata()
 
-  const result = await window.api.editorExportFile({
-    inputPath:    filePath,
-    cutRegions:   cuts,
-    duration,
-    mode,
-    outputFolder: exportOutputFolder || undefined,
-    outputFormat: fmt,
-    outputBitrate:  bitrate,
-    outputBitDepth: bitDepth,
-    processing: { ffmpegFilters: getFFmpegFilters() },
-    introPath:  (includeIntroOutro && settings.editorIntroPath) ? settings.editorIntroPath : undefined,
-    outroPath:  (includeIntroOutro && settings.editorOutroPath) ? settings.editorOutroPath : undefined,
-    metadata:   meta,
-  })
+  let result: { ok: boolean; outputPath?: string; error?: string }
+
+  if (isVideoFile) {
+    result = await window.api.editorExportVideo({
+      inputPath:    filePath,
+      cutRegions:   cuts,
+      duration,
+      mode,
+      outputFolder: exportOutputFolder || undefined,
+      processing: { ffmpegFilters: getFFmpegFilters() },
+      introPath:  (includeIntroOutro && videoIntroPath) ? videoIntroPath : undefined,
+      outroPath:  (includeIntroOutro && videoOutroPath) ? videoOutroPath : undefined,
+      metadata:   meta,
+    })
+  } else {
+    result = await window.api.editorExportFile({
+      inputPath:    filePath,
+      cutRegions:   cuts,
+      duration,
+      mode,
+      outputFolder: exportOutputFolder || undefined,
+      outputFormat: fmt,
+      outputBitrate:  bitrate,
+      outputBitDepth: bitDepth,
+      processing: { ffmpegFilters: getFFmpegFilters() },
+      introPath:  (includeIntroOutro && settings.editorIntroPath) ? settings.editorIntroPath : undefined,
+      outroPath:  (includeIntroOutro && settings.editorOutroPath) ? settings.editorOutroPath : undefined,
+      metadata:   meta,
+    })
+  }
 
   if (progRow) progRow.style.display = 'none'
   if (progBar) progBar.style.width   = '0%'

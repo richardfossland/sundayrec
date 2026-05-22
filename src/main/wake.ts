@@ -220,6 +220,10 @@ export async function fixWinWakeTimers(): Promise<{ ok: boolean; message?: strin
     ], { timeout: 15000 })
     return { ok: true }
   } catch (e) {
+    const msg = ((e as Error & { stderr?: string }).stderr ?? (e as Error).message ?? '').toLowerCase()
+    if (/access.?denied|unauthorized|privilege|administrator/i.test(msg)) {
+      return { ok: false, message: 'admin_required' }
+    }
     return { ok: false, message: (e as Error).message }
   }
 }

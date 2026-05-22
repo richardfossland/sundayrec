@@ -23,7 +23,7 @@ import { makeVuState, tickVU, stopVuState } from '../audio/vu'
 import { fmtCountdown, flashMsg, isoDate } from '../helpers'
 import { stopVU as stopHomeVU } from './home-vu'
 import { stopMonitoring as stopAudioPageMonitoring } from './audio-page'
-import { loadRecentHistory } from './home'
+import { loadRecentHistory, stopVideoPreview, startVideoPreview } from './home'
 import { showEditorPrompt } from './editor-page'
 import type { RecordingOpts } from '../../types'
 
@@ -34,6 +34,9 @@ export let isRecording = false
 
 let recStartTime = 0
 let recBytes     = 0
+let previewRestartTimer: ReturnType<typeof setTimeout> | null = null
+let recPreviewUnsub:     (() => void) | undefined
+let lastRecFrameTs = 0
 
 let scheduledStop:  Date | null = null
 let stopOverridden  = false
@@ -118,6 +121,8 @@ export function setupRecording(): void {
     }),
     window.api.on('recording-error', (data) => {
       const d = data as { error?: string; message?: string } | undefined
+      // Stop monitoring (VU timer + mic stream) before hiding overlay — same as normal stop
+      stopMonitoring().catch(err => console.error('[recording] stopMonitoring on error:', err))
       hideOverlay()
       loadRecentHistory()
       const msg = d?.message ?? (d?.error ? translateNativeError(d.error) : null)
@@ -126,6 +131,11 @@ export function setupRecording(): void {
     window.api.on('recording-progress', (data) => {
       const d = data as { bytes?: number } | undefined
       if (d?.bytes !== undefined) recBytes = d.bytes
+    }),
+    window.api.on('video-progress', (data) => {
+      const d = data as { bytes: number }
+      const el = document.getElementById('rec-video-bytes')
+      if (el) el.textContent = `${(d.bytes / 1048576).toFixed(1)} MB`
     }),
     window.api.on('recording-reconnecting', () => showReconnectBanner()),
     window.api.on('recording-reconnected',  () => hideReconnectBanner()),
@@ -151,6 +161,8 @@ async function openManualModal(): Promise<void> {
   modal.style.display = 'flex'
   const nameEl  = document.getElementById('manual-filename') as HTMLInputElement | null
   if (nameEl) nameEl.value = ''
+
+  // Audio devices
   const devSel  = document.getElementById('manual-device') as HTMLSelectElement | null
   const devices = await getAudioDevices()
   if (devSel) {
@@ -165,6 +177,66 @@ async function openManualModal(): Promise<void> {
       if (!devSel.value && devices.length) devSel.selectedIndex = 0
     }
   }
+
+  // Video devices — show section only when video mode is on
+  const videoSection = document.getElementById('manual-video-section')
+  const videoSel     = document.getElementById('manual-video-device') as HTMLSelectElement | null
+  const videoHint    = document.getElementById('manual-video-hint')
+
+  if (!settings.videoEnabled) {
+    if (videoSection) videoSection.style.display = 'none'
+    return
+  }
+  if (videoSection) videoSection.style.display = ''
+
+  if (videoSel) {
+    videoSel.innerHTML = '<option value="">Laster enheter…</option>'
+    videoSel.disabled  = true
+  }
+  if (videoHint) videoHint.style.display = 'none'
+
+  try {
+    const videoDevices = await window.api.listVideoDevices()
+    if (!videoSel) return
+
+    videoSel.innerHTML = ''
+
+    // "No video for this recording" option
+    const noVideoOpt = document.createElement('option')
+    noVideoOpt.value = '__none__'
+    noVideoOpt.textContent = 'Ingen video (bare lyd)'
+    videoSel.appendChild(noVideoOpt)
+
+    videoDevices.forEach(d => {
+      const opt = document.createElement('option')
+      opt.value = String(d.index)
+      opt.dataset.name = d.name
+      opt.textContent = d.name
+      videoSel.appendChild(opt)
+    })
+
+    // Pre-select the saved device
+    if (settings.videoDeviceName) {
+      const match = videoDevices.find(d => d.name === settings.videoDeviceName)
+      videoSel.value = match ? String(match.index) : '__none__'
+    } else {
+      videoSel.value = '__none__'
+    }
+
+    videoSel.disabled = false
+
+    if (!videoDevices.length) {
+      if (videoHint) {
+        videoHint.textContent = 'Ingen kameraer funnet — sjekk tilkobling'
+        videoHint.style.display = ''
+      }
+    }
+  } catch {
+    if (videoSel) {
+      videoSel.innerHTML = '<option value="__none__">Feil ved lasting av kameraer</option>'
+      videoSel.disabled  = false
+    }
+  }
 }
 
 async function handleManualStart(): Promise<void> {
@@ -172,21 +244,31 @@ async function handleManualStart(): Promise<void> {
   const mm  = document.getElementById('modal-manual')
   if (btn) btn.disabled = true
 
-  const devSel      = document.getElementById('manual-device')  as HTMLSelectElement | null
-  const nameEl      = document.getElementById('manual-filename') as HTMLInputElement  | null
-  // Use || so an empty dropdown value falls back to the stored deviceId
+  const devSel      = document.getElementById('manual-device')    as HTMLSelectElement | null
+  const videoSel    = document.getElementById('manual-video-device') as HTMLSelectElement | null
+  const nameEl      = document.getElementById('manual-filename')  as HTMLInputElement  | null
   const deviceId    = devSel?.value || settings.deviceId || null
   const devChannels = deviceId ? (settings.deviceChannels?.[deviceId] ?? null) : null
   const deviceName  = devSel?.options[devSel?.selectedIndex ?? 0]?.textContent ?? settings.deviceName ?? null
 
+  // Resolve video source from the modal selection
+  const videoVal  = videoSel?.value ?? '__none__'
+  const noVideo   = !settings.videoEnabled || videoVal === '__none__'
+  const videoOpt  = videoSel?.options[videoSel.selectedIndex ?? 0]
+  const videoName = (videoOpt?.dataset.name ?? videoOpt?.textContent ?? '').trim() || null
+  const videoIdx  = (videoVal && videoVal !== '__none__') ? parseInt(videoVal) : null
+
   const opts: RecordingOpts = {
     ...settings,
     deviceId,
-    deviceName: deviceName ?? undefined,
-    customName:  nameEl?.value.trim() ?? '',
-    channelL:    devChannels?.channelL ?? 0,
-    channelR:    devChannels?.channelR ?? 1,
-    maxMinutes:  settings.manualMaxMinutes || undefined
+    deviceName:       deviceName ?? undefined,
+    customName:       nameEl?.value.trim() ?? '',
+    channelL:         devChannels?.channelL ?? 0,
+    channelR:         devChannels?.channelR ?? 1,
+    maxMinutes:       settings.manualMaxMinutes || undefined,
+    videoEnabled:     !noVideo,
+    videoDeviceName:  noVideo ? null : videoName,
+    videoDeviceIndex: noVideo ? null : videoIdx,
   }
 
   // Do NOT close the modal before we know if the recording started —
@@ -394,8 +476,42 @@ async function tryReconnectMonitor(session: MonitorSession, opts: RecordingOpts)
 function showOverlay(opts: RecordingOpts): void {
   isRecording = true
   window.__isRecording = true
+  // Cancel any pending preview restart and stop home preview (device now used by recorder)
+  if (previewRestartTimer) { clearTimeout(previewRestartTimer); previewRestartTimer = null }
+  stopVideoPreview()
+
+  // Show overlay video preview if video is configured
+  if (opts.videoEnabled && opts.videoDeviceName) {
+    const recVideoSection = document.getElementById('rec-video-section')
+    const recImg          = document.getElementById('rec-video-preview-img') as HTMLImageElement | null
+    const recPh           = document.getElementById('rec-video-placeholder')
+    if (recVideoSection) recVideoSection.style.display = ''
+    if (recImg)  { recImg.src = ''; recImg.style.display = 'none' }
+    if (recPh)   { recPh.textContent = 'Starter kamera…'; recPh.style.display = '' }
+
+    recPreviewUnsub?.()
+    recPreviewUnsub = window.api.on('video-preview-frame', (data: unknown) => {
+      const now = Date.now()
+      if (now - lastRecFrameTs < 80) return
+      lastRecFrameTs = now
+      const arr = data as Uint8Array
+      if (!recImg || arr.length < 4) return
+      let binary = ''
+      for (let i = 0; i < arr.length; i += 8192) {
+        binary += String.fromCharCode(...arr.subarray(i, Math.min(i + 8192, arr.length)))
+      }
+      recImg.src = `data:image/jpeg;base64,${btoa(binary)}`
+      recImg.style.display = ''
+      if (recPh) recPh.style.display = 'none'
+    })
+  }
   const overlay = document.getElementById('recording-overlay')
-  if (overlay) overlay.style.display = 'flex'
+  if (overlay) {
+    overlay.style.display = 'flex'
+    if (opts.videoEnabled && opts.videoDeviceName) {
+      overlay.classList.add('video-active')
+    }
+  }
   const dot = document.getElementById('status-dot')
   const lbl = document.getElementById('status-label')
   if (dot) dot.className = 'status-dot recording'
@@ -439,8 +555,28 @@ function showOverlay(opts: RecordingOpts): void {
 function hideOverlay(): void {
   isRecording = false
   window.__isRecording = false
+
+  // Clean up overlay video preview
+  recPreviewUnsub?.(); recPreviewUnsub = undefined
+  const recVideoSection = document.getElementById('rec-video-section')
+  if (recVideoSection) recVideoSection.style.display = 'none'
+
+  // Restart preview after a short delay — gives time for split auto-restart to cancel it
+  if (previewRestartTimer) clearTimeout(previewRestartTimer)
+  previewRestartTimer = setTimeout(() => {
+    previewRestartTimer = null
+    if (!isRecording) {
+      // Reset video progress display
+      const progressRow = document.getElementById('video-progress-row')
+      if (progressRow) progressRow.style.display = 'none'
+      startVideoPreview()
+    }
+  }, 3000)
   const overlay = document.getElementById('recording-overlay')
-  if (overlay) overlay.style.display = 'none'
+  if (overlay) {
+    overlay.style.display = 'none'
+    overlay.classList.remove('video-active')
+  }
   scheduledStop  = null
   stopOverridden = false
   if (schedStopTimer) { clearTimeout(schedStopTimer);  schedStopTimer = null }

@@ -35,7 +35,10 @@ import { localDateStr, buildFilename, sanitizeFilename, formatDuration } from '.
 import { startCapture, stopCapture, ffmpegBin, buildCodecArgs } from './native-recorder'
 import * as preroll from './preroll'
 import type { NativeHandle } from './native-recorder'
-import type { RecordingOpts, RecordingEntry } from '../types'
+import { startVideoCapture, stopVideoCapture, muxAudioVideo } from './video-recorder'
+import type { VideoHandle } from './video-recorder'
+import { stopPreview } from './video-preview'
+import type { RecordingOpts, RecordingEntry, Settings } from '../types'
 
 // ── Localised notification labels ───────────────────────────────────────────
 
@@ -177,6 +180,8 @@ interface Session {
   segments:         string[]  // all output paths in order (reconnect segments appended)
   splitTimer:       ReturnType<typeof setTimeout> | null
   splitAutoRestart: boolean
+  videoHandle:      VideoHandle | null
+  videoOutputPath:  string | null    // path to the in-progress video file
 }
 
 let activeSession:       Session | null      = null
@@ -229,6 +234,10 @@ function safeSend(win: BrowserWindow, channel: string, payload?: unknown): void 
 
 export function isActive(): boolean {
   return activeSession !== null && !activeSession.stopping
+}
+
+export function getActiveSessionOpts(): RecordingOpts | null {
+  return activeSession?.settings ?? null
 }
 
 // ── Pre-recording safety checks ──────────────────────────────────────────────
@@ -286,12 +295,19 @@ async function preflightCheck(settings: RecordingOpts): Promise<{ error: string 
     }
   } catch { /* disk check is best-effort */ }
 
-  // 4. macOS: microphone permission must be granted
+  // 4. macOS: microphone (and camera if video is enabled) permission must be granted
   if (process.platform === 'darwin') {
-    const status = systemPreferences.getMediaAccessStatus('microphone')
-    if (status === 'denied' || status === 'restricted') {
-      console.error('[recorder] microphone access', status)
+    const micStatus = systemPreferences.getMediaAccessStatus('microphone')
+    if (micStatus === 'denied' || micStatus === 'restricted') {
+      console.error('[recorder] microphone access', micStatus)
       return { error: 'device_permission_denied' }
+    }
+    if ((settings as Settings).videoEnabled && (settings as Settings).videoDeviceName) {
+      const camStatus = systemPreferences.getMediaAccessStatus('camera')
+      if (camStatus === 'denied' || camStatus === 'restricted') {
+        console.error('[recorder] camera access', camStatus)
+        return { error: 'device_permission_denied' }
+      }
     }
   }
 
@@ -334,6 +350,51 @@ export async function startSession(
 
   const handle = result
 
+  // ── Video capture (optional) ─────────────────────────────────────────────
+  let videoHandle: VideoHandle | null = null
+  let videoOutputPath: string | null = null
+
+  if ((settings as Settings).videoEnabled && (settings as Settings).videoDeviceName) {
+    // Stop any live preview so the device is free
+    await stopPreview()
+    if (process.platform === 'darwin') {
+      await new Promise<void>(resolve => setTimeout(resolve, 300))
+    }
+
+    const audioExt  = path.extname(outputPath)
+    const audioBase = outputPath.slice(0, -audioExt.length)
+
+    // When split recording is active, force separate files (can't correctly
+    // mux partial audio segments with a continuous video stream).
+    const hasSplit       = !!(settings.splitMinutes && settings.splitMinutes > 0)
+    const useSeparate    = !!(settings as Settings).videoSeparate || hasSplit
+    videoOutputPath = useSeparate ? `${audioBase}_video.mp4` : `${audioBase}_vtmp.mp4`
+
+    const videoResult = await startVideoCapture(settings as Settings, videoOutputPath)
+    if ('error' in videoResult) {
+      console.error('[recorder] video capture failed to start:', videoResult.error)
+      videoOutputPath = null  // continue with audio-only
+    } else {
+      videoHandle = videoResult
+      videoHandle.onProgress = bytes => {
+        if (activeSession?.sessionId === sessionId) {
+          safeSend(win, 'video-progress', { bytes })
+        }
+      }
+      videoHandle.onFrame = (frame: Buffer) => {
+        if (activeSession?.sessionId === sessionId) {
+          safeSend(win, 'video-preview-frame', frame)
+        }
+      }
+      videoHandle.onExit = code => {
+        // If video dies unexpectedly, log but keep audio recording running
+        if (code !== 0 && !activeSession?.stopping) {
+          console.warn('[recorder] video ffmpeg died unexpectedly, code:', code)
+        }
+      }
+    }
+  }
+
   activeSession = {
     settings, outputPath, sessionId, handle,
     startTime:        handle.startTime,
@@ -345,6 +406,7 @@ export async function startSession(
     prerollMs:  prerollData?.trimMs  ?? 0,
     segments:   [outputPath],
     splitTimer: null, splitAutoRestart: false,
+    videoHandle, videoOutputPath,
   }
 
   // Persist recovery info so a crash restart can salvage the partial file
@@ -401,8 +463,9 @@ export async function startSession(
   handle.onExit = code => {
     if (!activeSession || activeSession.sessionId !== sessionId) return
     if (activeSession.stopping) {
+      // finishSession is triggered by stopSession() via Promise.all — skip here
       stopStuckTimer(activeSession)
-      finishSession(activeSession)
+      return
     } else if (code === 0) {
       stopStuckTimer(activeSession)
       finishSession(activeSession)
@@ -428,10 +491,17 @@ export function stopSession(): void {
   session.stopping = true
   if (session.maxTimer)   clearTimeout(session.maxTimer)
   if (session.splitTimer) clearTimeout(session.splitTimer)
-  stopCapture(session.handle).then(() => {
-    // finishSession will be called via handle.onExit
+  stopStuckTimer(session)
+
+  const audioStop = stopCapture(session.handle)
+  const videoStop = session.videoHandle
+    ? stopVideoCapture(session.videoHandle)
+    : Promise.resolve()
+
+  Promise.all([audioStop, videoStop]).then(() => {
+    finishSession(session)
   }).catch(err => {
-    console.error('[recorder] stopCapture error:', err)
+    console.error('[recorder] stop error:', err)
     try { finishSession(session) } catch (e) { console.error('[recorder] finishSession error:', e) }
   })
 }
@@ -517,7 +587,36 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
     }
   }
 
-  // Step 3: Single history entry for the (now possibly merged) recording
+  // Step 3: Video post-processing (mux or validate separate file)
+  let videoFinalPath = session.videoOutputPath
+
+  if (videoFinalPath) {
+    const videoOk = fs.existsSync(videoFinalPath) && fs.statSync(videoFinalPath).size > 100000
+    if (!videoOk) {
+      console.warn('[recorder] video file missing or too small — skipping video')
+      if (videoFinalPath && fs.existsSync(videoFinalPath)) fs.promises.unlink(videoFinalPath).catch(() => {})
+      videoFinalPath = null
+    }
+  }
+
+  if (videoFinalPath && !(session.settings as Settings).videoSeparate && !session.splitAutoRestart) {
+    // Combined mode: mux audio + video → one MP4
+    const audioExt  = path.extname(session.outputPath)
+    const audioBase = session.outputPath.slice(0, -audioExt.length)
+    // Use uniquePath to avoid overwriting an existing .mp4 if one already exists with the same base name
+    const combinedPath = await uniquePath(`${audioBase}.mp4`)
+    console.log('[recorder] muxing audio + video →', path.basename(combinedPath))
+    const muxOk = await muxAudioVideo(session.outputPath, videoFinalPath, combinedPath)
+    if (muxOk) {
+      fs.promises.unlink(videoFinalPath).catch(() => {})  // delete temp raw video
+      videoFinalPath = combinedPath
+    } else {
+      console.error('[recorder] mux failed — keeping separate files')
+      // videoFinalPath stays as-is (the raw video), treated as separate file
+    }
+  }
+
+  // Step 4: Audio history entry
   const entry: RecordingEntry = {
     date:      localDateStr(recDate),
     startTime: recDate.toTimeString().slice(0, 5),
@@ -527,6 +626,21 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
     status:    'ok'
   }
   store.addHistory(entry)
+
+  // Step 5: Video history entry (if any)
+  if (videoFinalPath && fs.existsSync(videoFinalPath)) {
+    const videoEntry: RecordingEntry = {
+      date:      localDateStr(recDate),
+      startTime: recDate.toTimeString().slice(0, 5),
+      duration:  formatDuration(durationSec),
+      filename:  path.basename(videoFinalPath),
+      path:      videoFinalPath,
+      status:    'ok',
+      note:      'Video'
+    }
+    store.addHistory(videoEntry)
+    safeSend(session.win, 'recording-finished', videoEntry)
+  }
 
   // Cloud auto-upload (fire-and-forget)
   import('./cloud').then(c => c.autoUploadAfterRecording(session.outputPath, session.win)).catch(err =>
@@ -606,8 +720,11 @@ async function applyPreroll(
     })
 
     // Step 2: Concat encoded pre-roll + main recording (lossless copy)
-    const escPath = (p: string) =>
-      (process.platform === 'win32' ? p.replace(/\\/g, '/') : p).replace(/'/g, "'\\''")
+    const escPath = (p: string) => {
+      const normalized = process.platform === 'win32' ? p.replace(/\\/g, '/') : p
+      // ffmpeg concat format uses backslash-escaping inside single-quoted paths (not the POSIX shell trick)
+      return normalized.replace(/'/g, "\\'")
+    }
     await fs.promises.writeFile(
       concatList,
       `file '${escPath(encodedPath)}'\nfile '${escPath(mainPath)}'\n`,
@@ -663,8 +780,10 @@ async function mergeSegments(segments: string[]): Promise<boolean> {
   const tempPath   = path.join(dir, `${base}_merge_tmp${ext}`)
 
   try {
-    const escPath = (p: string) =>
-      (process.platform === 'win32' ? p.replace(/\\/g, '/') : p).replace(/'/g, "'\\''")
+    const escPath = (p: string) => {
+      const normalized = process.platform === 'win32' ? p.replace(/\\/g, '/') : p
+      return normalized.replace(/'/g, "\\'")
+    }
     await fs.promises.writeFile(
       concatList,
       segments.map(s => `file '${escPath(s)}'`).join('\n') + '\n',

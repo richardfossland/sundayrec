@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Notification, dialog, shell, systemPreferences, powerMonitor } from 'electron'
+import { app, BrowserWindow, ipcMain, Notification, dialog, shell, systemPreferences, powerMonitor, protocol, net } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import * as store from './store'
@@ -22,6 +22,19 @@ process.on('unhandledRejection', (reason) => {
   console.error('[unhandledRejection]', reason)
 })
 
+// macOS sends SIGTERM when the OS restarts or updates — stop any active recording cleanly
+process.on('SIGTERM', () => {
+  console.log('[SundayRec] SIGTERM received — shutting down gracefully')
+  if (recorder.isActive()) {
+    recorder.onceIdle(() => { forceQuit = true; app.quit() })
+    recorder.stopSession()
+    setTimeout(() => { forceQuit = true; app.quit() }, 30000)
+  } else {
+    forceQuit = true
+    app.quit()
+  }
+})
+
 app.setName('SundayRec')
 
 // Prevent multiple instances — must be registered before requestSingleInstanceLock
@@ -35,6 +48,16 @@ if (!app.requestSingleInstanceLock()) {
 
 if (!app.isPackaged && process.platform === 'darwin' && app.dock) {
   app.dock.setIcon(path.join(__dirname, '../../assets/icon.png'))
+}
+
+const MISSED_NOTIFY_LABELS: Record<string, [string, string]> = {
+  no: ['SundayRec — opptak ikke utført', 'Et planlagt opptak kan ha blitt hoppet over. Sjekk opptakshistorikken.'],
+  en: ['SundayRec — recording possibly missed', 'A scheduled recording may have been skipped. Check recording history.'],
+  de: ['SundayRec — Aufnahme möglicherweise verpasst', 'Eine geplante Aufnahme wurde möglicherweise übersprungen. Verlauf prüfen.'],
+  sv: ['SundayRec — inspelning möjligen missad', 'En schemalagd inspelning kan ha hoppats över. Kontrollera historiken.'],
+  da: ['SundayRec — optagelse muligvis misset', 'En planlagt optagelse kan være sprunget over. Tjek optagelseshistorikken.'],
+  pl: ['SundayRec — nagranie możliwe pominięte', 'Zaplanowane nagranie mogło zostać pominięte. Sprawdź historię nagrań.'],
+  fr: ['SundayRec — enregistrement peut-être manqué', "Un enregistrement planifié a peut-être été ignoré. Vérifiez l'historique."],
 }
 
 const WAKE_NOTIFY_LABELS: Record<string, [string, string]> = {
@@ -75,6 +98,40 @@ const QUIT_LABELS: Record<string, [string, string, string, string]> = {
 }
 
 let mainWindow: BrowserWindow
+
+// ── Missed-recording detection ────────────────────────────────────────────────
+
+// Store the next expected recording time so we can detect if it was skipped
+function storeNextExpected(upcomingDates: Date[]): void {
+  const iso = upcomingDates[0]?.toISOString() ?? null
+  store.set('nextExpectedRecordingISO', iso)
+}
+
+// Call this on startup BEFORE the first wake.reschedule() overwrites the stored time.
+// If the stored time has passed and no history entry covers it → the machine never woke up.
+function checkTrulyMissedRecordings(): void {
+  if (recorder.isActive()) return
+  const storedISO = store.get('nextExpectedRecordingISO')
+  if (!storedISO) return
+
+  const expectedMs = new Date(storedISO).getTime()
+  if (isNaN(expectedMs)) return
+
+  const minutesAgo = (Date.now() - expectedMs) / 60000
+  // Only flag between 25 min (after late-start window) and 24 hours ago
+  if (minutesAgo < 25 || minutesAgo > 24 * 60) return
+
+  const history = store.getHistory()
+  const hasCoverage = history.some(e => e.timestamp && Math.abs(e.timestamp - expectedMs) < 25 * 60 * 1000)
+  if (!hasCoverage) {
+    const lang = store.get('language') ?? 'no'
+    const lbl  = MISSED_NOTIFY_LABELS[lang] ?? MISSED_NOTIFY_LABELS.no
+    if (Notification.isSupported()) new Notification({ title: lbl[0], body: lbl[1] }).show()
+  }
+}
+
+// ── Video editor state ────────────────────────────────────────────────────────
+let currentEditorVideoPath: string | null = null
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -125,6 +182,12 @@ function createWindow(): void {
   })
 }
 
+// Must be called before app.ready so the renderer recognises the custom scheme
+// as a privileged/secure origin (required for <video> and fetch from renderer).
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'media', privileges: { secure: true, standard: true, supportFetchAPI: true, stream: true } }
+])
+
 app.whenReady().then(async () => {
   if (!store.get('saveFolder')) {
     const musicPath = app.getPath('music')
@@ -173,6 +236,15 @@ app.whenReady().then(async () => {
   // Register custom URL scheme for OAuth callbacks (sundayrec://oauth/...)
   app.setAsDefaultProtocolClient('sundayrec')
 
+  // Register media:// protocol so the renderer can stream the currently-loaded
+  // video file without exposing arbitrary file:// access.
+  protocol.handle('media', async (req) => {
+    if (!currentEditorVideoPath) return new Response('Not found', { status: 404 })
+    const fileUrl = 'file://' + currentEditorVideoPath.replace(/\\/g, '/')
+    // Forward all headers (including Range) so the browser can seek within the video
+    return net.fetch(fileUrl, { headers: req.headers })
+  })
+
   createWindow()
   tray.create(mainWindow)
   recorder.recoverCrashedSession()
@@ -200,6 +272,9 @@ app.whenReady().then(async () => {
   cleanupOldRecordings()
   store.pruneHistory()
   const initialUpcoming = scheduler.getUpcomingDates()
+  // Check for truly missed recordings BEFORE overwriting the stored expected time
+  checkTrulyMissedRecordings()
+  storeNextExpected(initialUpcoming)
   wake.reschedule(initialUpcoming, mainWindow).catch(err => console.error('[wake] reschedule error:', err))
   tray.setNextRecording(initialUpcoming[0] ?? null)
 
@@ -220,6 +295,7 @@ app.whenReady().then(async () => {
       }
     }
     const upcoming = scheduler.getUpcomingDates()
+    storeNextExpected(upcoming)
     wake.reschedule(upcoming, mainWindow).catch(err => console.error('[wake] resume reschedule error:', err))
     tray.setNextRecording(upcoming[0] ?? null)
 
@@ -239,6 +315,7 @@ app.whenReady().then(async () => {
   // Refresh OS wake schedules every 6 hours so the list stays current
   setInterval(() => {
     const upcoming = scheduler.getUpcomingDates()
+    storeNextExpected(upcoming)
     wake.reschedule(upcoming, mainWindow).catch(err => console.error('[wake] periodic reschedule error:', err))
     tray.setNextRecording(upcoming[0] ?? null)
   }, 6 * 60 * 60 * 1000)
@@ -315,7 +392,19 @@ app.on('render-process-gone', (_event, _webContents, details) => {
     }
   } catch (err) {
     console.error('[SundayRec] Failed to reload renderer after crash:', err)
+    return
   }
+  // After the renderer reloads, restore the recording overlay if a session is still active.
+  // Use once() so this fires exactly once for this reload, then cleans up automatically.
+  mainWindow.webContents.once('did-finish-load', () => {
+    if (recorder.isActive()) {
+      const opts = recorder.getActiveSessionOpts()
+      if (opts) {
+        // Brief delay so the renderer's setupRecording() IPC listeners are fully registered
+        setTimeout(() => mainWindow?.webContents.send('recording-overlay-start', opts), 1200)
+      }
+    }
+  })
 })
 
 app.on('activate', () => {
@@ -531,7 +620,11 @@ function setupIPC(): void {
     const win = BrowserWindow.fromWebContents(event.sender) ?? mainWindow
     const r = await dialog.showOpenDialog(win!, {
       properties: ['openFile'],
-      filters: [{ name: 'Audio', extensions: ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'webm'] }]
+      filters: [
+        { name: 'Lyd og video', extensions: ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'webm', 'mp4', 'mov', 'mkv', 'm4v'] },
+        { name: 'Lydfiler',     extensions: ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'webm'] },
+        { name: 'Videofiler',   extensions: ['mp4', 'mov', 'mkv', 'm4v'] },
+      ]
     })
     return r.canceled ? null : r.filePaths[0]
   })
@@ -563,7 +656,7 @@ function setupIPC(): void {
 
   // Metadata sidecar read/write
   ipcMain.handle('editor-read-meta', async (_, filePath: string) => {
-    if (typeof filePath !== 'string' || !isAllowedAudioPath(filePath)) return null
+    if (typeof filePath !== 'string' || !isAllowedMediaPath(filePath)) return null
     const metaPath = sidecarPath(filePath, '.meta.json')
     if (!metaPath) return null
     try {
@@ -573,7 +666,7 @@ function setupIPC(): void {
   })
 
   ipcMain.handle('editor-save-meta', async (_, filePath: string, metadata: unknown) => {
-    if (typeof filePath !== 'string' || !isAllowedAudioPath(filePath)) return false
+    if (typeof filePath !== 'string' || !isAllowedMediaPath(filePath)) return false
     const metaPath = sidecarPath(filePath, '.meta.json')
     if (!metaPath) return false
     try {
@@ -583,9 +676,47 @@ function setupIPC(): void {
   })
 
   ipcMain.handle('editor-detect-segments', async (_, filePath: string) => {
-    if (typeof filePath !== 'string' || !isAllowedAudioPath(filePath)) return []
+    if (typeof filePath !== 'string' || !isAllowedMediaPath(filePath)) return []
     const { detectSegments } = await import('./editor')
     return detectSegments(filePath)
+  })
+
+  // ── Video editor IPC ──────────────────────────────────────────────────────
+
+  ipcMain.handle('editor-set-video-path', (_, filePath: string) => {
+    if (typeof filePath !== 'string' || !isAllowedMediaPath(filePath)) return false
+    currentEditorVideoPath = filePath
+    return true
+  })
+
+  ipcMain.handle('editor-extract-audio-peaks', async (_, filePath: string) => {
+    if (typeof filePath !== 'string' || !isAllowedMediaPath(filePath)) return null
+    const { extractAudioForPeaks } = await import('./editor')
+    return extractAudioForPeaks(filePath)
+  })
+
+  ipcMain.handle('editor-pick-video-file', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender) ?? mainWindow
+    const r = await dialog.showOpenDialog(win!, {
+      properties: ['openFile'],
+      filters: [{ name: 'Video', extensions: ['mp4', 'mov', 'mkv', 'm4v'] }]
+    })
+    return r.canceled ? null : r.filePaths[0]
+  })
+
+  ipcMain.handle('editor-save-video', async (_, params) => {
+    if (!params || typeof params !== 'object' || Array.isArray(params)) return { ok: false, error: 'invalid_params' }
+    const { saveVideoEdited } = await import('./editor')
+    return saveVideoEdited(params)
+  })
+
+  ipcMain.handle('editor-export-video', async (event, params) => {
+    if (!params || typeof params !== 'object' || Array.isArray(params)) return { ok: false, error: 'invalid_params' }
+    const { exportVideoEdited } = await import('./editor')
+    const onProgress = (percent: number) => {
+      try { event.sender.send('editor-export-progress', { percent }) } catch {}
+    }
+    return exportVideoEdited({ ...params, onProgress })
   })
 
   ipcMain.handle('list-asio-drivers', async () => {
@@ -610,7 +741,7 @@ function setupIPC(): void {
   })
 
   ipcMain.handle('cloud-upload-file', async (_, service: string, filePath: string, metadata?: unknown) => {
-    if (typeof filePath !== 'string' || !isAllowedAudioPath(filePath)) return { ok: false, error: 'invalid_path' }
+    if (typeof filePath !== 'string' || !isAllowedMediaPath(filePath)) return { ok: false, error: 'invalid_path' }
     try {
       const cloud = await import('./cloud')
       await cloud.uploadFile(service as import('../types').CloudServiceId, filePath, metadata as import('../types').RecordingMetadata | undefined)
@@ -630,6 +761,30 @@ function setupIPC(): void {
   ipcMain.handle('cloud-set-folder', async (_, service: string, folderId: string, folderName: string, folderPath?: string) => {
     const cloud = await import('./cloud')
     return cloud.setFolder(service as import('../types').CloudServiceId, folderId, folderName, folderPath)
+  })
+
+  // ── Video ─────────────────────────────────────────────────────────────────
+  ipcMain.handle('list-video-devices', async () => {
+    const { listVideoFfmpegDevices } = await import('./native-recorder')
+    return listVideoFfmpegDevices()
+  })
+
+  ipcMain.handle('video-preview-start', async (_, opts: { videoDeviceName?: string | null; videoDeviceIndex?: number | null; videoFramerate?: number }) => {
+    // macOS: request camera permission before opening device
+    if (process.platform === 'darwin') {
+      const granted = await systemPreferences.askForMediaAccess('camera')
+      if (!granted) {
+        console.warn('[video-preview] Camera permission denied by macOS')
+        return false
+      }
+    }
+    const preview = await import('./video-preview')
+    return preview.startPreview(opts, mainWindow)
+  })
+
+  ipcMain.handle('video-preview-stop', async () => {
+    const preview = await import('./video-preview')
+    preview.stopPreview()
   })
 
 }
@@ -665,9 +820,15 @@ async function cleanupOldRecordings(): Promise<void> {
 }
 
 const ALLOWED_AUDIO_EXTS = new Set(['.mp3', '.wav', '.flac', '.aac', '.m4a', '.ogg', '.webm'])
+const ALLOWED_VIDEO_EXTS = new Set(['.mp4', '.mov', '.mkv', '.m4v'])
+const ALLOWED_MEDIA_EXTS = new Set([...ALLOWED_AUDIO_EXTS, ...ALLOWED_VIDEO_EXTS])
 
 function isAllowedAudioPath(p: string): boolean {
   return ALLOWED_AUDIO_EXTS.has(path.extname(p).toLowerCase())
+}
+
+function isAllowedMediaPath(p: string): boolean {
+  return ALLOWED_MEDIA_EXTS.has(path.extname(p).toLowerCase())
 }
 
 function sidecarPath(audioPath: string, suffix: string): string | null {

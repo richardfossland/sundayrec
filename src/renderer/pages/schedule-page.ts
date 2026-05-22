@@ -58,7 +58,9 @@ export function setupSchedulePage(): void {
       } else {
         const msg = result.message?.includes('cancelled')
           ? (t('schedule.sleepFixCancelled') || 'Avbrutt — godkjenn tillatelsen for å fikse')
-          : (t('schedule.sleepFixFail') || 'Automatisk fiks mislyktes')
+          : result.message?.includes('admin_required')
+            ? (t('schedule.sleepFixNoAdmin') || 'Krever administratorrettigheter — kjør SundayRec som administrator')
+            : (t('schedule.sleepFixFail') || 'Automatisk fiks mislyktes')
         setSleepConfigStatus('error', '', msg)
       }
     } catch {
@@ -166,7 +168,7 @@ export function renderSlotsList(): void {
     s.addEventListener('click', async () => {
       if (!confirm(t('schedule.confirmDeleteSlot', 'Slett dette tidspunktet?'))) return
       settings.slots!.splice(+(s as HTMLElement).dataset.index!, 1)
-      await window.api.saveSettings(settings)
+      await window.api.saveSettings(settings).catch(err => console.error('[schedule] saveSettings failed:', err))
       renderSlotsList()
     })
   )

@@ -67,6 +67,7 @@ const defaults: Settings = {
   responsiblePerson: '',
 
   activeRecovery: null,
+  nextExpectedRecordingISO: null,
   recordingHistory: []
 }
 
@@ -182,7 +183,7 @@ export function pruneHistory(): number {
 }
 
 export function exportProfile(): Omit<Settings, 'recordingHistory' | 'activeRecovery'> {
-  const { recordingHistory, activeRecovery, hasLaunched, emailSmtpPassEnc, ...profile } = store.store
+  const { recordingHistory, activeRecovery, nextExpectedRecordingISO, hasLaunched, emailSmtpPassEnc, ...profile } = store.store
   return { ...profile, emailSmtpPass: '' }
 }
 

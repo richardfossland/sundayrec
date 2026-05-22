@@ -242,7 +242,10 @@ body.platform-win32 ::-webkit-scrollbar-thumb { border-radius: 4px; }
 .quick-row .btn-record { flex: 1; justify-content: center; }
 
 /* ── Home info strip ──────────────────────────────────────────── */
-.info-strip { display: flex; gap: 12px; margin-bottom: 22px; flex-wrap: wrap; }
+.info-strip { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.video-info-strip { margin-bottom: 22px; }
+.video-info-strip .info-card-icon { background: rgba(240,187,71,.08); color: var(--accent2); }
+.info-card-video { border-color: var(--border2); }
 .info-card {
   flex: 1; min-width: 160px;
   display: flex; align-items: center; gap: 12px;
@@ -719,6 +722,7 @@ select.form-input {
   background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px;
 }
 .form-hint { font-size: 11px; color: var(--text3); margin-top: 6px; line-height: 1.5; }
+.notice-warn { font-size: 12px; color: #b8860b; background: rgba(255,200,0,.08); border: 1px solid rgba(255,200,0,.25); border-radius: 6px; padding: 8px 12px; margin-top: 8px; line-height: 1.5; }
 .mt { margin-top: 14px; }
 .split-select { width: auto; min-width: 130px; }
 .pass-row { display: flex; align-items: center; gap: 10px; }
@@ -1056,12 +1060,23 @@ select.form-input {
 .modal.modal-sm { width: 360px; }
 .modal h2 { font-size: 17px; font-weight: 700; letter-spacing: -.3px; margin-bottom: 6px; }
 .modal p  { font-size: 13px; color: var(--text2); margin-bottom: 16px; line-height: 1.6; }
+.manual-section-divider {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 9px; font-weight: 700; letter-spacing: 1px;
+  color: var(--accent2); text-transform: uppercase;
+  margin: 14px 0 8px;
+}
+.manual-video-hint {
+  font-size: 11px; color: var(--text3); margin-top: 5px; padding: 5px 8px;
+  background: var(--surface2); border-radius: var(--rxs);
+}
 
 /* ── Recording overlay ─────────────────────────────────────────── */
 .recording-overlay {
   position: fixed; inset: 0; background: rgba(9,9,14,.97);
   display: flex; align-items: center; justify-content: center;
   z-index: 200;
+  padding-top: 36px;  /* clear macOS traffic-light buttons (hiddenInset titlebar) */
 }
 .rec-pulse-ring {
   position: absolute; width: 140px; height: 140px; border-radius: 50%;
@@ -2641,3 +2656,272 @@ body.platform-win32  #wake-instructions-win { display: block; }
 .ob-tip { font-size: 13px; color: var(--text2); line-height: 1.4; }
 .ob-tip strong { color: var(--text); }
 .editor-cut-info { flex: 1; min-width: 0; }
+
+/* ── Video preview panel ────────────────────────────────────────── */
+.video-preview-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin: 0 0 12px;
+}
+.video-source-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+  flex-wrap: wrap;
+}
+.video-source-label {
+  font-size: 9px; font-weight: 700; letter-spacing: 1px;
+  color: var(--text3); text-transform: uppercase; flex-shrink: 0;
+}
+.video-source-select {
+  flex: 1; min-width: 140px; max-width: 320px;
+  height: 28px; padding: 0 8px;
+  background: var(--surface3); border: 1px solid var(--border2);
+  border-radius: var(--rxs); color: var(--text);
+  font-size: 12px; cursor: pointer;
+}
+.video-source-select:focus { outline: none; border-color: var(--accent); }
+.btn-icon-refresh {
+  width: 28px; height: 28px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface3); border: 1px solid var(--border2);
+  border-radius: var(--rxs); color: var(--text2); cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.btn-icon-refresh:hover { background: var(--accent-bg); color: var(--accent2); }
+.video-progress-badge {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--red); font-weight: 600;
+  animation: pulse-opacity 1.5s infinite; margin-left: auto;
+}
+.video-preview-wrap {
+  position: relative; background: #000; aspect-ratio: 16/9;
+  max-height: 220px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+}
+.video-preview-img {
+  width: 100%; height: 100%; object-fit: contain;
+}
+.video-preview-placeholder {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; color: var(--text3);
+  background: #000;
+}
+@keyframes pulse-opacity {
+  0%, 100% { opacity: 1 }
+  50%       { opacity: .4 }
+}
+
+/* ── Video toggle button (home quick-row) ───────────────────────── */
+.btn-video-toggle {
+  display: flex; align-items: center; gap: 7px;
+  padding: 0 16px; height: 44px;
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: var(--rsm); color: var(--text2);
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+  white-space: nowrap; flex-shrink: 0;
+}
+.btn-video-toggle:hover { background: var(--surface3); color: var(--text); }
+.btn-video-toggle.video-toggle-on {
+  background: rgba(240,187,71,.1); border-color: rgba(240,187,71,.35);
+  color: var(--accent);
+}
+.btn-video-toggle.video-toggle-on:hover {
+  background: rgba(240,187,71,.18);
+}
+
+/* ── Recording overlay video preview ───────────────────────────── */
+.rec-video-section {
+  margin: 12px 16px 0;
+  border-radius: var(--rsm);
+  overflow: hidden;
+  border: 1px solid var(--border2);
+  background: #000;
+}
+.rec-video-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border2);
+}
+.rec-video-label {
+  font-size: 11px; font-weight: 700; color: var(--text2);
+  letter-spacing: .6px;
+}
+.rec-video-bytes {
+  font-size: 11px; color: var(--red); font-weight: 600;
+  animation: pulse-opacity 1.5s infinite;
+  margin-left: 8px;
+}
+.rec-video-wrap {
+  position: relative; aspect-ratio: 16/9; max-height: 180px;
+  overflow: hidden; display: flex; align-items: center; justify-content: center;
+}
+.rec-video-img {
+  width: 100%; height: 100%; object-fit: contain;
+}
+.rec-video-placeholder {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: var(--text3);
+}
+
+/* ── Video placeholder inner (icon + text column) ───────────────── */
+.video-placeholder-inner {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 8px; text-align: center;
+  font-size: 13px; color: var(--text3);
+}
+
+/* ── Home page flex layout — enables video-mode reordering ─────── */
+#page-home.active {
+  display: flex; flex-direction: column;
+}
+#page-home > #hero-ok,
+#page-home > #hero-warn   { order: 10; }
+#page-home > .quick-row   { order: 20; }
+#page-home > .vu-section  { order: 30; }
+#page-home > #video-preview-section { order: 35; }
+#page-home > .info-strip  { order: 40; }
+#page-home > #video-info-strip { order: 45; }
+#page-home > #home-lower  { order: 50; }
+
+/* ── Video mode: video feed becomes the hero ─────────────────────── */
+#page-home.video-mode > #video-preview-section { order: 25; }
+#page-home.video-mode > .vu-section            { order: 36; }
+
+/* Large full-ratio feed */
+#page-home.video-mode .video-preview-wrap {
+  max-height: none;
+  aspect-ratio: 16 / 9;
+}
+/* Accent glow on the card */
+#page-home.video-mode .video-preview-card {
+  border-color: rgba(240,187,71,.4);
+  box-shadow:
+    0 0 0 1px rgba(240,187,71,.2),
+    0 0 32px rgba(240,187,71,.08),
+    0 8px 32px rgba(0,0,0,.5);
+  margin-bottom: 14px;
+}
+
+/* Compact VU in video mode */
+#page-home.video-mode .vu-section {
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+#page-home.video-mode .vu-section-head { margin-bottom: 7px; }
+#page-home.video-mode .vu-bar-track    { height: 18px; }
+#page-home.video-mode .vu-bar-clip     { height: 18px; }
+#page-home.video-mode .vu-bar-group    { gap: 5px; }
+#page-home.video-mode .vu-bar-scale-row { display: none; }
+
+/* ── Recording overlay — video-as-hero mode ─────────────────────────────── */
+
+.recording-overlay.video-active .rec-layout {
+  gap: 16px;
+  padding: 24px 44px;
+  max-width: 940px;
+}
+
+/* Reorder children: video first, VU second, controls third */
+.recording-overlay.video-active .rec-video-section { order: 0; }
+.recording-overlay.video-active .rec-vu-section    { order: 1; }
+.recording-overlay.video-active .rec-controls-row  { order: 2; }
+
+/* ── Video hero ── */
+.recording-overlay.video-active .rec-video-section {
+  position: relative;
+  margin: 0;
+  border-radius: 14px;
+  border: 1.5px solid rgba(240,187,71,.45);
+  box-shadow:
+    0 0 0 1px rgba(240,187,71,.2),
+    0 0 56px rgba(240,187,71,.14),
+    0 12px 56px rgba(0,0,0,.75);
+  overflow: hidden;
+  background: #000;
+}
+
+.recording-overlay.video-active .rec-video-wrap {
+  max-height: none;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  position: relative;
+}
+
+/* Header becomes a gradient overlay at the top of the video */
+.recording-overlay.video-active .rec-video-header {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 2;
+  background: linear-gradient(180deg, rgba(0,0,0,.75) 0%, transparent 100%);
+  border-bottom: none;
+  padding: 12px 16px 28px;
+}
+.recording-overlay.video-active .rec-video-label {
+  font-size: 10px; letter-spacing: 2.5px;
+  color: rgba(255,255,255,.7);
+}
+.recording-overlay.video-active .rec-video-bytes {
+  font-size: 11px; color: rgba(239,68,68,.9);
+}
+
+/* ── Compact VU section ── */
+.recording-overlay.video-active .rec-vu-header  { margin-bottom: 11px; }
+.recording-overlay.video-active .rec-vu-bars .vu-bar-track  { height: 26px; }
+.recording-overlay.video-active .rec-vu-clip-el { height: 26px !important; }
+.recording-overlay.video-active .rec-vu-bars .vu-bar-group  { gap: 9px; }
+.recording-overlay.video-active .vu-bar-scale-row            { display: none; }
+.recording-overlay.video-active .rec-vu-lbl     { font-size: 12px !important; }
+.recording-overlay.video-active .rec-peak-db    { font-size: 21px; min-width: 52px; }
+.recording-overlay.video-active .rec-sig-label  { font-size: 14px; letter-spacing: 1.5px; }
+.recording-overlay.video-active .rec-device-name { max-width: 200px; }
+
+/* ── Compact controls row ── */
+.recording-overlay.video-active .rec-controls-row { padding-top: 4px; }
+.recording-overlay.video-active .rec-timer {
+  font-size: 40px; letter-spacing: -2px;
+}
+.recording-overlay.video-active .rec-meta { gap: 28px; }
+
+/* ── Editor video panel ──────────────────────────────────────────────────── */
+.editor-video-panel {
+  width: 100%;
+  background: #000;
+  border-radius: var(--rsm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  margin-bottom: 8px;
+  aspect-ratio: 16 / 9;
+  max-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.editor-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: #000;
+}
+
+/* ── Export video notice ─────────────────────────────────────────────────── */
+.export-video-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(99,102,241,0.1);
+  border: 1px solid rgba(99,102,241,0.25);
+  border-radius: var(--rsm);
+  font-size: 12px;
+  color: var(--text2);
+  margin-bottom: 12px;
+}

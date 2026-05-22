@@ -83,7 +83,8 @@ function spawnFfmpeg(
   const promise = new Promise<void>((resolve, reject) => {
     let stderr = ''
     proc.stderr?.on('data', (d: Buffer) => {
-      stderr += d.toString()
+      // Cap at 8 KB to prevent unbounded growth during long exports
+      stderr = (stderr + d.toString()).slice(-8192)
       if (onProgress && durationSec > 0) {
         const m = stderr.slice(-300).match(/time=(\d+):(\d+):([\d.]+)/)
         if (m) {
@@ -376,6 +377,349 @@ export async function exportEdited(params: EditorExportParams): Promise<EditorSa
     const msg = (err as Error).message
     if (msg.includes('timeout')) return { ok: false, error: 'timeout' }
     return { ok: false, error: msg }
+  }
+}
+
+// ── extractAudioForPeaks ──────────────────────────────────────────────────────
+// Extracts audio at 8kHz mono to WAV in memory for waveform display in the
+// renderer.  Returns the WAV bytes and the authoritative duration parsed from
+// ffmpeg's stderr.  Works on both audio and video files.
+
+export interface ExtractAudioResult {
+  data:     Buffer
+  duration: number
+}
+
+export async function extractAudioForPeaks(filePath: string): Promise<ExtractAudioResult | null> {
+  if (!fs.existsSync(filePath)) return null
+
+  return new Promise(resolve => {
+    const chunks: Buffer[] = []
+    let stderr = ''
+
+    const proc = spawn(ffmpegBin, [
+      '-nostdin', '-hide_banner',
+      '-i',    filePath,
+      '-vn',                      // drop video track
+      '-ac',   '1',               // mono
+      '-ar',   '8000',            // 8 kHz — enough for peaks, tiny in memory
+      '-f',    'wav',
+      'pipe:1',                   // write WAV to stdout
+    ], { stdio: ['ignore', 'pipe', 'pipe'] })
+
+    proc.stdout?.on('data', (d: Buffer) => chunks.push(d))
+    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+
+    proc.on('close', code => {
+      if (code !== 0 || chunks.length === 0) { resolve(null); return }
+      const data = Buffer.concat(chunks)
+
+      // Parse duration from ffmpeg stderr  e.g. "Duration: 01:23:45.67,"
+      let duration = 0
+      const m = stderr.match(/Duration:\s*(\d+):(\d+):([\d.]+)/)
+      if (m) {
+        duration = parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseFloat(m[3])
+      }
+
+      resolve({ data, duration })
+    })
+
+    // Safety kill after 2 min
+    setTimeout(() => { try { proc.kill('SIGTERM') } catch {} }, 120_000)
+  })
+}
+
+// ── Video save / export helpers ───────────────────────────────────────────────
+
+export interface VideoSaveParams {
+  inputPath:  string
+  cutRegions: CutRegion[]
+  duration:   number
+  mode:       'new' | 'replace'
+  processing: ExportProcessing
+  metadata?:  RecordingMetadata
+  onProgress?: (percent: number) => void
+}
+
+export interface VideoExportParams {
+  inputPath:    string
+  cutRegions:   CutRegion[]
+  duration:     number
+  mode:         'new' | 'replace' | 'folder'
+  outputFolder?: string
+  processing:   ExportProcessing
+  introPath?:   string
+  outroPath?:   string
+  metadata?:    RecordingMetadata
+  onProgress?:  (percent: number) => void
+}
+
+// Build the keep-segments list from cuts (same logic as audio helpers).
+function buildKeeps(cutRegions: CutRegion[], duration: number): { start: number; end: number }[] {
+  const sorted = [...cutRegions].sort((a, b) => a.start - b.start)
+  const keeps: { start: number; end: number }[] = []
+  let cursor = 0
+  for (const c of sorted) {
+    if (c.start > cursor + 0.05) keeps.push({ start: cursor, end: c.start })
+    cursor = Math.max(cursor, c.end)
+  }
+  if (cursor < duration - 0.05) keeps.push({ start: cursor, end: duration })
+  return keeps
+}
+
+// Output path for video files.  Always .mp4.
+function videoOutPath(
+  inputPath: string,
+  mode: 'new' | 'replace' | 'folder',
+  outputFolder?: string,
+): { outPath: string; tempPath: string | null } {
+  const base = path.basename(inputPath, path.extname(inputPath))
+  const dir  = path.dirname(inputPath)
+
+  if (mode === 'replace') {
+    const tempPath = inputPath + '.__editor_tmp.mp4'
+    return { outPath: tempPath, tempPath }
+  }
+
+  const outDir = (mode === 'folder' && outputFolder) ? outputFolder : dir
+  let cand = path.join(outDir, `${base}_redigert.mp4`)
+  for (let i = 2; fs.existsSync(cand); i++) {
+    cand = path.join(outDir, `${base}_redigert_${i}.mp4`)
+  }
+  return { outPath: cand, tempPath: null }
+}
+
+// Core ffmpeg args for cutting + audio-processing a video file.
+function buildVideoFilterComplex(
+  mainIdx: number,
+  keeps: { start: number; end: number }[],
+  procFilters: string[],
+): { filterComplex: string; vOut: string; aOut: string } {
+  const parts: string[] = []
+
+  if (keeps.length === 1) {
+    const seg = keeps[0]
+    const vTrim = `[${mainIdx}:v]trim=start=${seg.start.toFixed(4)}:end=${seg.end.toFixed(4)},setpts=PTS-STARTPTS[v_main]`
+    const aChain = [
+      `[${mainIdx}:a]atrim=start=${seg.start.toFixed(4)}:end=${seg.end.toFixed(4)},asetpts=PTS-STARTPTS`,
+      ...procFilters,
+    ].join(',') + '[a_main]'
+    parts.push(vTrim, aChain)
+  } else {
+    keeps.forEach((seg, i) => {
+      parts.push(`[${mainIdx}:v]trim=start=${seg.start.toFixed(4)}:end=${seg.end.toFixed(4)},setpts=PTS-STARTPTS[vseg${i}]`)
+      parts.push(`[${mainIdx}:a]atrim=start=${seg.start.toFixed(4)}:end=${seg.end.toFixed(4)},asetpts=PTS-STARTPTS[aseg${i}]`)
+    })
+    const vIn = keeps.map((_, i) => `[vseg${i}]`).join('')
+    const aIn = keeps.map((_, i) => `[aseg${i}]`).join('')
+    if (procFilters.length > 0) {
+      parts.push(`${vIn}concat=n=${keeps.length}:v=1:a=0[v_main]`)
+      parts.push(`${aIn}concat=n=${keeps.length}:v=0:a=1[a_concat]`)
+      parts.push(`[a_concat]${procFilters.join(',')}[a_main]`)
+    } else {
+      parts.push(`${vIn}concat=n=${keeps.length}:v=1:a=0[v_main]`)
+      parts.push(`${aIn}concat=n=${keeps.length}:v=0:a=1[a_main]`)
+    }
+  }
+
+  return { filterComplex: parts.join(';'), vOut: '[v_main]', aOut: '[a_main]' }
+}
+
+// Standard MP4 output codec args.
+const MP4_CODEC_ARGS = [
+  '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18',
+  '-c:a', 'aac', '-b:a', '192k',
+  '-movflags', '+faststart',
+]
+
+export async function saveVideoEdited(params: VideoSaveParams): Promise<EditorSaveResult> {
+  const { inputPath, cutRegions, duration, mode, processing, metadata } = params
+
+  if (typeof inputPath !== 'string') return { ok: false, error: 'invalid_path' }
+  if (!fs.existsSync(inputPath))     return { ok: false, error: 'file_not_found' }
+  if (!Array.isArray(cutRegions))    return { ok: false, error: 'invalid_cut_regions' }
+  if (typeof duration !== 'number' || duration <= 0) return { ok: false, error: 'invalid_duration' }
+
+  const keeps = buildKeeps(cutRegions, duration)
+  if (!keeps.length) return { ok: false, error: 'no_video_remaining' }
+
+  const { outPath, tempPath } = videoOutPath(inputPath, mode)
+  fs.mkdirSync(path.dirname(outPath), { recursive: true })
+
+  const procFilters = processing.ffmpegFilters ?? []
+  const { filterComplex, vOut, aOut } = buildVideoFilterComplex(0, keeps, procFilters)
+
+  // Metadata file
+  let metaFilePath: string | null = null
+  if (metadata?.chapters?.length) {
+    metaFilePath = path.join(os.tmpdir(), `sundayrec_vmeta_${Date.now()}.txt`)
+    const lines = [';FFMETADATA1']
+    if (metadata.title)       lines.push(`title=${metadata.title}`)
+    if (metadata.speaker)     lines.push(`artist=${metadata.speaker}`)
+    if (metadata.description) lines.push(`comment=${metadata.description}`)
+    for (let i = 0; i < metadata.chapters.length; i++) {
+      const ch   = metadata.chapters[i]
+      const next = metadata.chapters[i + 1]
+      const start = Math.round(ch.time * 1000)
+      const end   = next ? Math.round(next.time * 1000) - 1 : Math.round(duration * 1000)
+      lines.push('[CHAPTER]', 'TIMEBASE=1/1000', `START=${start}`, `END=${end}`, `title=${ch.title}`)
+    }
+    fs.writeFileSync(metaFilePath, lines.join('\n'), 'utf8')
+  }
+
+  const inputArgs: string[] = ['-i', inputPath]
+  if (metaFilePath) inputArgs.push('-i', metaFilePath)
+  const metaArgs: string[] = metaFilePath ? ['-map_metadata', '1'] : []
+
+  const args = [
+    ...inputArgs,
+    '-filter_complex', filterComplex,
+    '-map', vOut, '-map', aOut,
+    ...metaArgs,
+    ...MP4_CODEC_ARGS,
+    '-y', outPath,
+  ]
+
+  const { proc, promise } = spawnFfmpeg(args, duration, params.onProgress)
+  const killTimer = setTimeout(() => {
+    try { proc.kill('SIGTERM') } catch {}
+    if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
+  }, MAX_EDIT_MS)
+
+  try {
+    await promise
+    clearTimeout(killTimer)
+    if (metaFilePath) fs.promises.unlink(metaFilePath).catch(() => {})
+    if (mode === 'replace' && tempPath) {
+      await safeReplaceFile(tempPath, inputPath)
+      return { ok: true, outputPath: inputPath }
+    }
+    return { ok: true, outputPath: outPath }
+  } catch (err) {
+    clearTimeout(killTimer)
+    if (metaFilePath) fs.promises.unlink(metaFilePath).catch(() => {})
+    if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
+    return { ok: false, error: (err as Error).message }
+  }
+}
+
+export async function exportVideoEdited(params: VideoExportParams): Promise<EditorSaveResult> {
+  const { inputPath, cutRegions, duration, mode, outputFolder, processing,
+          introPath, outroPath, metadata } = params
+
+  if (typeof inputPath !== 'string') return { ok: false, error: 'invalid_path' }
+  if (!fs.existsSync(inputPath))     return { ok: false, error: 'file_not_found' }
+  if (!Array.isArray(cutRegions))    return { ok: false, error: 'invalid_cut_regions' }
+  if (typeof duration !== 'number' || duration <= 0) return { ok: false, error: 'invalid_duration' }
+
+  const keeps = buildKeeps(cutRegions, duration)
+  if (!keeps.length) return { ok: false, error: 'no_video_remaining' }
+
+  const hasIntro = !!(introPath && fs.existsSync(introPath))
+  const hasOutro = !!(outroPath && fs.existsSync(outroPath))
+
+  const { outPath, tempPath } = videoOutPath(inputPath, mode, outputFolder)
+  fs.mkdirSync(path.dirname(outPath), { recursive: true })
+
+  // Input index: intro=0 (if present), main=mainIdx, outro=outroIdx (if present)
+  const mainIdx   = hasIntro ? 1 : 0
+  const outroIdx  = mainIdx + 1
+
+  const inputArgs: string[] = []
+  if (hasIntro) inputArgs.push('-i', introPath!)
+  inputArgs.push('-i', inputPath)
+  if (hasOutro) inputArgs.push('-i', outroPath!)
+
+  // Metadata file
+  let metaFilePath: string | null = null
+  if (metadata?.chapters?.length) {
+    metaFilePath = path.join(os.tmpdir(), `sundayrec_vmeta_${Date.now()}.txt`)
+    const lines = [';FFMETADATA1']
+    if (metadata.title)       lines.push(`title=${metadata.title}`)
+    if (metadata.speaker)     lines.push(`artist=${metadata.speaker}`)
+    if (metadata.description) lines.push(`comment=${metadata.description}`)
+    for (let i = 0; i < metadata.chapters.length; i++) {
+      const ch   = metadata.chapters[i]
+      const next = metadata.chapters[i + 1]
+      const start = Math.round(ch.time * 1000)
+      const end   = next ? Math.round(next.time * 1000) - 1 : Math.round(duration * 1000)
+      lines.push('[CHAPTER]', 'TIMEBASE=1/1000', `START=${start}`, `END=${end}`, `title=${ch.title}`)
+    }
+    fs.writeFileSync(metaFilePath, lines.join('\n'), 'utf8')
+    inputArgs.push('-i', metaFilePath)
+  }
+
+  const procFilters = processing.ffmpegFilters ?? []
+  const { filterComplex: mainFilter, vOut: vMain, aOut: aMain } =
+    buildVideoFilterComplex(mainIdx, keeps, procFilters)
+
+  const allParts: string[] = [mainFilter]
+  let finalV: string
+  let finalA: string
+
+  if (hasIntro || hasOutro) {
+    // Format-align all segments for concat
+    const segments: { v: string; a: string }[] = []
+
+    if (hasIntro) {
+      allParts.push(`[0:v]setpts=PTS-STARTPTS[v_intro]`)
+      allParts.push(`[0:a]aformat=sample_fmts=fltp[a_intro]`)
+      segments.push({ v: '[v_intro]', a: '[a_intro]' })
+    }
+    // main is already trimmed/processed
+    allParts.push(`${vMain}setpts=PTS-STARTPTS[v_main2]`)
+    allParts.push(`${aMain}aformat=sample_fmts=fltp[a_main2]`)
+    segments.push({ v: '[v_main2]', a: '[a_main2]' })
+
+    if (hasOutro) {
+      allParts.push(`[${outroIdx}:v]setpts=PTS-STARTPTS[v_outro]`)
+      allParts.push(`[${outroIdx}:a]aformat=sample_fmts=fltp[a_outro]`)
+      segments.push({ v: '[v_outro]', a: '[a_outro]' })
+    }
+
+    const n  = segments.length
+    const vI = segments.map(s => s.v).join('')
+    const aI = segments.map(s => s.a).join('')
+    allParts.push(`${vI}concat=n=${n}:v=1:a=0[v_final]`)
+    allParts.push(`${aI}concat=n=${n}:v=0:a=1[a_final]`)
+    finalV = '[v_final]'
+    finalA = '[a_final]'
+  } else {
+    finalV = vMain
+    finalA = aMain
+  }
+
+  const metaArgs: string[] = metaFilePath ? ['-map_metadata', String(inputArgs.length / 2 - 1)] : []
+
+  const args = [
+    ...inputArgs,
+    '-filter_complex', allParts.join(';'),
+    '-map', finalV, '-map', finalA,
+    ...metaArgs,
+    ...MP4_CODEC_ARGS,
+    '-y', outPath,
+  ]
+
+  const { proc, promise } = spawnFfmpeg(args, duration, params.onProgress)
+  const killTimer = setTimeout(() => {
+    try { proc.kill('SIGTERM') } catch {}
+    if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
+  }, MAX_EDIT_MS)
+
+  try {
+    await promise
+    clearTimeout(killTimer)
+    if (metaFilePath) fs.promises.unlink(metaFilePath).catch(() => {})
+    if (mode === 'replace' && tempPath) {
+      await safeReplaceFile(tempPath, inputPath)
+      return { ok: true, outputPath: inputPath }
+    }
+    return { ok: true, outputPath: outPath }
+  } catch (err) {
+    clearTimeout(killTimer)
+    if (metaFilePath) fs.promises.unlink(metaFilePath).catch(() => {})
+    if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
+    return { ok: false, error: (err as Error).message }
   }
 }
 

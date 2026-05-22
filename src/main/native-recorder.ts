@@ -229,6 +229,107 @@ export async function resolveDeviceInput(
   return null
 }
 
+// ── Video device enumeration ────────────────────────────────────────────────
+
+export interface FfmpegVideoDevice { name: string; index: number }
+
+export async function listVideoFfmpegDevices(): Promise<FfmpegVideoDevice[]> {
+  return new Promise(resolve => {
+    let args: string[]
+    if (process.platform === 'win32') {
+      args = ['-list_devices', 'true', '-f', 'dshow', '-i', 'dummy', '-hide_banner']
+    } else if (process.platform === 'darwin') {
+      args = ['-f', 'avfoundation', '-list_devices', 'true', '-i', '', '-hide_banner']
+    } else {
+      return resolve([])
+    }
+
+    const proc = spawn(ffmpegBin, args, { stdio: ['ignore', 'ignore', 'pipe'] })
+    let stderr = ''
+    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+    let settled = false
+    const done = () => {
+      if (settled) return; settled = true
+      const devices: FfmpegVideoDevice[] = []
+      if (process.platform === 'win32') {
+        // Only parse the video devices section (before "DirectShow audio devices")
+        let inVideoSection = true
+        for (const line of stderr.split('\n')) {
+          if (line.toLowerCase().includes('directshow audio devices')) { inVideoSection = false; continue }
+          if (!inVideoSection || line.includes('Alternative name')) continue
+          const m = line.match(/"([^"]+)"/)
+          if (m && !m[1].startsWith('@')) {
+            const name = m[1]
+            if (!devices.find(d => d.name === name)) devices.push({ name, index: devices.length })
+          }
+        }
+      } else {
+        // AVFoundation: parse the video devices section (before audio section)
+        let inVideoSection = false
+        for (const line of stderr.split('\n')) {
+          if (line.includes('AVFoundation video devices')) { inVideoSection = true; continue }
+          if (line.includes('AVFoundation audio devices')) { inVideoSection = false; continue }
+          if (!inVideoSection) continue
+          const m = line.match(/\[(\d+)\]\s+(.+)/)
+          if (m) devices.push({ index: parseInt(m[1]), name: m[2].trim() })
+        }
+      }
+      resolve(devices)
+    }
+    proc.on('close', done)
+    setTimeout(() => { if (!settled) { try { proc.kill() } catch {}; done() } }, 5000)
+  })
+}
+
+function bestVideoMatch(devices: FfmpegVideoDevice[], name: string): FfmpegVideoDevice | undefined {
+  if (!name) return devices[0]
+  const n = name.toLowerCase()
+  const exact = devices.find(d => d.name.toLowerCase() === n)
+  if (exact) return exact
+  const sub = devices.find(d => d.name.toLowerCase().includes(n))
+  if (sub) return sub
+  const rev = devices.find(d => n.includes(d.name.toLowerCase()))
+  if (rev) return rev
+  const storedWords = n.split(/[\s\-()+]+/).filter(w => w.length > 2)
+  return devices.find(d => {
+    const devWords = d.name.toLowerCase().split(/[\s\-()+]+/).filter(w => w.length > 2)
+    const overlaps = storedWords.filter(sw => devWords.some(dw => dw.startsWith(sw) || sw.startsWith(dw)))
+    return overlaps.length >= 2
+  })
+}
+
+export async function resolveVideoInput(
+  opts: { videoDeviceName?: string | null; videoDeviceIndex?: number | null }
+): Promise<{ format: string; device: string; resolvedName: string } | null> {
+  if (process.platform === 'darwin') {
+    // Use stored index directly if available (most reliable)
+    if (opts.videoDeviceIndex !== null && opts.videoDeviceIndex !== undefined) {
+      return {
+        format: 'avfoundation',
+        device: String(opts.videoDeviceIndex),
+        resolvedName: opts.videoDeviceName ?? 'video'
+      }
+    }
+    const devices = await listVideoFfmpegDevices()
+    if (!devices.length) return null
+    const name = (opts.videoDeviceName ?? '').trim()
+    const match = name ? bestVideoMatch(devices, name) : devices[0]
+    const resolved = match ?? devices[0]
+    return { format: 'avfoundation', device: String(resolved.index), resolvedName: resolved.name }
+  }
+
+  if (process.platform === 'win32') {
+    const devices = await listVideoFfmpegDevices()
+    if (!devices.length) return null
+    const name = (opts.videoDeviceName ?? '').trim()
+    const match = name ? bestVideoMatch(devices, name) : devices[0]
+    const resolved = match ?? devices[0]
+    return { format: 'dshow', device: `video="${resolved.name}"`, resolvedName: resolved.name }
+  }
+
+  return null
+}
+
 // ── Audio filter chain ──────────────────────────────────────────────────────
 
 function buildAudioFilters(opts: RecordingOpts): string {
@@ -417,7 +518,8 @@ export async function startCapture(
 
   proc.stderr?.on('data', (d: Buffer) => {
     const chunk = d.toString()
-    stderrBuf  += chunk
+    // Cap at 64 KB — enough for error classification, prevents growth during long recordings
+    stderrBuf = (stderrBuf + chunk).slice(-65536)
 
     if (opts.stopOnSilence) {
       if (chunk.includes('silence_start')) {
@@ -454,14 +556,17 @@ export async function startCapture(
   const startupMs = process.platform === 'win32' ? 3000 : 2000
 
   const startupError = await new Promise<string | null>(resolve => {
-    const timer = setTimeout(() => resolve(null), startupMs)
-    proc.on('close', code => {
+    const onClose = () => {
       clearTimeout(timer)
-      // Any exit during startup window — success (code 0) or failure — is treated as error.
-      // A capture process that exits within 2 s wrote nothing useful.
       const classified = classifyFfmpegError(stderrBuf)
       resolve(classified || 'device_error')
-    })
+    }
+    const timer = setTimeout(() => {
+      proc.removeListener('close', onClose)
+      resolve(null)
+    }, startupMs)
+    // Use once so the listener is automatically removed after the first close event
+    proc.once('close', onClose)
   })
 
   if (startupError) return { error: startupError }

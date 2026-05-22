@@ -2,7 +2,7 @@ import { loadLocale, setApplyHook } from './i18n'
 import { updateSettings } from './state'
 import type { Settings } from '../types'
 
-import { setupHome, refreshHome, loadRecentHistory } from './pages/home'
+import { setupHome, refreshHome, loadRecentHistory, startVideoPreview, stopVideoPreview, loadVideoInfoStrip, deactivateHome } from './pages/home'
 import { stopVU, setupClipReset } from './pages/home-vu'
 import { setupAudioPage, applyAudioSettingsToUI, renderDeviceList, stopMonitoring } from './pages/audio-page'
 import { setupSchedulePage, applyScheduleSettingsToUI, renderDayPickers, renderSlotsList } from './pages/schedule-page'
@@ -12,6 +12,7 @@ import { setupGeneralPage, applyGeneralSettingsToUI } from './pages/general-page
 import { setupRecording } from './pages/recording'
 import { setupEditorPage, openEditorWithFile, deactivateEditor } from './pages/editor-page'
 import { checkAndShowOnboarding, showOnboarding } from './pages/onboarding'
+import { setupVideoPage, applyVideoSettingsToUI, refreshVideoDevices } from './pages/video-page'
 
 // Expose globals that sub-modules need
 declare global {
@@ -68,6 +69,14 @@ declare global {
       cloudUploadFile:  (service: string, filePath: string, metadata?: unknown) => Promise<{ ok: boolean; error?: string }>
       cloudListFolders: (service: string, parentId?: string) => Promise<{ id: string; name: string; path?: string }[]>
       cloudSetFolder:   (service: string, folderId: string, folderName: string, folderPath?: string) => Promise<void>
+      listVideoDevices:  () => Promise<{ name: string; index: number }[]>
+      videoPreviewStart: (opts: unknown) => Promise<boolean>
+      videoPreviewStop:  () => Promise<void>
+      editorSetVideoPath:      (filePath: string) => Promise<boolean>
+      editorExtractAudioPeaks: (filePath: string) => Promise<{ data: Uint8Array; duration: number } | null>
+      editorPickVideoFile:     ()                 => Promise<string | null>
+      editorSaveVideo:         (params: unknown)  => Promise<{ ok: boolean; outputPath?: string; error?: string }>
+      editorExportVideo:       (params: unknown)  => Promise<{ ok: boolean; outputPath?: string; error?: string }>
     }
     appVersion?: string
   }
@@ -86,13 +95,15 @@ function applyAllSettingsToUI(s: Settings): void {
   applyScheduleSettingsToUI()
   applyFilesSettingsToUI()
   applyGeneralSettingsToUI()
+  applyVideoSettingsToUI()
+  loadVideoInfoStrip()
   renderSlotsList()
   renderPlannedList()
   updateFilenamePreview()
 }
 
 function showPage(id: string): void {
-  if (id !== 'home') stopVU()
+  if (id !== 'home') { stopVU(); stopVideoPreview(); deactivateHome() }
   if (id !== 'editor') deactivateEditor()
   if (id !== 'settings') stopMonitoring()
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'))
@@ -104,6 +115,7 @@ function showPage(id: string): void {
   if (id === 'settings') {
     const activeTab = document.querySelector<HTMLElement>('#settings-tabs .inner-tab.active')?.dataset.tab
     if (!activeTab || activeTab === 'settings-audio') renderDeviceList('device-list')
+    if (activeTab === 'settings-video') refreshVideoDevices()
   }
 }
 
@@ -117,6 +129,7 @@ function setupSettingsTabs(): void {
       document.getElementById(tabId)?.classList.add('active')
       if (tabId === 'settings-audio') renderDeviceList('device-list')
       else stopMonitoring()
+      if (tabId === 'settings-video') refreshVideoDevices()
     })
   })
 }
@@ -157,6 +170,7 @@ async function init(): Promise<void> {
   setupCalendarPage()
   setupFilesPage()
   setupGeneralPage()
+  setupVideoPage()
   setupRecording()
   setupEditorPage()
   setupClipReset()

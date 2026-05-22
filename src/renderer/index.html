@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';" />
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' media:;" />
   <title>SundayRec</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -109,11 +109,17 @@
       <button class="btn-fix" id="btn-how-to-fix" data-i18n="home.howToFix">Slik løser du det</button>
     </div>
 
-    <!-- Single big recording button -->
+    <!-- Single big recording button + video toggle -->
     <div class="quick-row">
       <button class="btn-record" id="btn-start-recording">
         <span class="rec-dot-sm"></span>
         <span data-i18n="home.startRecording">Start opptak</span>
+      </button>
+      <button class="btn-video-toggle" id="btn-video-toggle" title="Slå video på/av">
+        <svg viewBox="0 0 20 20" width="15" height="15" fill="currentColor">
+          <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zm12.553 1.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/>
+        </svg>
+        <span id="video-toggle-label">Video av</span>
       </button>
     </div>
 
@@ -158,6 +164,39 @@
       </div>
     </div>
 
+    <!-- Video hero panel (shown when video mode is enabled) -->
+    <div id="video-preview-section" style="display:none">
+      <div class="video-preview-card">
+
+        <!-- Preview image — first and dominant -->
+        <div class="video-preview-wrap">
+          <img id="video-preview-img" class="video-preview-img" alt="" style="display:none" />
+          <div id="video-preview-placeholder" class="video-preview-placeholder">
+            <div class="video-placeholder-inner">
+              <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.35;margin-bottom:8px"><path d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.889L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span id="video-preview-placeholder-text">Velg kamera og trykk oppdater</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Source bar — footer of the card -->
+        <div class="video-source-bar">
+          <svg viewBox="0 0 20 20" width="13" height="13" fill="currentColor" style="flex-shrink:0;opacity:.5"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zm12.553 1.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/></svg>
+          <select id="home-video-device-select" class="video-source-select">
+            <option value="">Velg kamera…</option>
+          </select>
+          <button id="btn-home-video-refresh" class="btn-icon-refresh" title="Oppdater enhetsliste">
+            <svg viewBox="0 0 20 20" width="12" height="12" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/></svg>
+          </button>
+          <div id="video-progress-row" class="video-progress-badge" style="display:none">
+            <span class="rec-dot-sm" style="width:5px;height:5px"></span>
+            <span id="video-progress-bytes">0 MB</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
     <!-- Info strip: audio device · format · storage -->
     <div class="info-strip">
       <div class="info-card">
@@ -195,7 +234,34 @@
       </div>
     </div>
 
+    <!-- Video info strip — only visible when video mode is enabled -->
+    <div id="video-info-strip" class="info-strip video-info-strip" style="display:none">
+      <div class="info-card info-card-video">
+        <div class="info-card-icon">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zm12.553 1.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/></svg>
+        </div>
+        <div class="info-card-body">
+          <div class="info-card-label">KAMERA</div>
+          <div class="info-card-value" id="home-video-device-name">—</div>
+          <div class="info-card-sub" id="home-video-device-status"></div>
+        </div>
+        <a href="#" class="info-card-action" id="btn-go-video-source">Endre</a>
+      </div>
+      <div class="info-card info-card-video">
+        <div class="info-card-icon">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg>
+        </div>
+        <div class="info-card-body">
+          <div class="info-card-label">VIDEOKVALITET</div>
+          <div class="info-card-value" id="home-video-quality">—</div>
+          <div class="info-card-sub" id="home-video-mode">—</div>
+        </div>
+        <a href="#" class="info-card-action" id="btn-go-video-quality">Endre</a>
+      </div>
+    </div>
+
     <!-- History section -->
+    <div id="home-lower">
     <div class="section-header">
       <h2 data-i18n="home.recentRecordings">Siste opptak</h2>
       <div style="display:flex;gap:10px;align-items:center">
@@ -225,6 +291,7 @@
       </tr></thead>
       <tbody id="history-tbody"></tbody>
     </table>
+    </div><!-- #home-lower -->
 
   </section>
 
@@ -466,6 +533,7 @@
     <div class="inner-tabs" id="settings-tabs">
       <button class="inner-tab active" data-tab="settings-audio" data-i18n="nav.audio">Lyd</button>
       <button class="inner-tab" data-tab="settings-files">Opptak</button>
+      <button class="inner-tab" data-tab="settings-video">Video</button>
       <button class="inner-tab" data-tab="settings-notifications">Varsler</button>
       <button class="inner-tab" data-tab="settings-general">System</button>
     </div>
@@ -702,6 +770,115 @@
       </div>
     </div>
 
+    <!-- ── Video ─────────────────────────────────────────────────── -->
+    <div id="settings-video" class="inner-page">
+      <div class="card">
+        <div class="card-title">Videoopptak</div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title">Aktiver videoopptak</div>
+            <div class="toggle-desc">Tar opp video i tillegg til lyd ved hvert opptak</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-video-enable" /><span class="toggle-track"></span></label>
+        </div>
+      </div>
+
+      <div id="video-settings-panel" style="display:none">
+        <div class="card">
+          <div class="card-title">Kamera</div>
+          <label class="form-label">VELG KAMERA</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select class="form-input" id="video-device-select" style="flex:1">
+              <option value="">Trykk Oppdater for å søke etter kameraer</option>
+            </select>
+            <button class="btn-secondary" id="btn-video-refresh-devices">Oppdater</button>
+          </div>
+          <p class="form-hint">USB-webkamera og HDMI-opptakskort støttes på macOS og Windows.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Kvalitet</div>
+          <label class="form-label">OPPLØSNING</label>
+          <div class="option-cards" style="grid-template-columns:1fr 1fr 1fr">
+            <label class="option-card">
+              <input type="radio" name="video-resolution" value="480p" />
+              <div class="option-card-name">480p</div>
+              <div class="option-card-desc">~1.5 GB / t</div>
+            </label>
+            <label class="option-card">
+              <input type="radio" name="video-resolution" value="720p" checked />
+              <div class="option-card-name">720p</div>
+              <div class="option-card-badge">Anbefalt</div>
+              <div class="option-card-desc">~3.5 GB / t</div>
+            </label>
+            <label class="option-card">
+              <input type="radio" name="video-resolution" value="1080p" />
+              <div class="option-card-name">1080p</div>
+              <div class="option-card-desc">~7 GB / t</div>
+            </label>
+          </div>
+
+          <label class="form-label mt">BILDERATE</label>
+          <select class="form-input" id="video-fps-select" style="max-width:200px">
+            <option value="25">25 fps</option>
+            <option value="30" selected>30 fps (Anbefalt)</option>
+          </select>
+
+          <label class="form-label mt">BITHASTIGHET</label>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px">
+              <input type="radio" name="video-bitrate" id="opt-video-bitrate-auto" checked />
+              Automatisk (anbefalt — basert på oppløsning)
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px">
+              <input type="radio" name="video-bitrate" id="opt-video-bitrate-custom" />
+              Egendefinert
+            </label>
+          </div>
+          <div id="video-bitrate-custom-row" style="display:none;margin-top:8px;display:flex;align-items:center;gap:8px">
+            <input type="number" class="form-input" id="video-bitrate-value" value="4000" min="500" max="50000" style="max-width:100px" />
+            <span style="font-size:13px;color:var(--text2)">kbps</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Utdataformat</div>
+          <p class="card-desc">Velg om lyd og video skal kombineres til én fil eller lagres separat.</p>
+          <div class="option-cards" style="grid-template-columns:1fr 1fr">
+            <label class="option-card">
+              <input type="radio" name="video-mode" value="combined" checked />
+              <svg viewBox="0 0 32 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                <rect x="2" y="4" width="28" height="12" rx="2"/>
+                <path d="M10 10h12"/>
+                <path d="M8 7l2 3-2 3"/>
+              </svg>
+              <div class="option-card-name">Kombinert MP4</div>
+              <div class="option-card-desc">Lyd + video i én fil — klar for YouTube</div>
+            </label>
+            <label class="option-card">
+              <input type="radio" name="video-mode" value="separate" />
+              <svg viewBox="0 0 32 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                <rect x="1" y="3" width="13" height="14" rx="2"/>
+                <rect x="18" y="3" width="13" height="14" rx="2"/>
+                <path d="M5 10h5M22 8v4"/>
+              </svg>
+              <div class="option-card-name">Separate filer</div>
+              <div class="option-card-desc">Lyd og video lagres hver for seg</div>
+            </label>
+          </div>
+          <div id="video-split-warning" class="notice-warn" style="display:none">
+            Delt opptak er aktivt — video lagres alltid som separat fil uavhengig av valget over. Deaktiver automatisk oppdeling i planleggingsinnstillingene for å kombinere lyd og video til én MP4.
+          </div>
+          <p class="form-hint" id="video-split-hint">Ved automatisk oppdeling av filer brukes alltid separate filer.</p>
+        </div>
+      </div>
+
+      <div class="page-footer">
+        <button class="btn-primary" id="btn-video-save">Lagre</button>
+        <button class="btn-ghost" id="btn-video-cancel">Avbryt</button>
+      </div>
+    </div>
+
     <!-- ── Varsler ───────────────────────────────────────────────── -->
     <div id="settings-notifications" class="inner-page">
       <div class="card">
@@ -847,7 +1024,7 @@
           <rect x="6" y="30" width="36" height="12" rx="3" opacity=".35"/>
         </svg>
       </div>
-      <div class="editor-drop-overlay-text" data-i18n="editor.dropFile">Slipp lydfil her</div>
+      <div class="editor-drop-overlay-text" data-i18n="editor.dropFile">Slipp lyd- eller videofil her</div>
     </div>
 
     <!-- Empty state -->
@@ -861,8 +1038,8 @@
         </svg>
       </div>
       <div class="editor-empty-title" data-i18n="editor.emptyTitle">Ingen fil åpen</div>
-      <div class="editor-empty-desc" data-i18n="editor.emptyDesc">Velg en lydfil for å begynne å redigere. Du kan trimme starten og slutten, eller klippe ut deler fra midten.</div>
-      <button class="btn-primary" id="btn-editor-open" data-i18n="editor.openFile">Åpne lydfil…</button>
+      <div class="editor-empty-desc" data-i18n="editor.emptyDesc">Velg en lyd- eller videofil for å begynne å redigere. Du kan trimme starten og slutten, eller klippe ut deler fra midten.</div>
+      <button class="btn-primary" id="btn-editor-open" data-i18n="editor.openFile">Åpne fil…</button>
     </div>
 
     <!-- Loading state -->
@@ -898,6 +1075,11 @@
           </div>
           <div id="editor-clip-badge" class="editor-clip-badge" style="display:none" title="Klikk for å hoppe til første klipp"></div>
         </div>
+      </div>
+
+      <!-- Video preview panel (only shown for video files) -->
+      <div id="editor-video-panel" class="editor-video-panel" style="display:none">
+        <video id="editor-video" class="editor-video" preload="auto" playsinline></video>
       </div>
 
       <!-- Minimap -->
@@ -957,17 +1139,35 @@
           </label>
         </div>
         <div style="background:var(--surface);padding:10px 12px;display:flex;flex-direction:column;gap:8px">
-          <div class="editor-io-file-row">
-            <span class="editor-io-file-label">INTRO</span>
-            <span class="editor-io-file-path" id="editor-intro-display">Ingen fil valgt</span>
-            <button class="btn-secondary btn-sm" id="btn-editor-pick-intro">Velg fil</button>
-            <button class="btn-ghost btn-sm" id="btn-editor-clear-intro" style="display:none">✕</button>
+          <!-- Audio intro/outro (shown for audio files) -->
+          <div id="editor-audio-io-section">
+            <div class="editor-io-file-row">
+              <span class="editor-io-file-label">INTRO</span>
+              <span class="editor-io-file-path" id="editor-intro-display">Ingen fil valgt</span>
+              <button class="btn-secondary btn-sm" id="btn-editor-pick-intro">Velg fil</button>
+              <button class="btn-ghost btn-sm" id="btn-editor-clear-intro" style="display:none">✕</button>
+            </div>
+            <div class="editor-io-file-row">
+              <span class="editor-io-file-label">OUTRO</span>
+              <span class="editor-io-file-path" id="editor-outro-display">Ingen fil valgt</span>
+              <button class="btn-secondary btn-sm" id="btn-editor-pick-outro">Velg fil</button>
+              <button class="btn-ghost btn-sm" id="btn-editor-clear-outro" style="display:none">✕</button>
+            </div>
           </div>
-          <div class="editor-io-file-row">
-            <span class="editor-io-file-label">OUTRO</span>
-            <span class="editor-io-file-path" id="editor-outro-display">Ingen fil valgt</span>
-            <button class="btn-secondary btn-sm" id="btn-editor-pick-outro">Velg fil</button>
-            <button class="btn-ghost btn-sm" id="btn-editor-clear-outro" style="display:none">✕</button>
+          <!-- Video intro/outro (shown for video files) -->
+          <div id="editor-video-io-section" style="display:none">
+            <div class="editor-io-file-row">
+              <span class="editor-io-file-label">VIDEO-INTRO</span>
+              <span class="editor-io-file-path" id="editor-video-intro-display">Ingen fil valgt</span>
+              <button class="btn-secondary btn-sm" id="btn-editor-pick-video-intro">Velg fil</button>
+              <button class="btn-ghost btn-sm" id="btn-editor-clear-video-intro" style="display:none">✕</button>
+            </div>
+            <div class="editor-io-file-row">
+              <span class="editor-io-file-label">VIDEO-OUTRO</span>
+              <span class="editor-io-file-path" id="editor-video-outro-display">Ingen fil valgt</span>
+              <button class="btn-secondary btn-sm" id="btn-editor-pick-video-outro">Velg fil</button>
+              <button class="btn-ghost btn-sm" id="btn-editor-clear-video-outro" style="display:none">✕</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1262,13 +1462,21 @@
   <div class="modal export-modal">
     <h2 data-i18n="editor.exportTitle">Eksporter lydfil</h2>
 
-    <!-- Format picker -->
-    <div class="export-section-label" data-i18n="editor.exportFormat">Format</div>
-    <div class="export-fmt-row">
-      <button class="export-fmt-btn active" data-fmt="mp3">MP3</button>
-      <button class="export-fmt-btn" data-fmt="wav">WAV</button>
-      <button class="export-fmt-btn" data-fmt="flac">FLAC</button>
-      <button class="export-fmt-btn" data-fmt="aac">AAC</button>
+    <!-- Video export notice (shown instead of format picker for video files) -->
+    <div id="export-video-notice" class="export-video-notice" style="display:none">
+      <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="flex-shrink:0;opacity:.7"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zm12.553 1.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/></svg>
+      <span>Videofil — eksporteres som MP4 (H.264 + AAC)</span>
+    </div>
+
+    <!-- Format picker (hidden for video files) -->
+    <div id="export-fmt-section">
+      <div class="export-section-label" data-i18n="editor.exportFormat">Format</div>
+      <div class="export-fmt-row">
+        <button class="export-fmt-btn active" data-fmt="mp3">MP3</button>
+        <button class="export-fmt-btn" data-fmt="wav">WAV</button>
+        <button class="export-fmt-btn" data-fmt="flac">FLAC</button>
+        <button class="export-fmt-btn" data-fmt="aac">AAC</button>
+      </div>
     </div>
 
     <!-- Format options -->
@@ -1330,8 +1538,23 @@
   <div class="modal">
     <h2 data-i18n="manual.title">Start opptak</h2>
     <p data-i18n="manual.subtitle">Opptaket starter med en gang og du stopper det selv når du er ferdig.</p>
+
+    <!-- Audio source -->
     <label class="form-label" data-i18n="manual.source">LYDKILDE</label>
     <select class="form-input" id="manual-device"></select>
+
+    <!-- Video source — only shown when video mode is enabled -->
+    <div id="manual-video-section" style="display:none">
+      <div class="manual-section-divider">
+        <svg viewBox="0 0 20 20" width="13" height="13" fill="currentColor"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zm12.553 1.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/></svg>
+        <span>Videokilde</span>
+      </div>
+      <select class="form-input" id="manual-video-device">
+        <option value="">Laster enheter…</option>
+      </select>
+      <div id="manual-video-hint" class="manual-video-hint" style="display:none"></div>
+    </div>
+
     <label class="form-label mt" data-i18n="manual.filename">NAVN PÅ FIL (valgfritt)</label>
     <input type="text" class="form-input" id="manual-filename" placeholder="Gudstjeneste" />
     <div class="btn-row mt">
@@ -1426,6 +1649,21 @@
         </div>
       </div>
       <button class="btn-stop-big" id="btn-stop-overlay" data-i18n="recording.stop">Trykk for å stoppe opptaket</button>
+    </div>
+
+    <!-- Video preview inside recording overlay (only shown when video is active) -->
+    <div id="rec-video-section" class="rec-video-section" style="display:none">
+      <div class="rec-video-header">
+        <div style="display:flex;align-items:center;gap:6px">
+          <svg viewBox="0 0 20 20" width="13" height="13" fill="currentColor" style="opacity:.7"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zm12.553 1.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/></svg>
+          <span class="rec-video-label">KAMERA</span>
+          <span id="rec-video-bytes" class="rec-video-bytes">0 MB</span>
+        </div>
+      </div>
+      <div class="rec-video-wrap">
+        <img id="rec-video-preview-img" class="rec-video-img" alt="" style="display:none" />
+        <div id="rec-video-placeholder" class="rec-video-placeholder">Starter kamera…</div>
+      </div>
     </div>
 
   </div>
