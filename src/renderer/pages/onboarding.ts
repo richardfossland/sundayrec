@@ -156,6 +156,12 @@ async function s2(body: HTMLElement): Promise<void> {
   }
 
   document.getElementById('ob-n2')?.addEventListener('click', () => {
+    // OPPGAVE 2: validate that at least one audio device is selected
+    const audioDeviceOk = pickedId || settings.deviceId
+    if (!audioDeviceOk) {
+      showOnboardingError('Velg en lydenhet før du fortsetter')
+      return
+    }
     if (pickedId) {
       patchSettings({ deviceId: pickedId, deviceName: pickedName })
       void window.api.saveSettings(settings)
@@ -337,6 +343,24 @@ function sDone(body: HTMLElement): void {
       <button class="btn-primary" id="ob-done" style="justify-content:center">Åpne SundayRec →</button>
     </div>`
   document.getElementById('ob-done')?.addEventListener('click', finish)
+}
+
+function showOnboardingError(msg: string): void {
+  // Find or create an error element inside ob-body
+  const body = document.getElementById('ob-body')
+  if (!body) return
+  let errEl = body.querySelector<HTMLElement>('.ob-error')
+  if (!errEl) {
+    errEl = document.createElement('div')
+    errEl.className = 'ob-error'
+    errEl.style.cssText = 'color:var(--red);font-size:13px;padding:6px 0 2px;text-align:center'
+    // Insert before the actions div
+    const actions = body.querySelector('.ob-actions')
+    if (actions) body.insertBefore(errEl, actions)
+    else body.appendChild(errEl)
+  }
+  errEl.textContent = msg
+  setTimeout(() => { if (errEl) errEl.textContent = '' }, 4000)
 }
 
 function esc(s: unknown): string {

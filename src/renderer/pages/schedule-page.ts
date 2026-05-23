@@ -5,6 +5,47 @@ import type { ScheduleSlot } from '../../types'
 
 let editingSlotIndex = -1
 
+function updateNextRecordingPreview(): void {
+  const previewEl = document.getElementById('schedule-next-preview')
+  if (!previewEl) return
+
+  const slots = settings.slots ?? []
+  if (!slots.length) { previewEl.textContent = ''; return }
+
+  const now      = new Date()
+  const dayNames = ['Søndag', 'Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag']
+
+  let nextMs   = Infinity
+  let nextLabel = ''
+
+  for (const slot of slots) {
+    for (const day of (slot.days ?? [])) {
+      const target  = new Date(now)
+      // 0=Sun in JS Date, but schedule days are Mon=0..Sun=6
+      // Convert slot day (Mon=0..Sun=6) to JS day (Sun=0..Sat=6)
+      const jsDayOfSlot = (day + 1) % 7
+
+      const [h, m] = (slot.start || '09:00').split(':').map(Number)
+      const diffDays = (jsDayOfSlot - now.getDay() + 7) % 7
+      const slotTodayMinutes = h * 60 + m
+      const nowMinutes       = now.getHours() * 60 + now.getMinutes()
+
+      // If the slot is today but already past (or now), push to next week
+      const daysToAdd = diffDays === 0 && nowMinutes >= slotTodayMinutes ? 7 : diffDays
+
+      target.setDate(target.getDate() + daysToAdd)
+      target.setHours(h, m, 0, 0)
+
+      if (target.getTime() < nextMs) {
+        nextMs    = target.getTime()
+        nextLabel = `${dayNames[target.getDay()]} ${target.getDate()}. kl. ${slot.start}`
+      }
+    }
+  }
+
+  previewEl.textContent = nextLabel ? `Neste opptak: ${nextLabel}` : ''
+}
+
 export function setupSchedulePage(): void {
   document.getElementById('btn-add-slot')?.addEventListener('click', () => openSlotEditor(-1))
   document.getElementById('btn-slot-save')?.addEventListener('click', saveSlot)
@@ -75,6 +116,7 @@ export function setupSchedulePage(): void {
 }
 
 export function applyScheduleSettingsToUI(): void {
+  // OPPGAVE 5 preview is updated inside renderSlotsList which is called at the end
   const wakeEl       = document.getElementById('opt-wake')             as HTMLInputElement  | null
   const protectEl    = document.getElementById('opt-protect')          as HTMLInputElement  | null
   const silenceEl    = document.getElementById('opt-silence')          as HTMLInputElement  | null
@@ -149,6 +191,7 @@ export function renderSlotsList(): void {
   const days  = tArr('schedule.days', ['Man','Tir','Ons','Tor','Fre','Lør','Søn'])
   if (!slots.length) {
     list.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:8px 0">${t('schedule.noSlots')}</div>`
+    updateNextRecordingPreview()
     return
   }
   list.innerHTML = slots.map((s, i) => {
@@ -172,6 +215,7 @@ export function renderSlotsList(): void {
       renderSlotsList()
     })
   )
+  updateNextRecordingPreview()
 }
 
 function openSlotEditor(index: number): void {
@@ -210,6 +254,7 @@ async function saveSlot(): Promise<void> {
   if (editor) editor.style.display = 'none'
   await window.api.saveSettings(settings)
   renderSlotsList()
+  updateNextRecordingPreview()
 }
 
 function autoSetStopTime(): void {
