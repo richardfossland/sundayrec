@@ -2723,8 +2723,8 @@ body.platform-win32  #wake-instructions-win { display: block; }
   animation: pulse-opacity 1.5s infinite; margin-left: auto;
 }
 .video-preview-wrap {
-  position: relative; background: #000; aspect-ratio: var(--video-ar, 16 / 9);
-  max-height: 160px; overflow: hidden;
+  position: relative; background: #000;
+  width: 100%; height: 160px; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
 }
 .video-preview-img {
@@ -2833,8 +2833,7 @@ body.platform-win32  #wake-instructions-win { display: block; }
 
 /* Large full-ratio feed */
 #page-home.video-mode .video-preview-wrap {
-  max-height: 260px;
-  aspect-ratio: var(--video-ar, 16 / 9);
+  height: 260px;
 }
 /* Accent glow on the card */
 #page-home.video-mode .video-preview-card {

@@ -143,12 +143,6 @@ export function stopVideoPreview(): void {
   const phDiv = document.getElementById('video-preview-placeholder')
   if (img)   { img.src = ''; img.style.display = 'none' }
   if (phDiv) { phDiv.style.display = '' }
-  // Reset aspect ratio so it doesn't bleed into next preview session
-  const wrap = document.querySelector<HTMLElement>('.video-preview-wrap')
-  if (wrap) {
-    wrap.style.aspectRatio = ''
-    wrap.style.removeProperty('--video-ar')
-  }
 }
 
 export function startVideoPreview(): void {
@@ -233,15 +227,9 @@ export function startVideoPreview(): void {
     if (img) img.style.display = 'none'
   })
 
-  previewMetaUnsub = window.api.on('video-preview-meta', (data: unknown) => {
-    const meta = data as { width: number; height: number }
-    if (meta && meta.width > 0 && meta.height > 0) {
-      const wrap = document.querySelector<HTMLElement>('.video-preview-wrap')
-      if (wrap) {
-        wrap.style.aspectRatio = `${meta.width} / ${meta.height}`
-        wrap.style.setProperty('--video-ar', `${meta.width} / ${meta.height}`)
-      }
-    }
+  previewMetaUnsub = window.api.on('video-preview-meta', (_data: unknown) => {
+    // Container uses fixed height (not aspect-ratio), so no inline resize needed.
+    // Frame is displayed with object-fit: contain — aspect ratio preserved by CSS.
   })
 
   previewVideoUnsub = window.api.on('video-progress', (data: unknown) => {

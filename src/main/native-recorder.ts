@@ -386,6 +386,44 @@ export async function resolveDeviceInput(
 
 export interface FfmpegVideoDevice { name: string; index: number }
 
+/**
+ * Parse DirectShow VIDEO device list from ffmpeg stderr.
+ * Only returns devices from the video section (before "DirectShow audio devices").
+ * Exported for unit testing.
+ */
+export function parseVideoDshowDeviceList(stderr: string): FfmpegVideoDevice[] {
+  const devices: FfmpegVideoDevice[] = []
+  let inVideoSection = true  // dshow output starts with video devices
+  for (const line of stderr.split('\n')) {
+    if (line.toLowerCase().includes('directshow audio devices')) { inVideoSection = false; continue }
+    if (!inVideoSection || line.includes('Alternative name')) continue
+    const m = line.match(/"([^"]+)"/)
+    if (m && !m[1].startsWith('@')) {
+      const name = m[1]
+      if (!devices.find(d => d.name === name)) devices.push({ name, index: devices.length })
+    }
+  }
+  return devices
+}
+
+/**
+ * Parse AVFoundation VIDEO device list from ffmpeg stderr.
+ * Only returns devices from the video section (stops at audio section).
+ * Exported for unit testing.
+ */
+export function parseVideoAvfoundationDeviceList(stderr: string): FfmpegVideoDevice[] {
+  const devices: FfmpegVideoDevice[] = []
+  let inVideoSection = false
+  for (const line of stderr.split('\n')) {
+    if (line.includes('AVFoundation video devices')) { inVideoSection = true; continue }
+    if (line.includes('AVFoundation audio devices')) { inVideoSection = false; continue }
+    if (!inVideoSection) continue
+    const m = line.match(/\[(\d+)\]\s+(.+)/)
+    if (m) devices.push({ index: parseInt(m[1]), name: m[2].trim() })
+  }
+  return devices
+}
+
 export async function listVideoFfmpegDevices(): Promise<FfmpegVideoDevice[]> {
   return new Promise(resolve => {
     let args: string[]
@@ -403,30 +441,9 @@ export async function listVideoFfmpegDevices(): Promise<FfmpegVideoDevice[]> {
     let settled = false
     const done = () => {
       if (settled) return; settled = true
-      const devices: FfmpegVideoDevice[] = []
-      if (process.platform === 'win32') {
-        // Only parse the video devices section (before "DirectShow audio devices")
-        let inVideoSection = true
-        for (const line of stderr.split('\n')) {
-          if (line.toLowerCase().includes('directshow audio devices')) { inVideoSection = false; continue }
-          if (!inVideoSection || line.includes('Alternative name')) continue
-          const m = line.match(/"([^"]+)"/)
-          if (m && !m[1].startsWith('@')) {
-            const name = m[1]
-            if (!devices.find(d => d.name === name)) devices.push({ name, index: devices.length })
-          }
-        }
-      } else {
-        // AVFoundation: parse the video devices section (before audio section)
-        let inVideoSection = false
-        for (const line of stderr.split('\n')) {
-          if (line.includes('AVFoundation video devices')) { inVideoSection = true; continue }
-          if (line.includes('AVFoundation audio devices')) { inVideoSection = false; continue }
-          if (!inVideoSection) continue
-          const m = line.match(/\[(\d+)\]\s+(.+)/)
-          if (m) devices.push({ index: parseInt(m[1]), name: m[2].trim() })
-        }
-      }
+      const devices = process.platform === 'win32'
+        ? parseVideoDshowDeviceList(stderr)
+        : parseVideoAvfoundationDeviceList(stderr)
       resolve(devices)
     }
     proc.on('close', done)
@@ -434,7 +451,8 @@ export async function listVideoFfmpegDevices(): Promise<FfmpegVideoDevice[]> {
   })
 }
 
-function bestVideoMatch(devices: FfmpegVideoDevice[], name: string): FfmpegVideoDevice | undefined {
+/** Exported for unit testing. */
+export function findBestVideoDeviceMatch(devices: FfmpegVideoDevice[], name: string): FfmpegVideoDevice | undefined {
   if (!name) return devices[0]
   const n = name.toLowerCase()
   const exact = devices.find(d => d.name.toLowerCase() === n)
@@ -461,7 +479,7 @@ async function _resolveVideoInputImpl(
     if (!devices.length) return null
 
     const name = (opts.videoDeviceName ?? '').trim()
-    const byName = name ? bestVideoMatch(devices, name) : null
+    const byName = name ? findBestVideoDeviceMatch(devices, name) : null
     if (byName) {
       if (byName.index !== opts.videoDeviceIndex) {
         console.log(`[native-recorder] video device "${byName.name}" index changed: ${opts.videoDeviceIndex} → ${byName.index}`)
@@ -487,7 +505,7 @@ async function _resolveVideoInputImpl(
     const devices = await listVideoFfmpegDevices()
     if (!devices.length) return null
     const name = (opts.videoDeviceName ?? '').trim()
-    const match = name ? bestVideoMatch(devices, name) : devices[0]
+    const match = name ? findBestVideoDeviceMatch(devices, name) : devices[0]
     const resolved = match ?? devices[0]
     return { format: 'dshow', device: `video="${resolved.name}"`, resolvedName: resolved.name }
   }

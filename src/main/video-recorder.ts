@@ -15,7 +15,8 @@ export interface VideoHandle {
   onFrame:      ((frame: Buffer) => void) | null
 }
 
-function classifyVideoError(stderr: string): string {
+/** Exported for unit testing. */
+export function classifyVideoError(stderr: string): string {
   const s = stderr.toLowerCase()
   if (
     s.includes('device not found') || s.includes('no such') || s.includes('no video') ||
@@ -43,7 +44,8 @@ function classifyVideoError(stderr: string): string {
   return 'device_error'
 }
 
-function resolutionToDimensions(res?: string): string {
+/** Exported for unit testing. */
+export function resolutionToDimensions(res?: string): string {
   switch (res) {
     case '1080p': return '1920x1080'
     case '480p':  return '854x480'
@@ -51,12 +53,29 @@ function resolutionToDimensions(res?: string): string {
   }
 }
 
-function autoBitrate(res?: string): number {
+/** Exported for unit testing. */
+export function autoBitrate(res?: string): number {
   switch (res) {
     case '1080p': return 8000
     case '480p':  return 1500
     default:      return 4000
   }
+}
+
+/**
+ * Build the ffmpeg -filter_complex value that splits one input video stream
+ * into two outputs: a high-quality H.264 recording stream and a low-rate
+ * MJPEG preview stream.
+ *
+ * The split=2 is critical: without it, ffmpeg rejects multi-output commands
+ * that use different -vf filters per output. This function is exported so
+ * the formula can be verified in tests — this was the bug that broke video
+ * recording in earlier versions.
+ *
+ * Exported for unit testing.
+ */
+export function buildVideoFilterComplex(dimW: string, dimH: string): string {
+  return `[0:v]split=2[v1][v2];[v1]scale=${dimW}:${dimH}:flags=lanczos,format=yuv420p[vout];[v2]fps=5,scale=640:-2:flags=fast_bilinear[prev]`
 }
 
 export async function startVideoCapture(
@@ -105,11 +124,7 @@ export async function startVideoCapture(
   const args: string[] = [
     '-nostdin', '-hide_banner',
     ...inputArgs,
-    // Split the single input video stream into two filter chains:
-    //   [vout] → H.264 recording file at target resolution (lanczos scaling)
-    //   [prev] → low-rate MJPEG preview stream to stdout (fast_bilinear, preserve AR)
-    '-filter_complex',
-    `[0:v]split=2[v1][v2];[v1]scale=${dimW}:${dimH}:flags=lanczos,format=yuv420p[vout];[v2]fps=5,scale=640:-2:flags=fast_bilinear[prev]`,
+    '-filter_complex', buildVideoFilterComplex(dimW, dimH),
     // Primary output: H.264 recording file
     '-map', '[vout]',
     '-c:v', 'libx264',
