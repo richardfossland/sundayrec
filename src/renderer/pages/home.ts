@@ -311,6 +311,11 @@ export function setupHome(): void {
     window.showPage('settings')
     document.querySelector<HTMLElement>('#settings-tabs .inner-tab[data-tab="settings-audio"]')?.click()
   })
+  document.getElementById('btn-how-to-fix-audio')?.addEventListener('click', e => {
+    e.preventDefault()
+    window.showPage('settings')
+    document.querySelector<HTMLElement>('#settings-tabs .inner-tab[data-tab="settings-audio"]')?.click()
+  })
 
   document.getElementById('btn-prune-history')?.addEventListener('click', async e => {
     e.preventDefault()
