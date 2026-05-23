@@ -60,17 +60,27 @@ export interface Settings {
 
   // Audio processing
   channels: ChannelMode
+  /** Sample rate in Hz. Valid: 8000–192000. Default: 48000 */
   sampleRate: number
+  /** Input gain as percentage. Valid: 0–200. Default: 100 */
   inputVolume: number
+  /** Bass EQ gain in dB. Valid: -24–+24. Default: 0 */
   eqBass: number
+  /** Mid EQ gain in dB. Valid: -24–+24. Default: 0 */
   eqMid: number
+  /** Treble EQ gain in dB. Valid: -24–+24. Default: 0 */
   eqTreble: number
   compEnabled: boolean
+  /** Compressor threshold in dBFS. Valid: -60–0 */
   compThreshold: number
+  /** Compressor ratio. Valid: 1–100 */
   compRatio: number
+  /** Compressor attack in ms. Valid: 0.1–2000 */
   compAttack: number
+  /** Compressor release in ms. Valid: 1–9000 */
   compRelease: number
   limiterEnabled: boolean
+  /** Limiter ceiling in dBFS. Valid: -10–0. Default: -1 */
   limiterCeiling: number
 
   // Output format
@@ -86,9 +96,12 @@ export interface Settings {
   stopOnSilence: boolean
   silenceThreshold?: number        // dBFS threshold, default -50
   silenceTimeoutMinutes?: number   // minutes of silence before stop, default 5
+  /** Auto-split interval in minutes. Valid: 0–480. 0 = disabled */
   splitMinutes: number     // 0 = off; split every N minutes from recording start
   trimSilence?: boolean    // run ffmpeg silenceremove on output
+  /** Reminder notification before scheduled recording, in minutes. Valid: 0–60. 0 = disabled */
   reminderMinutes: number  // 0 = off; system notification N min before scheduled recording
+  /** Auto-stop manual recordings after N minutes. Valid: 0–1440 (24h). 0 = disabled */
   manualMaxMinutes: number // 0 = off; auto-stop manual recordings after N minutes
   preRollSeconds: number   // 0 = off; 15 or 30 — capture N seconds before manual record press
 
@@ -116,7 +129,9 @@ export interface Settings {
   videoDeviceName?: string | null
   videoDeviceIndex?: number | null
   videoResolution?: '1080p' | '720p' | '480p'
+  /** Video bitrate in kbps. Valid: 500–50000. 0 = auto based on resolution */
   videoBitrate?: number        // kbps (0 = auto based on resolution)
+  /** Video framerate in fps. Valid: 10–60. Default: 30 */
   videoFramerate?: number      // fps, default 30
   videoSeparate?: boolean      // true = keep audio + video as separate files; false = mux into combined MP4
 

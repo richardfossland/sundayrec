@@ -362,7 +362,7 @@ function bestVideoMatch(devices: FfmpegVideoDevice[], name: string): FfmpegVideo
   })
 }
 
-export async function resolveVideoInput(
+async function _resolveVideoInputImpl(
   opts: { videoDeviceName?: string | null; videoDeviceIndex?: number | null }
 ): Promise<{ format: string; device: string; resolvedName: string } | null> {
   if (process.platform === 'darwin') {
@@ -404,6 +404,22 @@ export async function resolveVideoInput(
   }
 
   return null
+}
+
+/**
+ * Resolve a video input device with a 5-second timeout.
+ * If enumeration hangs (e.g. driver issues), returns null rather than blocking the app.
+ */
+export async function resolveVideoInput(
+  opts: { videoDeviceName?: string | null; videoDeviceIndex?: number | null }
+): Promise<{ format: string; device: string; resolvedName: string } | null> {
+  return Promise.race([
+    _resolveVideoInputImpl(opts),
+    new Promise<null>(resolve => setTimeout(() => {
+      console.warn('[native-recorder] resolveVideoInput timed out after 5s')
+      resolve(null)
+    }, 5000))
+  ])
 }
 
 // ── Audio filter chain ──────────────────────────────────────────────────────
