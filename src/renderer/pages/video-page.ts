@@ -1,5 +1,6 @@
 import { settings, patchSettings } from '../state'
 import { flashMsg } from '../helpers'
+import type { Settings } from '../../types'
 
 type VideoDevice = { name: string; index: number }
 let loadedDevices: VideoDevice[] = []
@@ -161,5 +162,5 @@ async function saveVideoSettings(): Promise<void> {
   }
 
   patchSettings(updated)
-  await window.api.saveSettings(updated as never)
+  await window.api.saveSettings(updated as Settings)
 }
