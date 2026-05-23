@@ -24,6 +24,7 @@ const ALLOWED_CHANNELS = [
   'video-preview-stopped',
   'video-preview-meta',
   'video-progress',
+  'video-capture-error',
 ] as const
 
 type AllowedChannel = typeof ALLOWED_CHANNELS[number]

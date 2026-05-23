@@ -35,8 +35,29 @@ export let isRecording = false
 let recStartTime = 0
 let recBytes     = 0
 let previewRestartTimer: ReturnType<typeof setTimeout> | null = null
-let recPreviewUnsub:     (() => void) | undefined
+let recPreviewUnsub:      (() => void) | undefined
+let recCaptureErrUnsub:   (() => void) | undefined
 let lastRecFrameTs = 0
+let recVideoDimsSet = false
+
+function readJpegDims(arr: Uint8Array): { w: number; h: number } | null {
+  let i = 0
+  while (i < arr.length - 8) {
+    if (arr[i] !== 0xff) { i++; continue }
+    const m = arr[i + 1]
+    if (m === 0xc0 || m === 0xc2) {
+      const h = (arr[i + 5] << 8) | arr[i + 6]
+      const w = (arr[i + 7] << 8) | arr[i + 8]
+      if (w > 0 && h > 0) return { w, h }
+    }
+    if (m !== 0xd8 && m !== 0xd9 && m !== 0x01 && i + 3 < arr.length) {
+      const seg = (arr[i + 2] << 8) | arr[i + 3]
+      if (seg >= 2) { i += 2 + seg; continue }
+    }
+    i++
+  }
+  return null
+}
 
 let scheduledStop:  Date | null = null
 let stopOverridden  = false
@@ -490,12 +511,22 @@ function showOverlay(opts: RecordingOpts): void {
     if (recPh)   { recPh.textContent = 'Starter kamera…'; recPh.style.display = '' }
 
     recPreviewUnsub?.()
+    recCaptureErrUnsub?.()
+    recVideoDimsSet = false
     recPreviewUnsub = window.api.on('video-preview-frame', (data: unknown) => {
       const now = Date.now()
       if (now - lastRecFrameTs < 80) return
       lastRecFrameTs = now
       const arr = data as Uint8Array
       if (!recImg || arr.length < 4) return
+      if (!recVideoDimsSet) {
+        const dims = readJpegDims(arr)
+        if (dims) {
+          recVideoDimsSet = true
+          const wrap = document.querySelector<HTMLElement>('.rec-video-wrap')
+          if (wrap) wrap.style.setProperty('--rec-video-ar', `${dims.w} / ${dims.h}`)
+        }
+      }
       let binary = ''
       for (let i = 0; i < arr.length; i += 8192) {
         binary += String.fromCharCode(...arr.subarray(i, Math.min(i + 8192, arr.length)))
@@ -503,6 +534,10 @@ function showOverlay(opts: RecordingOpts): void {
       recImg.src = `data:image/jpeg;base64,${btoa(binary)}`
       recImg.style.display = ''
       if (recPh) recPh.style.display = 'none'
+    })
+    recCaptureErrUnsub = window.api.on('video-capture-error', () => {
+      if (recPh) { recPh.textContent = 'Kamera feilet — opptar kun lyd'; recPh.style.display = '' }
+      if (recImg) recImg.style.display = 'none'
     })
   }
   const overlay = document.getElementById('recording-overlay')
@@ -558,8 +593,12 @@ function hideOverlay(): void {
 
   // Clean up overlay video preview
   recPreviewUnsub?.(); recPreviewUnsub = undefined
+  recCaptureErrUnsub?.(); recCaptureErrUnsub = undefined
+  recVideoDimsSet = false
   const recVideoSection = document.getElementById('rec-video-section')
   if (recVideoSection) recVideoSection.style.display = 'none'
+  const recVideoWrap = document.querySelector<HTMLElement>('.rec-video-wrap')
+  if (recVideoWrap) recVideoWrap.style.removeProperty('--rec-video-ar')
 
   // Restart preview after a short delay — gives time for split auto-restart to cancel it
   if (previewRestartTimer) clearTimeout(previewRestartTimer)

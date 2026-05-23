@@ -265,7 +265,8 @@ async function preflightCheck(settings: RecordingOpts): Promise<{ error: string 
     const { execFile } = await import('child_process')
     const { promisify } = await import('util')
     const execAsync = promisify(execFile)
-    const videoActive = (settings as Settings).videoEnabled && (settings as Settings).videoDeviceName
+    const _s = settings as Settings
+    const videoActive = _s.videoEnabled && (_s.videoDeviceName || _s.videoDeviceIndex != null)
     if (process.platform === 'darwin' || process.platform === 'linux') {
       const { stdout } = await execAsync('df', ['-Pk', folder], { timeout: 4000 })
       const cols = stdout.trim().split('\n')[1]?.trim().split(/\s+/)
@@ -305,7 +306,8 @@ async function preflightCheck(settings: RecordingOpts): Promise<{ error: string 
       console.error('[recorder] microphone access', micStatus)
       return { error: 'device_permission_denied' }
     }
-    if ((settings as Settings).videoEnabled && (settings as Settings).videoDeviceName) {
+    const _sc = settings as Settings
+    if (_sc.videoEnabled && (_sc.videoDeviceName || _sc.videoDeviceIndex != null)) {
       const camStatus = systemPreferences.getMediaAccessStatus('camera')
       if (camStatus === 'denied' || camStatus === 'restricted') {
         console.error('[recorder] camera access', camStatus)
@@ -357,7 +359,8 @@ export async function startSession(
   let videoHandle: VideoHandle | null = null
   let videoOutputPath: string | null = null
 
-  if ((settings as Settings).videoEnabled && (settings as Settings).videoDeviceName) {
+  const s = settings as Settings
+  if (s.videoEnabled && (s.videoDeviceName || s.videoDeviceIndex != null)) {
     // Stop any live preview so the device is free.
     // Brief pause on macOS lets AVFoundation fully release the device before
     // the recording capture session opens it. Sync is handled by wall-clock
@@ -379,6 +382,7 @@ export async function startSession(
     const videoResult = await startVideoCapture(settings as Settings, videoOutputPath)
     if ('error' in videoResult) {
       console.error('[recorder] video capture failed to start:', videoResult.error)
+      safeSend(win, 'video-capture-error', { error: videoResult.error })
       videoOutputPath = null  // continue with audio-only
     } else {
       videoHandle = videoResult

@@ -101,21 +101,26 @@ export async function startVideoCapture(
     inputArgs = ['-use_wallclock_as_timestamps', '1', '-f', input.format, '-rtbufsize', '200M', '-framerate', String(fps), '-i', input.device]
   }
 
+  const [dimW, dimH] = dims.split('x')
   const args: string[] = [
     '-nostdin', '-hide_banner',
     ...inputArgs,
-    // Primary output: H.264 recording file at target resolution
+    // Split the single input video stream into two filter chains:
+    //   [vout] → H.264 recording file at target resolution (lanczos scaling)
+    //   [prev] → low-rate MJPEG preview stream to stdout (fast_bilinear, preserve AR)
+    '-filter_complex',
+    `[0:v]split=2[v1][v2];[v1]scale=${dimW}:${dimH}:flags=lanczos,format=yuv420p[vout];[v2]fps=5,scale=640:-2:flags=fast_bilinear[prev]`,
+    // Primary output: H.264 recording file
+    '-map', '[vout]',
     '-c:v', 'libx264',
     '-preset', 'veryfast',
-    '-vf', `scale=${dims.replace('x', ':')}:flags=lanczos,format=yuv420p`,
     '-b:v', `${bitrate}k`,
     '-maxrate', `${Math.round(bitrate * 1.5)}k`,
     '-bufsize', `${bitrate * 2}k`,
     '-an',
     '-y', outputPath,
     // Secondary output: low-rate MJPEG to stdout for in-recording preview
-    '-map', '0:v',
-    '-vf', 'fps=5,scale=640:360:flags=fast_bilinear',
+    '-map', '[prev]',
     '-c:v', 'mjpeg',
     '-q:v', '8',
     '-f', 'mjpeg',

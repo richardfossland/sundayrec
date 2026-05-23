@@ -2794,10 +2794,11 @@ body.platform-win32  #wake-instructions-win { display: block; }
   margin-left: 8px;
 }
 .rec-video-wrap {
-  position: relative; aspect-ratio: 16/9; max-height: 180px;
+  position: relative; aspect-ratio: var(--rec-video-ar, 16 / 9); max-height: 180px;
   overflow: hidden; display: flex; align-items: center; justify-content: center;
 }
 .rec-video-img {
+  position: absolute; inset: 0;
   width: 100%; height: 100%; object-fit: contain;
 }
 .rec-video-placeholder {
@@ -2921,7 +2922,7 @@ body.platform-win32  #wake-instructions-win { display: block; }
 
 .recording-overlay.video-active .rec-video-wrap {
   max-height: none;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: var(--rec-video-ar, 16 / 9);
   width: 100%;
   position: relative;
 }
