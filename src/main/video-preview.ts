@@ -121,7 +121,7 @@ export async function startPreview(
   const args: string[] = [
     '-hide_banner',
     ...inputArgs,
-    '-vf', `fps=${previewFps},scale=640:360:flags=fast_bilinear,format=yuvj420p`,
+    '-vf', `fps=${previewFps},scale=640:-2:flags=fast_bilinear,format=yuvj420p`,
     '-c:v', 'mjpeg',
     '-q:v', '5',
     '-f', 'mjpeg',

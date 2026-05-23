@@ -2821,6 +2821,19 @@ body.platform-win32  #wake-instructions-win { display: block; }
 #page-home.video-mode .vu-bar-group    { gap: 5px; }
 #page-home.video-mode .vu-bar-scale-row { display: none; }
 
+/* VU meter as semi-transparent overlay inside video feed */
+#page-home.video-mode .video-preview-wrap > .vu-section {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  z-index: 10;
+  background: rgba(10, 10, 12, 0.72);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  padding: 8px 14px;
+  margin: 0;
+  border-radius: 0;
+}
+
 /* ── Recording overlay — video-as-hero mode ─────────────────────────────── */
 
 .recording-overlay.video-active .rec-layout {

@@ -20,6 +20,27 @@ let previewVideoUnsub:    (() => void) | undefined
 let previewNoFrameTimer:  ReturnType<typeof setTimeout> | null = null
 let lastFrameTs           = 0
 
+// ── VU overlay (inside video wrap when video-mode is on) ─────────────────────
+let _vuOrigParent:      Element | null = null
+let _vuOrigNextSibling: Node    | null = null
+
+function setVuOverlay(enabled: boolean): void {
+  const vu   = document.querySelector<HTMLElement>('#page-home .vu-section')
+  const wrap = document.querySelector<HTMLElement>('.video-preview-wrap')
+  if (!vu || !wrap) return
+  if (enabled) {
+    if (vu.parentElement !== wrap) {
+      _vuOrigParent      = vu.parentElement
+      _vuOrigNextSibling = vu.nextSibling
+      wrap.appendChild(vu)
+    }
+  } else {
+    if (vu.parentElement === wrap && _vuOrigParent) {
+      _vuOrigParent.insertBefore(vu, _vuOrigNextSibling)
+    }
+  }
+}
+
 type HomeVideoDevice = { name: string; index: number }
 let homeVideoDevices: HomeVideoDevice[] = []
 
@@ -223,10 +244,12 @@ export function setupHome(): void {
       pageHome?.classList.add('video-mode')
       const section = document.getElementById('video-preview-section')
       if (section) section.style.display = ''
+      setVuOverlay(true)
       await refreshHomeVideoDevices()
       if (settings.videoDeviceName && !window.__isRecording) startVideoPreview()
     } else {
       pageHome?.classList.remove('video-mode')
+      setVuOverlay(false)
       stopVideoPreview()
       const section = document.getElementById('video-preview-section')
       if (section) section.style.display = 'none'
@@ -345,11 +368,13 @@ export async function refreshHome(): Promise<void> {
     pageHome?.classList.add('video-mode')
     const section = document.getElementById('video-preview-section')
     if (section) section.style.display = ''
+    setVuOverlay(true)
     refreshHomeVideoDevices().then(() => {
       if (settings.videoDeviceName && !window.__isRecording) startVideoPreview()
     }).catch(() => {})
   } else {
     pageHome?.classList.remove('video-mode')
+    setVuOverlay(false)
     stopVideoPreview()
     const section = document.getElementById('video-preview-section')
     if (section) section.style.display = 'none'
