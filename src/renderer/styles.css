@@ -2703,6 +2703,7 @@ body.platform-win32  #wake-instructions-win { display: block; }
   display: flex; align-items: center; justify-content: center;
 }
 .video-preview-img {
+  position: absolute; inset: 0;
   width: 100%; height: 100%; object-fit: contain;
 }
 .video-preview-placeholder {
@@ -2821,17 +2822,40 @@ body.platform-win32  #wake-instructions-win { display: block; }
 #page-home.video-mode .vu-bar-group    { gap: 5px; }
 #page-home.video-mode .vu-bar-scale-row { display: none; }
 
-/* VU meter as semi-transparent overlay inside video feed */
+/* VU meter as ghost overlay at bottom of video feed */
 #page-home.video-mode .video-preview-wrap > .vu-section {
   position: absolute;
   bottom: 0; left: 0; right: 0;
   z-index: 10;
-  background: rgba(10, 10, 12, 0.72);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  padding: 8px 14px;
+  background: rgba(8, 10, 16, 0.52);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  padding: 6px 12px 8px;
   margin: 0;
   border-radius: 0;
+  border: none;
+}
+#page-home.video-mode .video-preview-wrap > .vu-section .vu-section-head { display: none; }
+#page-home.video-mode .video-preview-wrap > .vu-section .vu-bar-lbl  { display: none; }
+#page-home.video-mode .video-preview-wrap > .vu-section .vu-bar-val  { display: none; }
+#page-home.video-mode .video-preview-wrap > .vu-section .vu-bar-clip { display: none; }
+#page-home.video-mode .video-preview-wrap > .vu-section .vu-bar-group { gap: 4px; }
+#page-home.video-mode .video-preview-wrap > .vu-section .vu-bar-row  { gap: 0; }
+#page-home.video-mode .video-preview-wrap > .vu-section .vu-bar-track {
+  height: 5px; border-radius: 1px; box-shadow: none;
+  background: linear-gradient(90deg,
+    rgba(22,163,74,.55) 0%,  rgba(22,163,74,.55) 80%,
+    rgba(202,138,4,.7) 80%,  rgba(202,138,4,.7) 92%,
+    rgba(220,38,38,.8) 92%,  rgba(220,38,38,.8) 100%);
+}
+#page-home.video-mode .video-preview-wrap > .vu-section .vu-bar-track::after { display: none; }
+#page-home.video-mode .video-preview-wrap > .vu-section .vu-bar-fill {
+  background: rgba(8, 10, 16, 0.72);
+  border-radius: 0 1px 1px 0;
+}
+#page-home.video-mode .video-preview-wrap > .vu-section .vu-bar-peak {
+  top: 0; bottom: 0; width: 1px;
+  background: rgba(255,255,255,.5);
 }
 
 /* ── Recording overlay — video-as-hero mode ─────────────────────────────── */
