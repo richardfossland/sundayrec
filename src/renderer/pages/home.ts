@@ -97,9 +97,14 @@ export async function refreshHomeVideoDevices(): Promise<void> {
     } else if (phTxt) {
       phTxt.textContent = sel.value ? 'Starter kamera…' : 'Velg kamera og trykk oppdater'
     }
-  } catch {
+  } catch (err) {
+    console.warn('[home] device list failed:', err)
     sel.innerHTML = '<option value="">Feil ved lasting</option>'
     sel.disabled = false
+    const phTxt2 = document.getElementById('video-preview-placeholder-text')
+    if (phTxt2) phTxt2.textContent = 'Kunne ikke hente kameraliste — sjekk tillatelser'
+    const phDiv2 = document.getElementById('video-preview-placeholder')
+    if (phDiv2) phDiv2.style.display = ''
   }
 }
 
@@ -257,6 +262,9 @@ function highlightCard(card: HTMLElement | null): void {
   setTimeout(() => card.classList.remove('setting-highlight'), 4400)
 }
 
+/** Exported so other pages can trigger a disk-space refresh after changing format/channels/samplerate */
+export { loadDiskSpace as refreshHomeDiskSpace }
+
 export function setupHome(): void {
   // Video toggle button — always toggles, loads devices inline if turning on
   document.getElementById('btn-video-toggle')?.addEventListener('click', async () => {
@@ -381,6 +389,18 @@ export function setupHome(): void {
   navigator.mediaDevices.addEventListener('devicechange', onDeviceChange)
   window.addEventListener('beforeunload', () =>
     navigator.mediaDevices.removeEventListener('devicechange', onDeviceChange))
+
+  // OPPGAVE 1 — Generic ESC key handler: closes all open modals/backdrops
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return
+    document.querySelectorAll<HTMLElement>('.modal-backdrop, .ob-overlay').forEach(m => {
+      if (m.style.display !== 'none' && m.offsetParent !== null) {
+        // The note modal has its own close logic — dispatch custom event so it can clean up
+        m.dispatchEvent(new CustomEvent('modal-close'))
+        m.style.display = 'none'
+      }
+    })
+  })
 }
 
 export async function refreshHome(): Promise<void> {
@@ -403,7 +423,13 @@ export async function refreshHome(): Promise<void> {
     setVuOverlay(true)
     refreshHomeVideoDevices().then(() => {
       if (settings.videoDeviceName && !window.__isRecording) startVideoPreview()
-    }).catch(() => {})
+    }).catch((err) => {
+      console.warn('[home] device list failed:', err)
+      const phTxt = document.getElementById('video-preview-placeholder-text')
+      if (phTxt) phTxt.textContent = 'Kunne ikke hente kameraliste — sjekk tillatelser'
+      const phDiv = document.getElementById('video-preview-placeholder')
+      if (phDiv) phDiv.style.display = ''
+    })
   } else {
     pageHome?.classList.remove('video-mode')
     setVuOverlay(false)

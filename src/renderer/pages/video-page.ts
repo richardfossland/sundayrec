@@ -2,6 +2,20 @@ import { settings, patchSettings } from '../state'
 import { flashMsg } from '../helpers'
 import type { Settings } from '../../types'
 
+function showVideoWarning(msg: string): void {
+  const bitrateInput = document.getElementById('video-bitrate-value') as HTMLInputElement | null
+  if (!bitrateInput) return
+  let warn = document.getElementById('video-bitrate-warn')
+  if (!warn) {
+    warn = document.createElement('div')
+    warn.id = 'video-bitrate-warn'
+    warn.style.cssText = 'font-size:12px;color:var(--orange);margin-top:4px'
+    bitrateInput.parentElement?.after(warn)
+  }
+  warn.textContent = msg
+  setTimeout(() => { if (warn) warn.textContent = '' }, 4000)
+}
+
 type VideoDevice = { name: string; index: number }
 let loadedDevices: VideoDevice[] = []
 
@@ -25,6 +39,19 @@ export function setupVideoPage(): void {
   }
   document.getElementById('opt-video-bitrate-auto')?.addEventListener('change', toggleBitrateRow)
   document.getElementById('opt-video-bitrate-custom')?.addEventListener('change', toggleBitrateRow)
+
+  // OPPGAVE 4: validate bitrate on blur/input
+  const bitrateInput = document.getElementById('video-bitrate-value') as HTMLInputElement | null
+  bitrateInput?.addEventListener('change', () => {
+    const val = parseInt(bitrateInput.value)
+    if (isNaN(val) || val < 500) {
+      bitrateInput.value = '500'
+      showVideoWarning('Minimum bitrate er 500 kbps')
+    } else if (val > 50000) {
+      bitrateInput.value = '50000'
+      showVideoWarning('Maksimum bitrate er 50 000 kbps')
+    }
+  })
 
   document.getElementById('btn-video-save')?.addEventListener('click', async () => {
     await saveVideoSettings()

@@ -3,6 +3,7 @@ import { settings, patchSettings } from '../state'
 import { flashSaved, setVal, setRadio, updateSliderLabel, setupDirtyBar } from '../helpers'
 import { getAudioDevices, detectDeviceChannels, buildInputRouter } from '../audio/capture'
 import { makeVuState, tickVU, stopVuState } from '../audio/vu'
+import { refreshHomeDiskSpace } from './home'
 import type { DeviceChannels, ChannelMode } from '../../types'
 
 let monitorStream: MediaStream   | null = null
@@ -116,6 +117,8 @@ async function saveAudioSettings(): Promise<void> {
   await window.api.saveSettings(settings)
   _markAudioClean()
   flashSaved(document.getElementById('btn-audio-save'))
+  // OPPGAVE 7: refresh disk estimate on home page when channels/samplerate change
+  void refreshHomeDiskSpace()
 }
 
 export async function renderDeviceList(containerId: string): Promise<void> {
@@ -252,6 +255,16 @@ function updateChannelSelector(count: number, chL: number, chR: number): void {
 }
 
 async function startMonitoring(): Promise<void> {
+  // OPPGAVE 3: stop any existing stream before opening a new one to prevent double GUM streams
+  if (monitorStream) {
+    monitorStream.getTracks().forEach(t => t.stop())
+    monitorStream = null
+    monitorSrc?.disconnect(); monitorSrc = null
+    monitorCtx?.close(); monitorCtx = null
+    // Small pause to let the driver release the device
+    await new Promise<void>(r => setTimeout(r, 100))
+  }
+
   try {
     // ASIO device IDs (asio::DriverName) are not valid getUserMedia IDs — use default input for monitoring
     const rawId  = settings.deviceId
