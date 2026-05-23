@@ -288,7 +288,7 @@ export function importProfile(json: string): boolean {
 export function migrateActiveRecovery(): void {
   const recovery = store.get('activeRecovery')
   if (!recovery) return
-  const rec = recovery as Record<string, unknown>
+  const rec = recovery as unknown as Record<string, unknown>
   if (rec.tempPath && !rec.outputPath) {
     rec.outputPath = rec.tempPath
     delete rec.tempPath
