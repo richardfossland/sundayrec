@@ -176,11 +176,11 @@ export function updateHistoryNote(timestamp: number, note: string): void {
 
 /** Returns true if a file exists and is larger than 1 KB (guards against corrupt/empty recordings). */
 function isFileValid(filePath: string): boolean {
+  if (!fs.existsSync(filePath)) return false
   try {
-    const stat = fs.statSync(filePath)
-    return stat.size > 1000
+    return fs.statSync(filePath).size > 1000
   } catch {
-    return false
+    return true  // existsSync confirmed it exists; trust that
   }
 }
 
@@ -212,14 +212,6 @@ export function importProfile(json: string): boolean {
     const raw = JSON.parse(json)
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false
     const imported = raw as Record<string, unknown>
-
-    // ── String field type guard — delete any non-string values to prevent type confusion ──
-    const strFields = ['saveFolder', 'emailSmtp', 'emailSmtpUser', 'emailAddress', 'deviceName'] as const
-    for (const f of strFields) {
-      if (f in imported && typeof imported[f] !== 'string') {
-        delete imported[f]
-      }
-    }
 
     const profile = imported as Partial<Settings>
     if (profile.saveFolder         !== undefined && profile.saveFolder         !== null && typeof profile.saveFolder         !== 'string') return false
