@@ -422,8 +422,9 @@ app.on('render-process-gone', (_event, _webContents, details) => {
     if (recorder.isActive()) {
       const opts = recorder.getActiveSessionOpts()
       if (opts) {
-        // Brief delay so the renderer's setupRecording() IPC listeners are fully registered
-        setTimeout(() => mainWindow?.webContents.send('recording-overlay-start', opts), 1200)
+        // Longer delay to ensure the renderer's IPC listeners are fully registered even on slow loads.
+        // 1200 ms was too tight; slow renderer loads may not have registered listeners in time.
+        setTimeout(() => mainWindow?.webContents.send('recording-overlay-start', opts), 3000)
       }
     }
   })
@@ -464,6 +465,7 @@ function setupIPC(): void {
       app.setLoginItemSettings({ openAtLogin: !!settings.launchAtLogin, openAsHidden: true })
     }
     const upcomingAfterSave = scheduler.getUpcomingDates()
+    storeNextExpected(upcomingAfterSave)
     wake.reschedule(upcomingAfterSave, mainWindow).catch(err => console.error('[wake] reschedule error:', err))
     tray.setNextRecording(upcomingAfterSave[0] ?? null)
     // Sync pre-roll state with new settings (stop must complete before start)
