@@ -748,6 +748,11 @@ function setupIPC(): void {
     return listAsioDrivers()
   })
 
+  ipcMain.handle('list-ffmpeg-audio-devices', async () => {
+    const { listFfmpegDevices } = await import('./native-recorder')
+    return listFfmpegDevices()
+  })
+
   // ── Cloud backup ──────────────────────────────────────────────────────────
   ipcMain.handle('cloud-connect', async (_, service: string) => {
     const cloud = await import('./cloud')

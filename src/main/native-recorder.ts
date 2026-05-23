@@ -125,7 +125,51 @@ async function probeWasapiAvailable(): Promise<boolean> {
   })
 }
 
+// ── WASAPI device enumeration ───────────────────────────────────────────────
+
+async function listWasapiDevices(): Promise<FfmpegDevice[]> {
+  if (process.platform !== 'win32') return []
+  return new Promise(resolve => {
+    const proc = spawn(ffmpegBin, ['-f', 'wasapi', '-list_devices', 'true', '-i', 'dummy', '-hide_banner'], {
+      stdio: ['ignore', 'ignore', 'pipe']
+    })
+    let stderr = ''
+    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+    let settled = false
+    const done = () => {
+      if (settled) return; settled = true
+      const devices: FfmpegDevice[] = []
+      // WASAPI output format: [wasapi @ ...] "Device Name" (uuid)
+      for (const line of stderr.split('\n')) {
+        const m = line.match(/"([^"]+)"/)
+        if (m && !m[1].startsWith('{')) {
+          const name = m[1].trim()
+          if (name && !devices.find(d => d.name === name)) {
+            devices.push({ name, index: devices.length })
+          }
+        }
+      }
+      resolve(devices)
+    }
+    proc.on('close', done)
+    proc.on('error', () => { if (!settled) { settled = true; resolve([]) } })
+    setTimeout(() => { if (!settled) { try { proc.kill() } catch {}; done() } }, 5000)
+  })
+}
+
 // ── Device input resolution ─────────────────────────────────────────────────
+
+// Generic USB audio words that are too common to distinguish devices
+const GENERIC_AUDIO_WORDS = new Set(['usb', 'audio', 'codec', 'device', 'input', 'output',
+  'microphone', 'speaker', 'headset', 'headphone', 'sound', 'card', 'interface',
+  'capture', 'playback', 'recording', 'stereo', 'mono', 'digital', 'analog'])
+
+function extractBrandWords(s: string): string[] {
+  // Strip leading "N- " Windows prefix pattern (e.g. "2- USB Audio CODEC")
+  const cleaned = s.replace(/^\d+[-–]\s*/, '')
+  return cleaned.toLowerCase().split(/[\s\-()+,/\\]+/)
+    .filter(w => w.length > 2 && !GENERIC_AUDIO_WORDS.has(w))
+}
 
 function bestMatch(devices: FfmpegDevice[], name: string): FfmpegDevice | undefined {
   if (!name) return devices[0]
@@ -148,6 +192,15 @@ function bestMatch(devices: FfmpegDevice[], name: string): FfmpegDevice | undefi
     return overlaps.length >= 2
   })
   if (wordMatch) return wordMatch
+  // 5. Brand/model extraction: strip generic USB audio words and compare remaining brand words.
+  //    Handles: "Soundcraft USB Audio (USB Audio)" vs "USB Audio CODEC"
+  //    Also handles: "2- USB Audio CODEC" Windows prefix pattern
+  const storedBrand = extractBrandWords(n)
+  const brandMatch = storedBrand.length > 0 ? devices.find(d => {
+    const devBrand = extractBrandWords(d.name)
+    return storedBrand.some(sw => devBrand.some(dw => dw === sw || dw.startsWith(sw) || sw.startsWith(dw)))
+  }) : undefined
+  if (brandMatch) return brandMatch
   return undefined
 }
 
@@ -201,15 +254,26 @@ export async function resolveDeviceInput(
 
     const devices = await listFfmpegDevices()
     if (!devices.length) return null
+    console.log(`[native-recorder] stored device name: "${name}"`)
+    console.log(`[native-recorder] DirectShow devices: [${devices.map(d => `"${d.name}"`).join(', ')}]`)
     const match = bestMatch(devices, name)
     if (!match) {
-      console.warn(`[native-recorder] No device matching "${name}" — using first device: "${devices[0].name}"`)
+      console.warn(`[native-recorder] No DirectShow device matching "${name}" — available: ${devices.map(d => `"${d.name}"`).join(', ')} — using first: "${devices[0].name}"`)
     }
     const resolved = match ?? devices[0]
     // WASAPI is the modern Windows audio API: lower latency, more stable than DirectShow.
-    // It accepts the same device friendly names as DirectShow enumeration.
+    // Enumerate WASAPI devices separately — they may have different names than DirectShow.
     if (await probeWasapiAvailable()) {
-      console.log('[native-recorder] using WASAPI for device:', resolved.name)
+      const wasapiDevices = await listWasapiDevices()
+      if (wasapiDevices.length) {
+        const wasapiMatch = bestMatch(wasapiDevices, name)
+        const wasapiResolved = wasapiMatch ?? wasapiDevices[0]
+        console.log(`[native-recorder] WASAPI devices: ${wasapiDevices.map(d => d.name).join(', ')}`)
+        console.log(`[native-recorder] using WASAPI device: "${wasapiResolved.name}"`)
+        return { format: 'wasapi', device: wasapiResolved.name, resolvedName: wasapiResolved.name }
+      }
+      // Fallback to DirectShow name with WASAPI format
+      console.log('[native-recorder] WASAPI enumeration empty — falling back to DirectShow name')
       return { format: 'wasapi', device: resolved.name, resolvedName: resolved.name }
     }
     return { format: 'dshow', device: `audio="${resolved.name}"`, resolvedName: resolved.name }
@@ -450,7 +514,12 @@ function classifyFfmpegError(stderr: string): string {
     s.includes('failed to find audio') ||
     s.includes('the handle is invalid') ||
     s.includes('no audio device') || s.includes('audio device not found') ||
-    s.includes('avfoundation: device') || s.includes('no such file or directory')
+    s.includes('avfoundation: device') || s.includes('no such file or directory') ||
+    s.includes('audclnt_e_device_not_active') ||
+    s.includes('no audio endpoint device') ||
+    s.includes('mmdevapi') ||
+    s.includes('failed to create audio client') ||
+    s.includes('the system cannot find the file specified')
   ) {
     return 'device_not_found'
   }
@@ -467,7 +536,9 @@ function classifyFfmpegError(stderr: string): string {
     s.includes('already in use') || s.includes('device busy') ||
     s.includes('being used by another') || s.includes('resource busy') ||
     s.includes('device or resource busy') || s.includes('audclnt_e_device_in_use') ||
-    s.includes('audclnt_e_exclusive_mode_not_allowed')
+    s.includes('audclnt_e_exclusive_mode_not_allowed') ||
+    s.includes('audclnt_e_already_initialized') ||
+    s.includes('audclnt_e_wrong_endpoint_type')
   ) {
     return 'device_busy'
   }
@@ -503,10 +574,16 @@ export async function startCapture(
     // actual capture start time when the two streams are merged into one MP4.
     '-use_wallclock_as_timestamps', '1',
     '-f', input.format,
+  ]
+  // WASAPI: increase real-time buffer to prevent frame drops under high CPU load or USB latency
+  if (input.format === 'wasapi') {
+    args.push('-rtbufsize', '50M')
+  }
+  args.push(
     '-i', input.device,
     '-ar', String(sampleRate),
     '-ac', String(outChannels),
-  ]
+  )
   if (afChain) args.push('-af', afChain)
   args.push(...buildCodecArgs(opts), '-y', outputPath)
 
@@ -566,9 +643,10 @@ export async function startCapture(
     handle.onExit?.(code)
   })
 
-  // Windows DirectShow can take 2-3 s to enumerate and open a device.
+  // Windows DirectShow/WASAPI can take up to 5 s to open USB audio devices,
+  // especially on first access or after another app has released the device.
   // macOS AVFoundation can also be slow on first access (privacy prompt, driver init).
-  const startupMs = process.platform === 'win32' ? 3000 : 2000
+  const startupMs = process.platform === 'win32' ? 5000 : 2000
 
   const startupError = await new Promise<string | null>(resolve => {
     const onClose = () => {
@@ -584,7 +662,20 @@ export async function startCapture(
     proc.once('close', onClose)
   })
 
-  if (startupError) return { error: startupError }
+  if (startupError) {
+    const sRateErr = stderrBuf.toLowerCase()
+    const isSampleRateError = sRateErr.includes('sample rate') ||
+      sRateErr.includes('sampling rate') || sRateErr.includes('samplerate') ||
+      sRateErr.includes('unsupported sample') || sRateErr.includes('invalid sample')
+
+    // Retry with 48000 Hz if sample rate was different and error suggests rate mismatch
+    if (isSampleRateError && (opts.sampleRate ?? 48000) !== 48000) {
+      console.warn('[native-recorder] Sample rate error — retrying with 48000 Hz')
+      return startCapture({ ...opts, sampleRate: 48000 }, outputPath)
+    }
+
+    return { error: startupError }
+  }
 
   // Guard: process might have exited cleanly during the startup window (race condition).
   // The close event already fired, handle.onExit was not set yet → zombie session.

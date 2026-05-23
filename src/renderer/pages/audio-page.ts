@@ -198,6 +198,18 @@ export async function renderDeviceList(containerId: string): Promise<void> {
     })
   }
 
+  // After rendering device cards, check ffmpeg device availability
+  window.api.listFfmpegAudioDevices?.().then((ffmpegDevices) => {
+    const stored = settings.deviceName
+    if (!stored || !ffmpegDevices) return
+    const found = ffmpegDevices.some(d =>
+      d.name.toLowerCase().includes(stored.toLowerCase().slice(0, 8)) ||
+      stored.toLowerCase().includes(d.name.toLowerCase().slice(0, 8))
+    )
+    const warn = document.getElementById('device-ffmpeg-warn')
+    if (warn) warn.style.display = found ? 'none' : ''
+  }).catch(() => {})
+
   // Probe current (non-ASIO) device for channel count
   const devId = settings.deviceId ?? (devices[0]?.deviceId ?? null)
   if (devId && !devId.startsWith('asio::')) {

@@ -63,6 +63,7 @@ declare global {
       editorDetectSegments:   (filePath: string) => Promise<{ start: number; end: number; duration: number; label: string; type: string }[]>
       pickAudioFile:          ()                 => Promise<string | null>
       listAsioDrivers:        ()                 => Promise<string[]>
+      listFfmpegAudioDevices: () => Promise<{ name: string; index: number }[]>
       cloudConnect:     (service: string) => Promise<{ ok: boolean; accountName?: string; error?: string }>
       cloudDisconnect:  (service: string) => Promise<void>
       cloudStatus:      ()                => Promise<Record<string, unknown>>
