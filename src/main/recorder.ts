@@ -367,7 +367,7 @@ export async function startSession(
     // timestamps on both streams — so the actual offset is preserved in the mux.
     await stopPreview()
     if (process.platform === 'darwin') {
-      await new Promise<void>(resolve => setTimeout(resolve, 150))
+      await new Promise<void>(resolve => setTimeout(resolve, 300))
     }
 
     const audioExt  = path.extname(outputPath)
@@ -400,6 +400,7 @@ export async function startSession(
         // If video dies unexpectedly, log but keep audio recording running
         if (code !== 0 && !activeSession?.stopping) {
           console.warn('[recorder] video ffmpeg died unexpectedly, code:', code)
+          safeSend(win, 'video-capture-error', { error: 'died', code })
         }
       }
     }
@@ -458,14 +459,24 @@ export async function startSession(
     safeSend(win, 'recording-progress', { bytes })
   }
 
-  // Stuck detector: if no progress in 60 s while not stopping, trigger watchdog
+  // Stuck detector: if no progress in 60 s while not stopping, trigger watchdog.
+  // Also check byte progression — bytes not increasing despite time passing means
+  // the encoder is hung (e.g. USB device stalled without closing the handle).
+  let lastBytesSnapshot = 0
   activeSession.stuckTimer = setInterval(() => {
     const s = activeSession
     if (!s || s.sessionId !== sessionId || s.stopping) return
+    const currentBytes = s.handle.bytesWritten ?? 0
     if (Date.now() - s.lastProgressAt > 60000) {
       console.warn('[recorder] No progress for 60 s — treating as device failure')
       stopStuckTimer(s)
       startWatchdog(s)
+    } else if (currentBytes > 0 && currentBytes === lastBytesSnapshot) {
+      console.warn('[recorder] bytes not progressing — possible encoder hang')
+      stopStuckTimer(s)
+      startWatchdog(s)
+    } else {
+      lastBytesSnapshot = currentBytes
     }
   }, 15000)
 
@@ -623,6 +634,16 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
     } else {
       console.error('[recorder] mux failed — keeping separate files')
       // videoFinalPath stays as-is (the raw video), treated as separate file
+    }
+  } else if (videoFinalPath && session.splitAutoRestart && videoFinalPath.endsWith('_vtmp.mp4')) {
+    // Split auto-restart: mux was skipped — rename vtmp to a proper segment name for history
+    const segmentVideoPath = videoFinalPath.replace('_vtmp.mp4', `_video_${Date.now()}.mp4`)
+    try {
+      fs.renameSync(videoFinalPath, segmentVideoPath)
+      videoFinalPath = segmentVideoPath
+      console.log('[recorder] vtmp renamed to segment video →', path.basename(segmentVideoPath))
+    } catch (err) {
+      console.warn('[recorder] vtmp rename failed:', err)
     }
   }
 
@@ -880,15 +901,48 @@ function startWatchdog(session: Session): void {
 
     // Reconnect succeeded — update session in place
     console.log('[recorder] Reconnected! New segment:', newPath)
-    if (session.videoHandle) {
-      console.warn('[recorder] audio reconnected but video capture was not restarted — video segment may be incomplete')
-    }
     session.outputPath     = newPath
     session.handle         = result
     session.startTime      = result.startTime
     session.lastProgressAt = Date.now()
     session.segments.push(newPath)
     store.set('activeRecovery', { outputPath: newPath, startTime: result.startTime, sessionId: session.sessionId })
+
+    // Restart video capture if it was active (stop old handle first, then start new one)
+    if (session.videoHandle) {
+      try { await stopVideoCapture(session.videoHandle) } catch {}
+      session.videoHandle = null
+
+      const audioExt = path.extname(newPath)
+      const audioBase = newPath.slice(0, -audioExt.length)
+      const newVideoPath = `${audioBase}_video_${Date.now()}.mp4`
+
+      const videoResult = await startVideoCapture(session.settings as Settings, newVideoPath)
+      if ('error' in videoResult) {
+        console.warn('[recorder] video restart after reconnect failed:', videoResult.error)
+        session.videoOutputPath = null
+      } else {
+        session.videoHandle     = videoResult
+        session.videoOutputPath = newVideoPath
+        videoResult.onFrame = (frame: Buffer) => {
+          if (activeSession?.sessionId === session.sessionId) {
+            safeSend(session.win, 'video-preview-frame', frame)
+          }
+        }
+        videoResult.onProgress = (bytes: number) => {
+          if (activeSession?.sessionId === session.sessionId) {
+            safeSend(session.win, 'video-progress', { bytes })
+          }
+        }
+        videoResult.onExit = (code) => {
+          if (code !== 0 && !activeSession?.stopping) {
+            console.warn('[recorder] video ffmpeg died after reconnect, code:', code)
+            safeSend(session.win, 'video-capture-error', { error: 'died', code })
+          }
+        }
+        console.log('[recorder] video restarted after audio reconnect →', newVideoPath)
+      }
+    }
 
     result.onProgress = bytes => {
       if (activeSession?.sessionId === session.sessionId) session.lastProgressAt = Date.now()
