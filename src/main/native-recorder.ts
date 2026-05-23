@@ -49,6 +49,76 @@ export const ffmpegBin = resolveFfmpegPath()
 
 export interface FfmpegDevice { name: string; index: number }
 
+/**
+ * Parse WASAPI device list from ffmpeg stderr.
+ *
+ * Handles all known ffmpeg WASAPI output formats:
+ *   Format 1 (ffmpeg 5+): "[wasapi @ ...] WASAPI input device #0 : 'Name'"
+ *   Format 2 (older):     "[wasapi @ ...] Device 0: 'Name'"
+ *   Format 3 (double quot): same as above but with "Name"
+ *   Format 4 (legacy):    "[wasapi @ ...] "Name""
+ *
+ * Exported for unit testing — this is a pure string-in / array-out function.
+ */
+export function parseWasapiDeviceList(stderr: string): FfmpegDevice[] {
+  const devices: FfmpegDevice[] = []
+  for (const line of stderr.split('\n')) {
+    if (line.includes('Alternative name') || line.includes('@device_')) continue
+    let name: string | undefined
+    // Matches "... device #N : 'Name'" — case-insensitive so "Device", "device",
+    // "WASAPI input device" all match. The [#]? handles both "0:" and "#0:".
+    const m1 = line.match(/device\s*[#]?\s*\d+\s*:\s*'([^']+)'/i)
+    const m2 = !m1 ? line.match(/device\s*[#]?\s*\d+\s*:\s*"([^"]+)"/i) : null
+    // Legacy: "[wasapi @ addr] "Name"" with no device-number prefix
+    const m3 = !m1 && !m2 ? line.match(/\[wasapi\s*@[^\]]+\]\s*"([^"{}@][^"]*)"/) : null
+    if      (m1) name = m1[1].trim()
+    else if (m2) name = m2[1].trim()
+    else if (m3 && !m3[1].startsWith('{')) name = m3[1].trim()
+    if (name && name.length > 1 && !devices.find(d => d.name === name)) {
+      devices.push({ name, index: devices.length })
+    }
+  }
+  return devices
+}
+
+/**
+ * Parse DirectShow device list from ffmpeg stderr.
+ * Exported for unit testing.
+ */
+export function parseDshowDeviceList(stderr: string): FfmpegDevice[] {
+  const devices: FfmpegDevice[] = []
+  for (const line of stderr.split('\n')) {
+    if (line.includes('Alternative name')) continue
+    const m = line.match(/"([^"]+)"/)
+    if (m && !m[1].startsWith('@')) {
+      const name = m[1]
+      if (!devices.find(d => d.name === name)) {
+        devices.push({ name, index: devices.length })
+      }
+    }
+  }
+  return devices
+}
+
+/**
+ * Parse AVFoundation audio device list from ffmpeg stderr.
+ * Only returns devices from the audio section (not video) — both sections
+ * use [0], [1], ... indices so mixing them would produce wrong index mappings.
+ * Exported for unit testing.
+ */
+export function parseAvfoundationDeviceList(stderr: string): FfmpegDevice[] {
+  const devices: FfmpegDevice[] = []
+  let inAudioSection = false
+  for (const line of stderr.split('\n')) {
+    if (line.includes('AVFoundation audio devices')) { inAudioSection = true; continue }
+    if (line.includes('AVFoundation video devices')) { inAudioSection = false; continue }
+    if (!inAudioSection) continue
+    const m = line.match(/\[(\d+)\]\s+(.+)/)
+    if (m) devices.push({ index: parseInt(m[1]), name: m[2].trim() })
+  }
+  return devices
+}
+
 export async function listFfmpegDevices(): Promise<FfmpegDevice[]> {
   return new Promise(resolve => {
     let args: string[]
@@ -66,33 +136,9 @@ export async function listFfmpegDevices(): Promise<FfmpegDevice[]> {
     let settled = false
     const done = () => {
       if (settled) return; settled = true
-      const devices: FfmpegDevice[] = []
-      if (process.platform === 'win32') {
-        // Only match actual device name lines; skip "Alternative name" entries
-        // and @device_... GUID strings that ffmpeg also quotes.
-        for (const line of stderr.split('\n')) {
-          if (line.includes('Alternative name')) continue
-          const m = line.match(/"([^"]+)"/)
-          if (m && !m[1].startsWith('@')) {
-            const name = m[1]
-            if (!devices.find(d => d.name === name)) {
-              devices.push({ name, index: devices.length })
-            }
-          }
-        }
-      } else {
-        // AVFoundation: only parse the audio devices section.
-        // The output lists video devices first, then audio — both use [0], [1], … indices,
-        // so mixing them would map video index 0 → audio input 0 incorrectly.
-        let inAudioSection = false
-        for (const line of stderr.split('\n')) {
-          if (line.includes('AVFoundation audio devices')) { inAudioSection = true; continue }
-          if (line.includes('AVFoundation video devices')) { inAudioSection = false; continue }
-          if (!inAudioSection) continue
-          const m = line.match(/\[(\d+)\]\s+(.+)/)
-          if (m) devices.push({ index: parseInt(m[1]), name: m[2].trim() })
-        }
-      }
+      const devices = process.platform === 'win32'
+        ? parseDshowDeviceList(stderr)
+        : parseAvfoundationDeviceList(stderr)
       resolve(devices)
     }
     proc.on('close', done)
@@ -138,24 +184,7 @@ export async function listWasapiDevices(): Promise<FfmpegDevice[]> {
     let settled = false
     const done = () => {
       if (settled) return; settled = true
-      const devices: FfmpegDevice[] = []
-      for (const line of stderr.split('\n')) {
-        if (line.includes('Alternative name') || line.includes('@device_')) continue
-        // Try all known ffmpeg WASAPI output formats:
-        // Format 1: [wasapi @...] Device N: 'Name'   (most common)
-        // Format 2: [wasapi @...] Device N: "Name"   (some builds)
-        // Format 3: [wasapi @...] "Name" (uuid)       (older ffmpeg)
-        let name: string | undefined
-        const m1 = line.match(/Device\s+\d+:\s+'([^']+)'/)
-        const m2 = line.match(/Device\s+\d+:\s+"([^"]+)"/)
-        const m3 = !m1 && !m2 ? line.match(/\[wasapi\s+@[^\]]+\]\s+"([^"{}@][^"]*)"/) : null
-        if      (m1) name = m1[1].trim()
-        else if (m2) name = m2[1].trim()
-        else if (m3 && !m3[1].startsWith('{')) name = m3[1].trim()
-        if (name && name.length > 1 && !devices.find(d => d.name === name)) {
-          devices.push({ name, index: devices.length })
-        }
-      }
+      const devices = parseWasapiDeviceList(stderr)
       console.log(`[native-recorder] WASAPI enumeration: found ${devices.length} devices`, devices.map(d => d.name))
       resolve(devices)
     }
@@ -220,7 +249,8 @@ function extractBrandWords(s: string): string[] {
     .filter(w => w.length > 2 && !GENERIC_AUDIO_WORDS.has(w))
 }
 
-function bestMatch(devices: FfmpegDevice[], name: string): FfmpegDevice | undefined {
+/** Exported for testing. All internal callers use this directly. */
+export function findBestDeviceMatch(devices: FfmpegDevice[], name: string): FfmpegDevice | undefined {
   if (!name) return devices[0]
   const n = name.toLowerCase()
   // 1. Exact match
@@ -291,7 +321,7 @@ export async function resolveDeviceInput(
     if ((opts.deviceId ?? '').startsWith('asio::')) {
       const driverName = (opts.deviceId as string).slice(6)
       const devices    = await listFfmpegDevices()
-      const match      = devices.length ? (bestMatch(devices, driverName) ?? devices[0]) : null
+      const match      = devices.length ? (findBestDeviceMatch(devices, driverName) ?? devices[0]) : null
       if (!match) return null
       const api = await probeWasapiAvailable() ? 'WASAPI' : 'DirectShow'
       console.warn(`[native-recorder] ASIO driver "${driverName}" selected — using ${api}: "${match.name}"`)
@@ -305,7 +335,7 @@ export async function resolveDeviceInput(
     console.log(`[native-recorder] stored name: "${name}"`)
     console.log(`[native-recorder] DirectShow devices: [${dshowDevices.map(d => `"${d.name}"`).join(', ')}]`)
 
-    const dshowMatch = dshowDevices.length ? (bestMatch(dshowDevices, name) ?? dshowDevices[0]) : null
+    const dshowMatch = dshowDevices.length ? (findBestDeviceMatch(dshowDevices, name) ?? dshowDevices[0]) : null
 
     if (await probeWasapiAvailable()) {
       let wasapiDevices = await listWasapiDevices()
@@ -316,7 +346,7 @@ export async function resolveDeviceInput(
 
       if (wasapiDevices.length > 0) {
         // Match stored name against WASAPI devices
-        const wasapiMatch = bestMatch(wasapiDevices, name) ?? wasapiDevices[0]
+        const wasapiMatch = findBestDeviceMatch(wasapiDevices, name) ?? wasapiDevices[0]
         console.log(`[native-recorder] using WASAPI device: "${wasapiMatch.name}" (from ${wasapiDevices.length} WASAPI devices)`)
         return { format: 'wasapi', device: wasapiMatch.name, resolvedName: wasapiMatch.name }
       }
@@ -341,7 +371,7 @@ export async function resolveDeviceInput(
   if (process.platform === 'darwin') {
     const devices = await listFfmpegDevices()
     if (!devices.length) return { format: 'avfoundation', device: ':0', resolvedName: 'default' }
-    const match = name ? bestMatch(devices, name) : devices[0]
+    const match = name ? findBestDeviceMatch(devices, name) : devices[0]
     if (name && !match) {
       console.warn(`[native-recorder] No AVFoundation device matching "${name}" — using :0`)
     }
@@ -577,8 +607,8 @@ export interface NativeHandle {
 
 // ── Start / stop ────────────────────────────────────────────────────────────
 
-// Classify ffmpeg stderr into a user-facing error code
-function classifyFfmpegError(stderr: string): string {
+// Classify ffmpeg stderr into a user-facing error code. Exported for testing.
+export function classifyFfmpegError(stderr: string): string {
   const s = stderr.toLowerCase()
   if (
     s.includes('device not found') ||
@@ -761,7 +791,7 @@ async function startCaptureWithInput(
       if (input.format === 'wasapi') {
         const dshowDevices = await listFfmpegDevices()
         if (dshowDevices.length > 0) {
-          const dshowMatch = bestMatch(dshowDevices, opts.deviceName ?? '') ?? dshowDevices[0]
+          const dshowMatch = findBestDeviceMatch(dshowDevices, opts.deviceName ?? '') ?? dshowDevices[0]
           console.warn(`[native-recorder] WASAPI failed (${startupError}) — retrying with DirectShow: "${dshowMatch.name}"`)
           return startCaptureWithInput(
             { format: 'dshow', device: `audio="${dshowMatch.name}"`, resolvedName: dshowMatch.name },
