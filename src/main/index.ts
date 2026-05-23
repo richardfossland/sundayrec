@@ -208,10 +208,11 @@ app.whenReady().then(async () => {
   }
 
   if (process.platform === 'darwin') {
-    const status = await systemPreferences.askForMediaAccess('microphone')
-    if (!status) {
+    const lang = store.get('language') ?? 'en'
+
+    const micOk = await systemPreferences.askForMediaAccess('microphone')
+    if (!micOk) {
       console.warn('[SundayRec] Microphone access denied')
-      // Show once per launch — user must fix in System Settings before recording works
       const MIC_DENIED: Record<string, [string, string, string]> = {
         no: ['Mikrofontilgang nektet', 'SundayRec trenger tilgang til mikrofon for å ta opp. Åpne Systeminnstillinger → Personvern & sikkerhet → Mikrofon og aktiver SundayRec.', 'Åpne Systeminnstillinger'],
         en: ['Microphone access denied', 'SundayRec needs microphone access to record. Open System Settings → Privacy & Security → Microphone and enable SundayRec.', 'Open System Settings'],
@@ -221,7 +222,6 @@ app.whenReady().then(async () => {
         pl: ['Odmowa dostępu do mikrofonu', 'SundayRec potrzebuje dostępu do mikrofonu. Otwórz Ustawienia systemowe → Prywatność i bezpieczeństwo → Mikrofon.', 'Otwórz ustawienia systemowe'],
         fr: ['Accès au microphone refusé', "SundayRec a besoin d'accéder au microphone. Ouvrez Réglages système → Confidentialité et sécurité → Microphone.", 'Ouvrir les Réglages système'],
       }
-      const lang = store.get('language') ?? 'en'
       const [title, detail, openBtn] = MIC_DENIED[lang] ?? MIC_DENIED.en
       const { response } = await dialog.showMessageBox({
         type: 'warning', buttons: [openBtn, 'OK'], defaultId: 0,
@@ -229,6 +229,28 @@ app.whenReady().then(async () => {
       })
       if (response === 0) {
         shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone')
+      }
+    }
+
+    const camOk = await systemPreferences.askForMediaAccess('camera')
+    if (!camOk) {
+      console.warn('[SundayRec] Camera access denied')
+      const CAM_DENIED: Record<string, [string, string, string]> = {
+        no: ['Kameratilgang nektet', 'SundayRec trenger tilgang til kamera for å ta opp video. Åpne Systeminnstillinger → Personvern & sikkerhet → Kamera og aktiver SundayRec.', 'Åpne Systeminnstillinger'],
+        en: ['Camera access denied', 'SundayRec needs camera access for video recording. Open System Settings → Privacy & Security → Camera and enable SundayRec.', 'Open System Settings'],
+        de: ['Kamerazugriff verweigert', 'SundayRec benötigt Kamerazugriff. Öffnen Sie Systemeinstellungen → Datenschutz & Sicherheit → Kamera.', 'Systemeinstellungen öffnen'],
+        sv: ['Kameraåtkomst nekad', 'SundayRec behöver kameraåtkomst. Öppna Systeminställningar → Integritet & säkerhet → Kamera.', 'Öppna Systeminställningar'],
+        da: ['Kameraadgang nægtet', 'SundayRec skal bruge kameraadgang. Åbn Systemindstillinger → Privatliv & sikkerhed → Kamera.', 'Åbn Systemindstillinger'],
+        pl: ['Odmowa dostępu do kamery', 'SundayRec potrzebuje dostępu do kamery. Otwórz Ustawienia systemowe → Prywatność i bezpieczeństwo → Kamera.', 'Otwórz ustawienia systemowe'],
+        fr: ['Accès à la caméra refusé', "SundayRec a besoin d'accéder à la caméra. Ouvrez Réglages système → Confidentialité et sécurité → Caméra.", 'Ouvrir les Réglages système'],
+      }
+      const [title, detail, openBtn] = CAM_DENIED[lang] ?? CAM_DENIED.en
+      const { response } = await dialog.showMessageBox({
+        type: 'warning', buttons: [openBtn, 'OK'], defaultId: 0,
+        title, message: title, detail
+      })
+      if (response === 0) {
+        shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Camera')
       }
     }
   }

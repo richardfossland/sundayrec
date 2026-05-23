@@ -157,7 +157,15 @@ export function startVideoPreview(): void {
     videoDeviceName:  settings.videoDeviceName,
     videoDeviceIndex: settings.videoDeviceIndex,
     videoFramerate:   settings.videoFramerate,
-  })
+  }).then((ok: unknown) => {
+    if (ok === false) {
+      // Main process denied camera permission before even starting ffmpeg
+      if (previewNoFrameTimer) { clearTimeout(previewNoFrameTimer); previewNoFrameTimer = null }
+      previewActive = false
+      if (phTxt) phTxt.textContent = 'Kameratilgang nektet — sjekk Systeminnstillinger'
+      if (phDiv) phDiv.style.display = ''
+    }
+  }).catch(() => { /* IPC errors are non-fatal */ })
 
   previewFrameUnsub = window.api.on('video-preview-frame', (data: unknown) => {
     if (previewNoFrameTimer) { clearTimeout(previewNoFrameTimer); previewNoFrameTimer = null }
