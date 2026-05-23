@@ -2698,7 +2698,7 @@ body.platform-win32  #wake-instructions-win { display: block; }
   animation: pulse-opacity 1.5s infinite; margin-left: auto;
 }
 .video-preview-wrap {
-  position: relative; background: #000; aspect-ratio: 16/9;
+  position: relative; background: #000; aspect-ratio: var(--video-ar, 16 / 9);
   max-height: 220px; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
 }
@@ -2799,7 +2799,7 @@ body.platform-win32  #wake-instructions-win { display: block; }
 /* Large full-ratio feed */
 #page-home.video-mode .video-preview-wrap {
   max-height: none;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: var(--video-ar, 16 / 9);
 }
 /* Accent glow on the card */
 #page-home.video-mode .video-preview-card {
