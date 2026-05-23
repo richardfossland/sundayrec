@@ -269,6 +269,7 @@ app.whenReady().then(async () => {
 
   createWindow()
   tray.create(mainWindow)
+  store.migrateActiveRecovery()
   recorder.recoverCrashedSession()
   scheduler.init(mainWindow)
   updater.init(mainWindow)

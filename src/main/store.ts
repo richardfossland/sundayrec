@@ -145,11 +145,15 @@ export function getHistory(): RecordingEntry[] {
 
 let _lastHistoryTs = 0
 export function addHistory(entry: RecordingEntry): void {
+  // createdAt: wall-clock time the entry was created. Monotonic: never older than
+  // the previous entry, so history ordering survives clock adjustments (NTP, DST, etc.).
   const now = Date.now()
-  const ts  = now > _lastHistoryTs ? now : _lastHistoryTs + 1
-  _lastHistoryTs = ts
+  const lastPersisted = getHistory()[0]?.timestamp ?? 0
+  const lastTs = Math.max(_lastHistoryTs, lastPersisted)
+  const safeTs = Math.max(now, lastTs + 1)
+  _lastHistoryTs = safeTs
   const history = getHistory()
-  history.unshift({ ...entry, timestamp: ts })
+  history.unshift({ ...entry, timestamp: safeTs })
   store.set('recordingHistory', history.slice(0, 200))
 }
 
@@ -170,11 +174,21 @@ export function updateHistoryNote(timestamp: number, note: string): void {
   }
 }
 
+/** Returns true if a file exists and is larger than 1 KB (guards against corrupt/empty recordings). */
+function isFileValid(filePath: string): boolean {
+  try {
+    const stat = fs.statSync(filePath)
+    return stat.size > 1000
+  } catch {
+    return false
+  }
+}
+
 export function pruneHistory(): number {
   const before = getHistory()
   const after  = before.filter(entry => {
     if (entry.status !== 'ok' || !entry.path) return true
-    return fs.existsSync(entry.path)
+    return isFileValid(entry.path)
   })
   if (after.length !== before.length) {
     store.set('recordingHistory', after)
@@ -187,11 +201,27 @@ export function exportProfile(): Omit<Settings, 'recordingHistory' | 'activeReco
   return { ...profile, emailSmtpPass: '' }
 }
 
+/** Clamp a numeric value to [min, max]; return def if v is not a finite number. */
+function clampNum(v: unknown, min: number, max: number, def: number): number {
+  const n = Number(v)
+  return isNaN(n) || !isFinite(n) ? def : Math.max(min, Math.min(max, n))
+}
+
 export function importProfile(json: string): boolean {
   try {
     const raw = JSON.parse(json)
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false
-    const profile = raw as Partial<Settings>
+    const imported = raw as Record<string, unknown>
+
+    // ── String field type guard — delete any non-string values to prevent type confusion ──
+    const strFields = ['saveFolder', 'emailSmtp', 'emailSmtpUser', 'emailAddress', 'deviceName'] as const
+    for (const f of strFields) {
+      if (f in imported && typeof imported[f] !== 'string') {
+        delete imported[f]
+      }
+    }
+
+    const profile = imported as Partial<Settings>
     if (profile.saveFolder         !== undefined && profile.saveFolder         !== null && typeof profile.saveFolder         !== 'string') return false
     if (profile.emailSmtp          !== undefined && typeof profile.emailSmtp          !== 'string') return false
     if (profile.emailAddress       !== undefined && typeof profile.emailAddress       !== 'string') return false
@@ -215,12 +245,55 @@ export function importProfile(json: string): boolean {
       }
     }
     if (profile.language           !== undefined && profile.language           !== null && typeof profile.language           !== 'string') return false
+
+    // ── Numeric field clamping ──
+    if (typeof profile.sampleRate === 'number') {
+      profile.sampleRate = clampNum(profile.sampleRate, 8000, 192000, 48000)
+    }
+    if (typeof profile.manualMaxMinutes === 'number') {
+      profile.manualMaxMinutes = clampNum(profile.manualMaxMinutes, 0, 1440, 0)
+    }
+    if (typeof profile.splitMinutes === 'number') {
+      profile.splitMinutes = clampNum(profile.splitMinutes, 0, 480, 0)
+    }
+    if (typeof profile.videoBitrate === 'number') {
+      profile.videoBitrate = clampNum(profile.videoBitrate, 500, 50000, 4000)
+    }
+    if (typeof profile.videoFramerate === 'number') {
+      profile.videoFramerate = clampNum(profile.videoFramerate, 10, 60, 30)
+    }
+
+    // ── EQ field clamping — gain: -24..+24 dB ──
+    const eqGainFields = ['eqBass', 'eqMid', 'eqTreble'] as const
+    for (const f of eqGainFields) {
+      if (typeof profile[f] === 'number') {
+        profile[f] = clampNum(profile[f], -24, 24, 0)
+      }
+    }
+
     const { recordingHistory, activeRecovery, emailSmtpPassEnc, emailSmtpPassSet, emailSmtpPass, ...safe } = profile
     Object.entries(safe).forEach(([k, v]) => store.set(k as keyof Settings, v as never))
     if (emailSmtpPass) setSmtpPassword(emailSmtpPass)
     return true
   } catch {
     return false
+  }
+}
+
+/**
+ * Migrate legacy `tempPath` → `outputPath` in activeRecovery.
+ * Call once at app startup, before recoverCrashedSession(), so that the
+ * crash-recovery logic always sees the normalised `outputPath` field.
+ */
+export function migrateActiveRecovery(): void {
+  const recovery = store.get('activeRecovery')
+  if (!recovery) return
+  const rec = recovery as Record<string, unknown>
+  if (rec.tempPath && !rec.outputPath) {
+    rec.outputPath = rec.tempPath
+    delete rec.tempPath
+    store.set('activeRecovery', rec as never)
+    console.log('[store] migrated legacy tempPath → outputPath in activeRecovery')
   }
 }
 
