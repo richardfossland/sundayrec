@@ -549,6 +549,18 @@ function setupIPC(): void {
     if (opts !== undefined && opts !== null && (typeof opts !== 'object' || Array.isArray(opts))) {
       return { error: 'invalid_opts' }
     }
+    // Sanitise numeric fields to prevent out-of-range values from crashing ffmpeg
+    if (opts && typeof opts === 'object') {
+      const o = opts as Record<string, unknown>
+      if (o['maxMinutes'] !== undefined) {
+        const v = Number(o['maxMinutes'])
+        if (!Number.isFinite(v) || v < 1 || v > 1440) o['maxMinutes'] = undefined
+      }
+      if (o['splitMinutes'] !== undefined) {
+        const v = Number(o['splitMinutes'])
+        if (!Number.isFinite(v) || v < 1 || v > 480) o['splitMinutes'] = undefined
+      }
+    }
     const settings = { ...store.getAll(), ...(opts ?? {}) }
     // Map manualMaxMinutes → maxMinutes so the auto-stop timer actually fires
     if (!(settings as import('../types').RecordingOpts).maxMinutes && settings.manualMaxMinutes) {
@@ -615,12 +627,24 @@ function setupIPC(): void {
   })
 
   ipcMain.handle('test-email', async () => {
+    const s = store.getAll()
+    mainWindow.webContents.send('email-test-status', { status: 'sending' })
     try {
-      const s = store.getAll()
-      await mailer.sendTest(s, store.getSmtpPassword())
-      return { ok: true }
+      const result = await Promise.race([
+        mailer.sendTest(s, store.getSmtpPassword()).then(() => ({ ok: true as const })),
+        new Promise<{ ok: false; error: string }>(resolve =>
+          setTimeout(() => resolve({ ok: false, error: 'Timeout etter 15 sekunder' }), 15000)
+        )
+      ])
+      mainWindow.webContents.send('email-test-status', {
+        status: result.ok ? 'ok' : 'error',
+        message: result.ok ? undefined : result.error
+      })
+      return result
     } catch (err) {
-      return { ok: false, error: (err as Error).message }
+      const message = (err as Error).message
+      mainWindow.webContents.send('email-test-status', { status: 'error', message })
+      return { ok: false, error: message }
     }
   })
 

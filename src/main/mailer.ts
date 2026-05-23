@@ -103,16 +103,17 @@ export async function sendTest(settings: Settings, smtpPass: string): Promise<vo
     host: settings.emailSmtp,
     port: settings.emailSmtpPort || 587,
     secure: settings.emailSmtpPort === 465,
-    connectionTimeout: 15000,
-    greetingTimeout:   15000,
-    socketTimeout:     30000,
+    connectionTimeout: 10000,
+    greetingTimeout:    5000,
+    socketTimeout:     10000,
     auth: settings.emailSmtpUser
       ? { user: settings.emailSmtpUser, pass: smtpPass }
       : undefined
   })
+  const from = (settings as { emailFrom?: string }).emailFrom?.trim() || settings.emailSmtpUser || 'noreply@sundayrec.app'
   const ts = TEST_STRINGS[settings.language ?? 'no'] ?? TEST_STRINGS.no
   await transporter.sendMail({
-    from: `"SundayRec" <${settings.emailSmtpUser || 'noreply@sundayrec.app'}>`,
+    from: `"SundayRec" <${from}>`,
     to: settings.emailAddress,
     subject: ts.subject,
     text: ts.body
@@ -126,9 +127,9 @@ export async function sendError(settings: Settings, smtpPass: string, errorMessa
     host: settings.emailSmtp,
     port: settings.emailSmtpPort || 587,
     secure: settings.emailSmtpPort === 465,
-    connectionTimeout: 15000,
-    greetingTimeout:   15000,
-    socketTimeout:     30000,
+    connectionTimeout: 10000,
+    greetingTimeout:    5000,
+    socketTimeout:     10000,
     auth: settings.emailSmtpUser
       ? { user: settings.emailSmtpUser, pass: smtpPass }
       : undefined
@@ -147,9 +148,10 @@ export async function sendError(settings: Settings, smtpPass: string, errorMessa
   const greeting = strings.greeting(person)
   const intro    = strings.intro(church)
 
+  const from = (settings as { emailFrom?: string }).emailFrom?.trim() || settings.emailSmtpUser || 'noreply@sundayrec.app'
   try {
     await transporter.sendMail({
-      from: `"SundayRec" <${settings.emailSmtpUser || 'noreply@sundayrec.app'}>`,
+      from: `"SundayRec" <${from}>`,
       to: settings.emailAddress,
       subject,
       text: [
