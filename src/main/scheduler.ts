@@ -149,7 +149,14 @@ async function triggerStart(slot: ScheduleSlot | SpecialRecording, overrideName?
     splitMinutes:     s.splitMinutes,
     maxMinutes:       (slot as ScheduleSlot).max,
     overrideName:     overrideName ?? null,
-    scheduledStopTime: scheduledStopTime.toISOString()
+    scheduledStopTime: scheduledStopTime.toISOString(),
+    videoEnabled:     s.videoEnabled,
+    videoDeviceName:  s.videoDeviceName,
+    videoDeviceIndex: s.videoDeviceIndex,
+    videoResolution:  s.videoResolution,
+    videoBitrate:     s.videoBitrate,
+    videoFramerate:   s.videoFramerate,
+    videoSeparate:    s.videoSeparate,
   }
 
   // Start recording directly in main — no longer routed through the renderer

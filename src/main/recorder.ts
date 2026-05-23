@@ -260,16 +260,18 @@ async function preflightCheck(settings: RecordingOpts): Promise<{ error: string 
     return { error: 'save_folder_permission' }
   }
 
-  // 3. Disk space: require at least 200 MB free
+  // 3. Disk space: require at least 200 MB free for audio-only, 1 GB for video recordings
   try {
     const { execFile } = await import('child_process')
     const { promisify } = await import('util')
     const execAsync = promisify(execFile)
+    const videoActive = (settings as Settings).videoEnabled && (settings as Settings).videoDeviceName
     if (process.platform === 'darwin' || process.platform === 'linux') {
       const { stdout } = await execAsync('df', ['-Pk', folder], { timeout: 4000 })
       const cols = stdout.trim().split('\n')[1]?.trim().split(/\s+/)
       const freeKb = cols ? parseInt(cols[3]) : NaN
-      if (!isNaN(freeKb) && freeKb < 200 * 1024) return { error: 'disk_full' }
+      const minKb = videoActive ? 1024 * 1024 : 200 * 1024  // 1 GB vs 200 MB in KB
+      if (!isNaN(freeKb) && freeKb < minKb) return { error: 'disk_full' }
     } else if (process.platform === 'win32') {
       let freeBytes = NaN
       const driveLetter = folder.match(/^([A-Za-z]):/)
@@ -291,7 +293,8 @@ async function preflightCheck(settings: RecordingOpts): Promise<{ error: string 
           freeBytes = parseInt(stdout.trim())
         }
       }
-      if (!isNaN(freeBytes) && freeBytes >= 0 && freeBytes < 200 * 1024 * 1024) return { error: 'disk_full' }
+      const minBytes = videoActive ? 1024 * 1024 * 1024 : 200 * 1024 * 1024  // 1 GB vs 200 MB in bytes
+      if (!isNaN(freeBytes) && freeBytes >= 0 && freeBytes < minBytes) return { error: 'disk_full' }
     }
   } catch { /* disk check is best-effort */ }
 
@@ -594,7 +597,7 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
   let videoFinalPath = session.videoOutputPath
 
   if (videoFinalPath) {
-    const videoOk = fs.existsSync(videoFinalPath) && fs.statSync(videoFinalPath).size > 100000
+    const videoOk = fs.existsSync(videoFinalPath) && fs.statSync(videoFinalPath).size > 1_000_000
     if (!videoOk) {
       console.warn('[recorder] video file missing or too small — skipping video')
       if (videoFinalPath && fs.existsSync(videoFinalPath)) fs.promises.unlink(videoFinalPath).catch(() => {})
@@ -873,6 +876,9 @@ function startWatchdog(session: Session): void {
 
     // Reconnect succeeded — update session in place
     console.log('[recorder] Reconnected! New segment:', newPath)
+    if (session.videoHandle) {
+      console.warn('[recorder] audio reconnected but video capture was not restarted — video segment may be incomplete')
+    }
     session.outputPath     = newPath
     session.handle         = result
     session.startTime      = result.startTime
