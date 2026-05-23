@@ -171,6 +171,8 @@ export interface RecordingOpts extends Partial<Settings> {
   scheduledStopTime?: string
   channelL?: number
   channelR?: number
+  /** Internal: prevents infinite sample-rate retry loop */
+  _sampleRateRetried?: boolean
 }
 
 export interface DiskInfo {

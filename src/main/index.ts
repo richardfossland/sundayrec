@@ -778,6 +778,19 @@ function setupIPC(): void {
     return listFfmpegDevices()
   })
 
+  ipcMain.handle('diagnose-audio', async () => {
+    const { listFfmpegDevices, listWasapiDevices, probeWasapiAvailable } = await import('./native-recorder')
+    const [dshowDevices, wasapiDevices] = await Promise.all([
+      listFfmpegDevices().catch(() => []),
+      listWasapiDevices().catch(() => [])
+    ])
+    return {
+      dshow: dshowDevices.map(d => d.name),
+      wasapi: wasapiDevices.map(d => d.name),
+      wasapiAvailable: await probeWasapiAvailable().catch(() => false)
+    }
+  })
+
   // ── Cloud backup ──────────────────────────────────────────────────────────
   ipcMain.handle('cloud-connect', async (_, service: string) => {
     const cloud = await import('./cloud')

@@ -554,7 +554,10 @@
             <div class="toggle-title" data-i18n="audio.testTitle">Test lydkilde</div>
             <div class="toggle-desc" data-i18n="audio.testDesc">Hør lyden fra valgt kilde i sanntid gjennom høyttalerne.</div>
           </div>
-          <button class="btn-secondary" id="btn-test-audio" data-i18n="audio.testBtn">Test lyd</button>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn-secondary" id="btn-test-audio" data-i18n="audio.testBtn">Test lyd</button>
+            <button class="btn-secondary btn-sm" id="btn-audio-diagnose">Diagnose</button>
+          </div>
         </div>
         <div id="test-audio-warn" class="test-warn" style="display:none">
           ⚠️ Pass på feedback — hold mikrofonen unna høyttalerne!
@@ -1701,6 +1704,18 @@
       <button class="ob-skip-btn" id="ob-btn-skip-all">Hopp over</button>
     </div>
     <div class="ob-body" id="ob-body"></div>
+  </div>
+</div>
+
+<!-- Audio diagnostic modal -->
+<div id="audio-diagnose-modal" class="modal-backdrop" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Lydenhetsdiagnose</span>
+      <button class="modal-close" id="btn-audio-diagnose-close">×</button>
+    </div>
+    <pre id="audio-diagnose-body" class="diagnose-body"></pre>
+    <p class="diagnose-hint">Kopier dette og send til support hvis opptak ikke fungerer.</p>
   </div>
 </div>
 

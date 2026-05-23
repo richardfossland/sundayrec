@@ -104,7 +104,7 @@ export async function listFfmpegDevices(): Promise<FfmpegDevice[]> {
 
 let _wasapiAvailable: boolean | null = null
 
-async function probeWasapiAvailable(): Promise<boolean> {
+export async function probeWasapiAvailable(): Promise<boolean> {
   if (_wasapiAvailable !== null) return _wasapiAvailable
   return new Promise(resolve => {
     const proc = spawn(ffmpegBin, ['-devices', '-hide_banner'], {
@@ -127,7 +127,7 @@ async function probeWasapiAvailable(): Promise<boolean> {
 
 // ── WASAPI device enumeration ───────────────────────────────────────────────
 
-async function listWasapiDevices(): Promise<FfmpegDevice[]> {
+export async function listWasapiDevices(): Promise<FfmpegDevice[]> {
   if (process.platform !== 'win32') return []
   return new Promise(resolve => {
     const proc = spawn(ffmpegBin, ['-f', 'wasapi', '-list_devices', 'true', '-i', 'dummy', '-hide_banner'], {
@@ -139,21 +139,70 @@ async function listWasapiDevices(): Promise<FfmpegDevice[]> {
     const done = () => {
       if (settled) return; settled = true
       const devices: FfmpegDevice[] = []
-      // WASAPI output format: [wasapi @ ...] "Device Name" (uuid)
       for (const line of stderr.split('\n')) {
-        const m = line.match(/"([^"]+)"/)
-        if (m && !m[1].startsWith('{')) {
-          const name = m[1].trim()
-          if (name && !devices.find(d => d.name === name)) {
-            devices.push({ name, index: devices.length })
-          }
+        if (line.includes('Alternative name') || line.includes('@device_')) continue
+        // Try all known ffmpeg WASAPI output formats:
+        // Format 1: [wasapi @...] Device N: 'Name'   (most common)
+        // Format 2: [wasapi @...] Device N: "Name"   (some builds)
+        // Format 3: [wasapi @...] "Name" (uuid)       (older ffmpeg)
+        let name: string | undefined
+        const m1 = line.match(/Device\s+\d+:\s+'([^']+)'/)
+        const m2 = line.match(/Device\s+\d+:\s+"([^"]+)"/)
+        const m3 = !m1 && !m2 ? line.match(/\[wasapi\s+@[^\]]+\]\s+"([^"{}@][^"]*)"/) : null
+        if      (m1) name = m1[1].trim()
+        else if (m2) name = m2[1].trim()
+        else if (m3 && !m3[1].startsWith('{')) name = m3[1].trim()
+        if (name && name.length > 1 && !devices.find(d => d.name === name)) {
+          devices.push({ name, index: devices.length })
         }
       }
+      console.log(`[native-recorder] WASAPI enumeration: found ${devices.length} devices`, devices.map(d => d.name))
       resolve(devices)
     }
     proc.on('close', done)
     proc.on('error', () => { if (!settled) { settled = true; resolve([]) } })
     setTimeout(() => { if (!settled) { try { proc.kill() } catch {}; done() } }, 5000)
+  })
+}
+
+// ── WASAPI device enumeration via PowerShell (backup) ──────────────────────
+
+async function listWasapiDevicesViaPowershell(): Promise<FfmpegDevice[]> {
+  if (process.platform !== 'win32') return []
+  return new Promise(resolve => {
+    const script = `
+      $devices = @()
+      try {
+        $col = Get-WmiObject -Query "SELECT * FROM Win32_SoundDevice WHERE ConfigManagerErrorCode = 0" -ErrorAction Stop
+        $col | ForEach-Object { $devices += $_.Name }
+      } catch {}
+      if ($devices.Count -eq 0) {
+        try {
+          Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4D36E96C-E325-11CE-BFC1-08002BE10318}' -ErrorAction Stop |
+            Get-ItemProperty -Name 'DriverDesc' -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty DriverDesc |
+            ForEach-Object { $devices += $_ }
+        } catch {}
+      }
+      $devices | ForEach-Object { Write-Output $_ }
+    `.trim()
+
+    const proc = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      stdio: ['ignore', 'pipe', 'ignore']
+    })
+    let stdout = ''
+    proc.stdout?.on('data', (d: Buffer) => { stdout += d.toString() })
+    let settled = false
+    const done = () => {
+      if (settled) return; settled = true
+      const names = stdout.trim().split('\n').map(s => s.trim()).filter(s => s.length > 2)
+      const devices = names.map((name, index) => ({ name, index }))
+      console.log(`[native-recorder] PowerShell WASAPI devices: ${devices.map(d => d.name).join(', ')}`)
+      resolve(devices)
+    }
+    proc.on('close', done)
+    proc.on('error', () => { if (!settled) { settled = true; resolve([]) } })
+    setTimeout(() => { if (!settled) { try { proc.kill() } catch {}; done() } }, 8000)
   })
 }
 
@@ -252,31 +301,41 @@ export async function resolveDeviceInput(
       return { format: 'dshow', device: `audio="${match.name}"`, resolvedName: match.name }
     }
 
-    const devices = await listFfmpegDevices()
-    if (!devices.length) return null
-    console.log(`[native-recorder] stored device name: "${name}"`)
-    console.log(`[native-recorder] DirectShow devices: [${devices.map(d => `"${d.name}"`).join(', ')}]`)
-    const match = bestMatch(devices, name)
-    if (!match) {
-      console.warn(`[native-recorder] No DirectShow device matching "${name}" — available: ${devices.map(d => `"${d.name}"`).join(', ')} — using first: "${devices[0].name}"`)
-    }
-    const resolved = match ?? devices[0]
-    // WASAPI is the modern Windows audio API: lower latency, more stable than DirectShow.
-    // Enumerate WASAPI devices separately — they may have different names than DirectShow.
+    const dshowDevices = await listFfmpegDevices()
+    console.log(`[native-recorder] stored name: "${name}"`)
+    console.log(`[native-recorder] DirectShow devices: [${dshowDevices.map(d => `"${d.name}"`).join(', ')}]`)
+
+    const dshowMatch = dshowDevices.length ? (bestMatch(dshowDevices, name) ?? dshowDevices[0]) : null
+
     if (await probeWasapiAvailable()) {
-      const wasapiDevices = await listWasapiDevices()
-      if (wasapiDevices.length) {
-        const wasapiMatch = bestMatch(wasapiDevices, name)
-        const wasapiResolved = wasapiMatch ?? wasapiDevices[0]
-        console.log(`[native-recorder] WASAPI devices: ${wasapiDevices.map(d => d.name).join(', ')}`)
-        console.log(`[native-recorder] using WASAPI device: "${wasapiResolved.name}"`)
-        return { format: 'wasapi', device: wasapiResolved.name, resolvedName: wasapiResolved.name }
+      let wasapiDevices = await listWasapiDevices()
+      if (wasapiDevices.length === 0) {
+        console.log('[native-recorder] ffmpeg WASAPI list empty — trying PowerShell enumeration')
+        wasapiDevices = await listWasapiDevicesViaPowershell()
       }
-      // Fallback to DirectShow name with WASAPI format
-      console.log('[native-recorder] WASAPI enumeration empty — falling back to DirectShow name')
-      return { format: 'wasapi', device: resolved.name, resolvedName: resolved.name }
+
+      if (wasapiDevices.length > 0) {
+        // Match stored name against WASAPI devices
+        const wasapiMatch = bestMatch(wasapiDevices, name) ?? wasapiDevices[0]
+        console.log(`[native-recorder] using WASAPI device: "${wasapiMatch.name}" (from ${wasapiDevices.length} WASAPI devices)`)
+        return { format: 'wasapi', device: wasapiMatch.name, resolvedName: wasapiMatch.name }
+      }
+
+      // WASAPI list is empty — use DirectShow instead
+      // WASAPI and DirectShow use different device name formats, so mixing them fails
+      if (dshowMatch) {
+        console.warn(`[native-recorder] WASAPI list empty — using DirectShow: "${dshowMatch.name}"`)
+        return { format: 'dshow', device: `audio="${dshowMatch.name}"`, resolvedName: dshowMatch.name }
+      }
     }
-    return { format: 'dshow', device: `audio="${resolved.name}"`, resolvedName: resolved.name }
+
+    // Pure DirectShow fallback
+    if (!dshowMatch) {
+      if (!dshowDevices.length) return null
+      console.warn(`[native-recorder] No match for "${name}" — using first DirectShow device: "${dshowDevices[0].name}"`)
+      return { format: 'dshow', device: `audio="${dshowDevices[0].name}"`, resolvedName: dshowDevices[0].name }
+    }
+    return { format: 'dshow', device: `audio="${dshowMatch.name}"`, resolvedName: dshowMatch.name }
   }
 
   if (process.platform === 'darwin') {
@@ -570,13 +629,12 @@ function classifyFfmpegError(stderr: string): string {
   return 'device_error'
 }
 
-export async function startCapture(
+async function startCaptureWithInput(
+  input: { format: string; device: string; resolvedName: string },
   opts: RecordingOpts,
-  outputPath: string
+  outputPath: string,
+  isRetry = false
 ): Promise<NativeHandle | { error: string }> {
-  const input = await resolveDeviceInput(opts)
-  if (!input) return { error: 'no_device' }
-
   const sampleRate  = opts.sampleRate ?? 48000
   const outChannels = (opts.channels === 'stereo') ? 2 : 1
   const afChain     = buildAudioFilters(opts)
@@ -595,8 +653,10 @@ export async function startCapture(
   if (input.format === 'wasapi') {
     args.push('-rtbufsize', '50M')
   }
+  // WASAPI default device: use ':' syntax (empty string is invalid in WASAPI)
+  const deviceArg = input.format === 'wasapi' && input.device === '' ? ':' : input.device
   args.push(
-    '-i', input.device,
+    '-i', deviceArg,
     '-ar', String(sampleRate),
     '-ac', String(outChannels),
   )
@@ -684,10 +744,41 @@ export async function startCapture(
       sRateErr.includes('sampling rate') || sRateErr.includes('samplerate') ||
       sRateErr.includes('unsupported sample') || sRateErr.includes('invalid sample')
 
-    // Retry with 48000 Hz if sample rate was different and error suggests rate mismatch
-    if (isSampleRateError && (opts.sampleRate ?? 48000) !== 48000) {
-      console.warn('[native-recorder] Sample rate error — retrying with 48000 Hz')
-      return startCapture({ ...opts, sampleRate: 48000 }, outputPath)
+    // Sample rate fallback: try multiple common rates
+    if (isSampleRateError && !opts._sampleRateRetried) {
+      const commonRates = [48000, 44100, 96000, 16000]
+      const currentRate = opts.sampleRate ?? 48000
+      const nextRate = commonRates.find(r => r !== currentRate)
+      if (nextRate) {
+        console.warn(`[native-recorder] Sample rate ${currentRate}Hz not supported — retrying with ${nextRate}Hz`)
+        return startCaptureWithInput(input, { ...opts, sampleRate: nextRate, _sampleRateRetried: true }, outputPath, true)
+      }
+    }
+
+    // Multi-format retry on Windows (only on first attempt to avoid infinite loop)
+    if (process.platform === 'win32' && !isRetry) {
+      // If WASAPI fails → retry with DirectShow
+      if (input.format === 'wasapi') {
+        const dshowDevices = await listFfmpegDevices()
+        if (dshowDevices.length > 0) {
+          const dshowMatch = bestMatch(dshowDevices, opts.deviceName ?? '') ?? dshowDevices[0]
+          console.warn(`[native-recorder] WASAPI failed (${startupError}) — retrying with DirectShow: "${dshowMatch.name}"`)
+          return startCaptureWithInput(
+            { format: 'dshow', device: `audio="${dshowMatch.name}"`, resolvedName: dshowMatch.name },
+            opts, outputPath, true
+          )
+        }
+      }
+      // If DirectShow fails → retry with WASAPI default device
+      if (input.format === 'dshow') {
+        if (await probeWasapiAvailable()) {
+          console.warn(`[native-recorder] DirectShow failed (${startupError}) — retrying with WASAPI default device`)
+          return startCaptureWithInput(
+            { format: 'wasapi', device: '', resolvedName: 'default' },
+            opts, outputPath, true
+          )
+        }
+      }
     }
 
     return { error: startupError }
@@ -701,6 +792,15 @@ export async function startCapture(
   }
 
   return handle
+}
+
+export async function startCapture(
+  opts: RecordingOpts,
+  outputPath: string
+): Promise<NativeHandle | { error: string }> {
+  const input = await resolveDeviceInput(opts)
+  if (!input) return { error: 'no_device' }
+  return startCaptureWithInput(input, opts, outputPath)
 }
 
 export async function stopCapture(handle: NativeHandle): Promise<void> {

@@ -52,6 +52,12 @@ export function setupAudioPage(): void {
     await startMonitoring()
   })
 
+  document.getElementById('btn-audio-diagnose')?.addEventListener('click', runAudioDiagnosis)
+  document.getElementById('btn-audio-diagnose-close')?.addEventListener('click', () => {
+    const modal = document.getElementById('audio-diagnose-modal')
+    if (modal) modal.style.display = 'none'
+  })
+
   document.getElementById('btn-audio-save')?.addEventListener('click', saveAudioSettings)
   document.getElementById('btn-audio-cancel')?.addEventListener('click', () => applyAudioSettingsToUI())
 }
@@ -324,6 +330,34 @@ export function stopMonitoring(): void {
   if (btn) btn.innerHTML = `🎧 <span data-i18n="audio.testBtn">${t('audio.testBtn', 'Test lyd')}</span>`
   const warn = document.getElementById('test-audio-warn')
   if (warn) warn.style.display = 'none'
+}
+
+async function runAudioDiagnosis(): Promise<void> {
+  const btn = document.getElementById('btn-audio-diagnose') as HTMLButtonElement | null
+  if (btn) { btn.disabled = true; btn.textContent = 'Analyserer...' }
+
+  try {
+    const result = await window.api.diagnoseAudio?.()
+    if (!result) return
+
+    const modal = document.getElementById('audio-diagnose-modal')
+    const body  = document.getElementById('audio-diagnose-body')
+    if (!modal || !body) return
+
+    const lines: string[] = [
+      `WASAPI tilgjengelig: ${result.wasapiAvailable ? 'Ja' : 'Nei'}`,
+      '',
+      `DirectShow-enheter (${result.dshow.length}):`,
+      ...result.dshow.map(n => `  • ${n}`),
+      '',
+      `WASAPI-enheter (${result.wasapi.length}):`,
+      ...(result.wasapi.length ? result.wasapi.map(n => `  • ${n}`) : ['  (ingen funnet — se konsoll for detaljer)']),
+    ]
+    body.textContent = lines.join('\n')
+    modal.style.display = 'flex'
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Diagnose' }
+  }
 }
 
 function escHtml(str: unknown): string {

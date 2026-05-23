@@ -3017,3 +3017,32 @@ button > svg:first-child { flex-shrink: 0; }
     transition-duration: .01ms !important;
   }
 }
+
+/* ── Modal header (title + close button) ─────────────────────────────────── */
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.modal-title {
+  font-size: 16px; font-weight: 700; letter-spacing: -.2px; color: var(--text);
+}
+.modal-close {
+  background: none; border: none; cursor: pointer;
+  color: var(--text3); font-size: 20px; line-height: 1;
+  padding: 2px 6px; border-radius: var(--rxs);
+  transition: color .15s, background .15s;
+}
+.modal-close:hover { color: var(--text); background: var(--surface3); }
+
+/* ── Audio diagnose modal ────────────────────────────────────────────────── */
+.diagnose-body {
+  font-family: 'SF Mono', 'Consolas', monospace; font-size: 12px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 12px;
+  white-space: pre-wrap; word-break: break-all;
+  max-height: 300px; overflow-y: auto;
+  color: var(--text);
+}
+.diagnose-hint {
+  font-size: 11px; color: var(--text3); margin-top: 8px;
+}

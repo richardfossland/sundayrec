@@ -78,6 +78,7 @@ contextBridge.exposeInMainWorld('api', {
 
   listAsioDrivers: () => ipcRenderer.invoke('list-asio-drivers'),
   listFfmpegAudioDevices: () => ipcRenderer.invoke('list-ffmpeg-audio-devices'),
+  diagnoseAudio: (): Promise<{ dshow: string[]; wasapi: string[]; wasapiAvailable: boolean }> => ipcRenderer.invoke('diagnose-audio'),
 
   cloudConnect:     (service: string) => ipcRenderer.invoke('cloud-connect', service),
   cloudDisconnect:  (service: string) => ipcRenderer.invoke('cloud-disconnect', service),
