@@ -226,7 +226,8 @@ function draw(): void {
   const H   = cvs.height / dpr
   if (W === 0 || H === 0) return
 
-  const ctx = cvs.getContext('2d')!
+  const ctx = cvs.getContext('2d')
+  if (!ctx) return
   ctx.save()
   ctx.scale(dpr, dpr)
 
@@ -325,7 +326,7 @@ function drawSpectrum(ctx: CanvasRenderingContext2D, W: number, H: number): void
 
 function drawCurve(ctx: CanvasRenderingContext2D, W: number, H: number): void {
   ensureDisplayCtx()
-  if (!displayNodes.length) return
+  if (!displayCtx || !displayNodes.length) return
 
   const iW = W - PAD.l - PAD.r
   const iH = H - PAD.t - PAD.b
@@ -340,9 +341,14 @@ function drawCurve(ctx: CanvasRenderingContext2D, W: number, H: number): void {
     freqArr[i] = FREQ_MIN * Math.pow(FREQ_MAX / FREQ_MIN, i / (NUM - 1))
   }
 
-  for (const node of displayNodes) {
-    node.getFrequencyResponse(freqArr, magArr, phaseArr)
-    for (let i = 0; i < NUM; i++) combined[i] *= magArr[i]
+  try {
+    for (const node of displayNodes) {
+      node.getFrequencyResponse(freqArr, magArr, phaseArr)
+      for (let i = 0; i < NUM; i++) combined[i] *= magArr[i]
+    }
+  } catch (e) {
+    console.warn('[eq-canvas] getFrequencyResponse failed:', e)
+    return
   }
 
   // Fill below curve
@@ -480,7 +486,8 @@ function onMouseMove(e: MouseEvent): void {
     const iH  = innerHeight()
     const dx  = cx - dragState.startX
     const dy  = cy - dragState.startY
-    const b   = bands.find(x => x.id === dragState!.id)!
+    const b   = bands.find(x => x.id === dragState!.id)
+    if (!b) { dragState = null; return }
 
     // Frequency: horizontal drag (log scale)
     const newFreq = dragState.startFreq * Math.pow(FREQ_MAX / FREQ_MIN, dx / iW)
@@ -571,7 +578,8 @@ function gainToY_inner(gain: number, iH: number): number {
   return (1 - (gain + DB_RANGE) / (2 * DB_RANGE)) * iH
 }
 function clientToCanvas(e: MouseEvent): [number, number] {
-  const rect = cvs!.getBoundingClientRect()
+  if (!cvs) return [0, 0]
+  const rect = cvs.getBoundingClientRect()
   return [e.clientX - rect.left, e.clientY - rect.top]
 }
 function innerWidth():  number { return (cvs?.offsetWidth  ?? 400) - PAD.l - PAD.r }
@@ -580,19 +588,30 @@ function innerHeight(): number { return (cvs?.offsetHeight ?? 260) - PAD.t - PAD
 // ── Display nodes ─────────────────────────────────────────────────────────
 function ensureDisplayCtx(): void {
   if (displayCtx) return
-  displayCtx  = new AudioContext()
-  displayNodes = bands.map(b => {
-    const n = displayCtx!.createBiquadFilter()
-    applyBandToNode(n, b)
-    return n
-  })
+  try {
+    displayCtx  = new AudioContext()
+    displayNodes = bands.map(b => {
+      const n = displayCtx!.createBiquadFilter()
+      applyBandToNode(n, b)
+      return n
+    })
+  } catch (e) {
+    console.warn('[eq-canvas] AudioContext creation failed:', e)
+    displayCtx = null
+    displayNodes = []
+  }
 }
 
 function syncDisplayNodes(): void {
   ensureDisplayCtx()
-  bands.forEach((b, i) => {
-    if (displayNodes[i]) applyBandToNode(displayNodes[i], b)
-  })
+  if (!displayCtx) return
+  try {
+    bands.forEach((b, i) => {
+      if (displayNodes[i]) applyBandToNode(displayNodes[i], b)
+    })
+  } catch (e) {
+    console.warn('[eq-canvas] AudioContext operation failed:', e)
+  }
 }
 
 function applyBandToNode(node: BiquadFilterNode, b: EQBand): void {

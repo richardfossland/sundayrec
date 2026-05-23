@@ -16,7 +16,8 @@ let filePath  = ''
 let duration  = 0
 let peaks: Float32Array | null = null
 let cuts: Cut[] = []
-let cutHistory: Cut[][] = []   // undo stack
+let cutHistory: Cut[][] = []   // undo/redo stack
+let cutHistoryIdx = -1         // pointer into cutHistory (-1 = no history yet)
 let suggestions: Suggestion[] = []
 
 // Intro/Outro
@@ -91,7 +92,7 @@ function cssVar(name: string): string {
 export function setupEditorPage(): void {
   canvas    = $('editor-canvas')  as HTMLCanvasElement
   minimap   = $('editor-minimap') as HTMLCanvasElement
-  minimapVp = $('editor-minimap-vp')!
+  minimapVp = $('editor-minimap-vp') as HTMLElement
   videoEl   = $('editor-video') as HTMLVideoElement | null
 
   $('btn-editor-open')?.addEventListener('click',    () => pickAndLoad())
@@ -103,8 +104,8 @@ export function setupEditorPage(): void {
   $('btn-zoom-fit')?.addEventListener('click',  () => fitAll())
   $('btn-editor-undo-all')?.addEventListener('click', () => {
     if (cuts.length === 0) return
-    cutHistory.push([...cuts])
     cuts = []
+    pushCutHistory()
     renderCutList()
     updateRemainingDisplay()
     drawWaveform()
@@ -312,8 +313,8 @@ export function setupEditorPage(): void {
   setupKeyboardShortcuts()
   setupDragDrop()
 
-  if (canvas) {
-    new ResizeObserver(() => { syncCanvasSize(); drawWaveform() }).observe(canvas.parentElement!)
+  if (canvas && canvas.parentElement) {
+    new ResizeObserver(() => { syncCanvasSize(); drawWaveform() }).observe(canvas.parentElement)
   }
 
   showState('empty')
@@ -357,6 +358,7 @@ async function loadFile(fp: string): Promise<void> {
 
   cuts = []
   cutHistory = []
+  cutHistoryIdx = -1
   suggestions = []
   filePath = fp
   peaks = null
@@ -422,15 +424,15 @@ async function loadFile(fp: string): Promise<void> {
           if (videoEl.readyState >= 1 && isFinite(videoEl.duration)) {
             resolve(videoEl.duration); return
           }
-          const onMeta  = () => { videoEl!.removeEventListener('error', onErr); resolve(videoEl!.duration) }
-          const onErr   = () => { videoEl!.removeEventListener('loadedmetadata', onMeta); reject(new Error('video error')) }
+          const onMeta  = () => { videoEl?.removeEventListener('error', onErr); resolve(videoEl?.duration ?? 0) }
+          const onErr   = () => { videoEl?.removeEventListener('loadedmetadata', onMeta); reject(new Error('video error')) }
           videoEl.addEventListener('loadedmetadata', onMeta, { once: true })
           videoEl.addEventListener('error', onErr, { once: true })
           setTimeout(() => {
             videoEl?.removeEventListener('loadedmetadata', onMeta)
             videoEl?.removeEventListener('error', onErr)
             reject(new Error('timeout waiting for video metadata'))
-          }, 8000)
+          }, 15000)
         })
         if (seq !== loadSeq) return
         // Flat/empty peaks — waveform shows as a thin line
@@ -438,6 +440,7 @@ async function loadFile(fp: string): Promise<void> {
         console.log('[editor] video-only mode, duration:', duration.toFixed(1) + 's')
       } catch (err) {
         console.error('[editor] could not determine video duration:', err)
+        showEditorError('Kunne ikke laste videofil — filen er kanskje korrupt')
         showState('empty')
         return
       }
@@ -788,7 +791,7 @@ function syncCanvasSize(): void {
   const h   = 200
   canvas.style.height = h + 'px'
   // Read width from CSS (width: 100%) — never write canvas.style.width
-  const w = canvas.clientWidth || canvas.parentElement!.getBoundingClientRect().width
+  const w = canvas.clientWidth || canvas.parentElement?.getBoundingClientRect().width || 0
   if (!w) return
   canvas.width  = Math.round(w * dpr)
   canvas.height = Math.round(h * dpr)
@@ -797,7 +800,8 @@ function syncCanvasSize(): void {
 function drawWaveform(): void {
   if (!canvas || !peaks) return
   const dpr  = window.devicePixelRatio || 1
-  const ctx  = canvas.getContext('2d')!
+  const ctx  = canvas.getContext('2d')
+  if (!ctx) return
   const W    = canvas.width  / dpr
   const H    = canvas.height / dpr
   ctx.save()
@@ -824,8 +828,8 @@ function drawWaveform(): void {
   // Current playhead time (used for "past" shading)
   const curSec = (isPlaying && isVideoFile && videoEl)
     ? videoEl.currentTime
-    : isPlaying
-    ? playStartSec + (audioCtx!.currentTime - playStartCtxTime)
+    : (isPlaying && audioCtx)
+    ? playStartSec + (audioCtx.currentTime - playStartCtxTime)
     : playStartSec
 
   // ── Suggested segment backgrounds ─────────────────────────────────
@@ -1147,14 +1151,16 @@ function drawRuler(ctx: CanvasRenderingContext2D, W: number, H: number, RULER: n
 function drawMinimap(): void {
   if (!minimap || !peaks) return
   const dpr  = window.devicePixelRatio || 1
-  const W    = minimap.parentElement!.clientWidth
+  const W    = minimap.parentElement?.clientWidth ?? 0
+  if (!W) return
   const H    = 44
   minimap.style.width  = W + 'px'
   minimap.style.height = H + 'px'
   minimap.width  = W * dpr
   minimap.height = H * dpr
 
-  const ctx  = minimap.getContext('2d')!
+  const ctx  = minimap.getContext('2d')
+  if (!ctx) return
   ctx.save()
   ctx.scale(dpr, dpr)
 
@@ -1253,7 +1259,11 @@ function setupKeyboardShortcuts(): void {
         zoomBy(1.7)
         break
       case 'KeyZ':
-        if (e.metaKey || e.ctrlKey) { e.preventDefault(); undoCut() }
+        if ((e.metaKey || e.ctrlKey) && e.shiftKey) { e.preventDefault(); redoCut() }
+        else if (e.metaKey || e.ctrlKey) { e.preventDefault(); undoCut() }
+        break
+      case 'KeyY':
+        if (e.metaKey || e.ctrlKey) { e.preventDefault(); redoCut() }
         break
       case 'Escape':
         if (isPlaying) stopPlay()
@@ -1377,12 +1387,20 @@ function isInDrag(sec: number): boolean {
   return sec >= s && sec <= e
 }
 
+// Undo/redo: history stores snapshots; cutHistoryIdx points to the current
+// live state. Index -1 means "no history yet" (initial empty state).
+// pushCutHistory() is called AFTER a mutation to record the new state.
+function pushCutHistory(): void {
+  // Discard any redo states ahead of the current pointer
+  cutHistory = cutHistory.slice(0, cutHistoryIdx + 1)
+  cutHistory.push(JSON.parse(JSON.stringify(cuts)))
+  if (cutHistory.length > 50) cutHistory.shift()
+  cutHistoryIdx = cutHistory.length - 1
+}
+
 function addCut(s: number, e: number): void {
   if (e < s) [s, e] = [e, s]
   if (e - s < 0.1) return
-
-  // Save state for undo
-  cutHistory.push([...cuts])
 
   cuts.push({ start: s, end: e })
   cuts.sort((a, b) => a.start - b.start)
@@ -1395,12 +1413,13 @@ function addCut(s: number, e: number): void {
     else merged.push({ ...c })
   }
   cuts = merged
+  pushCutHistory()
   updateRemainingDisplay()
 }
 
 function deleteCut(i: number): void {
-  cutHistory.push([...cuts])
   cuts.splice(i, 1)
+  pushCutHistory()
   renderCutList()
   updateRemainingDisplay()
   drawWaveform()
@@ -1408,8 +1427,27 @@ function deleteCut(i: number): void {
 }
 
 function undoCut(): void {
-  if (cutHistory.length === 0) return
-  cuts = cutHistory.pop()!
+  if (cutHistoryIdx <= 0) {
+    // Undo back to empty state
+    if (cutHistoryIdx === 0 && cuts.length > 0) {
+      cuts = []
+      cutHistoryIdx = -1
+      renderCutList(); updateRemainingDisplay(); drawWaveform(); drawMinimap()
+    }
+    return
+  }
+  cutHistoryIdx--
+  cuts = JSON.parse(JSON.stringify(cutHistory[cutHistoryIdx]))
+  renderCutList()
+  updateRemainingDisplay()
+  drawWaveform()
+  drawMinimap()
+}
+
+function redoCut(): void {
+  if (cutHistoryIdx >= cutHistory.length - 1) return
+  cutHistoryIdx++
+  cuts = JSON.parse(JSON.stringify(cutHistory[cutHistoryIdx]))
   renderCutList()
   updateRemainingDisplay()
   drawWaveform()
@@ -1548,12 +1586,10 @@ function onCanvasDown(e: MouseEvent): void {
   const threshold = (vpEnd - vpStart) / rect.width * 10
   for (let i = 0; i < cuts.length; i++) {
     if (Math.abs(sec - cuts[i].start) < threshold) {
-      cutHistory.push([...cuts])
       handleDrag = { cutIdx: i, side: 'start' }
       return
     }
     if (Math.abs(sec - cuts[i].end) < threshold) {
-      cutHistory.push([...cuts])
       handleDrag = { cutIdx: i, side: 'end' }
       return
     }
@@ -1630,6 +1666,7 @@ function onCanvasUp(e: MouseEvent): void {
   if (handleDrag) {
     handleDrag = null
     cuts.sort((a, b) => a.start - b.start)
+    pushCutHistory()
     renderCutList()
     updateRemainingDisplay()
     drawWaveform()
@@ -1669,6 +1706,7 @@ function onCanvasLeave(): void {
   if (handleDrag) {
     handleDrag = null
     cuts.sort((a, b) => a.start - b.start)
+    pushCutHistory()
     renderCutList()
     updateRemainingDisplay()
     drawWaveform(); drawMinimap()
@@ -1868,8 +1906,8 @@ function stopPlay(): void {
 
   for (const n of sourceNodes) { try { n.stop() } catch { /* already stopped */ } }
   sourceNodes = []
-  if (isPlaying) {
-    playStartSec = Math.min(duration, playStartSec + (audioCtx!.currentTime - playStartCtxTime))
+  if (isPlaying && audioCtx) {
+    playStartSec = Math.min(duration, playStartSec + (audioCtx.currentTime - playStartCtxTime))
   }
   isPlaying = false
   cancelAnimationFrame(rafId)
@@ -1899,7 +1937,8 @@ function animate(): void {
     return
   }
 
-  const curSec = playStartSec + (audioCtx!.currentTime - playStartCtxTime)
+  if (!audioCtx) return
+  const curSec = playStartSec + (audioCtx.currentTime - playStartCtxTime)
   updateTimecode(curSec)
   autoScrollToPlayhead(curSec)
   drawWaveform()
@@ -1979,11 +2018,13 @@ function openExportModal(): void {
     ioSummary.textContent = parts.length ? parts.join(' · ') : ''
     ioRow.style.display   = parts.length ? '' : 'none'
   }
-  $('editor-export-modal')!.style.display = 'flex'
+  const exportModal = $('editor-export-modal')
+  if (exportModal) exportModal.style.display = 'flex'
 }
 
 function closeExportModal(): void {
-  $('editor-export-modal')!.style.display = 'none'
+  const exportModal = $('editor-export-modal')
+  if (exportModal) exportModal.style.display = 'none'
 }
 
 async function runExport(): Promise<void> {
@@ -1992,12 +2033,12 @@ async function runExport(): Promise<void> {
   const progRow  = $('editor-export-progress-row')
   const progBar  = $('editor-export-progress-bar')
   const progLbl  = $('editor-export-progress-label')
-  const resultRow = $('editor-result-row')!
+  const resultRow = $('editor-result-row')
 
   if (btn)     { btn.disabled = true; btn.textContent = t('editor.exportExporting') || 'Eksporterer…' }
   if (progRow) progRow.style.display = ''
   if (progBar) progBar.style.width   = '0%'
-  if (resultRow) resultRow.style.display = 'none'
+  if (resultRow) { resultRow.style.display = 'none' }
 
   const fmt = (document.querySelector<HTMLElement>('.export-fmt-btn.active')?.dataset.fmt ?? 'mp3') as 'mp3'|'wav'|'flac'|'aac'
   const dest = document.querySelector<HTMLElement>('.export-dest-btn.active')?.dataset.dest ?? 'same'
@@ -2046,17 +2087,17 @@ async function runExport(): Promise<void> {
   if (progBar) progBar.style.width   = '0%'
   if (btn) { btn.disabled = false; btn.textContent = t('editor.save') || 'Eksporter' }
 
-  const row  = $('editor-result-row')!
-  const text = $('editor-result-text')!
-  row.style.display = ''
+  const row  = $('editor-result-row')
+  const text = $('editor-result-text')
+  if (row) row.style.display = ''
 
   if (result.ok) {
     const fname = (result.outputPath ?? '').split(/[/\\]/).pop() ?? ''
-    text.textContent = (t('editor.saveOk') || '✓ Eksportert') + (fname ? ' — ' + fname : '')
-    row.setAttribute('data-ok', 'true')
+    if (text) text.textContent = (t('editor.saveOk') || '✓ Eksportert') + (fname ? ' — ' + fname : '')
+    if (row) row.setAttribute('data-ok', 'true')
   } else {
-    text.textContent = (t('editor.saveError') || '✕ Feil') + (result.error ? ': ' + result.error : '')
-    row.removeAttribute('data-ok')
+    if (text) text.textContent = (t('editor.saveError') || '✕ Feil') + (result.error ? ': ' + result.error : '')
+    if (row) row.removeAttribute('data-ok')
   }
 }
 
@@ -2071,7 +2112,8 @@ function updateExportFormatUI(fmt: string): void {
 
 // ── Editor prompt toast ───────────────────────────────────────────────────
 export function showEditorPrompt(fp: string): void {
-  const toast = $('editor-prompt-toast')!
+  const toast = $('editor-prompt-toast')
+  if (!toast) return
   toast.dataset.path    = fp
   toast.style.display   = 'flex'
   // Auto-dismiss after 12s
@@ -2091,9 +2133,28 @@ export function dismissEditorPrompt(): void {
 
 // ── Page state ────────────────────────────────────────────────────────────
 function showState(state: 'empty' | 'loading' | 'workspace'): void {
-  $('editor-empty')!.style.display     = state === 'empty'     ? '' : 'none'
-  $('editor-loading')!.style.display   = state === 'loading'   ? '' : 'none'
-  $('editor-workspace')!.style.display = state === 'workspace' ? '' : 'none'
+  const emptyEl     = $('editor-empty')
+  const loadingEl   = $('editor-loading')
+  const workspaceEl = $('editor-workspace')
+  if (emptyEl)     emptyEl.style.display     = state === 'empty'     ? '' : 'none'
+  if (loadingEl)   loadingEl.style.display   = state === 'loading'   ? '' : 'none'
+  if (workspaceEl) workspaceEl.style.display = state === 'workspace' ? '' : 'none'
+}
+
+function showEditorError(msg: string): void {
+  const loadingEl   = $('editor-loading')
+  const errorEl     = $('editor-loading-error') ?? (() => {
+    const el = document.createElement('div')
+    el.id        = 'editor-loading-error'
+    el.className = 'editor-error-toast'
+    el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#ef4444;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;z-index:9999'
+    document.body.appendChild(el)
+    return el
+  })()
+  errorEl.textContent = msg
+  errorEl.style.display = ''
+  if (loadingEl) loadingEl.style.display = 'none'
+  setTimeout(() => { errorEl.style.display = 'none' }, 6000)
 }
 
 // ── Time formatting ───────────────────────────────────────────────────────
