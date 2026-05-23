@@ -2724,7 +2724,7 @@ body.platform-win32  #wake-instructions-win { display: block; }
 }
 .video-preview-wrap {
   position: relative; background: #000; aspect-ratio: var(--video-ar, 16 / 9);
-  max-height: 220px; overflow: hidden;
+  max-height: 160px; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
 }
 .video-preview-img {
@@ -2833,7 +2833,7 @@ body.platform-win32  #wake-instructions-win { display: block; }
 
 /* Large full-ratio feed */
 #page-home.video-mode .video-preview-wrap {
-  max-height: none;
+  max-height: 260px;
   aspect-ratio: var(--video-ar, 16 / 9);
 }
 /* Accent glow on the card */
