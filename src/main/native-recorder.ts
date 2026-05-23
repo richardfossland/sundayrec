@@ -302,20 +302,32 @@ export async function resolveVideoInput(
   opts: { videoDeviceName?: string | null; videoDeviceIndex?: number | null }
 ): Promise<{ format: string; device: string; resolvedName: string } | null> {
   if (process.platform === 'darwin') {
-    // Use stored index directly if available (most reliable)
-    if (opts.videoDeviceIndex !== null && opts.videoDeviceIndex !== undefined) {
-      return {
-        format: 'avfoundation',
-        device: String(opts.videoDeviceIndex),
-        resolvedName: opts.videoDeviceName ?? 'video'
-      }
-    }
+    // Always enumerate current devices — indices can change after camera reconnect.
+    // Prefer name-based match; fall back to stored index only if name lookup fails.
     const devices = await listVideoFfmpegDevices()
     if (!devices.length) return null
+
     const name = (opts.videoDeviceName ?? '').trim()
-    const match = name ? bestVideoMatch(devices, name) : devices[0]
-    const resolved = match ?? devices[0]
-    return { format: 'avfoundation', device: String(resolved.index), resolvedName: resolved.name }
+    const byName = name ? bestVideoMatch(devices, name) : null
+    if (byName) {
+      if (byName.index !== opts.videoDeviceIndex) {
+        console.log(`[native-recorder] video device "${byName.name}" index changed: ${opts.videoDeviceIndex} → ${byName.index}`)
+      }
+      return { format: 'avfoundation', device: String(byName.index), resolvedName: byName.name }
+    }
+
+    // Name lookup failed — fall back to stored index if it still exists in the list.
+    if (opts.videoDeviceIndex !== null && opts.videoDeviceIndex !== undefined) {
+      const byIndex = devices.find(d => d.index === opts.videoDeviceIndex)
+      if (byIndex) {
+        console.warn(`[native-recorder] video device name "${name}" not found — using index ${opts.videoDeviceIndex} (${byIndex.name})`)
+        return { format: 'avfoundation', device: String(byIndex.index), resolvedName: byIndex.name }
+      }
+    }
+
+    // Last resort: first available device
+    console.warn(`[native-recorder] video device "${name}" not found — falling back to first device: "${devices[0].name}"`)
+    return { format: 'avfoundation', device: String(devices[0].index), resolvedName: devices[0].name }
   }
 
   if (process.platform === 'win32') {

@@ -156,19 +156,28 @@ export async function startPreview(
   const EOI = Buffer.from([0xff, 0xd9])
   let firstFrameReceived = false
 
-  // If no frame arrives within 15 s, the device is stuck — kill and signal the renderer.
-  // This covers the case where ffmpeg opens the device but AVFoundation never delivers frames.
+  // If no frame arrives within 10 s, the device is stuck (e.g. AVFoundation opened the
+  // device but never delivered frames). On macOS, retry with the next config candidate
+  // before giving up — this catches cameras like FaceTime HD where native@30fps hangs
+  // silently instead of exiting with a format error.
   const firstFrameTimer = setTimeout(() => {
     if (!firstFrameReceived && !handle.stopped) {
-      console.warn('[video-preview] no frame received in 15 s — killing stuck ffmpeg')
       handle.stopped = true
       active = null
       try { proc.kill('SIGKILL') } catch {}
-      if (!win.isDestroyed()) {
-        try { win.webContents.send('video-preview-stopped') } catch {}
+
+      const nextIdx = _macConfigIdx + 1
+      if (process.platform === 'darwin' && nextIdx < MAC_CONFIGS.length) {
+        console.warn(`[video-preview] no frame in 10 s on config ${_macConfigIdx} (${MAC_CONFIGS[_macConfigIdx].label}) — retrying with ${MAC_CONFIGS[nextIdx].label}`)
+        startPreview(opts, win, nextIdx)
+      } else {
+        console.warn('[video-preview] no frame received in 10 s — all configs exhausted')
+        if (!win.isDestroyed()) {
+          try { win.webContents.send('video-preview-stopped') } catch {}
+        }
       }
     }
-  }, 15000)
+  }, 10000)
 
   proc.stdout?.on('data', (chunk: Buffer) => {
     buf = Buffer.concat([buf, chunk])
@@ -218,7 +227,16 @@ export async function startPreview(
     }
 
     if (code !== 0 && stderrBuf) {
-      console.warn('[video-preview] ffmpeg exited', code, '— last stderr:', stderrBuf.slice(-300))
+      const s = stderrBuf.toLowerCase()
+      if (s.includes('already in use') || s.includes('device busy') || s.includes('resource busy')) {
+        console.warn('[video-preview] camera is in use by another app — cannot open device')
+      } else if (s.includes('permission') || s.includes('not permitted') || s.includes('authorization')) {
+        console.warn('[video-preview] camera permission denied — check System Settings → Privacy → Camera')
+      } else if (s.includes('device not found') || s.includes('no such') || s.includes('no video')) {
+        console.warn('[video-preview] camera device not found — may have been unplugged')
+      } else {
+        console.warn('[video-preview] ffmpeg exited', code, '— stderr:', stderrBuf.slice(-300))
+      }
     }
     if (!handle.stopped && !win.isDestroyed()) {
       try { win.webContents.send('video-preview-stopped') } catch {}

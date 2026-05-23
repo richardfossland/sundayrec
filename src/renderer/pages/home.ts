@@ -138,9 +138,9 @@ export function startVideoPreview(): void {
   const phTxt = document.getElementById('video-preview-placeholder-text')
   if (phTxt) phTxt.textContent = 'Starter kamera…'
 
-  // Renderer-side safety net: if no frame arrives within 20 s, show an error.
-  // The main process sends video-preview-stopped after 15 s, but this handles
-  // any IPC delivery delay or edge cases where the signal is lost.
+  // Renderer-side safety net: if no frame arrives within 75 s, show an error.
+  // The main process tries up to 6 configs (10 s each = 60 s max) before giving up.
+  // This timer fires only if all retries are exhausted and IPC is never received.
   if (previewNoFrameTimer) clearTimeout(previewNoFrameTimer)
   previewNoFrameTimer = setTimeout(() => {
     previewNoFrameTimer = null
@@ -151,7 +151,7 @@ export function startVideoPreview(): void {
       if (img)   img.style.display   = 'none'
       window.api.videoPreviewStop?.()
     }
-  }, 20000)
+  }, 75000)
 
   window.api.videoPreviewStart?.({
     videoDeviceName:  settings.videoDeviceName,
@@ -176,6 +176,7 @@ export function startVideoPreview(): void {
   })
 
   previewStopUnsub = window.api.on('video-preview-stopped', () => {
+    if (previewNoFrameTimer) { clearTimeout(previewNoFrameTimer); previewNoFrameTimer = null }
     previewActive = false
     if (phTxt) phTxt.textContent = 'Kamera utilgjengelig'
     if (phDiv) phDiv.style.display = ''

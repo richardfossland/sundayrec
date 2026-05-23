@@ -19,14 +19,26 @@ function classifyVideoError(stderr: string): string {
   if (
     s.includes('device not found') || s.includes('no such') || s.includes('no video') ||
     s.includes('no capture device') || s.includes('avfoundation: device') ||
-    s.includes('could not find video') || s.includes('video device not found')
+    s.includes('could not find video') || s.includes('video device not found') ||
+    s.includes('no such file or directory') || s.includes('the handle is invalid') ||
+    s.includes('no video device') || s.includes('failed to find video')
   ) return 'device_not_found'
   if (
     s.includes('permission') || s.includes('access denied') || s.includes('not permitted') ||
-    s.includes('authorization') || s.includes('camera access') || s.includes('privacy')
+    s.includes('authorization') || s.includes('camera access') || s.includes('privacy') ||
+    s.includes('e_accessdenied') || s.includes('tcm_access')
   ) return 'device_permission_denied'
-  if (s.includes('already in use') || s.includes('device busy') || s.includes('resource busy')) return 'device_busy'
+  if (
+    s.includes('already in use') || s.includes('device busy') || s.includes('resource busy') ||
+    s.includes('device or resource busy') || s.includes('audclnt_e_device_in_use') ||
+    s.includes('audclnt_e_exclusive_mode_not_allowed')
+  ) return 'device_busy'
   if (s.includes('no space left') || s.includes('disk full') || s.includes('enospc')) return 'disk_full'
+  if (
+    s.includes('broken pipe') || s.includes('i/o error') || s.includes('input/output') ||
+    s.includes('unplugged') || s.includes('audclnt_e_device_invalidated') ||
+    s.includes('connection reset') || s.includes('eof')
+  ) return 'device_disconnected'
   return 'device_error'
 }
 
@@ -136,11 +148,26 @@ export async function startVideoCapture(
   })
 
   let stderrBuf = ''
+  // Watchdog: if no size= progress in stderr within 20 s, the camera opened but
+  // is not delivering frames (capture card with no HDMI signal, slow USB camera,
+  // or driver hang). Kill the process — recorder.ts onExit handler will recover.
+  let firstVideoProgress = false
+  const videoHangWatchdog = setTimeout(() => {
+    if (!firstVideoProgress && proc.exitCode === null) {
+      console.warn('[video-recorder] no video frames in 20 s — camera stuck, killing')
+      try { proc.kill('SIGKILL') } catch {}
+    }
+  }, 20000)
+
   proc.stderr?.on('data', (d: Buffer) => {
     const chunk = d.toString()
     stderrBuf = (stderrBuf + chunk).slice(-65536)
     const m = chunk.match(/size=\s*(\d+)kB/)
     if (m) {
+      if (!firstVideoProgress) {
+        firstVideoProgress = true
+        clearTimeout(videoHangWatchdog)
+      }
       handle.bytesWritten = parseInt(m[1]) * 1024
       handle.onProgress?.(handle.bytesWritten)
     } else if (chunk.trim() && !chunk.includes('Press [q]') && !chunk.includes('time=')) {
@@ -149,6 +176,7 @@ export async function startVideoCapture(
   })
 
   proc.on('close', code => {
+    clearTimeout(videoHangWatchdog)
     console.log('[video-recorder] ffmpeg exited, code:', code)
     handle.onExit?.(code)
   })
@@ -218,7 +246,7 @@ export async function muxAudioVideo(
       '-y', outputPath,
     ], { stdio: ['ignore', 'ignore', 'pipe'] })
     let stderr = ''
-    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+    proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-65536) })
     const timeout = setTimeout(() => {
       try { proc.kill('SIGTERM') } catch {}
       resolve(false)
