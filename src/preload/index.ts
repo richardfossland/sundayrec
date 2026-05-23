@@ -22,6 +22,7 @@ const ALLOWED_CHANNELS = [
   'cloud-upload-done',
   'video-preview-frame',
   'video-preview-stopped',
+  'video-preview-meta',
   'video-progress',
 ] as const
 

@@ -17,6 +17,7 @@ let previewActive         = false
 let previewFrameUnsub:    (() => void) | undefined
 let previewStopUnsub:     (() => void) | undefined
 let previewVideoUnsub:    (() => void) | undefined
+let previewMetaUnsub:     (() => void) | undefined
 let previewNoFrameTimer:  ReturnType<typeof setTimeout> | null = null
 let lastFrameTs           = 0
 
@@ -124,6 +125,7 @@ export function stopVideoPreview(): void {
   previewFrameUnsub?.(); previewFrameUnsub = undefined
   previewStopUnsub?.();  previewStopUnsub  = undefined
   previewVideoUnsub?.(); previewVideoUnsub  = undefined
+  previewMetaUnsub?.();  previewMetaUnsub  = undefined
   window.api.videoPreviewStop?.()
   const img   = document.getElementById('video-preview-img') as HTMLImageElement | null
   const phDiv = document.getElementById('video-preview-placeholder')
@@ -210,6 +212,14 @@ export function startVideoPreview(): void {
     if (phTxt) phTxt.textContent = 'Kamera utilgjengelig'
     if (phDiv) phDiv.style.display = ''
     if (img) img.style.display = 'none'
+  })
+
+  previewMetaUnsub = window.api.on('video-preview-meta', (data: unknown) => {
+    const meta = data as { width: number; height: number }
+    if (meta && meta.width > 0 && meta.height > 0) {
+      const wrap = document.querySelector<HTMLElement>('.video-preview-wrap')
+      if (wrap) wrap.style.aspectRatio = `${meta.width} / ${meta.height}`
+    }
   })
 
   previewVideoUnsub = window.api.on('video-progress', (data: unknown) => {

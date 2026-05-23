@@ -32,16 +32,50 @@ interface PreviewHandle {
 }
 
 let active: PreviewHandle | null = null
+let _workingMacConfigIdx = 0
+
+/** Returns the MAC_CONFIGS index at which the last successful preview received its first frame. */
+export function getWorkingMacConfigIdx(): number {
+  return _workingMacConfigIdx
+}
+
+/**
+ * Decode width and height from a JPEG buffer by scanning for SOF0 (0xFF 0xC0)
+ * or SOF2 (0xFF 0xC2) markers. Returns null if no SOF marker is found.
+ */
+function readJpegDimensions(buf: Buffer): { width: number; height: number } | null {
+  let i = 0
+  while (i < buf.length - 8) {
+    if (buf[i] !== 0xff) { i++; continue }
+    const marker = buf[i + 1]
+    if (marker === 0xc0 || marker === 0xc2) {
+      // SOF structure: FF Cx LL LL PP HH HH WW WW
+      // height is at offset +5 (2 bytes), width at offset +7 (2 bytes)
+      if (i + 8 < buf.length) {
+        const height = (buf[i + 5] << 8) | buf[i + 6]
+        const width  = (buf[i + 7] << 8) | buf[i + 8]
+        if (width > 0 && height > 0) return { width, height }
+      }
+    }
+    // Skip over this segment: length field is at offset +2 (big-endian uint16)
+    if (i + 3 < buf.length && marker !== 0xd8 && marker !== 0xd9 && marker !== 0x01) {
+      const segLen = (buf[i + 2] << 8) | buf[i + 3]
+      if (segLen >= 2) { i += 2 + segLen; continue }
+    }
+    i++
+  }
+  return null
+}
 
 // ── macOS AVFoundation config candidates ────────────────────────────────────
 
-interface MacConfig {
+export interface MacConfig {
   fps:  number
   size: string | null   // null = let device choose its native resolution
   label: string
 }
 
-const MAC_CONFIGS: MacConfig[] = [
+export const MAC_CONFIGS: MacConfig[] = [
   // Capture cards (Blackmagic ATEM Mini/Pro, Elgato Cam Link, Magewell, etc.)
   // output a fixed HDMI signal — let AVFoundation use whatever the card reports.
   { fps: 30, size: null,        label: 'native@30fps'  },
@@ -55,7 +89,7 @@ const MAC_CONFIGS: MacConfig[] = [
   { fps: 25, size: '1280x720',  label: '720p@25fps'    },
 ]
 
-function buildMacInputArgs(format: string, device: string, cfg: MacConfig): string[] {
+export function buildMacInputArgs(format: string, device: string, cfg: MacConfig): string[] {
   const a: string[] = ['-f', format, '-framerate', String(cfg.fps)]
   if (cfg.size) a.push('-video_size', cfg.size)
   a.push('-i', device)
@@ -197,6 +231,12 @@ export async function startPreview(
       if (!firstFrameReceived) {
         firstFrameReceived = true
         clearTimeout(firstFrameTimer)
+        _workingMacConfigIdx = _macConfigIdx
+        // Decode frame dimensions from JPEG headers and notify renderer
+        const dims = readJpegDimensions(frame)
+        if (dims && !win.isDestroyed()) {
+          try { win.webContents.send('video-preview-meta', dims) } catch {}
+        }
       }
 
       if (!handle.stopped && !win.isDestroyed()) {
@@ -226,7 +266,15 @@ export async function startPreview(
       return
     }
 
-    if (code !== 0 && stderrBuf) {
+    if (handle.stopped) {
+      // Normal stop — no error message needed
+    } else if (
+      process.platform === 'darwin' &&
+      !firstFrameReceived &&
+      _macConfigIdx + 1 >= MAC_CONFIGS.length
+    ) {
+      console.warn('[video-preview] exhausted all configs — giving up')
+    } else if (code !== 0 && stderrBuf) {
       const s = stderrBuf.toLowerCase()
       if (s.includes('already in use') || s.includes('device busy') || s.includes('resource busy')) {
         console.warn('[video-preview] camera is in use by another app — cannot open device')

@@ -1,6 +1,7 @@
 import { spawn } from 'child_process'
 import type { ChildProcess } from 'child_process'
 import { ffmpegBin, resolveVideoInput } from './native-recorder'
+import { getWorkingMacConfigIdx, MAC_CONFIGS, buildMacInputArgs } from './video-preview'
 import type { Settings } from '../types'
 
 export interface VideoHandle {
@@ -86,9 +87,19 @@ export async function startVideoCapture(
   // Windows DirectShow: -rtbufsize prevents frame drops on slow USB buses.
   // Wall-clock timestamps on both audio and video processes allow the muxer
   // to align the two streams by their actual capture start times.
-  const inputArgs: string[] = process.platform === 'darwin'
-    ? ['-use_wallclock_as_timestamps', '1', '-f', input.format, '-framerate', String(fps), '-i', input.device]
-    : ['-use_wallclock_as_timestamps', '1', '-f', input.format, '-rtbufsize', '200M', '-framerate', String(fps), '-i', input.device]
+  //
+  // On macOS, sync the capture config (framerate + video_size) with the working
+  // preview config so we don't retry from scratch on a device that only accepts
+  // a specific resolution or framerate.
+  let inputArgs: string[]
+  if (process.platform === 'darwin') {
+    const cfgIdx = getWorkingMacConfigIdx()
+    const cfg = MAC_CONFIGS[cfgIdx] ?? MAC_CONFIGS[0]
+    console.log(`[video-recorder] using preview config ${cfgIdx} (${cfg.label}) for capture`)
+    inputArgs = ['-use_wallclock_as_timestamps', '1', ...buildMacInputArgs(input.format, input.device, cfg)]
+  } else {
+    inputArgs = ['-use_wallclock_as_timestamps', '1', '-f', input.format, '-rtbufsize', '200M', '-framerate', String(fps), '-i', input.device]
+  }
 
   const args: string[] = [
     '-nostdin', '-hide_banner',
