@@ -8,6 +8,8 @@ let countdownTimer: ReturnType<typeof setInterval> | null = null
 
 export function deactivateHome(): void {
   if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null }
+  // Bug 3: restore VU section to original DOM position when navigating away
+  setVuOverlay(false)
 }
 let fullHistory: RecordingEntry[] = []
 
@@ -89,7 +91,12 @@ export async function refreshHomeVideoDevices(): Promise<void> {
     sel.value = match ? String(match.index) : ''
     sel.disabled = false
 
-    if (phTxt) phTxt.textContent = sel.value ? 'Starter kamera…' : 'Velg kamera og trykk oppdater'
+    // Bug 6: inform user when previously saved camera is no longer available
+    if (savedName && !match && phTxt) {
+      phTxt.textContent = `Kamera "${savedName}" ikke funnet — velg et annet`
+    } else if (phTxt) {
+      phTxt.textContent = sel.value ? 'Starter kamera…' : 'Velg kamera og trykk oppdater'
+    }
   } catch {
     sel.innerHTML = '<option value="">Feil ved lasting</option>'
     sel.disabled = false
@@ -131,6 +138,9 @@ export function stopVideoPreview(): void {
   const phDiv = document.getElementById('video-preview-placeholder')
   if (img)   { img.src = ''; img.style.display = 'none' }
   if (phDiv) { phDiv.style.display = '' }
+  // Bug 1: reset aspect ratio so it doesn't bleed into next preview session
+  const wrap = document.querySelector<HTMLElement>('.video-preview-wrap')
+  if (wrap) wrap.style.aspectRatio = ''
 }
 
 export function startVideoPreview(): void {
@@ -176,11 +186,12 @@ export function startVideoPreview(): void {
     }
   }, 75000)
 
+  // Bug 2: use ?. before .then/.catch so if videoPreviewStart is undefined we don't crash
   window.api.videoPreviewStart?.({
     videoDeviceName:  settings.videoDeviceName,
     videoDeviceIndex: settings.videoDeviceIndex,
     videoFramerate:   settings.videoFramerate,
-  }).then((ok: unknown) => {
+  })?.then((ok: unknown) => {
     if (ok === false) {
       // Main process denied camera permission before even starting ffmpeg
       if (previewNoFrameTimer) { clearTimeout(previewNoFrameTimer); previewNoFrameTimer = null }
@@ -188,7 +199,7 @@ export function startVideoPreview(): void {
       if (phTxt) phTxt.textContent = 'Kameratilgang nektet — sjekk Systeminnstillinger'
       if (phDiv) phDiv.style.display = ''
     }
-  }).catch(() => { /* IPC errors are non-fatal */ })
+  })?.catch(() => { /* IPC errors are non-fatal */ })
 
   previewFrameUnsub = window.api.on('video-preview-frame', (data: unknown) => {
     if (previewNoFrameTimer) { clearTimeout(previewNoFrameTimer); previewNoFrameTimer = null }
