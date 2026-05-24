@@ -148,11 +148,11 @@ export function addHistory(entry: RecordingEntry): void {
   // createdAt: wall-clock time the entry was created. Monotonic: never older than
   // the previous entry, so history ordering survives clock adjustments (NTP, DST, etc.).
   const now = Date.now()
-  const lastPersisted = getHistory()[0]?.timestamp ?? 0
+  const history = getHistory()
+  const lastPersisted = history[0]?.timestamp ?? 0
   const lastTs = Math.max(_lastHistoryTs, lastPersisted)
   const safeTs = Math.max(now, lastTs + 1)
   _lastHistoryTs = safeTs
-  const history = getHistory()
   history.unshift({ ...entry, timestamp: safeTs })
   store.set('recordingHistory', history.slice(0, 200))
 }

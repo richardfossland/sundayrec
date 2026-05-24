@@ -40,10 +40,15 @@ export function isRunning(): boolean {
 export async function start(opts: RecordingOpts): Promise<void> {
   if (isActive) return
   isActive = true
-  startLoop(opts).catch(err => console.error('[preroll] start error:', err))
+  startLoop(opts, 0).catch(err => console.error('[preroll] start error:', err))
 }
 
-async function startLoop(opts: RecordingOpts): Promise<void> {
+function retryDelay(attempt: number): number {
+  // 5s → 10s → 20s → 40s → 60s cap
+  return Math.min(5000 * Math.pow(2, attempt), 60000)
+}
+
+async function startLoop(opts: RecordingOpts, attempt: number): Promise<void> {
   if (!isActive) return
 
   let input: Awaited<ReturnType<typeof resolveDeviceInput>>
@@ -51,12 +56,19 @@ async function startLoop(opts: RecordingOpts): Promise<void> {
     input = await resolveDeviceInput(opts)
   } catch (err) {
     console.error('[preroll] device resolution error:', err)
-    if (isActive) setTimeout(() => startLoop(opts).catch(e => console.error('[preroll] loop error:', e)), 30000)
+    if (isActive) {
+      const delay = retryDelay(attempt)
+      console.log(`[preroll] retrying in ${delay / 1000}s (attempt ${attempt + 1})`)
+      setTimeout(() => startLoop(opts, attempt + 1).catch(e => console.error('[preroll] loop error:', e)), delay)
+    }
     return
   }
   if (!input) {
-    // Device not available — retry in 30 s
-    if (isActive) setTimeout(() => startLoop(opts).catch(e => console.error('[preroll] loop error:', e)), 30000)
+    if (isActive) {
+      const delay = retryDelay(attempt)
+      console.log(`[preroll] no device, retrying in ${delay / 1000}s (attempt ${attempt + 1})`)
+      setTimeout(() => startLoop(opts, attempt + 1).catch(e => console.error('[preroll] loop error:', e)), delay)
+    }
     return
   }
   if (!isActive) return
@@ -87,8 +99,8 @@ async function startLoop(opts: RecordingOpts): Promise<void> {
   proc.on('close', () => {
     if (activePreroll?.filePath === filePath) activePreroll = null
     if (isActive) {
-      // Auto-restart after natural 90 s cap (or unexpected exit)
-      setTimeout(() => startLoop(opts).catch(e => console.error('[preroll] loop error:', e)), 200)
+      // Auto-restart after natural 90 s cap (or unexpected exit); reset retry counter on success
+      setTimeout(() => startLoop(opts, 0).catch(e => console.error('[preroll] loop error:', e)), 200)
     }
   })
 }

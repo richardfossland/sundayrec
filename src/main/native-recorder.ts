@@ -45,6 +45,62 @@ export function resolveFfmpegPath(): string {
 
 export const ffmpegBin = resolveFfmpegPath()
 
+// ── Device enumeration cache ────────────────────────────────────────────────
+
+const DEVICE_CACHE_TTL_MS = 30_000
+
+// On macOS and Windows, audio and video devices come from the same ffmpeg
+// enumerate call.  Share the result so we only spawn ffmpeg once per TTL window.
+interface AllDevices { audio: FfmpegDevice[]; video: FfmpegVideoDevice[] }
+let _allDevicesCache: { result: AllDevices; expiresAt: number } | null = null
+let _allDevicesInflight: Promise<AllDevices> | null = null
+
+let _wasapiCache: { result: FfmpegDevice[]; expiresAt: number } | null = null
+let _wasapiInflight: Promise<FfmpegDevice[]> | null = null
+
+export function invalidateDeviceCache(): void {
+  _allDevicesCache = null
+  _allDevicesInflight = null
+  _wasapiCache = null
+  _wasapiInflight = null
+}
+
+async function _enumerateAllDevices(): Promise<AllDevices> {
+  const now = Date.now()
+  if (_allDevicesCache && now < _allDevicesCache.expiresAt) return _allDevicesCache.result
+  if (_allDevicesInflight) return _allDevicesInflight
+
+  const p = new Promise<AllDevices>(resolve => {
+    if (process.platform !== 'darwin' && process.platform !== 'win32') {
+      resolve({ audio: [], video: [] }); return
+    }
+    const args: string[] = process.platform === 'win32'
+      ? ['-list_devices', 'true', '-f', 'dshow', '-i', 'dummy', '-hide_banner']
+      : ['-f', 'avfoundation', '-list_devices', 'true', '-i', '', '-hide_banner']
+    const proc = spawn(ffmpegBin, args, { stdio: ['ignore', 'ignore', 'pipe'] })
+    let stderr = ''
+    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+    let settled = false
+    const done = () => {
+      if (settled) return; settled = true
+      _allDevicesInflight = null
+      const result: AllDevices = process.platform === 'win32' ? {
+        audio: parseDshowDeviceList(stderr),
+        video: parseVideoDshowDeviceList(stderr),
+      } : {
+        audio: parseAvfoundationDeviceList(stderr),
+        video: parseVideoAvfoundationDeviceList(stderr),
+      }
+      _allDevicesCache = { result, expiresAt: Date.now() + DEVICE_CACHE_TTL_MS }
+      resolve(result)
+    }
+    proc.on('close', done)
+    setTimeout(() => { if (!settled) { try { proc.kill() } catch {}; done() } }, 5000)
+  })
+  _allDevicesInflight = p
+  return p
+}
+
 // ── Device enumeration ──────────────────────────────────────────────────────
 
 export interface FfmpegDevice { name: string; index: number }
@@ -120,30 +176,7 @@ export function parseAvfoundationDeviceList(stderr: string): FfmpegDevice[] {
 }
 
 export async function listFfmpegDevices(): Promise<FfmpegDevice[]> {
-  return new Promise(resolve => {
-    let args: string[]
-    if (process.platform === 'win32') {
-      args = ['-list_devices', 'true', '-f', 'dshow', '-i', 'dummy', '-hide_banner']
-    } else if (process.platform === 'darwin') {
-      args = ['-f', 'avfoundation', '-list_devices', 'true', '-i', '', '-hide_banner']
-    } else {
-      return resolve([])
-    }
-
-    const proc = spawn(ffmpegBin, args, { stdio: ['ignore', 'ignore', 'pipe'] })
-    let stderr = ''
-    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
-    let settled = false
-    const done = () => {
-      if (settled) return; settled = true
-      const devices = process.platform === 'win32'
-        ? parseDshowDeviceList(stderr)
-        : parseAvfoundationDeviceList(stderr)
-      resolve(devices)
-    }
-    proc.on('close', done)
-    setTimeout(() => { if (!settled) { try { proc.kill() } catch {}; done() } }, 5000)
-  })
+  return (await _enumerateAllDevices()).audio
 }
 
 // ── WASAPI detection (cached for process lifetime) ──────────────────────────
@@ -175,7 +208,11 @@ export async function probeWasapiAvailable(): Promise<boolean> {
 
 export async function listWasapiDevices(): Promise<FfmpegDevice[]> {
   if (process.platform !== 'win32') return []
-  return new Promise(resolve => {
+  const now = Date.now()
+  if (_wasapiCache && now < _wasapiCache.expiresAt) return _wasapiCache.result
+  if (_wasapiInflight) return _wasapiInflight
+
+  const p = new Promise<FfmpegDevice[]>(resolve => {
     const proc = spawn(ffmpegBin, ['-f', 'wasapi', '-list_devices', 'true', '-i', 'dummy', '-hide_banner'], {
       stdio: ['ignore', 'ignore', 'pipe']
     })
@@ -184,14 +221,18 @@ export async function listWasapiDevices(): Promise<FfmpegDevice[]> {
     let settled = false
     const done = () => {
       if (settled) return; settled = true
+      _wasapiInflight = null
       const devices = parseWasapiDeviceList(stderr)
       console.log(`[native-recorder] WASAPI enumeration: found ${devices.length} devices`, devices.map(d => d.name))
+      _wasapiCache = { result: devices, expiresAt: Date.now() + DEVICE_CACHE_TTL_MS }
       resolve(devices)
     }
     proc.on('close', done)
-    proc.on('error', () => { if (!settled) { settled = true; resolve([]) } })
+    proc.on('error', () => { if (!settled) { settled = true; _wasapiInflight = null; resolve([]) } })
     setTimeout(() => { if (!settled) { try { proc.kill() } catch {}; done() } }, 5000)
   })
+  _wasapiInflight = p
+  return p
 }
 
 // ── WASAPI device enumeration via PowerShell (backup) ──────────────────────
@@ -425,30 +466,7 @@ export function parseVideoAvfoundationDeviceList(stderr: string): FfmpegVideoDev
 }
 
 export async function listVideoFfmpegDevices(): Promise<FfmpegVideoDevice[]> {
-  return new Promise(resolve => {
-    let args: string[]
-    if (process.platform === 'win32') {
-      args = ['-list_devices', 'true', '-f', 'dshow', '-i', 'dummy', '-hide_banner']
-    } else if (process.platform === 'darwin') {
-      args = ['-f', 'avfoundation', '-list_devices', 'true', '-i', '', '-hide_banner']
-    } else {
-      return resolve([])
-    }
-
-    const proc = spawn(ffmpegBin, args, { stdio: ['ignore', 'ignore', 'pipe'] })
-    let stderr = ''
-    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
-    let settled = false
-    const done = () => {
-      if (settled) return; settled = true
-      const devices = process.platform === 'win32'
-        ? parseVideoDshowDeviceList(stderr)
-        : parseVideoAvfoundationDeviceList(stderr)
-      resolve(devices)
-    }
-    proc.on('close', done)
-    setTimeout(() => { if (!settled) { try { proc.kill() } catch {}; done() } }, 5000)
-  })
+  return (await _enumerateAllDevices()).video
 }
 
 /** Exported for unit testing. */

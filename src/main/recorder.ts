@@ -24,7 +24,8 @@
 
 import path from 'path'
 import fs from 'fs'
-import { spawn } from 'child_process'
+import { spawn, execFile } from 'child_process'
+import { promisify } from 'util'
 import { app, Notification, powerSaveBlocker, systemPreferences } from 'electron'
 import type { BrowserWindow } from 'electron'
 import crypto from 'crypto'
@@ -262,8 +263,6 @@ async function preflightCheck(settings: RecordingOpts): Promise<{ error: string 
 
   // 3. Disk space: require at least 200 MB free for audio-only, 1 GB for video recordings
   try {
-    const { execFile } = await import('child_process')
-    const { promisify } = await import('util')
     const execAsync = promisify(execFile)
     const _s = settings as Settings
     const videoActive = _s.videoEnabled && (_s.videoDeviceName || _s.videoDeviceIndex != null)
