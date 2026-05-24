@@ -128,15 +128,24 @@ function spawnFfmpeg(
 }
 
 function codecArgs(fmt: string, bitrate?: number, bitDepth?: 16 | 24): string[] {
-  if (fmt === 'wav')                 return ['-c:a', bitDepth === 24 ? 'pcm_s24le' : 'pcm_s16le']
-  if (fmt === 'flac')                return ['-c:a', 'flac']
-  if (fmt === 'aac' || fmt === 'm4a') return ['-c:a', 'aac',         '-b:a', `${bitrate ?? 192}k`]
-  if (fmt === 'ogg' || fmt === 'oga') return ['-c:a', 'libvorbis',   '-b:a', `${bitrate ?? 192}k`]
-  if (fmt === 'opus')                return ['-c:a', 'libopus',      '-b:a', `${bitrate ?? 128}k`]
-  if (fmt === 'aiff' || fmt === 'aif') return ['-c:a', 'pcm_s16be']
-  if (fmt === 'wma')                 return ['-c:a', 'wmav2',        '-b:a', `${bitrate ?? 192}k`]
-  if (fmt === 'mp2')                 return ['-c:a', 'mp2',          '-b:a', `${bitrate ?? 192}k`]
-  if (fmt === 'mka')                 return ['-c:a', 'flac']
+  if (fmt === 'wav')                               return ['-c:a', bitDepth === 24 ? 'pcm_s24le' : 'pcm_s16le']
+  if (fmt === 'flac')                              return ['-c:a', 'flac']
+  if (['aac', 'm4a', 'm4b', 'm4r', 'caf'].includes(fmt)) return ['-c:a', 'aac', '-b:a', `${bitrate ?? 192}k`]
+  if (fmt === 'ogg' || fmt === 'oga')              return ['-c:a', 'libvorbis',  '-b:a', `${bitrate ?? 192}k`]
+  if (fmt === 'opus')                              return ['-c:a', 'libopus',    '-b:a', `${bitrate ?? 128}k`]
+  if (fmt === 'aiff' || fmt === 'aif')             return ['-c:a', 'pcm_s16be']
+  if (fmt === 'au'   || fmt === 'snd')             return ['-c:a', 'pcm_mulaw']
+  if (fmt === 'wma')                               return ['-c:a', 'wmav2',      '-b:a', `${bitrate ?? 192}k`]
+  if (fmt === 'mp2'  || fmt === 'mp1')             return ['-c:a', 'mp2',        '-b:a', `${bitrate ?? 192}k`]
+  if (fmt === 'mka')                               return ['-c:a', 'flac']
+  if (fmt === 'ac3')                               return ['-c:a', 'ac3',        '-b:a', `${bitrate ?? 192}k`]
+  if (fmt === 'eac3')                              return ['-c:a', 'eac3',       '-b:a', `${bitrate ?? 192}k`]
+  if (fmt === 'amr'  || fmt === '3ga')             return ['-c:a', 'amr_nb',    '-ar', '8000', '-ac', '1']
+  if (fmt === 'wv')                                return ['-c:a', 'wavpack']
+  if (fmt === 'tta')                               return ['-c:a', 'tta']
+  // ape/dts/mpc/ra/spx/gsm: no reliable encoder in ffmpeg-static → transcode to wav
+  if (['ape', 'dts', 'mpc', 'ra', 'ram', 'spx', 'gsm'].includes(fmt))
+                                                   return ['-c:a', 'pcm_s16le']
   return ['-c:a', 'libmp3lame', '-b:a', `${bitrate ?? 192}k`]
 }
 
@@ -151,8 +160,15 @@ export async function saveEdited(params: EditorSaveParams): Promise<EditorSaveRe
   if (typeof duration !== 'number' || duration <= 0) return { ok: false, error: 'invalid_duration' }
 
   const rawExt = path.extname(inputPath).slice(1).toLowerCase()
-  const AUDIO_SAVE_EXTS = new Set(['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'oga', 'opus', 'aiff', 'aif', 'mp2', 'wma', 'mka'])
-  const ext    = AUDIO_SAVE_EXTS.has(rawExt) ? rawExt : 'mp3'
+  // Formats with no encoder in ffmpeg-static → re-save as wav (lossless)
+  const FORCE_WAV = new Set(['ape', 'dts', 'mpc', 'ra', 'ram', 'spx', 'gsm', 'amr', '3ga'])
+  const AUDIO_SAVE_EXTS = new Set([
+    'mp3', 'mp1', 'mp2', 'wav', 'flac', 'aac', 'm4a', 'm4b', 'm4r',
+    'ogg', 'oga', 'opus', 'aiff', 'aif', 'wma', 'mka', 'ac3', 'eac3',
+    'amr', '3ga', 'caf', 'wv', 'tta', 'au', 'snd',
+    'ape', 'dts', 'mpc', 'ra', 'ram', 'spx', 'gsm',
+  ])
+  const ext = !AUDIO_SAVE_EXTS.has(rawExt) ? 'mp3' : FORCE_WAV.has(rawExt) ? 'wav' : rawExt
 
   const sorted = [...cutRegions].sort((a, b) => a.start - b.start)
   const keeps: { start: number; end: number }[] = []

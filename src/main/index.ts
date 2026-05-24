@@ -732,10 +732,18 @@ function setupIPC(): void {
       properties: ['openFile'],
       filters: [
         { name: 'Lyd og video', extensions: [
-            'mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'oga', 'webm', 'aiff', 'aif', 'wma', 'mp2', 'mka',
+            'mp3', 'mp1', 'mp2', 'wav', 'flac', 'aac', 'm4a', 'm4b', 'm4r',
+            'ogg', 'oga', 'opus', 'webm', 'aiff', 'aif', 'wma', 'mka',
+            'ac3', 'eac3', 'dts', 'amr', '3ga', 'caf', 'ape', 'wv', 'tta',
+            'mpc', 'au', 'snd', 'ra', 'ram', 'spx', 'gsm',
             'mp4', 'mov', 'mkv', 'm4v', 'avi', 'wmv', 'ts', 'mts', 'm2ts', 'flv', '3gp', 'asf', 'f4v',
           ] },
-        { name: 'Lydfiler',     extensions: ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'oga', 'webm', 'aiff', 'aif', 'wma', 'mp2', 'mka'] },
+        { name: 'Lydfiler', extensions: [
+            'mp3', 'mp1', 'mp2', 'wav', 'flac', 'aac', 'm4a', 'm4b', 'm4r',
+            'ogg', 'oga', 'opus', 'webm', 'aiff', 'aif', 'wma', 'mka',
+            'ac3', 'eac3', 'dts', 'amr', '3ga', 'caf', 'ape', 'wv', 'tta',
+            'mpc', 'au', 'snd', 'ra', 'ram', 'spx', 'gsm',
+          ] },
         { name: 'Videofiler',   extensions: ['mp4', 'mov', 'mkv', 'm4v', 'avi', 'wmv', 'ts', 'mts', 'm2ts', 'flv', '3gp', 'asf', 'f4v'] },
       ]
     })
@@ -977,8 +985,12 @@ async function cleanupOldRecordings(): Promise<void> {
   if (changed) store.set('recordingHistory', remaining)
 }
 
-const ALLOWED_AUDIO_EXTS = new Set(['.mp3', '.wav', '.flac', '.aac', '.m4a', '.ogg', '.webm',
-  '.opus', '.oga', '.aiff', '.aif', '.mp2', '.wma', '.mka'])
+const ALLOWED_AUDIO_EXTS = new Set([
+  '.mp3', '.mp1', '.mp2', '.wav', '.flac', '.aac', '.m4a', '.m4b', '.m4r',
+  '.ogg', '.oga', '.opus', '.webm', '.aiff', '.aif', '.wma', '.mka',
+  '.ac3', '.eac3', '.dts', '.amr', '.3ga', '.caf', '.ape', '.wv', '.tta',
+  '.mpc', '.au', '.snd', '.ra', '.ram', '.spx', '.gsm',
+])
 const ALLOWED_VIDEO_EXTS = new Set(['.mp4', '.mov', '.mkv', '.m4v',
   '.avi', '.wmv', '.ts', '.mts', '.m2ts', '.flv', '.3gp', '.asf', '.f4v'])
 const ALLOWED_MEDIA_EXTS = new Set([...ALLOWED_AUDIO_EXTS, ...ALLOWED_VIDEO_EXTS])

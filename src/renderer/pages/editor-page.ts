@@ -27,10 +27,12 @@ let introDuration = 0
 let outroDuration = 0
 let includeIntroOutro = false
 
-// Video state — formats always routed to the video editor path
+// Formats always routed to the video editor path (HTML video element + ffmpeg peaks)
 const VIDEO_EXTS = new Set(['.mp4', '.mov', '.m4v', '.avi', '.wmv', '.ts', '.mts', '.m2ts', '.flv', '.3gp', '.asf', '.f4v'])
-// Ambiguous formats: could be video or audio — probe to decide
+// Ambiguous containers (can be video or audio) — probe to decide
 const PROBE_EXTS = new Set(['.mkv', '.webm', '.mka'])
+// Audio formats the browser (Web Audio API) can decode natively
+const WEB_AUDIO_EXTS = new Set(['.mp3', '.wav', '.flac', '.aac', '.m4a', '.m4b', '.m4r', '.ogg', '.oga', '.opus', '.webm'])
 let isVideoFile      = false
 let videoEl: HTMLVideoElement | null = null
 let videoIntroPath   = ''
@@ -453,8 +455,8 @@ async function loadFile(fp: string): Promise<void> {
         return
       }
     }
-  } else {
-    // Audio file: existing flow
+  } else if (WEB_AUDIO_EXTS.has(ext)) {
+    // Browser-decodable audio: read raw bytes → Web Audio API
     const raw = await window.api.editorReadFile(fp)
     if (!raw) { showState('empty'); return }
 
@@ -469,6 +471,32 @@ async function loadFile(fp: string): Promise<void> {
       audioCtx    = localCtx
       audioBuffer = buf
       duration    = audioBuffer.duration
+      peaks       = computePeaks(audioBuffer)
+    } catch {
+      localCtx?.close().catch(() => {})
+      showState('empty')
+      return
+    }
+  } else {
+    // Exotic audio (wma, ape, flac-in-mka, ac3, amr, etc.):
+    // Browser cannot decode these — extract via ffmpeg at 8 kHz mono.
+    // The resulting WAV is decodable by Web Audio API and serves as both
+    // waveform source and playback buffer (phone-call quality, adequate for cut-finding).
+    const result = await window.api.editorExtractAudioPeaks(fp) as { data: Uint8Array | ArrayBuffer; duration: number } | null
+    if (seq !== loadSeq) return
+    if (!result) { showState('empty'); return }
+
+    const u8 = result.data instanceof Uint8Array ? result.data : new Uint8Array(result.data as ArrayBuffer)
+    const ab = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer
+
+    let localCtx: AudioContext | null = null
+    try {
+      localCtx = new AudioContext()
+      const buf = await localCtx.decodeAudioData(ab)
+      if (seq !== loadSeq) { localCtx.close().catch(() => {}); return }
+      audioCtx    = localCtx
+      audioBuffer = buf
+      duration    = result.duration > 0 ? result.duration : buf.duration
       peaks       = computePeaks(audioBuffer)
     } catch {
       localCtx?.close().catch(() => {})
@@ -1316,7 +1344,10 @@ function setupDragDrop(): void {
     if (!file) return
     const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
     if (![
-      'mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'oga', 'webm', 'aiff', 'aif', 'wma', 'mp2', 'mka',
+      'mp3', 'mp1', 'mp2', 'wav', 'flac', 'aac', 'm4a', 'm4b', 'm4r',
+      'ogg', 'oga', 'opus', 'webm', 'aiff', 'aif', 'wma', 'mka',
+      'ac3', 'eac3', 'dts', 'amr', '3ga', 'caf', 'ape', 'wv', 'tta',
+      'mpc', 'au', 'snd', 'ra', 'ram', 'spx', 'gsm',
       'mp4', 'mov', 'mkv', 'm4v', 'avi', 'wmv', 'ts', 'mts', 'm2ts', 'flv', '3gp', 'asf', 'f4v',
     ].includes(ext)) return
     const fp = (file as File & { path?: string }).path

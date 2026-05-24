@@ -79,6 +79,9 @@ declare global {
       editorPickVideoFile:     ()                 => Promise<string | null>
       editorSaveVideo:         (params: unknown)  => Promise<{ ok: boolean; outputPath?: string; error?: string }>
       editorExportVideo:       (params: unknown)  => Promise<{ ok: boolean; outputPath?: string; error?: string }>
+      editorProbeStreams:      (filePath: string) => Promise<{ hasVideo: boolean; hasAudio: boolean } | null>
+      getLogs:                 ()                 => Promise<unknown[]>
+      getLogFilePath:          ()                 => Promise<string | null>
       diagnoseAudio?:          () => Promise<{ dshow: string[]; wasapi: string[]; wasapiAvailable: boolean }>
     }
     appVersion?: string
