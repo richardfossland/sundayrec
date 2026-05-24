@@ -630,6 +630,11 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
     if (muxOk) {
       fs.promises.unlink(videoFinalPath).catch(() => {})  // delete temp raw video
       videoFinalPath = combinedPath
+      // When the user explicitly opts out of a separate audio file, delete it now
+      // that the audio is embedded in the combined MP4. Default is to keep it.
+      if ((session.settings as Settings).videoKeepAudio === false) {
+        fs.promises.unlink(session.outputPath).catch(() => {})
+      }
     } else {
       console.error('[recorder] mux failed — keeping separate files')
       // videoFinalPath stays as-is (the raw video), treated as separate file
@@ -646,7 +651,10 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
     }
   }
 
-  // Step 4: Audio history entry
+  // Step 4: Audio history entry (skip if audio file was deleted after mux)
+  const audioFileKept = (session.settings as Settings).videoKeepAudio !== false
+    || !(videoFinalPath)  // always keep entry when no video was recorded
+    || !!(session.settings as Settings).videoSeparate  // always keep in separate-files mode
   const entry: RecordingEntry = {
     date:      localDateStr(recDate),
     startTime: recDate.toTimeString().slice(0, 5),
@@ -655,7 +663,7 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
     path:      session.outputPath,
     status:    'ok'
   }
-  store.addHistory(entry)
+  if (audioFileKept) store.addHistory(entry)
 
   // Step 5: Video history entry (if any)
   if (videoFinalPath && fs.existsSync(videoFinalPath)) {

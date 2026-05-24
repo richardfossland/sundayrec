@@ -60,6 +60,18 @@ function updateVideoToggleButton(): void {
   if (!btn || !label) return
   label.textContent = on ? 'Video på' : 'Video av'
   btn.classList.toggle('video-toggle-on', on)
+  updateAudioSeparateButton()
+}
+
+function updateAudioSeparateButton(): void {
+  const btn   = document.getElementById('btn-audio-separate') as HTMLButtonElement | null
+  const label = document.getElementById('audio-separate-label')
+  if (!btn || !label) return
+  const videoOn   = settings.videoEnabled ?? false
+  const keepAudio = settings.videoKeepAudio ?? true
+  btn.style.display = videoOn ? '' : 'none'
+  btn.classList.toggle('audio-separate-on', keepAudio)
+  label.textContent = keepAudio ? 'Lyd +' : 'Lyd –'
 }
 
 export async function refreshHomeVideoDevices(): Promise<void> {
@@ -283,6 +295,14 @@ export function setupHome(): void {
       const section = document.getElementById('video-preview-section')
       if (section) section.style.display = 'none'
     }
+  })
+
+  // Separate audio toggle — keep high-quality audio file alongside combined MP4
+  document.getElementById('btn-audio-separate')?.addEventListener('click', async () => {
+    const nowKeep = !(settings.videoKeepAudio ?? true)
+    patchSettings({ videoKeepAudio: nowKeep })
+    await window.api.saveSettings({ ...settings })
+    updateAudioSeparateButton()
   })
 
   // Inline camera refresh button

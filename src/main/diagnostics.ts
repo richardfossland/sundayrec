@@ -196,6 +196,7 @@ function sanitizeSettings(s: Settings): Record<string, unknown> {
     videoBitrate:      s.videoBitrate,
     videoFramerate:    s.videoFramerate,
     videoSeparate:     s.videoSeparate,
+    videoKeepAudio:    s.videoKeepAudio,
     videoFlip:         s.videoFlip,
     askOpenEditor:     s.askOpenEditor,
     churchName:        s.churchName,

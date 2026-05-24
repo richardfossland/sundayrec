@@ -160,6 +160,7 @@ async function triggerStart(slot: ScheduleSlot | SpecialRecording, overrideName?
     videoBitrate:           s.videoBitrate,
     videoFramerate:         s.videoFramerate,
     videoSeparate:          s.videoSeparate,
+    videoKeepAudio:         s.videoKeepAudio,
     videoFlip:              s.videoFlip,
   }
 
