@@ -82,6 +82,17 @@ export function reschedule(): void {
     })
   })
 
+  // Prune specials that ended more than 7 days ago so the list doesn't grow unbounded.
+  const pruneThreshold = new Date(Date.now() - 7 * 86400000)
+  const prunedSpecials = specials.filter(s => {
+    const stopDate = new Date(`${s.date}T${s.stop || '12:00'}`)
+    return stopDate >= pruneThreshold
+  })
+  if (prunedSpecials.length < specials.length) {
+    store.set('specialRecordings', prunedSpecials)
+    console.log(`[scheduler] pruned ${specials.length - prunedSpecials.length} expired special recording(s)`)
+  }
+
   specials.forEach((special, idx) => {
     const startDate = new Date(`${special.date}T${special.start || '11:00'}`)
     const stopDate  = new Date(`${special.date}T${special.stop  || '12:00'}`)

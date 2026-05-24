@@ -325,11 +325,22 @@ export async function startSession(
 ): Promise<{ ok: true } | { error: string }> {
   if (activeSession) return { error: 'already_recording' }
 
-  // Stop any running pre-roll (it competes for the same audio device)
+  const s = settings as Settings
+  const hasVideo = !!(s.videoEnabled && (s.videoDeviceName || s.videoDeviceIndex != null))
   const prerollWasActive = preroll.isRunning()
-  await preroll.stop()
-  if (prerollWasActive && process.platform === 'darwin') {
-    await new Promise<void>(resolve => setTimeout(resolve, 500))
+
+  // Stop competing device users concurrently so both audio and video can start
+  // as close together as possible — this is critical for A/V sync. If we stop
+  // preview after starting audio, the gap between audio and video spawn times
+  // (preview teardown + darwin wait) shifts video timestamps forward by ~3-4 s.
+  await Promise.all([
+    preroll.stop(),
+    hasVideo ? stopPreview() : Promise.resolve()
+  ])
+  if (process.platform === 'darwin') {
+    // Give AVFoundation time to release both audio and camera devices.
+    const releaseMs = prerollWasActive ? 500 : 300
+    await new Promise<void>(resolve => setTimeout(resolve, releaseMs))
   }
 
   const preflightError = await preflightCheck(settings)
@@ -349,42 +360,47 @@ export async function startSession(
     return { error: 'save_folder_error' }
   }
 
-  const result = await startCapture(settings, outputPath)
-  if ('error' in result) return { error: result.error }
+  // Determine video output path before starting captures
+  let videoOutputPath: string | null = null
+  if (hasVideo) {
+    const audioExt  = path.extname(outputPath)
+    const audioBase = outputPath.slice(0, -audioExt.length)
+    // When split recording is active, force separate files (can't correctly
+    // mux partial audio segments with a continuous video stream).
+    const hasSplit    = !!(settings.splitMinutes && settings.splitMinutes > 0)
+    const useSeparate = !!s.videoSeparate || hasSplit
+    videoOutputPath   = useSeparate ? `${audioBase}_video.mp4` : `${audioBase}_vtmp.mp4`
+  }
 
-  const handle = result
+  // Start audio and video captures concurrently — both ffmpeg processes are
+  // spawned within milliseconds of each other, aligning their wall-clock
+  // timestamps and eliminating A/V sync drift in the combined MP4.
+  const [audioResult, rawVideoResult] = await Promise.all([
+    startCapture(settings, outputPath),
+    hasVideo && videoOutputPath
+      ? startVideoCapture(s, videoOutputPath)
+      : Promise.resolve(null as null)
+  ])
+
+  if ('error' in audioResult) {
+    if (rawVideoResult && !('error' in rawVideoResult)) {
+      stopVideoCapture(rawVideoResult as VideoHandle).catch(() => {})
+    }
+    return { error: audioResult.error }
+  }
+
+  const handle = audioResult
 
   // ── Video capture (optional) ─────────────────────────────────────────────
   let videoHandle: VideoHandle | null = null
-  let videoOutputPath: string | null = null
 
-  const s = settings as Settings
-  if (s.videoEnabled && (s.videoDeviceName || s.videoDeviceIndex != null)) {
-    // Stop any live preview so the device is free.
-    // Brief pause on macOS lets AVFoundation fully release the device before
-    // the recording capture session opens it. Sync is handled by wall-clock
-    // timestamps on both streams — so the actual offset is preserved in the mux.
-    await stopPreview()
-    if (process.platform === 'darwin') {
-      await new Promise<void>(resolve => setTimeout(resolve, 300))
-    }
-
-    const audioExt  = path.extname(outputPath)
-    const audioBase = outputPath.slice(0, -audioExt.length)
-
-    // When split recording is active, force separate files (can't correctly
-    // mux partial audio segments with a continuous video stream).
-    const hasSplit       = !!(settings.splitMinutes && settings.splitMinutes > 0)
-    const useSeparate    = !!(settings as Settings).videoSeparate || hasSplit
-    videoOutputPath = useSeparate ? `${audioBase}_video.mp4` : `${audioBase}_vtmp.mp4`
-
-    const videoResult = await startVideoCapture(settings as Settings, videoOutputPath)
-    if ('error' in videoResult) {
-      console.error('[recorder] video capture failed to start:', videoResult.error)
-      safeSend(win, 'video-capture-error', { error: videoResult.error })
-      videoOutputPath = null  // continue with audio-only
+  if (rawVideoResult) {
+    if ('error' in rawVideoResult) {
+      console.error('[recorder] video capture failed to start:', rawVideoResult.error)
+      safeSend(win, 'video-capture-error', { error: rawVideoResult.error })
+      videoOutputPath = null
     } else {
-      videoHandle = videoResult
+      videoHandle = rawVideoResult
       videoHandle.onProgress = bytes => {
         if (activeSession?.sessionId === sessionId) {
           safeSend(win, 'video-progress', { bytes })
@@ -396,7 +412,6 @@ export async function startSession(
         }
       }
       videoHandle.onExit = code => {
-        // If video dies unexpectedly, log but keep audio recording running
         if (code !== 0 && !activeSession?.stopping) {
           console.warn('[recorder] video ffmpeg died unexpectedly, code:', code)
           safeSend(win, 'video-capture-error', { error: 'died', code })
@@ -711,10 +726,11 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
     return
   }
 
-  safeSend(session.win, 'recording-finished', entry)
+  if (audioFileKept) safeSend(session.win, 'recording-finished', entry)
 
+  const doneFile = audioFileKept ? session.outputPath : (videoFinalPath ?? session.outputPath)
   if (store.get('notifyStop') !== false) {
-    notify('SundayRec', `${getNL().done}: ${path.basename(session.outputPath)}`)
+    notify('SundayRec', `${getNL().done}: ${path.basename(doneFile)}`)
   }
   notifyIdle()
   sessionEndCallback?.()

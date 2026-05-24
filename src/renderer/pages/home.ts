@@ -617,7 +617,28 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
     tr.appendChild(td); tbody.appendChild(tr)
     return
   }
-  rows.forEach((r, idx) => {
+  // Group audio+video pairs from the same session into a single row.
+  // finishSessionAsync adds audio first, then video (note='Video'), so in the
+  // newest-first history list the video entry appears just before the audio entry.
+  const grouped: Array<{ r: RecordingEntry; videoEntry: RecordingEntry | null }> = []
+  {
+    let i = 0
+    while (i < rows.length) {
+      const curr = rows[i], next = rows[i + 1]
+      const isPair = next && curr.date === next.date && curr.startTime === next.startTime &&
+        ((curr.note === 'Video' && next.note !== 'Video') ||
+         (next.note === 'Video' && curr.note !== 'Video'))
+      if (isPair) {
+        const [audio, video] = curr.note === 'Video' ? [next, curr] : [curr, next]
+        grouped.push({ r: audio, videoEntry: video })
+        i += 2
+      } else {
+        grouped.push({ r: curr, videoEntry: null })
+        i++
+      }
+    }
+  }
+  grouped.forEach(({ r, videoEntry }, idx) => {
     const tr = document.createElement('tr')
     tr.className = 'hist-row'
     tr.style.animationDelay = `${idx * 0.04}s`
@@ -641,6 +662,14 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
       aEdit.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 10h14M3 6h3m11 0h-3M3 14h3m11 0h-3" stroke-linecap="round"/><circle cx="7.5" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="12.5" cy="14" r="1.5" fill="currentColor" stroke="none"/></svg>'
       aEdit.addEventListener('click', e => { e.preventDefault(); window.openEditorWithFile(r.path!) })
       tdActions.appendChild(aEdit)
+    }
+    if (showReveal && videoEntry?.path) {
+      const aRevealVid = document.createElement('a')
+      aRevealVid.href = '#'; aRevealVid.className = 'hist-action'
+      aRevealVid.title = 'Vis videofil i Finder'
+      aRevealVid.innerHTML = '<svg viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zm12.553-1.106A1 1 0 0115 5v10a1 1 0 01-1.553.832l-5-3.333a1 1 0 010-1.664l5-3.333a1 1 0 01.106-.072z"/></svg>'
+      aRevealVid.addEventListener('click', e => { e.preventDefault(); window.api.revealFile(videoEntry.path!) })
+      tdActions.appendChild(aRevealVid)
     }
 
     const aNote = document.createElement('a')
@@ -675,9 +704,14 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
     aDel.innerHTML = '<svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"/></svg>'
     aDel.addEventListener('click', async e => {
       e.preventDefault()
-      await window.api.deleteHistoryEntry(r.timestamp!)
+      if (r.timestamp) await window.api.deleteHistoryEntry(r.timestamp)
+      if (videoEntry?.timestamp) await window.api.deleteHistoryEntry(videoEntry.timestamp)
       const idx = fullHistory.findIndex(h => h.timestamp === r.timestamp)
       if (idx >= 0) fullHistory.splice(idx, 1)
+      if (videoEntry?.timestamp) {
+        const vidIdx = fullHistory.findIndex(h => h.timestamp === videoEntry.timestamp)
+        if (vidIdx >= 0) fullHistory.splice(vidIdx, 1)
+      }
       tr.remove()
       if (!tbody.querySelector('tr')) renderHistoryRows(tbody, [], false)
       updateHistoryStats(fullHistory)
@@ -694,6 +728,11 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
         if (r.path) td.title = r.path
         if (r.note) {
           td.appendChild(Object.assign(document.createElement('div'), { className: 'hist-note', textContent: r.note }))
+        }
+        if (videoEntry?.filename) {
+          const vidDiv = Object.assign(document.createElement('div'), { className: 'hist-note', textContent: `📹 ${videoEntry.filename}` })
+          if (videoEntry.path) vidDiv.title = videoEntry.path
+          td.appendChild(vidDiv)
         }
       }
       tr.appendChild(td)
