@@ -126,6 +126,15 @@ jest.mock('../src/main/native-recorder', () => ({
   resolveVideoInput:  (...args: unknown[]) => mockResolveVideoInput(...args),
 }))
 
+jest.mock('../src/main/video-preview', () => ({
+  isPreviewRunning:    jest.fn().mockReturnValue(false),
+  stopPreview:         jest.fn(),
+  startPreview:        jest.fn().mockResolvedValue(true),
+  getWorkingMacConfigIdx: jest.fn().mockReturnValue(0),
+  buildMacInputArgs:   jest.fn().mockReturnValue(['-f', 'avfoundation', '-framerate', '5', '-i', '0']),
+  MAC_CONFIGS: [{ label: '30fps', framerate: 30 }],
+}))
+
 import { runDiagnostics } from '../src/main/diagnostics'
 import { clipboard } from 'electron'
 

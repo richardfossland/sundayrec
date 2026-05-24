@@ -276,15 +276,16 @@ app.whenReady().then(async () => {
     const { runDiagnostics } = await import('./diagnostics')
     let result: import('./diagnostics').DiagnosticsReport
     try {
-      result = await runDiagnostics(settings)
+      result = await runDiagnostics(settings, mainWindow)
     } catch (err) {
       await dialog.showMessageBox({ type: 'error', title: 'Diagnose', message: 'Diagnose feilet', detail: String(err), buttons: ['OK'] })
       return
     }
     const savedLine  = result.savedTo ? `Rapport lagret til Skrivebord:\n${result.savedTo}` : 'Kunne ikke lagre til Skrivebord.'
     const clipLine   = result.clipboardOk ? 'Innhold kopiert til utklippstavle.' : ''
-    const testLine   = result.captureOk ? '✅ Lydtest OK' : '❌ Lydtest feilet'
-    const detail     = [testLine, '', savedLine, clipLine].filter(Boolean).join('\n')
+    const audioLine  = result.captureOk ? '✅ Lydtest OK' : '❌ Lydtest feilet'
+    const videoLine  = result.videoOk === true ? '✅ Videotest OK' : result.videoOk === false ? '❌ Videotest feilet' : ''
+    const detail     = [audioLine, videoLine, '', savedLine, clipLine].filter(Boolean).join('\n')
     const btns       = result.savedTo ? ['Vis fil', 'OK'] : ['OK']
     const { response } = await dialog.showMessageBox({
       type: result.captureOk ? 'info' : 'warning',
@@ -885,7 +886,7 @@ function setupIPC(): void {
   ipcMain.handle('run-diagnostics', async () => {
     const settings = store.getAll()
     const { runDiagnostics } = await import('./diagnostics')
-    return runDiagnostics(settings)
+    return runDiagnostics(settings, mainWindow)
   })
 
 }

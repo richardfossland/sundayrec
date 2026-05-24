@@ -1,4 +1,5 @@
 import { app, clipboard } from 'electron'
+import type { BrowserWindow } from 'electron'
 import { spawn } from 'child_process'
 import fs from 'fs'
 import os from 'os'
@@ -9,7 +10,8 @@ export interface DiagnosticsReport {
   markdown: string
   savedTo: string | null
   clipboardOk: boolean
-  captureOk: boolean
+  captureOk: boolean   // audio test
+  videoOk: boolean | null  // video test (null = not enabled/tested)
 }
 
 async function getFfmpegVersion(ffmpegBin: string): Promise<string> {
@@ -72,7 +74,7 @@ async function runAudioCaptureTest(ffmpegBin: string, settings: Settings): Promi
   })
 }
 
-async function runVideoCaptureTest(ffmpegBin: string, settings: Settings): Promise<CaptureTestResult> {
+async function runVideoCaptureTest(ffmpegBin: string, settings: Settings, win: BrowserWindow | null): Promise<CaptureTestResult> {
   if (!settings.videoEnabled) return { ok: false, error: 'video_disabled' }
   const { resolveVideoInput } = await import('./native-recorder')
   let input: { format: string; device: string; resolvedName: string } | null = null
@@ -84,18 +86,33 @@ async function runVideoCaptureTest(ffmpegBin: string, settings: Settings): Promi
   } catch {}
   if (!input) return { ok: false, error: 'no_video_device' }
 
+  // macOS: only one process can hold the camera at a time — stop any running preview
+  // first so the test can open the device, then restart it afterwards.
+  const { isPreviewRunning, stopPreview, startPreview } = await import('./video-preview')
+  const previewWasRunning = isPreviewRunning()
+  if (previewWasRunning) {
+    stopPreview()
+    // Brief pause for AVFoundation to release the device handle
+    await new Promise<void>(r => setTimeout(r, 800))
+  }
+
   const tmpFile = path.join(os.tmpdir(), `sundayrec-diag-video-${Date.now()}.mp4`)
 
-  // Minimal capture: 2 seconds, 1 fps, tiny resolution — just verify the device opens
-  const inputArgs = process.platform === 'darwin'
-    ? ['-f', 'avfoundation', '-framerate', '5', '-i', input.device]
-    : ['-f', input.format, '-framerate', '5', '-i', input.device]
+  // Use the same MAC_CONFIGS approach as the real preview to pick a working config
+  const { MAC_CONFIGS, buildMacInputArgs, getWorkingMacConfigIdx } = await import('./video-preview')
+  let inputArgs: string[]
+  if (process.platform === 'darwin') {
+    const cfg = MAC_CONFIGS[getWorkingMacConfigIdx()] ?? MAC_CONFIGS[0]
+    inputArgs = buildMacInputArgs(input.format, input.device, cfg)
+  } else {
+    inputArgs = ['-f', input.format, '-rtbufsize', '50M', '-framerate', '5', '-i', input.device]
+  }
 
-  return new Promise(resolve => {
+  const result = await new Promise<CaptureTestResult>(resolve => {
     const proc = spawn(ffmpegBin, [
       '-nostdin', '-hide_banner',
       ...inputArgs,
-      '-t', '2', '-vframes', '10', '-vf', 'scale=160:-2', '-c:v', 'libx264', '-preset', 'ultrafast',
+      '-t', '2', '-vf', 'scale=160:-2', '-c:v', 'libx264', '-preset', 'ultrafast',
       '-an', '-y', tmpFile,
     ], { stdio: ['ignore', 'ignore', 'pipe'] })
 
@@ -117,6 +134,16 @@ async function runVideoCaptureTest(ffmpegBin: string, settings: Settings): Promi
       }
     })
   })
+
+  // Restart preview if it was running before the test (needs win to send frames)
+  if (previewWasRunning && win) {
+    startPreview({
+      videoDeviceName:  settings.videoDeviceName ?? null,
+      videoDeviceIndex: settings.videoDeviceIndex ?? null,
+    }, win).catch(() => {})
+  }
+
+  return result
 }
 
 function sanitizeSettings(s: Settings): Record<string, unknown> {
@@ -171,7 +198,7 @@ function sanitizeSettings(s: Settings): Record<string, unknown> {
   }
 }
 
-export async function runDiagnostics(settings: Settings): Promise<DiagnosticsReport> {
+export async function runDiagnostics(settings: Settings, win: BrowserWindow | null = null): Promise<DiagnosticsReport> {
   const {
     ffmpegBin,
     listFfmpegDevices,
@@ -191,7 +218,7 @@ export async function runDiagnostics(settings: Settings): Promise<DiagnosticsRep
       probeWasapiAvailable().catch(() => false),
       runAudioCaptureTest(ffmpegBin, settings),
       videoEnabled
-        ? runVideoCaptureTest(ffmpegBin, settings)
+        ? runVideoCaptureTest(ffmpegBin, settings, win)
         : Promise.resolve<CaptureTestResult>({ ok: false, error: 'video_disabled' }),
     ])
 
@@ -287,5 +314,9 @@ export async function runDiagnostics(settings: Settings): Promise<DiagnosticsRep
   let clipboardOk = false
   try { clipboard.writeText(markdown); clipboardOk = true } catch {}
 
-  return { markdown, savedTo, clipboardOk, captureOk: audioTest.ok }
+  return {
+    markdown, savedTo, clipboardOk,
+    captureOk: audioTest.ok,
+    videoOk: videoEnabled ? videoTest.ok : null,
+  }
 }
