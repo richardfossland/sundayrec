@@ -235,47 +235,6 @@ export async function listWasapiDevices(): Promise<FfmpegDevice[]> {
   return p
 }
 
-// ── WASAPI device enumeration via PowerShell (backup) ──────────────────────
-
-async function listWasapiDevicesViaPowershell(): Promise<FfmpegDevice[]> {
-  if (process.platform !== 'win32') return []
-  return new Promise(resolve => {
-    const script = `
-      $devices = @()
-      try {
-        $col = Get-WmiObject -Query "SELECT * FROM Win32_SoundDevice WHERE ConfigManagerErrorCode = 0" -ErrorAction Stop
-        $col | ForEach-Object { $devices += $_.Name }
-      } catch {}
-      if ($devices.Count -eq 0) {
-        try {
-          Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4D36E96C-E325-11CE-BFC1-08002BE10318}' -ErrorAction Stop |
-            Get-ItemProperty -Name 'DriverDesc' -ErrorAction SilentlyContinue |
-            Select-Object -ExpandProperty DriverDesc |
-            ForEach-Object { $devices += $_ }
-        } catch {}
-      }
-      $devices | ForEach-Object { Write-Output $_ }
-    `.trim()
-
-    const proc = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], {
-      stdio: ['ignore', 'pipe', 'ignore']
-    })
-    let stdout = ''
-    proc.stdout?.on('data', (d: Buffer) => { stdout += d.toString() })
-    let settled = false
-    const done = () => {
-      if (settled) return; settled = true
-      const names = stdout.trim().split('\n').map(s => s.trim()).filter(s => s.length > 2)
-      const devices = names.map((name, index) => ({ name, index }))
-      console.log(`[native-recorder] PowerShell WASAPI devices: ${devices.map(d => d.name).join(', ')}`)
-      resolve(devices)
-    }
-    proc.on('close', done)
-    proc.on('error', () => { if (!settled) { settled = true; resolve([]) } })
-    setTimeout(() => { if (!settled) { try { proc.kill() } catch {}; done() } }, 8000)
-  })
-}
-
 // ── Device input resolution ─────────────────────────────────────────────────
 
 // Generic USB audio words that are too common to distinguish devices
@@ -324,30 +283,11 @@ export function findBestDeviceMatch(devices: FfmpegDevice[], name: string): Ffmp
   return undefined
 }
 
-// ── ASIO driver enumeration (Windows registry) ─────────────────────────────
-
-export async function listAsioDrivers(): Promise<string[]> {
-  if (process.platform !== 'win32') return []
-  return new Promise(resolve => {
-    const proc = spawn('powershell', [
-      '-NoProfile', '-NonInteractive', '-Command',
-      'Get-ChildItem "HKLM:\\SOFTWARE\\ASIO" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty PSChildName'
-    ], { stdio: ['ignore', 'pipe', 'ignore'] })
-    let stdout = ''
-    proc.stdout?.on('data', (d: Buffer) => { stdout += d.toString() })
-    let settled = false
-    const done = (result?: string[]) => {
-      if (settled) return; settled = true
-      if (result) { resolve(result); return }
-      const drivers = stdout.trim().split('\n')
-        .map(s => s.trim()).filter(s => s.length > 0)
-      resolve(drivers)
-    }
-    proc.on('close', () => done())
-    proc.on('error', () => done([]))
-    setTimeout(() => { if (!settled) { try { proc.kill() } catch {}; done([]) } }, 5000)
-  })
-}
+// ASIO was previously listed here but never actually implemented —
+// selecting an ASIO driver silently fell back to WASAPI/DirectShow,
+// misleading users who expected real ASIO capture. Removed in v4.22.9.
+// The IPC stub returns [] so the renderer simply shows no ASIO section.
+export async function listAsioDrivers(): Promise<string[]> { return [] }
 
 // ── Device input resolution ─────────────────────────────────────────────────
 
@@ -357,21 +297,6 @@ export async function resolveDeviceInput(
   const name = (opts.deviceName ?? '').trim()
 
   if (process.platform === 'win32') {
-    // ASIO device selected — currently recorded via WASAPI/DirectShow fallback.
-    // Full ASIO capture (naudiodon) can be dropped in here later without UI changes.
-    if ((opts.deviceId ?? '').startsWith('asio::')) {
-      const driverName = (opts.deviceId as string).slice(6)
-      const devices    = await listFfmpegDevices()
-      const match      = devices.length ? (findBestDeviceMatch(devices, driverName) ?? devices[0]) : null
-      if (!match) return null
-      const api = await probeWasapiAvailable() ? 'WASAPI' : 'DirectShow'
-      console.warn(`[native-recorder] ASIO driver "${driverName}" selected — using ${api}: "${match.name}"`)
-      if (api === 'WASAPI') {
-        return { format: 'wasapi', device: match.name, resolvedName: match.name }
-      }
-      return { format: 'dshow', device: `audio="${match.name}"`, resolvedName: match.name }
-    }
-
     const dshowDevices = await listFfmpegDevices()
     console.log(`[native-recorder] stored name: "${name}"`)
     console.log(`[native-recorder] DirectShow devices: [${dshowDevices.map(d => `"${d.name}"`).join(', ')}]`)
@@ -379,28 +304,19 @@ export async function resolveDeviceInput(
     const dshowMatch = dshowDevices.length ? (findBestDeviceMatch(dshowDevices, name) ?? dshowDevices[0]) : null
 
     if (await probeWasapiAvailable()) {
-      let wasapiDevices = await listWasapiDevices()
-      if (wasapiDevices.length === 0) {
-        console.log('[native-recorder] ffmpeg WASAPI list empty — trying PowerShell enumeration')
-        wasapiDevices = await listWasapiDevicesViaPowershell()
-      }
+      const wasapiDevices = await listWasapiDevices()
 
       if (wasapiDevices.length > 0) {
-        // Match stored name against WASAPI devices
         const wasapiMatch = findBestDeviceMatch(wasapiDevices, name) ?? wasapiDevices[0]
         console.log(`[native-recorder] using WASAPI device: "${wasapiMatch.name}" (from ${wasapiDevices.length} WASAPI devices)`)
         return { format: 'wasapi', device: wasapiMatch.name, resolvedName: wasapiMatch.name }
       }
 
-      // WASAPI list is empty — use DirectShow instead
-      // WASAPI and DirectShow use different device name formats, so mixing them fails
-      if (dshowMatch) {
-        console.warn(`[native-recorder] WASAPI list empty — using DirectShow: "${dshowMatch.name}"`)
-        return { format: 'dshow', device: `audio="${dshowMatch.name}"`, resolvedName: dshowMatch.name }
-      }
+      // WASAPI list empty — fall through to DirectShow
+      console.warn('[native-recorder] WASAPI list empty — falling through to DirectShow')
     }
 
-    // Pure DirectShow fallback
+    // DirectShow path
     if (!dshowMatch) {
       if (!dshowDevices.length) return null
       console.warn(`[native-recorder] No match for "${name}" — using first DirectShow device: "${dshowDevices[0].name}"`)

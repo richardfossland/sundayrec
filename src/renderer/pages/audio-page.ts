@@ -173,40 +173,6 @@ export async function renderDeviceList(containerId: string): Promise<void> {
     container.appendChild(card)
   })
 
-  // ── ASIO drivers (Windows only) ────────────────────────────────────────────
-  if (asioDrivers.length > 0) {
-    const hdr = document.createElement('div')
-    hdr.style.cssText = 'color:var(--text3);font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:12px 0 4px'
-    hdr.textContent = t('audio.asioSection', 'ASIO — Profesjonell')
-    container.appendChild(hdr)
-
-    asioDrivers.forEach(driverName => {
-      const asioId  = `asio::${driverName}`
-      const selected = settings.deviceId === asioId
-      const card    = document.createElement('div')
-      card.className           = 'device-card' + (selected ? ' selected' : '')
-      card.dataset.deviceId    = asioId
-      card.dataset.deviceLabel = driverName
-      card.innerHTML = `
-        <div class="device-icon">🎛</div>
-        <div>
-          <div class="device-name">${escHtml(driverName)}</div>
-          <div class="device-sub">ASIO-driver</div>
-        </div>
-        <span class="device-badge ok">ASIO</span>`
-      card.addEventListener('click', () => {
-        container.querySelectorAll('.device-card').forEach(c => c.classList.remove('selected'))
-        card.classList.add('selected')
-        patchSettings({ deviceId: asioId, deviceName: driverName })
-        _markAudioDirty()
-        // ASIO drivers expose many channels; show selector at 16 ch as a safe default
-        updateChannelSelector(16, 0, 1)
-        detectedChannelCount = 16
-      })
-      container.appendChild(card)
-    })
-  }
-
   // After rendering device cards, check ffmpeg device availability
   window.api.listFfmpegAudioDevices?.().then((ffmpegDevices) => {
     const stored = settings.deviceName

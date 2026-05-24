@@ -118,7 +118,7 @@ export async function startVideoCapture(
     console.log(`[video-recorder] using preview config ${cfgIdx} (${cfg.label}) for capture`)
     inputArgs = ['-use_wallclock_as_timestamps', '1', ...buildMacInputArgs(input.format, input.device, cfg)]
   } else {
-    inputArgs = ['-use_wallclock_as_timestamps', '1', '-f', input.format, '-rtbufsize', '200M', '-framerate', String(fps), '-i', input.device]
+    inputArgs = ['-use_wallclock_as_timestamps', '1', '-f', input.format, '-rtbufsize', '200M', '-i', input.device]
   }
 
   const [dimW, dimH] = dims.split('x')
