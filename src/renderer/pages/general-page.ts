@@ -86,17 +86,37 @@ export function setupGeneralPage(): void {
   document.getElementById('btn-varsler-cancel')?.addEventListener('click', () => applyGeneralSettingsToUI())
 
   // Update events from main
+  // On macOS, autoDownload is disabled (unsigned app — in-place ZIP install loops).
+  // update-available shows a download link; update-downloaded only fires on Windows.
+  let _isMac = false
+  window.api.getPlatform?.().then(p => { _isMac = p === 'darwin' }).catch(() => {})
+
   window.api.on('update-checking',          () => setUpdateStatus('pending', t('update.checking', 'Sjekker etter oppdateringer…')))
   window.api.on('update-not-available',     () => { setUpdateStatus('ok', t('update.upToDate', 'Du er oppdatert')); hideToast() })
   window.api.on('update-available',         (info: unknown) => {
     const v = (info as { version: string }).version
-    setUpdateStatus('pending', t('update.available', 'Ny versjon {v} er tilgjengelig — laster ned…').replace('{v}', v))
-    showUpdateToast(
-      t('update.toastAvailableTitle', 'Oppdatering tilgjengelig'),
-      t('update.toastAvailableText', 'Versjon {v} lastes ned…').replace('{v}', v)
-    )
+    if (_isMac) {
+      setUpdateStatus('ready', t('update.availableMac', 'Versjon {v} tilgjengelig — last ned ny DMG').replace('{v}', v))
+      const restartBtn = document.getElementById('btn-restart-install')
+      if (restartBtn) {
+        restartBtn.textContent = `↓ Last ned v${v}`
+        restartBtn.style.display = 'inline-flex'
+      }
+      showUpdateToast(
+        t('update.toastAvailableTitle', 'Oppdatering tilgjengelig'),
+        t('update.toastAvailableMac', 'Versjon {v} — klikk for å laste ned').replace('{v}', v),
+        true
+      )
+    } else {
+      setUpdateStatus('pending', t('update.available', 'Ny versjon {v} er tilgjengelig — laster ned…').replace('{v}', v))
+      showUpdateToast(
+        t('update.toastAvailableTitle', 'Oppdatering tilgjengelig'),
+        t('update.toastAvailableText', 'Versjon {v} lastes ned…').replace('{v}', v)
+      )
+    }
   })
   window.api.on('update-download-progress', (prog: unknown) => {
+    if (_isMac) return
     const pct  = Math.round((prog as { percent?: number }).percent ?? 0)
     const wrap = document.getElementById('update-progress-wrap')
     const bar  = document.getElementById('update-progress-bar') as HTMLElement | null

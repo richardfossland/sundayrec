@@ -45,6 +45,7 @@ declare global {
       getAppVersion:       () => Promise<string>
       checkForUpdates:     () => Promise<void>
       installUpdate:       () => void
+      getPlatform:         () => Promise<string>
       scheduleOsWakes:      () => Promise<unknown>
       scheduleOsWakesAdmin: () => Promise<unknown>
       getSleepConfig:       () => Promise<unknown>

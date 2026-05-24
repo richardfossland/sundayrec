@@ -89,6 +89,7 @@ contextBridge.exposeInMainWorld('api', {
 
   checkForUpdates: ()        => ipcRenderer.invoke('check-for-updates'),
   installUpdate:   ()        => ipcRenderer.invoke('install-update'),
+  getPlatform:     ()        => ipcRenderer.invoke('get-platform'),
 
   scheduleOsWakes:      ()   => ipcRenderer.invoke('schedule-os-wakes'),
   scheduleOsWakesAdmin: ()   => ipcRenderer.invoke('schedule-os-wakes-admin'),

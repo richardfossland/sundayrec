@@ -472,6 +472,11 @@ function setupIPC(): void {
   ipcSetup = true
 
   ipcMain.handle('install-update', () => {
+    if (process.platform === 'darwin') {
+      // macOS: unsigned app — open the releases page instead of attempting in-place install
+      shell.openExternal('https://github.com/richardfossland/sundayrec/releases/latest')
+      return
+    }
     forceQuit = true
     quitting  = true
     setImmediate(() => {
@@ -480,6 +485,8 @@ function setupIPC(): void {
       setTimeout(() => { app.relaunch(); app.exit(0) }, 3000)
     })
   })
+
+  ipcMain.handle('get-platform', () => process.platform)
 
   ipcMain.handle('get-app-version', () => app.getVersion())
 
