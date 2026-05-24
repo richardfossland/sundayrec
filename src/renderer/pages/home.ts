@@ -66,12 +66,15 @@ function updateVideoToggleButton(): void {
 function updateAudioSeparateButton(): void {
   const btn   = document.getElementById('btn-audio-separate') as HTMLButtonElement | null
   const label = document.getElementById('audio-separate-label')
+  const card  = document.getElementById('home-format-card')
   if (!btn || !label) return
   const videoOn   = settings.videoEnabled ?? false
   const keepAudio = settings.videoKeepAudio ?? true
   btn.style.display = videoOn ? 'inline-flex' : 'none'
   btn.classList.toggle('audio-separate-on', keepAudio)
   label.textContent = keepAudio ? 'Separat lydfil' : 'Ingen lydfil'
+  // Grey out the whole FORMAT card when video is on but separate audio is off
+  card?.classList.toggle('format-inactive', videoOn && !keepAudio)
 }
 
 export async function refreshHomeVideoDevices(): Promise<void> {
