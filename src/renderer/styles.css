@@ -2774,31 +2774,27 @@ body.platform-win32  #wake-instructions-win { display: block; }
   background: rgba(240,187,71,.18);
 }
 
-/* ── Separate audio toggle button (home quick-row, video mode only) ── */
-.btn-audio-separate {
-  display: flex; align-items: center; gap: 6px;
-  padding: 0 13px; height: 44px;
+/* ── Separate audio toggle inside FORMAT info card (video mode only) ── */
+.info-card-audio-sep {
+  display: inline-flex; align-items: center; gap: 5px;
+  margin-top: 5px;
+  padding: 2px 8px 2px 6px;
   background: var(--surface2); border: 1px solid var(--border2);
-  border-radius: var(--rsm); color: var(--text2);
-  font-size: 13px; font-weight: 500; cursor: pointer;
+  border-radius: 20px; color: var(--text3);
+  font-size: 11px; font-weight: 500; cursor: pointer;
   transition: background .15s, border-color .15s, color .15s;
-  white-space: nowrap; flex-shrink: 0;
 }
-.btn-audio-separate:hover { background: var(--surface3); color: var(--text); }
-.btn-audio-separate.audio-separate-on {
-  background: rgba(80,180,120,.12); border-color: rgba(80,180,120,.4);
+.info-card-audio-sep:hover { background: var(--surface3); color: var(--text2); }
+.info-card-audio-sep.audio-separate-on {
+  background: rgba(80,180,120,.1); border-color: rgba(80,180,120,.35);
   color: #50b478;
-  box-shadow: 0 0 0 2px rgba(80,180,120,.2);
 }
-.btn-audio-separate.audio-separate-on::before {
-  content: '';
-  display: inline-block;
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: var(--green);
-  flex-shrink: 0;
+.audio-sep-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--border2); flex-shrink: 0;
+  transition: background .15s;
 }
-.btn-audio-separate.audio-separate-on:hover { background: rgba(80,180,120,.18); }
+.audio-separate-on .audio-sep-dot { background: var(--green); }
 
 /* ── Recording overlay video preview ───────────────────────────── */
 .rec-video-section {

@@ -69,9 +69,9 @@ function updateAudioSeparateButton(): void {
   if (!btn || !label) return
   const videoOn   = settings.videoEnabled ?? false
   const keepAudio = settings.videoKeepAudio ?? true
-  btn.style.display = videoOn ? '' : 'none'
+  btn.style.display = videoOn ? 'inline-flex' : 'none'
   btn.classList.toggle('audio-separate-on', keepAudio)
-  label.textContent = keepAudio ? 'Lyd +' : 'Lyd –'
+  label.textContent = keepAudio ? 'Separat lydfil' : 'Ingen lydfil'
 }
 
 export async function refreshHomeVideoDevices(): Promise<void> {

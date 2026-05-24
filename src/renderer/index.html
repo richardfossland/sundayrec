@@ -122,12 +122,6 @@
         </svg>
         <span id="video-toggle-label">Video av</span>
       </button>
-      <button class="btn-audio-separate" id="btn-audio-separate" title="Behold separat høykvalitets lydfil ved siden av video-MP4" style="display:none">
-        <svg viewBox="0 0 20 20" width="14" height="14" fill="currentColor">
-          <path d="M18 3a1 1 0 00-1.196-.98l-10 2A1 1 0 006 5v9.114A4.369 4.369 0 005 14c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V7.82l8-1.6v5.894A4.37 4.37 0 0015 12c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V3z"/>
-        </svg>
-        <span id="audio-separate-label">Lyd +</span>
-      </button>
     </div>
 
     <!-- Full-width VU section with signal status -->
@@ -232,6 +226,10 @@
           <div class="info-card-label" data-i18n="home.formatLabel">FORMAT</div>
           <div class="info-card-value" id="home-format-value">—</div>
           <div class="info-card-sub" id="home-format-sub"></div>
+          <button class="info-card-audio-sep" id="btn-audio-separate" style="display:none">
+            <span class="audio-sep-dot" id="audio-sep-dot"></span>
+            <span id="audio-separate-label">Separat lydfil</span>
+          </button>
         </div>
         <a href="#" class="info-card-action" id="btn-go-audio-fmt" data-i18n="home.changeSettings">Endre</a>
       </div>
