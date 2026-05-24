@@ -98,14 +98,19 @@ async function runVideoCaptureTest(ffmpegBin: string, settings: Settings, win: B
 
   const tmpFile = path.join(os.tmpdir(), `sundayrec-diag-video-${Date.now()}.mp4`)
 
-  // Use the same MAC_CONFIGS approach as the real preview to pick a working config
+  // Mirror startVideoCapture: use wall-clock timestamps + same MAC_CONFIGS as preview.
+  // -use_wallclock_as_timestamps 1 is critical — without it, AVFoundation reports a
+  // 1000k-fps internal timebase that makes ffmpeg duplicate millions of frames.
+  // For the test config, prefer the last working preview config; if no preview has
+  // run yet (index 0, size=null), fall back to 720p to avoid the portrait-mode trap.
   const { MAC_CONFIGS, buildMacInputArgs, getWorkingMacConfigIdx } = await import('./video-preview')
   let inputArgs: string[]
   if (process.platform === 'darwin') {
-    const cfg = MAC_CONFIGS[getWorkingMacConfigIdx()] ?? MAC_CONFIGS[0]
-    inputArgs = buildMacInputArgs(input.format, input.device, cfg)
+    const cfgIdx = getWorkingMacConfigIdx()
+    const cfg = (MAC_CONFIGS[cfgIdx]?.size != null ? MAC_CONFIGS[cfgIdx] : MAC_CONFIGS[1]) ?? MAC_CONFIGS[1]
+    inputArgs = ['-use_wallclock_as_timestamps', '1', ...buildMacInputArgs(input.format, input.device, cfg)]
   } else {
-    inputArgs = ['-f', input.format, '-rtbufsize', '50M', '-framerate', '5', '-i', input.device]
+    inputArgs = ['-use_wallclock_as_timestamps', '1', '-f', input.format, '-rtbufsize', '50M', '-framerate', '30', '-i', input.device]
   }
 
   const result = await new Promise<CaptureTestResult>(resolve => {
