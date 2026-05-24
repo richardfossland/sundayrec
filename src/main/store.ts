@@ -289,6 +289,18 @@ export function migrateActiveRecovery(): void {
   }
 }
 
+export function markCloudUploaded(timestamp: number, serviceId: string): void {
+  const history = get('recordingHistory') ?? []
+  const idx = history.findIndex(e => e.timestamp === timestamp)
+  if (idx < 0) return
+  const entry = history[idx]
+  const existing = entry.cloudUploaded ?? []
+  if (!existing.includes(serviceId)) {
+    history[idx] = { ...entry, cloudUploaded: [...existing, serviceId] }
+    set('recordingHistory', history)
+  }
+}
+
 export function reset(): void {
   store.clear()
   _lastHistoryTs = 0

@@ -82,6 +82,34 @@ export function setupGeneralPage(): void {
 
   document.getElementById('btn-general-save')?.addEventListener('click', saveGeneralSettings)
   document.getElementById('btn-general-cancel')?.addEventListener('click', () => applyGeneralSettingsToUI())
+
+  // Editor intro path picker
+  document.getElementById('btn-pick-editor-intro')?.addEventListener('click', async () => {
+    const fp = await window.api.pickAudioFile()
+    if (!fp) return
+    patchSettings({ editorIntroPath: fp })
+    await window.api.saveSettings(settings)
+    updateEditorClipUI()
+  })
+  document.getElementById('btn-clear-editor-intro')?.addEventListener('click', async () => {
+    patchSettings({ editorIntroPath: undefined })
+    await window.api.saveSettings(settings)
+    updateEditorClipUI()
+  })
+
+  // Editor outro path picker
+  document.getElementById('btn-pick-editor-outro')?.addEventListener('click', async () => {
+    const fp = await window.api.pickAudioFile()
+    if (!fp) return
+    patchSettings({ editorOutroPath: fp })
+    await window.api.saveSettings(settings)
+    updateEditorClipUI()
+  })
+  document.getElementById('btn-clear-editor-outro')?.addEventListener('click', async () => {
+    patchSettings({ editorOutroPath: undefined })
+    await window.api.saveSettings(settings)
+    updateEditorClipUI()
+  })
   document.getElementById('btn-varsler-save')?.addEventListener('click', saveGeneralSettings)
   document.getElementById('btn-varsler-cancel')?.addEventListener('click', () => applyGeneralSettingsToUI())
 
@@ -187,6 +215,7 @@ export function applyGeneralSettingsToUI(): void {
   })
 
   setUpdateStatus('', t('update.checkHint', 'Klikk «Se etter oppdateringer» for å sjekke'))
+  updateEditorClipUI()
 }
 
 async function saveGeneralSettings(): Promise<void> {
@@ -227,6 +256,26 @@ function toggleEmailSection(): void {
 function setCheckbox(id: string, val: boolean): void {
   const el = document.getElementById(id) as HTMLInputElement | null
   if (el) el.checked = val
+}
+
+export function updateEditorClipUI(): void {
+  const introPath = settings.editorIntroPath ?? ''
+  const outroPath = settings.editorOutroPath ?? ''
+
+  const introDisplay = document.getElementById('general-editor-intro-display')
+  const outrDisplay  = document.getElementById('general-editor-outro-display')
+  const introClear   = document.getElementById('btn-clear-editor-intro')
+  const outrClear    = document.getElementById('btn-clear-editor-outro')
+
+  if (introDisplay) introDisplay.textContent = introPath
+    ? introPath.split(/[\\/]/).pop() ?? introPath
+    : t('general.noClipSelected', 'Ingen fil valgt')
+  if (outrDisplay)  outrDisplay.textContent  = outroPath
+    ? outroPath.split(/[\\/]/).pop() ?? outroPath
+    : t('general.noClipSelected', 'Ingen fil valgt')
+
+  if (introClear) (introClear as HTMLElement).style.display = introPath ? '' : 'none'
+  if (outrClear)  (outrClear  as HTMLElement).style.display = outroPath ? '' : 'none'
 }
 
 export function setUpdateStatus(dotCls: string, text: string): void {

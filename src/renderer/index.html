@@ -889,6 +889,15 @@
             Delt opptak er aktivt — video lagres alltid som separat fil uavhengig av valget over. Deaktiver automatisk oppdeling i planleggingsinnstillingene for å kombinere lyd og video til én MP4.
           </div>
           <p class="form-hint" id="video-split-hint">Ved automatisk oppdeling av filer brukes alltid separate filer.</p>
+
+          <!-- Keep audio toggle — only visible when "combined" mode is selected -->
+          <div id="video-keep-audio-row" class="toggle-row" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border,rgba(255,255,255,.08))">
+            <div style="padding-left:16px">
+              <div class="toggle-title">Behold separat lydfil</div>
+              <div class="toggle-desc">Lagrer også den høykvalitets lydfilen ved siden av den kombinerte MP4</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="opt-video-keep-audio" checked /><span class="toggle-track"></span></label>
+          </div>
         </div>
       </div>
 
@@ -1024,6 +1033,25 @@
           <button class="btn-primary" id="btn-restart-install" style="display:none">↺ Start på nytt og installer</button>
         </div>
       </div>
+      <div class="card">
+        <div class="card-title">Rediger — standardklipp</div>
+        <p class="card-desc">Intro- og outro-filer som brukes som standard når du redigerer nye opptak i Rediger-siden.</p>
+
+        <label class="form-label">STANDARD INTRO-KLIPP</label>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span id="general-editor-intro-display" style="flex:1;font-size:13px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Ingen fil valgt</span>
+          <button class="btn-secondary btn-sm" id="btn-pick-editor-intro">Velg fil</button>
+          <button class="btn-ghost btn-sm" id="btn-clear-editor-intro" style="display:none">✕</button>
+        </div>
+
+        <label class="form-label mt">STANDARD OUTRO-KLIPP</label>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span id="general-editor-outro-display" style="flex:1;font-size:13px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Ingen fil valgt</span>
+          <button class="btn-secondary btn-sm" id="btn-pick-editor-outro">Velg fil</button>
+          <button class="btn-ghost btn-sm" id="btn-clear-editor-outro" style="display:none">✕</button>
+        </div>
+      </div>
+
       <div class="page-footer">
         <button class="btn-primary" id="btn-general-save" data-i18n="general.save">Lagre</button>
         <button class="btn-ghost" id="btn-general-cancel" data-i18n="general.cancel">Avbryt</button>

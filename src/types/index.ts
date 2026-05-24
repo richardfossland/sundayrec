@@ -38,6 +38,9 @@ export interface RecordingEntry {
   error?: string
   note?: string
   timestamp?: number
+  fileSizeBytes?: number    // actual file size on disk after recording
+  durationSec?: number      // recording duration in seconds
+  cloudUploaded?: string[]  // cloud service IDs where this file was uploaded: ['google-drive', 'dropbox', 'onedrive']
 }
 
 export interface ActiveRecovery {

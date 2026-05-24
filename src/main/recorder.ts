@@ -243,7 +243,7 @@ export function getActiveSessionOpts(): RecordingOpts | null {
 
 // ── Pre-recording safety checks ──────────────────────────────────────────────
 
-async function preflightCheck(settings: RecordingOpts): Promise<{ error: string } | null> {
+async function preflightCheck(settings: RecordingOpts, onWarn?: (msg: string) => void): Promise<{ error: string } | null> {
   // 1. ffmpeg binary must exist
   if (ffmpegBin !== 'ffmpeg' && !fs.existsSync(ffmpegBin)) {
     console.error('[recorder] ffmpeg binary not found at', ffmpegBin)
@@ -296,7 +296,11 @@ async function preflightCheck(settings: RecordingOpts): Promise<{ error: string 
       const minBytes = videoActive ? 1024 * 1024 * 1024 : 200 * 1024 * 1024  // 1 GB vs 200 MB in bytes
       if (!isNaN(freeBytes) && freeBytes >= 0 && freeBytes < minBytes) return { error: 'disk_full' }
     }
-  } catch { /* disk check is best-effort */ }
+  } catch (diskErr) {
+    console.warn('[recorder] disk space check failed:', (diskErr as Error).message)
+    // disk check is best-effort — surface to UI via the warn callback if provided
+    onWarn?.(`Disk space check failed: ${(diskErr as Error).message}`)
+  }
 
   // 4. macOS: microphone (and camera if video is enabled) permission must be granted
   if (process.platform === 'darwin') {
@@ -343,7 +347,9 @@ export async function startSession(
     await new Promise<void>(resolve => setTimeout(resolve, releaseMs))
   }
 
-  const preflightError = await preflightCheck(settings)
+  const preflightError = await preflightCheck(settings, (msg) => {
+    safeSend(win, 'backend-warning', { msg, severity: 'warn', category: 'disk' })
+  })
   if (preflightError) return preflightError
 
   const sessionId  = crypto.randomUUID()
@@ -670,33 +676,46 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
   const audioFileKept = (session.settings as Settings).videoKeepAudio !== false
     || !(videoFinalPath)  // always keep entry when no video was recorded
     || !!(session.settings as Settings).videoSeparate  // always keep in separate-files mode
+
+  // Get actual file size from disk
+  let audioFileSizeBytes: number | undefined
+  try { audioFileSizeBytes = fs.statSync(session.outputPath).size } catch {}
+
   const entry: RecordingEntry = {
-    date:      localDateStr(recDate),
-    startTime: recDate.toTimeString().slice(0, 5),
-    duration:  formatDuration(durationSec),
-    filename:  path.basename(session.outputPath),
-    path:      session.outputPath,
-    status:    'ok'
+    date:          localDateStr(recDate),
+    startTime:     recDate.toTimeString().slice(0, 5),
+    duration:      formatDuration(durationSec),
+    filename:      path.basename(session.outputPath),
+    path:          session.outputPath,
+    status:        'ok',
+    durationSec,
+    fileSizeBytes: audioFileSizeBytes,
   }
   if (audioFileKept) store.addHistory(entry)
 
   // Step 5: Video history entry (if any)
   if (videoFinalPath && fs.existsSync(videoFinalPath)) {
+    let videoFileSizeBytes: number | undefined
+    try { videoFileSizeBytes = fs.statSync(videoFinalPath).size } catch {}
     const videoEntry: RecordingEntry = {
-      date:      localDateStr(recDate),
-      startTime: recDate.toTimeString().slice(0, 5),
-      duration:  formatDuration(durationSec),
-      filename:  path.basename(videoFinalPath),
-      path:      videoFinalPath,
-      status:    'ok',
-      note:      'Video'
+      date:          localDateStr(recDate),
+      startTime:     recDate.toTimeString().slice(0, 5),
+      duration:      formatDuration(durationSec),
+      filename:      path.basename(videoFinalPath),
+      path:          videoFinalPath,
+      status:        'ok',
+      note:          'Video',
+      durationSec,
+      fileSizeBytes: videoFileSizeBytes,
     }
     store.addHistory(videoEntry)
     safeSend(session.win, 'recording-finished', videoEntry)
   }
 
   // Cloud auto-upload (fire-and-forget)
-  import('./cloud').then(c => c.autoUploadAfterRecording(session.outputPath, session.win)).catch(err =>
+  import('./cloud').then(c => c.autoUploadAfterRecording(session.outputPath, session.win, (msg, severity, category) => {
+    safeSend(session.win, 'backend-warning', { msg, severity, category })
+  })).catch(err =>
     console.error('[recorder] cloud upload error:', err)
   )
 
@@ -1007,6 +1026,8 @@ function failSession(session: Session, reason: string): void {
   const nl = getNL()
   const localizedReason = localizeError(reason)
   safeSend(session.win, 'recording-error', { error: reason, message: localizedReason })
+  // Also surface as backend-warning with device category (reconnect gave up)
+  safeSend(session.win, 'backend-warning', { msg: localizedReason, severity: 'error', category: 'device' })
   tray.setRecording(false)
   tray.setError(true)
   notify(nl.err, localizedReason)

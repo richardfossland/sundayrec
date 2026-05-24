@@ -26,6 +26,7 @@ const ALLOWED_CHANNELS = [
   'video-progress',
   'video-capture-error',
   'email-test-status',
+  'backend-warning',
 ] as const
 
 type AllowedChannel = typeof ALLOWED_CHANNELS[number]

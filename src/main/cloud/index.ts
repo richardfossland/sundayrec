@@ -63,7 +63,7 @@ export function getStatus(): Record<CloudServiceId, CloudStatus> {
   return result
 }
 
-export async function uploadFile(service: CloudServiceId, filePath: string, metadata?: RecordingMetadata): Promise<void> {
+export async function uploadFile(service: CloudServiceId, filePath: string, metadata?: RecordingMetadata, entryTimestamp?: number): Promise<void> {
   const token = await getValidToken(service)
   const tok   = tokenStore.getToken(service)!
 
@@ -75,6 +75,9 @@ export async function uploadFile(service: CloudServiceId, filePath: string, meta
     await oneDrive.uploadFile(token, filePath, tok.folderId)
   }
   tokenStore.updateTokenFields(service, { lastUpload: Date.now(), lastUploadOk: true })
+  if (entryTimestamp !== undefined) {
+    store.markCloudUploaded(entryTimestamp, service)
+  }
 }
 
 export async function listFolders(service: CloudServiceId, parentId?: string): Promise<{ id: string; name: string; path?: string }[]> {
@@ -88,7 +91,11 @@ export function setFolder(service: CloudServiceId, folderId: string, folderName:
   tokenStore.updateTokenFields(service, { folderId, folderName, folderPath })
 }
 
-export async function autoUploadAfterRecording(filePath: string, win: BrowserWindow): Promise<void> {
+export async function autoUploadAfterRecording(
+  filePath: string,
+  win: BrowserWindow,
+  sendWarning?: (msg: string, severity: 'warn' | 'error', category: 'cloud') => void
+): Promise<void> {
   const settings = store.getAll()
   const map: { id: CloudServiceId; cfg: typeof settings.cloudGoogleDrive }[] = [
     { id: 'google-drive', cfg: settings.cloudGoogleDrive },
@@ -96,16 +103,23 @@ export async function autoUploadAfterRecording(filePath: string, win: BrowserWin
     { id: 'onedrive',     cfg: settings.cloudOneDrive },
   ]
 
+  // Find the history entry timestamp for this file so we can mark it uploaded
+  const history = store.getHistory()
+  const entryTimestamp = history.find(e => e.path === filePath)?.timestamp
+
   for (const { id, cfg } of map) {
     if (!cfg?.enabled || !cfg.autoUpload) continue
     if (!tokenStore.getToken(id)) continue
     try {
       win.webContents.send('cloud-upload-progress', { service: id, filename: path.basename(filePath) })
-      await uploadFile(id, filePath)
+      await uploadFile(id, filePath, undefined, entryTimestamp)
       win.webContents.send('cloud-upload-done', { service: id, ok: true })
     } catch (err) {
       tokenStore.updateTokenFields(id, { lastUpload: Date.now(), lastUploadOk: false })
       win.webContents.send('cloud-upload-done', { service: id, ok: false, error: (err as Error).message })
+      const errMsg = `Cloud upload failed (${id}): ${(err as Error).message}`
+      console.error('[cloud]', errMsg)
+      sendWarning?.(errMsg, 'error', 'cloud')
     }
   }
 }

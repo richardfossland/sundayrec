@@ -2,6 +2,15 @@ import { settings, patchSettings } from '../state'
 import { flashMsg } from '../helpers'
 import type { Settings } from '../../types'
 
+import { t } from '../i18n'
+
+function updateKeepAudioVisibility(): void {
+  const modeEl    = document.querySelector<HTMLInputElement>('input[name="video-mode"]:checked')
+  const separate  = modeEl?.value === 'separate'
+  const row       = document.getElementById('video-keep-audio-row')
+  if (row) row.style.display = separate ? 'none' : ''
+}
+
 function showVideoWarning(msg: string): void {
   const bitrateInput = document.getElementById('video-bitrate-value') as HTMLInputElement | null
   if (!bitrateInput) return
@@ -31,6 +40,11 @@ export function setupVideoPage(): void {
     await refreshVideoDevices()
   })
 
+  // video-mode radio buttons — update keep-audio visibility
+  document.querySelectorAll<HTMLInputElement>('input[name="video-mode"]').forEach(el => {
+    el.addEventListener('change', updateKeepAudioVisibility)
+  })
+
   // Toggle custom bitrate row
   const toggleBitrateRow = () => {
     const autoCheck = document.getElementById('opt-video-bitrate-auto') as HTMLInputElement | null
@@ -46,10 +60,10 @@ export function setupVideoPage(): void {
     const val = parseInt(bitrateInput.value)
     if (isNaN(val) || val < 500) {
       bitrateInput.value = '500'
-      showVideoWarning('Minimum bitrate er 500 kbps')
+      showVideoWarning(t('video.minBitrateWarn', 'Minimum bitrate er 500 kbps'))
     } else if (val > 50000) {
       bitrateInput.value = '50000'
-      showVideoWarning('Maksimum bitrate er 50 000 kbps')
+      showVideoWarning(t('video.maxBitrateWarn', 'Maksimum bitrate er 50 000 kbps'))
     }
   })
 
@@ -139,6 +153,11 @@ export function applyVideoSettingsToUI(): void {
   const modeEl     = document.querySelector<HTMLInputElement>(`input[name="video-mode"][value="${separate ? 'separate' : 'combined'}"]`)
   if (modeEl) modeEl.checked = true
 
+  // Keep audio toggle — only visible when NOT separate
+  const keepAudioEl = document.getElementById('opt-video-keep-audio') as HTMLInputElement | null
+  if (keepAudioEl) keepAudioEl.checked = settings.videoKeepAudio !== false
+  updateKeepAudioVisibility()
+
   // Populate device select (best-effort — may not have been loaded yet)
   if (loadedDevices.length) {
     const selectEl = document.getElementById('video-device-select') as HTMLSelectElement | null
@@ -174,8 +193,11 @@ async function saveVideoSettings(): Promise<void> {
   const autoMode = document.getElementById('opt-video-bitrate-auto') as HTMLInputElement | null
   const bitrate  = (autoMode?.checked) ? 0 : parseInt(bitrateInput?.value ?? '0') || 0
 
-  const modeSel  = document.querySelector<HTMLInputElement>('input[name="video-mode"]:checked')
-  const separate = modeSel?.value === 'separate'
+  const modeSel   = document.querySelector<HTMLInputElement>('input[name="video-mode"]:checked')
+  const separate  = modeSel?.value === 'separate'
+
+  const keepAudioEl = document.getElementById('opt-video-keep-audio') as HTMLInputElement | null
+  const keepAudio   = keepAudioEl ? keepAudioEl.checked : true
 
   const updated = {
     ...settings,
@@ -186,6 +208,7 @@ async function saveVideoSettings(): Promise<void> {
     videoFramerate:    fps,
     videoBitrate:      bitrate,
     videoSeparate:     separate,
+    videoKeepAudio:    keepAudio,
   }
 
   patchSettings(updated)

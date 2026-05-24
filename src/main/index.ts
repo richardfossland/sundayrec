@@ -311,7 +311,10 @@ app.whenReady().then(async () => {
     const s = store.getAll()
     if ((s.preRollSeconds ?? 0) > 0 && !recorder.isActive()) {
       setTimeout(() => {
-        preroll.start(s).catch(err => console.error('[preroll] post-session restart error:', err))
+        preroll.start(s).catch(err => {
+          console.error('[preroll] post-session restart error:', err)
+          sendBackendWarning(mainWindow, `Pre-roll restart failed: ${(err as Error).message}`, 'warn', 'preroll')
+        })
       }, 1000) // brief pause for device release
     }
   })
@@ -319,7 +322,10 @@ app.whenReady().then(async () => {
   // Start pre-roll if enabled at launch
   const launchSettings = store.getAll()
   if ((launchSettings.preRollSeconds ?? 0) > 0) {
-    preroll.start(launchSettings).catch(err => console.error('[preroll] launch start error:', err))
+    preroll.start(launchSettings).catch(err => {
+      console.error('[preroll] launch start error:', err)
+      sendBackendWarning(mainWindow, `Pre-roll failed to start: ${(err as Error).message}`, 'warn', 'preroll')
+    })
   }
   cleanupOldRecordings()
   store.pruneHistory()
@@ -327,7 +333,10 @@ app.whenReady().then(async () => {
   // Check for truly missed recordings BEFORE overwriting the stored expected time
   checkTrulyMissedRecordings()
   storeNextExpected(initialUpcoming)
-  wake.reschedule(initialUpcoming, mainWindow).catch(err => console.error('[wake] reschedule error:', err))
+  wake.reschedule(initialUpcoming, mainWindow).catch(err => {
+    console.error('[wake] reschedule error:', err)
+    sendBackendWarning(mainWindow, `Wake scheduling failed: ${(err as Error).message}`, 'warn', 'wake')
+  })
   tray.setNextRecording(initialUpcoming[0] ?? null)
 
   // On wake from sleep: check for missed recordings, refresh OS wake list, notify user
@@ -341,14 +350,20 @@ app.whenReady().then(async () => {
       if ((wakeSettings.preRollSeconds ?? 0) > 0) {
         preroll.stop().catch(() => {}).finally(() => {
           setTimeout(() => {
-            preroll.start(wakeSettings).catch(err => console.error('[preroll] wake restart error:', err))
+            preroll.start(wakeSettings).catch(err => {
+              console.error('[preroll] wake restart error:', err)
+              sendBackendWarning(mainWindow, `Pre-roll failed to restart after wake: ${(err as Error).message}`, 'warn', 'preroll')
+            })
           }, 2000)
         })
       }
     }
     const upcoming = scheduler.getUpcomingDates()
     storeNextExpected(upcoming)
-    wake.reschedule(upcoming, mainWindow).catch(err => console.error('[wake] resume reschedule error:', err))
+    wake.reschedule(upcoming, mainWindow).catch(err => {
+      console.error('[wake] resume reschedule error:', err)
+      sendBackendWarning(mainWindow, `Wake rescheduling failed after resume: ${(err as Error).message}`, 'warn', 'wake')
+    })
     tray.setNextRecording(upcoming[0] ?? null)
 
     // Show notification if a recording is imminent (within 15 min)
@@ -368,7 +383,10 @@ app.whenReady().then(async () => {
   setInterval(() => {
     const upcoming = scheduler.getUpcomingDates()
     storeNextExpected(upcoming)
-    wake.reschedule(upcoming, mainWindow).catch(err => console.error('[wake] periodic reschedule error:', err))
+    wake.reschedule(upcoming, mainWindow).catch(err => {
+      console.error('[wake] periodic reschedule error:', err)
+      sendBackendWarning(mainWindow, `Periodic wake rescheduling failed: ${(err as Error).message}`, 'warn', 'wake')
+    })
     tray.setNextRecording(upcoming[0] ?? null)
   }, 6 * 60 * 60 * 1000)
 
@@ -503,14 +521,20 @@ function setupIPC(): void {
     }
     const upcomingAfterSave = scheduler.getUpcomingDates()
     storeNextExpected(upcomingAfterSave)
-    wake.reschedule(upcomingAfterSave, mainWindow).catch(err => console.error('[wake] reschedule error:', err))
+    wake.reschedule(upcomingAfterSave, mainWindow).catch(err => {
+      console.error('[wake] reschedule error:', err)
+      sendBackendWarning(mainWindow, `Wake rescheduling failed after settings save: ${(err as Error).message}`, 'warn', 'wake')
+    })
     tray.setNextRecording(upcomingAfterSave[0] ?? null)
     // Sync pre-roll state with new settings (stop must complete before start)
     if (!recorder.isActive()) {
       const newPreRollSec = (settings as { preRollSeconds?: number }).preRollSeconds ?? 0
       preroll.stop().then(() => {
         if (newPreRollSec > 0) return preroll.start(store.getAll())
-      }).catch(err => console.error('[preroll] settings-change restart error:', err))
+      }).catch(err => {
+        console.error('[preroll] settings-change restart error:', err)
+        sendBackendWarning(mainWindow, `Pre-roll failed to restart after settings change: ${(err as Error).message}`, 'warn', 'preroll')
+      })
     }
     return true
   })
@@ -670,7 +694,7 @@ function setupIPC(): void {
       const result = await Promise.race([
         mailer.sendTest(s, store.getSmtpPassword()).then(() => ({ ok: true as const })),
         new Promise<{ ok: false; error: string }>(resolve =>
-          setTimeout(() => resolve({ ok: false, error: 'Timeout etter 15 sekunder' }), 15000)
+          setTimeout(() => resolve({ ok: false, error: 'Email test timed out after 15 seconds' }), 15000)
         )
       ])
       mainWindow.webContents.send('email-test-status', {
@@ -900,6 +924,18 @@ function setupIPC(): void {
 
 function notify(title: string, body: string): void {
   if (Notification.isSupported()) new Notification({ title, body }).show()
+}
+
+function sendBackendWarning(win: BrowserWindow | null, msg: string, severity: 'warn' | 'error', category: 'cloud' | 'preroll' | 'wake' | 'disk' | 'device'): void {
+  win?.webContents.send('backend-warning', { msg, severity, category })
+  if (severity === 'error') {
+    const s = store.getAll()
+    if (s.emailOnError && s.emailAddress) {
+      mailer.sendError(s, store.getSmtpPassword(), `[${category}] ${msg}`).catch(err =>
+        console.error('[sendBackendWarning] email send failed:', (err as Error).message)
+      )
+    }
+  }
 }
 
 async function cleanupOldRecordings(): Promise<void> {

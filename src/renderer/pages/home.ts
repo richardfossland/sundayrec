@@ -274,6 +274,108 @@ function highlightCard(card: HTMLElement | null): void {
 /** Exported so other pages can trigger a disk-space refresh after changing format/channels/samplerate */
 export { loadDiskSpace as refreshHomeDiskSpace }
 
+// ── Backend warning toast ────────────────────────────────────────────────────
+
+let _backendWarningTimers: ReturnType<typeof setTimeout>[] = []
+
+function showBackendWarning(msg: string, severity: 'warn' | 'error'): void {
+  // Remove existing toasts of same severity so they don't pile up
+  document.querySelectorAll<HTMLElement>(`.backend-warning-toast.severity-${severity}`).forEach(el => el.remove())
+
+  const toast = document.createElement('div')
+  toast.className = `backend-warning-toast severity-${severity}`
+  toast.style.cssText = [
+    'display:flex', 'align-items:flex-start', 'gap:10px',
+    'padding:10px 14px', 'border-radius:8px', 'font-size:13px',
+    'line-height:1.4', 'position:relative', 'box-shadow:0 2px 8px rgba(0,0,0,.25)',
+    'margin:8px 0',
+    'animation:toast-in .2s ease',
+    severity === 'error'
+      ? 'background:var(--red,#ef4444);color:#fff;border:1px solid rgba(255,255,255,.2)'
+      : 'background:var(--yellow,#fbbf24);color:#1a1a1a;border:1px solid rgba(0,0,0,.15)',
+  ].join(';')
+
+  const icon = document.createElement('span')
+  icon.textContent = severity === 'error' ? '✕' : '⚠'
+  icon.style.cssText = 'flex-shrink:0;font-size:14px;margin-top:1px'
+
+  const msgEl = document.createElement('span')
+  msgEl.style.cssText = 'flex:1'
+  msgEl.textContent = msg
+
+  const closeBtn = document.createElement('button')
+  closeBtn.textContent = '×'
+  closeBtn.style.cssText = [
+    'background:none;border:none;cursor:pointer;padding:0;font-size:16px',
+    'line-height:1;opacity:.7;flex-shrink:0;margin-left:4px',
+    severity === 'error' ? 'color:#fff' : 'color:#1a1a1a',
+  ].join(';')
+  closeBtn.addEventListener('click', () => toast.remove())
+
+  toast.appendChild(icon)
+  toast.appendChild(msgEl)
+  toast.appendChild(closeBtn)
+
+  // Insert below the global error banner (or at top of main if banner not present)
+  const main     = document.getElementById('main')
+  const errorBanner = document.getElementById('global-error-banner')
+  if (main && errorBanner?.nextSibling) {
+    main.insertBefore(toast, errorBanner.nextSibling)
+  } else if (main) {
+    main.insertBefore(toast, main.firstChild)
+  }
+
+  if (severity === 'warn') {
+    const tid = setTimeout(() => toast.remove(), 8000)
+    _backendWarningTimers.push(tid)
+  }
+  // 'error' stays until dismissed
+}
+
+// ── Post-recording summary helpers ──────────────────────────────────────────
+
+function fmtDurationSec(sec: number): string {
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  const s = sec % 60
+  if (h > 0 && m > 0) return `${h}t ${m}m`
+  if (h > 0)           return `${h}t`
+  if (m > 0 && s > 0)  return `${m}m ${s}s`
+  if (m > 0)           return `${m}m`
+  return `${s}s`
+}
+
+function fmtFileSizeBytes(bytes: number): string {
+  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`
+  if (bytes >= 1e6) return `${Math.round(bytes / 1e6)} MB`
+  return `${Math.round(bytes / 1e3)} KB`
+}
+
+function showRecordingFinishedSummary(entry: RecordingEntry): void {
+  const toast = document.getElementById('editor-prompt-toast')
+  if (!toast) return
+
+  const titleEl = toast.querySelector('.update-toast-title')
+  if (!titleEl) return
+
+  // Build summary line
+  const parts: string[] = []
+  if (entry.durationSec != null && entry.durationSec > 0)
+    parts.push(fmtDurationSec(entry.durationSec))
+  if (entry.fileSizeBytes != null && entry.fileSizeBytes > 0)
+    parts.push(fmtFileSizeBytes(entry.fileSizeBytes))
+
+  const cloudNames: Record<string, string> = { 'google-drive': 'GD', 'dropbox': 'DB', 'onedrive': 'OD' }
+  const uploadedServices = (entry.cloudUploaded ?? []).map(s => cloudNames[s] ?? s)
+  if (uploadedServices.length) parts.push('☁ ' + uploadedServices.join(' ☁ '))
+
+  if (parts.length) {
+    titleEl.textContent = t('history.complete', 'Fullført') + ' — ' + parts.join(' · ')
+  } else {
+    titleEl.textContent = t('history.complete', 'Fullført')
+  }
+}
+
 export function setupHome(): void {
   // Video toggle button — always toggles, loads devices inline if turning on
   document.getElementById('btn-video-toggle')?.addEventListener('click', async () => {
@@ -414,6 +516,18 @@ export function setupHome(): void {
   navigator.mediaDevices.addEventListener('devicechange', onDeviceChange)
   window.addEventListener('beforeunload', () =>
     navigator.mediaDevices.removeEventListener('devicechange', onDeviceChange))
+
+  // Backend warning toast — shown for cloud/preroll/wake/disk/device issues
+  window.api.on('backend-warning', (data: unknown) => {
+    const d = data as { msg: string; severity: 'warn' | 'error'; category: string }
+    if (d?.msg) showBackendWarning(d.msg, d.severity ?? 'warn')
+  })
+
+  // Post-recording summary in existing editor prompt toast
+  window.api.on('recording-finished', (entry: unknown) => {
+    const rec = entry as RecordingEntry & { splitRestart?: boolean } | undefined
+    if (rec && !rec.splitRestart) showRecordingFinishedSummary(rec)
+  })
 
   // OPPGAVE 1 — Generic ESC key handler: closes all open modals/backdrops
   document.addEventListener('keydown', (e) => {
@@ -734,6 +848,18 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
           if (videoEntry.path) vidDiv.title = videoEntry.path
           td.appendChild(vidDiv)
         }
+        // Cloud upload indicators
+        const cloudNames: Record<string, string> = { 'google-drive': 'GD', 'dropbox': 'DB', 'onedrive': 'OD' }
+        const cloudTitles: Record<string, string> = { 'google-drive': 'Google Drive', 'dropbox': 'Dropbox', 'onedrive': 'OneDrive' }
+        const uploaded = r.cloudUploaded ?? []
+        if (uploaded.length) {
+          const cloudDiv = document.createElement('div')
+          cloudDiv.className = 'hist-note'
+          cloudDiv.style.cssText = 'color:var(--blue,#60a5fa);font-size:11px'
+          cloudDiv.textContent = uploaded.map(s => `☁ ${cloudNames[s] ?? s}`).join(' ')
+          cloudDiv.title = uploaded.map(s => cloudTitles[s] ?? s).join(', ')
+          td.appendChild(cloudDiv)
+        }
       }
       tr.appendChild(td)
     })
@@ -889,4 +1015,16 @@ function showNoteModal(currentNote: string, onSave: (note: string) => void): voi
 }
 
 // Type helpers
-interface RecordingEntry { date?: string; startTime?: string; duration?: string; filename?: string; path?: string; status: string; timestamp?: number; note?: string }
+interface RecordingEntry {
+  date?: string
+  startTime?: string
+  duration?: string
+  filename?: string
+  path?: string
+  status: string
+  timestamp?: number
+  note?: string
+  fileSizeBytes?: number
+  durationSec?: number
+  cloudUploaded?: string[]
+}

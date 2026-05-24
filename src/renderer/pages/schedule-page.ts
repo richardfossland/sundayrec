@@ -13,7 +13,10 @@ function updateNextRecordingPreview(): void {
   if (!slots.length) { previewEl.textContent = ''; return }
 
   const now      = new Date()
-  const dayNames = ['Søndag', 'Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag']
+  // JS Date: Sunday=0 … Saturday=6; schedule.days is Mon=0..Sun=6
+  // Build a Sun-Sat array: Sun is index 6 in schedule.days, Mon..Sat are 0..5
+  const _sched = tArr('schedule.days', ['Man','Tir','Ons','Tor','Fre','Lør','Søn'])
+  const dayNames = [_sched[6], _sched[0], _sched[1], _sched[2], _sched[3], _sched[4], _sched[5]]
 
   let nextMs   = Infinity
   let nextLabel = ''
@@ -38,12 +41,12 @@ function updateNextRecordingPreview(): void {
 
       if (target.getTime() < nextMs) {
         nextMs    = target.getTime()
-        nextLabel = `${dayNames[target.getDay()]} ${target.getDate()}. kl. ${slot.start}`
+        nextLabel = `${dayNames[target.getDay()]} ${target.getDate()}. ${t('schedule.atTime', 'kl.')} ${slot.start}`
       }
     }
   }
 
-  previewEl.textContent = nextLabel ? `Neste opptak: ${nextLabel}` : ''
+  previewEl.textContent = nextLabel ? `${t('schedule.nextPreviewPrefix', 'Neste opptak')}: ${nextLabel}` : ''
 }
 
 export function setupSchedulePage(): void {
