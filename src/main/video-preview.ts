@@ -130,7 +130,7 @@ export async function startPreview(
   win: BrowserWindow,
   _macConfigIdx = 0   // internal retry index — callers pass only opts + win
 ): Promise<boolean> {
-  stopPreview()
+  await stopPreview()
 
   const input = await resolveVideoInput({
     videoDeviceName:  opts.videoDeviceName  ?? null,
@@ -231,9 +231,29 @@ export async function startPreview(
       if (!firstFrameReceived) {
         firstFrameReceived = true
         clearTimeout(firstFrameTimer)
-        _workingMacConfigIdx = _macConfigIdx
-        // Decode frame dimensions from JPEG headers and notify renderer
+
+        // Decode dimensions from the first JPEG frame.
         const dims = readJpegDimensions(frame)
+
+        // Square or portrait output from a native-resolution config means the camera
+        // chose an unusual mode (e.g. FaceTime HD at 1552×1552).  Retry with the
+        // next config that forces an explicit landscape size.
+        const currentCfg = MAC_CONFIGS[_macConfigIdx]
+        if (
+          process.platform === 'darwin' &&
+          dims !== null && dims.height >= dims.width &&
+          currentCfg?.size === null &&
+          _macConfigIdx + 1 < MAC_CONFIGS.length
+        ) {
+          console.warn(`[video-preview] first frame ${dims.width}x${dims.height} (portrait/square) on ${currentCfg.label} — retrying with ${MAC_CONFIGS[_macConfigIdx + 1].label}`)
+          handle.stopped = true
+          active = null
+          try { proc.kill('SIGKILL') } catch {}
+          startPreview(opts, win, _macConfigIdx + 1)
+          continue  // handle.stopped=true; remaining frames won't be sent
+        }
+
+        _workingMacConfigIdx = _macConfigIdx
         if (dims && !win.isDestroyed()) {
           try { win.webContents.send('video-preview-meta', dims) } catch {}
         }
@@ -294,12 +314,18 @@ export async function startPreview(
   return true
 }
 
-export function stopPreview(): void {
+export async function stopPreview(): Promise<void> {
   if (!active) return
   const handle = active
   handle.stopped = true
   active = null
-  try { handle.proc.kill('SIGTERM') } catch {}
+  if (handle.proc.exitCode !== null) return
+  return new Promise<void>(resolve => {
+    handle.proc.once('close', resolve)
+    try { handle.proc.kill('SIGTERM') } catch {}
+    // Force-kill after 5 s if SIGTERM is ignored
+    setTimeout(() => { try { handle.proc.kill('SIGKILL') } catch {} }, 5000)
+  })
 }
 
 export function isPreviewRunning(): boolean {

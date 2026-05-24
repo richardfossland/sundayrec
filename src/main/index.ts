@@ -880,7 +880,7 @@ function setupIPC(): void {
 
   ipcMain.handle('video-preview-stop', async () => {
     const preview = await import('./video-preview')
-    preview.stopPreview()
+    await preview.stopPreview()
   })
 
   ipcMain.handle('run-diagnostics', async () => {

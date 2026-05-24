@@ -91,9 +91,9 @@ async function runVideoCaptureTest(ffmpegBin: string, settings: Settings, win: B
   const { isPreviewRunning, stopPreview, startPreview } = await import('./video-preview')
   const previewWasRunning = isPreviewRunning()
   if (previewWasRunning) {
-    stopPreview()
-    // Brief pause for AVFoundation to release the device handle
-    await new Promise<void>(r => setTimeout(r, 800))
+    await stopPreview()
+    // Brief pause for AVFoundation to release the device handle after process exits
+    await new Promise<void>(r => setTimeout(r, 300))
   }
 
   const tmpFile = path.join(os.tmpdir(), `sundayrec-diag-video-${Date.now()}.mp4`)
