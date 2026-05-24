@@ -292,11 +292,12 @@ describe('buildVideoFilterComplex', () => {
     expect(fc).toContain('format=yuv420p')
   })
 
-  it('routes [v2] to the preview output [prev] at 5 fps', () => {
+  it('routes [v2] to the preview output [prev] without fps downsampling', () => {
     const fc = buildVideoFilterComplex('1280', '720')
     expect(fc).toContain('[v2]')
     expect(fc).toContain('[prev]')
-    expect(fc).toContain('fps=5')
+    // No fps= filter — preview inherits the recording framerate from the input stream
+    expect(fc).not.toMatch(/fps=\d/)
   })
 
   it('preview uses 640:-2 scale (preserves aspect ratio, no black bars)', () => {
@@ -337,7 +338,7 @@ describe('buildVideoFilterComplex', () => {
     expect(fc).toContain('[vout]')
     expect(fc).toContain('[prev]')
     expect(fc).toContain('scale=1920:1080')
-    expect(fc).toContain('fps=5')
+    expect(fc).not.toMatch(/fps=\d/)
     expect(fc).toContain('640:-2')
   })
 })

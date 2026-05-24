@@ -24,14 +24,14 @@
 
 import path from 'path'
 import fs from 'fs'
-import { spawn, execFile } from 'child_process'
-import { promisify } from 'util'
+import { spawn } from 'child_process'
 import { app, Notification, powerSaveBlocker, systemPreferences } from 'electron'
 import type { BrowserWindow } from 'electron'
 import crypto from 'crypto'
 import * as store from './store'
 import * as tray from './tray'
 import * as mailer from './mailer'
+import * as logger from './logger'
 import { localDateStr, buildFilename, sanitizeFilename, formatDuration } from './recorder-utils'
 import { startCapture, stopCapture, ffmpegBin, buildCodecArgs } from './native-recorder'
 import * as preroll from './preroll'
@@ -39,7 +39,7 @@ import type { NativeHandle } from './native-recorder'
 import { startVideoCapture, stopVideoCapture, muxAudioVideo } from './video-recorder'
 import type { VideoHandle } from './video-recorder'
 import { stopPreview } from './video-preview'
-import type { RecordingOpts, RecordingEntry, Settings } from '../types'
+import type { RecordingOpts, RecordingEntry, Settings, RecordingPhase } from '../types'
 
 // ── Localised notification labels ───────────────────────────────────────────
 
@@ -191,6 +191,44 @@ let displayBlocker:      number | null       = null
 let idleCallback:        (() => void) | null = null
 let sessionEndCallback:  (() => void) | null = null
 
+// ── Phase state machine ──────────────────────────────────────────────────────
+
+let _phase: RecordingPhase = 'idle'
+
+export function getPhase(): RecordingPhase { return _phase }
+
+// ── Periodic recovery persistence ───────────────────────────────────────────
+
+let _recoveryInterval: ReturnType<typeof setInterval> | null = null
+
+function persistRecovery(session: Session): void {
+  store.set('activeRecovery', {
+    outputPath:      session.outputPath,
+    videoOutputPath: session.videoOutputPath ?? undefined,
+    segments:        session.segments,
+    startTime:       session.startTime,
+    sessionId:       session.sessionId,
+    phase:           _phase,
+    updatedAt:       Date.now(),
+  })
+}
+
+function startRecoveryInterval(session: Session): void {
+  clearRecoveryInterval()
+  _recoveryInterval = setInterval(() => {
+    if (activeSession?.sessionId === session.sessionId) {
+      persistRecovery(session)
+    }
+  }, 30000)
+}
+
+function clearRecoveryInterval(): void {
+  if (_recoveryInterval !== null) {
+    clearInterval(_recoveryInterval)
+    _recoveryInterval = null
+  }
+}
+
 export function onceIdle(cb: () => void): void { idleCallback = cb }
 export function setSessionEndCallback(cb: () => void): void { sessionEndCallback = cb }
 
@@ -227,14 +265,16 @@ function safeSend(win: BrowserWindow, channel: string, payload?: unknown): void 
       win.webContents.send(channel, payload)
     }
   } catch (err) {
-    console.warn(`[recorder] safeSend(${channel}) failed:`, (err as Error).message)
+    logger.warn('recorder', `safeSend(${channel}) failed`, { msg: (err as Error).message })
   }
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
 export function isActive(): boolean {
-  return activeSession !== null && !activeSession.stopping
+  // Active means the session is doing useful work: starting, recording, or reconnecting.
+  // stopping/finalizing are transient — they should not accept new startSession() calls.
+  return _phase === 'starting' || _phase === 'recording' || _phase === 'reconnecting'
 }
 
 export function getActiveSessionOpts(): RecordingOpts | null {
@@ -246,7 +286,7 @@ export function getActiveSessionOpts(): RecordingOpts | null {
 async function preflightCheck(settings: RecordingOpts, onWarn?: (msg: string) => void): Promise<{ error: string } | null> {
   // 1. ffmpeg binary must exist
   if (ffmpegBin !== 'ffmpeg' && !fs.existsSync(ffmpegBin)) {
-    console.error('[recorder] ffmpeg binary not found at', ffmpegBin)
+    logger.error('recorder', 'ffmpeg binary not found', { path: ffmpegBin })
     return { error: 'ffmpeg_missing' }
   }
 
@@ -261,44 +301,18 @@ async function preflightCheck(settings: RecordingOpts, onWarn?: (msg: string) =>
     return { error: 'save_folder_permission' }
   }
 
-  // 3. Disk space: require at least 200 MB free for audio-only, 1 GB for video recordings
+  // 3. Disk space: require at least 200 MB free for audio-only, 1 GB for video recordings.
+  // fs.promises.statfs is a fast kernel syscall (no subprocess) supported on macOS, Windows,
+  // and Linux. Replaces the old df/PowerShell approach which took 100–500 ms.
   try {
-    const execAsync = promisify(execFile)
     const _s = settings as Settings
     const videoActive = _s.videoEnabled && (_s.videoDeviceName || _s.videoDeviceIndex != null)
-    if (process.platform === 'darwin' || process.platform === 'linux') {
-      const { stdout } = await execAsync('df', ['-Pk', folder], { timeout: 4000 })
-      const cols = stdout.trim().split('\n')[1]?.trim().split(/\s+/)
-      const freeKb = cols ? parseInt(cols[3]) : NaN
-      const minKb = videoActive ? 1024 * 1024 : 200 * 1024  // 1 GB vs 200 MB in KB
-      if (!isNaN(freeKb) && freeKb < minKb) return { error: 'disk_full' }
-    } else if (process.platform === 'win32') {
-      let freeBytes = NaN
-      const driveLetter = folder.match(/^([A-Za-z]):/)
-      if (driveLetter) {
-        const { stdout } = await execAsync('powershell', [
-          '-NoProfile', '-Command', `(Get-PSDrive -Name '${driveLetter[1]}' -ErrorAction SilentlyContinue).Free`
-        ], { timeout: 4000 })
-        freeBytes = parseInt(stdout.trim())
-      } else {
-        // UNC/network path (\\server\share\...) — query free space via COM FileSystemObject
-        const norm = folder.replace(/\//g, '\\')
-        const unc  = norm.match(/^(\\\\[^\\]+\\[^\\]+)/)
-        if (unc) {
-          const escaped = unc[1].replace(/'/g, "''")
-          const { stdout } = await execAsync('powershell', [
-            '-NoProfile', '-Command',
-            `try{(New-Object -ComObject Scripting.FileSystemObject).GetDrive('${escaped}').FreeSpace}catch{-1}`
-          ], { timeout: 4000 })
-          freeBytes = parseInt(stdout.trim())
-        }
-      }
-      const minBytes = videoActive ? 1024 * 1024 * 1024 : 200 * 1024 * 1024  // 1 GB vs 200 MB in bytes
-      if (!isNaN(freeBytes) && freeBytes >= 0 && freeBytes < minBytes) return { error: 'disk_full' }
-    }
+    const stats = await fs.promises.statfs(folder)
+    const freeBytes = stats.bavail * stats.bsize
+    const minBytes = videoActive ? 1024 * 1024 * 1024 : 200 * 1024 * 1024
+    if (freeBytes < minBytes) return { error: 'disk_full' }
   } catch (diskErr) {
-    console.warn('[recorder] disk space check failed:', (diskErr as Error).message)
-    // disk check is best-effort — surface to UI via the warn callback if provided
+    logger.warn('recorder', 'disk space check failed', { msg: (diskErr as Error).message })
     onWarn?.(`Disk space check failed: ${(diskErr as Error).message}`)
   }
 
@@ -306,14 +320,14 @@ async function preflightCheck(settings: RecordingOpts, onWarn?: (msg: string) =>
   if (process.platform === 'darwin') {
     const micStatus = systemPreferences.getMediaAccessStatus('microphone')
     if (micStatus === 'denied' || micStatus === 'restricted') {
-      console.error('[recorder] microphone access', micStatus)
+      logger.error('recorder', 'microphone access denied', { status: micStatus })
       return { error: 'device_permission_denied' }
     }
     const _sc = settings as Settings
     if (_sc.videoEnabled && (_sc.videoDeviceName || _sc.videoDeviceIndex != null)) {
       const camStatus = systemPreferences.getMediaAccessStatus('camera')
       if (camStatus === 'denied' || camStatus === 'restricted') {
-        console.error('[recorder] camera access', camStatus)
+        logger.error('recorder', 'camera access denied', { status: camStatus })
         return { error: 'device_permission_denied' }
       }
     }
@@ -327,30 +341,33 @@ export async function startSession(
   win: BrowserWindow,
   prerollData?: { rawPath: string; trimMs: number } | null
 ): Promise<{ ok: true } | { error: string }> {
-  if (activeSession) return { error: 'already_recording' }
+  if (activeSession || _phase === 'stopping' || _phase === 'finalizing') return { error: 'already_recording' }
+  _phase = 'starting'
 
   const s = settings as Settings
   const hasVideo = !!(s.videoEnabled && (s.videoDeviceName || s.videoDeviceIndex != null))
   const prerollWasActive = preroll.isRunning()
 
-  // Stop competing device users concurrently so both audio and video can start
-  // as close together as possible — this is critical for A/V sync. If we stop
-  // preview after starting audio, the gap between audio and video spawn times
-  // (preview teardown + darwin wait) shifts video timestamps forward by ~3-4 s.
-  await Promise.all([
+  // Run preflight concurrently with device teardown: disk check and permission
+  // checks don't require the device to be free, so we can overlap them.
+  // On macOS we must still wait for AVFoundation to release device handles after
+  // the process exits — without this gap the next spawn fails with "already in use".
+  const teardown = Promise.all([
     preroll.stop(),
     hasVideo ? stopPreview() : Promise.resolve()
-  ])
-  if (process.platform === 'darwin') {
-    // Give AVFoundation time to release both audio and camera devices.
-    const releaseMs = prerollWasActive ? 500 : 300
-    await new Promise<void>(resolve => setTimeout(resolve, releaseMs))
-  }
-
-  const preflightError = await preflightCheck(settings, (msg) => {
-    safeSend(win, 'backend-warning', { msg, severity: 'warn', category: 'disk' })
+  ]).then(() => {
+    if (process.platform !== 'darwin') return
+    const releaseMs = prerollWasActive ? 250 : 150
+    return new Promise<void>(resolve => setTimeout(resolve, releaseMs))
   })
-  if (preflightError) return preflightError
+
+  const [, preflightError] = await Promise.all([
+    teardown,
+    preflightCheck(settings, (msg) => {
+      safeSend(win, 'backend-warning', { msg, severity: 'warn', category: 'disk' })
+    }),
+  ])
+  if (preflightError) { _phase = 'idle'; return preflightError }
 
   const sessionId  = crypto.randomUUID()
   const filename   = buildFilename(settings)
@@ -361,9 +378,9 @@ export async function startSession(
   } catch (e) {
     const code = (e as NodeJS.ErrnoException).code
     if (code === 'EPERM' || code === 'EACCES') {
-      return { error: 'save_folder_permission' }
+      _phase = 'idle'; return { error: 'save_folder_permission' }
     }
-    return { error: 'save_folder_error' }
+    _phase = 'idle'; return { error: 'save_folder_error' }
   }
 
   // Determine video output path before starting captures
@@ -392,7 +409,7 @@ export async function startSession(
     if (rawVideoResult && !('error' in rawVideoResult)) {
       stopVideoCapture(rawVideoResult as VideoHandle).catch(() => {})
     }
-    return { error: audioResult.error }
+    _phase = 'idle'; return { error: audioResult.error }
   }
 
   const handle = audioResult
@@ -402,7 +419,7 @@ export async function startSession(
 
   if (rawVideoResult) {
     if ('error' in rawVideoResult) {
-      console.error('[recorder] video capture failed to start:', rawVideoResult.error)
+      logger.error('recorder', 'video capture failed to start', { error: rawVideoResult.error })
       safeSend(win, 'video-capture-error', { error: rawVideoResult.error })
       videoOutputPath = null
     } else {
@@ -419,12 +436,14 @@ export async function startSession(
       }
       videoHandle.onExit = code => {
         if (code !== 0 && !activeSession?.stopping) {
-          console.warn('[recorder] video ffmpeg died unexpectedly, code:', code)
+          logger.warn('recorder', 'video ffmpeg died unexpectedly', { code })
           safeSend(win, 'video-capture-error', { error: 'died', code })
         }
       }
     }
   }
+
+  _phase = 'recording'
 
   activeSession = {
     settings, outputPath, sessionId, handle,
@@ -441,7 +460,9 @@ export async function startSession(
   }
 
   // Persist recovery info so a crash restart can salvage the partial file
-  store.set('activeRecovery', { outputPath, startTime: handle.startTime, sessionId })
+  persistRecovery(activeSession)
+  // Refresh recovery every 30 s so stale-recovery detection stays current
+  startRecoveryInterval(activeSession)
 
   // Auto-stop after maxMinutes if set
   if (settings.maxMinutes) {
@@ -450,7 +471,7 @@ export async function startSession(
 
   // Silence detection — ffmpeg silencedetect filter fires onSilenceEnd after sustained quiet
   handle.onSilenceEnd = () => {
-    console.log('[recorder] Silence timeout reached — stopping session')
+    logger.info('recorder', 'silence timeout reached — stopping session')
     stopSession()
   }
 
@@ -488,11 +509,11 @@ export async function startSession(
     if (!s || s.sessionId !== sessionId || s.stopping) return
     const currentBytes = s.handle.bytesWritten ?? 0
     if (Date.now() - s.lastProgressAt > 60000) {
-      console.warn('[recorder] No progress for 60 s — treating as device failure')
+      logger.warn('recorder', 'no audio progress for 60 s — treating as device failure')
       stopStuckTimer(s)
       startWatchdog(s)
     } else if (currentBytes > 0 && currentBytes === lastBytesSnapshot) {
-      console.warn('[recorder] bytes not progressing — possible encoder hang')
+      logger.warn('recorder', 'bytes not progressing — possible encoder hang', { bytes: currentBytes })
       stopStuckTimer(s)
       startWatchdog(s)
     } else {
@@ -528,11 +549,13 @@ export async function startSession(
 
 export function stopSession(): void {
   if (!activeSession || activeSession.stopping) return
+  _phase = 'stopping'
   const session = activeSession
   session.stopping = true
   if (session.maxTimer)   clearTimeout(session.maxTimer)
   if (session.splitTimer) clearTimeout(session.splitTimer)
   stopStuckTimer(session)
+  clearRecoveryInterval()
 
   const audioStop = stopCapture(session.handle)
   const videoStop = session.videoHandle
@@ -542,16 +565,18 @@ export function stopSession(): void {
   Promise.all([audioStop, videoStop]).then(() => {
     finishSession(session)
   }).catch(err => {
-    console.error('[recorder] stop error:', err)
-    try { finishSession(session) } catch (e) { console.error('[recorder] finishSession error:', e) }
+    logger.error('recorder', 'stop error', { msg: String(err) })
+    try { finishSession(session) } catch (e) { logger.error('recorder', 'finishSession error', { msg: String(e) }) }
   })
 }
 
 // ── Internal: finish a session after ffmpeg exits ───────────────────────────
 
 function finishSession(session: Session): void {
+  _phase = 'finalizing'
   if (activeSession?.sessionId === session.sessionId) activeSession = null
   stopStuckTimer(session)
+  clearRecoveryInterval()
   stopBlockers()
   store.set('activeRecovery', null)
 
@@ -579,7 +604,7 @@ function finishSession(session: Session): void {
   tray.setRecording(false)
 
   finishSessionAsync(session, durationSec, recDate).catch(err =>
-    console.error('[recorder] finishSessionAsync error:', err)
+    logger.error('recorder', 'finishSessionAsync error', { msg: String(err) })
   )
 }
 
@@ -591,7 +616,7 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
     try {
       await applyPreroll(session.prerollRaw, session.prerollMs, session.segments[0], session.settings)
     } catch (err) {
-      console.error('[recorder] pre-roll concat failed — continuing without pre-roll:', err)
+      logger.error('recorder', 'pre-roll concat failed — continuing without pre-roll', { msg: String(err) })
       fs.promises.unlink(session.prerollRaw).catch(() => {})
     }
   }
@@ -603,7 +628,7 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
       session.outputPath = session.segments[0]
     } else {
       // Merge failed — add individual history entries so no data is lost
-      console.error('[recorder] segment merge failed — adding individual segments to history')
+      logger.error('recorder', 'segment merge failed — adding individual segments to history', { count: session.segments.length })
       for (const segPath of session.segments) {
         try {
           if (!fs.existsSync(segPath) || fs.statSync(segPath).size < 1000) continue
@@ -622,6 +647,7 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
       if (store.get('notifyStop') !== false) {
         notify('SundayRec', `${getNL().done}: ${path.basename(session.segments[0])}`)
       }
+      _phase = 'idle'
       notifyIdle()
       sessionEndCallback?.()
       return
@@ -634,7 +660,7 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
   if (videoFinalPath) {
     const videoOk = fs.existsSync(videoFinalPath) && fs.statSync(videoFinalPath).size > 1_000_000
     if (!videoOk) {
-      console.warn('[recorder] video file missing or too small — skipping video')
+      logger.warn('recorder', 'video file missing or too small — skipping video', { path: videoFinalPath })
       if (videoFinalPath && fs.existsSync(videoFinalPath)) fs.promises.unlink(videoFinalPath).catch(() => {})
       videoFinalPath = null
     }
@@ -646,7 +672,7 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
     const audioBase = session.outputPath.slice(0, -audioExt.length)
     // Use uniquePath to avoid overwriting an existing .mp4 if one already exists with the same base name
     const combinedPath = await uniquePath(`${audioBase}.mp4`)
-    console.log('[recorder] muxing audio + video →', path.basename(combinedPath))
+    logger.info('recorder', 'muxing audio + video', { output: path.basename(combinedPath) })
     const muxOk = await muxAudioVideo(session.outputPath, videoFinalPath, combinedPath)
     if (muxOk) {
       fs.promises.unlink(videoFinalPath).catch(() => {})  // delete temp raw video
@@ -657,7 +683,7 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
         fs.promises.unlink(session.outputPath).catch(() => {})
       }
     } else {
-      console.error('[recorder] mux failed — keeping separate files')
+      logger.error('recorder', 'mux failed — keeping separate files')
       // videoFinalPath stays as-is (the raw video), treated as separate file
     }
   } else if (videoFinalPath && session.splitAutoRestart && videoFinalPath.endsWith('_vtmp.mp4')) {
@@ -666,9 +692,9 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
     try {
       fs.renameSync(videoFinalPath, segmentVideoPath)
       videoFinalPath = segmentVideoPath
-      console.log('[recorder] vtmp renamed to segment video →', path.basename(segmentVideoPath))
+      logger.info('recorder', 'vtmp renamed to segment video', { name: path.basename(segmentVideoPath) })
     } catch (err) {
-      console.warn('[recorder] vtmp rename failed:', err)
+      logger.warn('recorder', 'vtmp rename failed', { msg: String(err) })
     }
   }
 
@@ -716,7 +742,7 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
   import('./cloud').then(c => c.autoUploadAfterRecording(session.outputPath, session.win, (msg, severity, category) => {
     safeSend(session.win, 'backend-warning', { msg, severity, category })
   })).catch(err =>
-    console.error('[recorder] cloud upload error:', err)
+    logger.error('recorder', 'cloud upload error', { msg: String(err) })
   )
 
   // Split auto-restart: start new session in main, send overlay events to renderer
@@ -735,10 +761,12 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
     const nextResult = await startSession(nextOpts, session.win)
     if ('ok' in nextResult) {
       safeSend(session.win, 'recording-overlay-start', nextOpts)
+      // _phase is now 'recording' — set by the new startSession call
     } else {
       const msg = localizeError(nextResult.error)
       safeSend(session.win, 'recording-error', { error: nextResult.error, message: msg })
       notify(getNL().err, msg)
+      _phase = 'idle'
       notifyIdle()
       sessionEndCallback?.()
     }
@@ -751,6 +779,7 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
   if (store.get('notifyStop') !== false) {
     notify('SundayRec', `${getNL().done}: ${path.basename(doneFile)}`)
   }
+  _phase = 'idle'
   notifyIdle()
   sessionEndCallback?.()
 }
@@ -829,7 +858,7 @@ async function applyPreroll(
       fs.renameSync(concatTmp, mainPath)
     }
 
-    console.log(`[recorder] pre-roll ${(trimMs / 1000).toFixed(1)} s prepended to`, mainPath)
+    logger.info('recorder', 'pre-roll prepended', { trimSec: (trimMs / 1000).toFixed(1), to: path.basename(mainPath) })
   } finally {
     for (const f of [encodedPath, concatList, rawPath]) {
       fs.promises.unlink(f).catch(() => {})
@@ -889,10 +918,10 @@ async function mergeSegments(segments: string[]): Promise<boolean> {
       fs.promises.unlink(seg).catch(() => {})
     }
 
-    console.log(`[recorder] merged ${segments.length} reconnect segments → ${path.basename(targetPath)}`)
+    logger.info('recorder', 'merged reconnect segments', { count: segments.length, output: path.basename(targetPath) })
     return true
   } catch (err) {
-    console.error('[recorder] mergeSegments failed:', err)
+    logger.error('recorder', 'mergeSegments failed', { msg: String(err) })
     fs.promises.unlink(tempPath).catch(() => {})
     return false
   } finally {
@@ -915,9 +944,10 @@ function startWatchdog(session: Session): void {
     return
   }
 
+  _phase = 'reconnecting'
   stopStuckTimer(session)
   safeSend(session.win, 'recording-reconnecting', {})
-  console.warn('[recorder] ffmpeg died unexpectedly — starting reconnect watchdog')
+  logger.warn('recorder', 'ffmpeg died unexpectedly — starting reconnect watchdog')
 
   let attempts = 0
   const tryReconnect = async () => {
@@ -928,7 +958,7 @@ function startWatchdog(session: Session): void {
     }
     attempts++
     session.reconnectCount++
-    console.log(`[recorder] Reconnect attempt ${attempts}/${MAX_RECONNECT_ATTEMPTS}…`)
+    logger.info('recorder', `reconnect attempt ${attempts}/${MAX_RECONNECT_ATTEMPTS}`)
 
     // Build a new output path with _r1/_r2 suffix for the reconnected segment
     const ext     = path.extname(session.outputPath)
@@ -942,13 +972,15 @@ function startWatchdog(session: Session): void {
     }
 
     // Reconnect succeeded — update session in place
-    console.log('[recorder] Reconnected! New segment:', newPath)
+    _phase = 'recording'
+    logger.info('recorder', 'reconnected', { segment: path.basename(newPath) })
     session.outputPath     = newPath
     session.handle         = result
     session.startTime      = result.startTime
     session.lastProgressAt = Date.now()
     session.segments.push(newPath)
-    store.set('activeRecovery', { outputPath: newPath, startTime: result.startTime, sessionId: session.sessionId })
+    persistRecovery(session)
+    startRecoveryInterval(session)
 
     // Restart video capture if it was active (stop old handle first, then start new one)
     if (session.videoHandle) {
@@ -961,7 +993,7 @@ function startWatchdog(session: Session): void {
 
       const videoResult = await startVideoCapture(session.settings as Settings, newVideoPath)
       if ('error' in videoResult) {
-        console.warn('[recorder] video restart after reconnect failed:', videoResult.error)
+        logger.warn('recorder', 'video restart after reconnect failed', { error: videoResult.error })
         session.videoOutputPath = null
       } else {
         session.videoHandle     = videoResult
@@ -978,11 +1010,11 @@ function startWatchdog(session: Session): void {
         }
         videoResult.onExit = (code) => {
           if (code !== 0 && !activeSession?.stopping) {
-            console.warn('[recorder] video ffmpeg died after reconnect, code:', code)
+            logger.warn('recorder', 'video ffmpeg died after reconnect', { code })
             safeSend(session.win, 'video-capture-error', { error: 'died', code })
           }
         }
-        console.log('[recorder] video restarted after audio reconnect →', newVideoPath)
+        logger.info('recorder', 'video restarted after audio reconnect', { path: path.basename(newVideoPath) })
       }
     }
 
@@ -1001,7 +1033,7 @@ function startWatchdog(session: Session): void {
       const s = activeSession
       if (!s || s.sessionId !== session.sessionId || s.stopping) return
       if (Date.now() - s.lastProgressAt > 60000) {
-        console.warn('[recorder] Reconnected segment stuck — triggering watchdog again')
+        logger.warn('recorder', 'reconnected segment stuck — triggering watchdog again')
         stopStuckTimer(s)
         startWatchdog(s)
       }
@@ -1015,8 +1047,10 @@ function startWatchdog(session: Session): void {
 }
 
 function failSession(session: Session, reason: string): void {
+  _phase = 'idle'
   if (activeSession?.sessionId === session.sessionId) activeSession = null
   stopStuckTimer(session)
+  clearRecoveryInterval()
   stopBlockers()
   store.set('activeRecovery', null)
 
@@ -1088,7 +1122,7 @@ export function recoverCrashedSession(): void {
       notify('SundayRec', getNL().recovered.replace('{file}', path.basename(out)))
     } else {
       // -c copy failed (very corrupt file); try to keep what we have
-      console.error('[recorder] recovery remux failed for', filePath)
+      logger.error('recorder', 'recovery remux failed', { file: path.basename(filePath) })
       try {
         fs.renameSync(filePath, out)
         notify('SundayRec', getNL().recovered.replace('{file}', path.basename(out)))
@@ -1118,7 +1152,7 @@ function unlinkSilent(p: string): void {
       setTimeout(() => fs.promises.unlink(p).catch(() => {}), 5000)
       return
     }
-    console.error('[recorder] unlink failed:', err)
+    logger.error('recorder', 'unlink failed', { msg: String(err) })
   })
 }
 

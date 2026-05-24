@@ -47,7 +47,7 @@ export const ffmpegBin = resolveFfmpegPath()
 
 // ── Device enumeration cache ────────────────────────────────────────────────
 
-const DEVICE_CACHE_TTL_MS = 30_000
+const DEVICE_CACHE_TTL_MS = 120_000
 
 // On macOS and Windows, audio and video devices come from the same ffmpeg
 // enumerate call.  Share the result so we only spawn ffmpeg once per TTL window.
@@ -611,6 +611,11 @@ export function classifyFfmpegError(stderr: string): string {
   return 'device_error'
 }
 
+// 'startup_timeout' is a synthetic error code (not from ffmpeg stderr) used when
+// ffmpeg starts successfully but produces no audio data within the startup window.
+// The retry logic treats it the same as 'device_error' — triggers format fallback.
+const STARTUP_TIMEOUT_ERROR = 'startup_timeout'
+
 async function startCaptureWithInput(
   input: { format: string; device: string; resolvedName: string },
   opts: RecordingOpts,
@@ -666,6 +671,11 @@ async function startCaptureWithInput(
   let silenceTimer: ReturnType<typeof setTimeout> | null = null
   const silenceTimeoutMs = (opts.silenceTimeoutMinutes ?? 5) * 60 * 1000
 
+  // Startup resolver: called either by the first size= line (success) or by
+  // the close event (error) or by the timeout (startup_timeout / null).
+  // Set to null once resolved so it is only called once.
+  let resolveStartup: ((err: string | null) => void) | null = null
+
   proc.stderr?.on('data', (d: Buffer) => {
     const chunk = d.toString()
     // Cap at 64 KB — enough for error classification, prevents growth during long recordings
@@ -688,6 +698,11 @@ async function startCaptureWithInput(
     if (m) {
       handle.bytesWritten = parseInt(m[1]) * 1024
       handle.onProgress?.(handle.bytesWritten)
+      // First size= line proves ffmpeg is actively encoding — resolve startup as success
+      if (resolveStartup) {
+        const r = resolveStartup; resolveStartup = null
+        r(null)
+      }
       return
     }
     if (chunk.trim() && !chunk.includes('Press [q]') && !chunk.includes('time=')) {
@@ -701,21 +716,40 @@ async function startCaptureWithInput(
     handle.onExit?.(code)
   })
 
-  // Windows DirectShow/WASAPI can take up to 5 s to open USB audio devices,
-  // especially on first access or after another app has released the device.
-  // macOS AVFoundation can also be slow on first access (privacy prompt, driver init).
-  const startupMs = process.platform === 'win32' ? 5000 : 2000
+  // Maximum wait for first audio data.
+  // Increased from 5 s (Windows) / 2 s (macOS) because:
+  //   - Slow USB audio interfaces on Windows can take 6–7 s to initialize
+  //   - We now resolve *early* on first size= line, so the timeout is only a
+  //     safety net — typical fast devices still start in <2 s
+  const startupMs = process.platform === 'win32' ? 10000 : 5000
 
   const startupError = await new Promise<string | null>(resolve => {
+    resolveStartup = resolve
+
     const onClose = () => {
       clearTimeout(timer)
-      const classified = classifyFfmpegError(stderrBuf)
-      resolve(classified || 'device_error')
+      // Only resolve if not already resolved by a size= line
+      if (resolveStartup) {
+        resolveStartup = null
+        const classified = classifyFfmpegError(stderrBuf)
+        resolve(classified || 'device_error')
+      }
     }
+
     const timer = setTimeout(() => {
       proc.removeListener('close', onClose)
-      resolve(null)
+      if (resolveStartup) {
+        resolveStartup = null
+        // Process is still alive but produced no audio data — hung driver / muted input
+        if (proc.exitCode !== null || proc.killed) {
+          resolve(classifyFfmpegError(stderrBuf) || 'device_error')
+        } else {
+          console.warn('[native-recorder] startup timeout — ffmpeg alive but no audio data after', startupMs, 'ms')
+          resolve(STARTUP_TIMEOUT_ERROR)
+        }
+      }
     }, startupMs)
+
     // Use once so the listener is automatically removed after the first close event
     proc.once('close', onClose)
   })
@@ -726,8 +760,9 @@ async function startCaptureWithInput(
       sRateErr.includes('sampling rate') || sRateErr.includes('samplerate') ||
       sRateErr.includes('unsupported sample') || sRateErr.includes('invalid sample')
 
-    // Sample rate fallback: try multiple common rates
-    if (isSampleRateError && !opts._sampleRateRetried) {
+    // Sample rate fallback: try multiple common rates.
+    // Skip for startup_timeout — that is a hang, not a sample rate rejection.
+    if (isSampleRateError && startupError !== STARTUP_TIMEOUT_ERROR && !opts._sampleRateRetried) {
       const commonRates = [48000, 44100, 96000, 16000]
       const currentRate = opts.sampleRate ?? 48000
       const nextRate = commonRates.find(r => r !== currentRate)
@@ -737,8 +772,13 @@ async function startCaptureWithInput(
       }
     }
 
-    // Multi-format retry on Windows (only on first attempt to avoid infinite loop)
+    // Multi-format retry on Windows (only on first attempt to avoid infinite loop).
+    // startup_timeout means the process is alive but silent — kill it first, then retry.
     if (process.platform === 'win32' && !isRetry) {
+      if (startupError === STARTUP_TIMEOUT_ERROR) {
+        // Kill the hung process before retrying with the alternate format
+        try { proc.kill('SIGTERM') } catch {}
+      }
       // If WASAPI fails → retry with DirectShow
       if (input.format === 'wasapi') {
         const dshowDevices = await listFfmpegDevices()
@@ -763,6 +803,11 @@ async function startCaptureWithInput(
       }
     }
 
+    // For startup_timeout on a non-retried non-Windows path, kill the hung process
+    if (startupError === STARTUP_TIMEOUT_ERROR && proc.exitCode === null && !proc.killed) {
+      try { proc.kill('SIGTERM') } catch {}
+    }
+
     return { error: startupError }
   }
 
@@ -772,6 +817,30 @@ async function startCaptureWithInput(
     console.error('[native-recorder] process already exited after startup window, exitCode:', proc.exitCode)
     return { error: classifyFfmpegError(stderrBuf) || 'device_error' }
   }
+
+  // ── Audio progress watchdog (Task 2) ────────────────────────────────────────
+  // After successful startup, watch for stalled audio data. A hung USB audio
+  // driver can keep ffmpeg alive while silently producing zero bytes — this
+  // watchdog kills the process so the existing onExit recovery path can restart.
+  let lastWatchdogBytes = handle.bytesWritten
+  let stagnantChecks = 0
+  const hangWatchdog = setInterval(() => {
+    if (proc.exitCode !== null || proc.killed) { clearInterval(hangWatchdog); return }
+    if (handle.bytesWritten > lastWatchdogBytes) {
+      lastWatchdogBytes = handle.bytesWritten
+      stagnantChecks = 0
+    } else {
+      stagnantChecks++
+      if (stagnantChecks >= 2) {
+        // No audio progress for ≥ 60 s — driver is hung
+        clearInterval(hangWatchdog)
+        console.warn('[native-recorder] audio progress stalled 60s — killing hung process')
+        try { proc.kill('SIGTERM') } catch {}
+      }
+    }
+  }, 30000)
+
+  proc.on('close', () => clearInterval(hangWatchdog))
 
   return handle
 }

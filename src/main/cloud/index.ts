@@ -6,6 +6,7 @@ import * as googleDrive from './google-drive'
 import * as dropbox from './dropbox'
 import * as oneDrive from './onedrive'
 import * as store from '../store'
+import * as logger from '../logger'
 import type { CloudServiceId, CloudStatus, RecordingMetadata } from '../../types'
 
 // Re-export handleCallback so main/index.ts can call it from the URL handler
@@ -15,9 +16,15 @@ async function getValidToken(service: CloudServiceId): Promise<string> {
   const tok = tokenStore.getToken(service)
   if (!tok) throw new Error('not_connected')
   if (tok.expiresAt && Date.now() > tok.expiresAt - 60_000 && tok.refreshToken) {
-    const refreshed = await oauth.refreshAccessToken(service, tok.refreshToken)
-    tokenStore.updateTokenFields(service, { accessToken: refreshed.accessToken, expiresAt: refreshed.expiresAt })
-    return refreshed.accessToken
+    try {
+      const refreshed = await oauth.refreshAccessToken(service, tok.refreshToken)
+      tokenStore.updateTokenFields(service, { accessToken: refreshed.accessToken, expiresAt: refreshed.expiresAt })
+      logger.debug('cloud', 'token_refreshed', { service })
+      return refreshed.accessToken
+    } catch (err) {
+      logger.error('cloud', 'token_refresh_failed', { service, error: (err as Error).message })
+      throw err
+    }
   }
   return tok.accessToken
 }
@@ -110,14 +117,19 @@ export async function autoUploadAfterRecording(
   for (const { id, cfg } of map) {
     if (!cfg?.enabled || !cfg.autoUpload) continue
     if (!tokenStore.getToken(id)) continue
+    const filename = path.basename(filePath)
+    const uploadStart = Date.now()
+    logger.info('cloud', 'auto_upload_start', { service: id, filename })
     try {
-      win.webContents.send('cloud-upload-progress', { service: id, filename: path.basename(filePath) })
+      win.webContents.send('cloud-upload-progress', { service: id, filename })
       await uploadFile(id, filePath, undefined, entryTimestamp)
       win.webContents.send('cloud-upload-done', { service: id, ok: true })
+      logger.info('cloud', 'auto_upload_ok', { service: id, filename, durationMs: Date.now() - uploadStart })
     } catch (err) {
       tokenStore.updateTokenFields(id, { lastUpload: Date.now(), lastUploadOk: false })
       win.webContents.send('cloud-upload-done', { service: id, ok: false, error: (err as Error).message })
       const errMsg = `Cloud upload failed (${id}): ${(err as Error).message}`
+      logger.error('cloud', 'auto_upload_failed', { service: id, error: (err as Error).message })
       console.error('[cloud]', errMsg)
       sendWarning?.(errMsg, 'error', 'cloud')
     }

@@ -37,8 +37,9 @@ let recBytes     = 0
 let previewRestartTimer: ReturnType<typeof setTimeout> | null = null
 let recPreviewUnsub:      (() => void) | undefined
 let recCaptureErrUnsub:   (() => void) | undefined
-let lastRecFrameTs = 0
-let recVideoDimsSet = false
+let lastRecFrameTs    = 0
+let recVideoDimsSet   = false
+let recFrameBlobUrl:  string | null = null
 
 function readJpegDims(arr: Uint8Array): { w: number; h: number } | null {
   let i = 0
@@ -513,9 +514,10 @@ function showOverlay(opts: RecordingOpts): void {
     recPreviewUnsub?.()
     recCaptureErrUnsub?.()
     recVideoDimsSet = false
+    const recFrameIntervalMs = Math.floor(1000 / (opts.videoFramerate ?? settings.videoFramerate ?? 30)) - 2
     recPreviewUnsub = window.api.on('video-preview-frame', (data: unknown) => {
       const now = Date.now()
-      if (now - lastRecFrameTs < 80) return
+      if (now - lastRecFrameTs < recFrameIntervalMs) return
       lastRecFrameTs = now
       const arr = data as Uint8Array
       if (!recImg || arr.length < 4) return
@@ -527,11 +529,10 @@ function showOverlay(opts: RecordingOpts): void {
           if (wrap) wrap.style.setProperty('--rec-video-ar', `${dims.w} / ${dims.h}`)
         }
       }
-      let binary = ''
-      for (let i = 0; i < arr.length; i += 8192) {
-        binary += String.fromCharCode(...arr.subarray(i, Math.min(i + 8192, arr.length)))
-      }
-      recImg.src = `data:image/jpeg;base64,${btoa(binary)}`
+      const url = URL.createObjectURL(new Blob([arr], { type: 'image/jpeg' }))
+      if (recFrameBlobUrl) URL.revokeObjectURL(recFrameBlobUrl)
+      recFrameBlobUrl = url
+      recImg.src = url
       recImg.style.display = ''
       if (recPh) recPh.style.display = 'none'
     })
@@ -594,6 +595,7 @@ function hideOverlay(): void {
   // Clean up overlay video preview
   recPreviewUnsub?.(); recPreviewUnsub = undefined
   recCaptureErrUnsub?.(); recCaptureErrUnsub = undefined
+  if (recFrameBlobUrl) { URL.revokeObjectURL(recFrameBlobUrl); recFrameBlobUrl = null }
   recVideoDimsSet = false
   const recVideoSection = document.getElementById('rec-video-section')
   if (recVideoSection) recVideoSection.style.display = 'none'

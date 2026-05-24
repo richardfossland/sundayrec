@@ -74,6 +74,7 @@ contextBridge.exposeInMainWorld('api', {
   editorPickVideoFile:     ()                 => ipcRenderer.invoke('editor-pick-video-file'),
   editorSaveVideo:         (params: unknown)  => ipcRenderer.invoke('editor-save-video', params),
   editorExportVideo:       (params: unknown)  => ipcRenderer.invoke('editor-export-video', params),
+  editorProbeStreams:      (filePath: string) => ipcRenderer.invoke('editor-probe-streams', filePath),
 
   pickAudioFile: () => ipcRenderer.invoke('pick-audio-file'),
 
@@ -106,6 +107,9 @@ contextBridge.exposeInMainWorld('api', {
   videoPreviewStop:  () => ipcRenderer.invoke('video-preview-stop'),
 
   runDiagnostics: (): Promise<{ markdown: string; savedTo: string | null; clipboardOk: boolean; captureOk: boolean; videoOk: boolean | null }> => ipcRenderer.invoke('run-diagnostics'),
+
+  getLogs:        (): Promise<unknown[]> => ipcRenderer.invoke('get-logs'),
+  getLogFilePath: (): Promise<string | null> => ipcRenderer.invoke('get-log-file-path'),
 
   on: (channel: string, fn: (...args: unknown[]) => void) => {
     if (!ALLOWED_CHANNELS.includes(channel as AllowedChannel)) return

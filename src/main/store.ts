@@ -274,18 +274,60 @@ export function importProfile(json: string): boolean {
 
 /**
  * Migrate legacy `tempPath` → `outputPath` in activeRecovery.
- * Call once at app startup, before recoverCrashedSession(), so that the
- * crash-recovery logic always sees the normalised `outputPath` field.
+ * Also fills in new fields (segments, videoOutputPath, phase, updatedAt) that
+ * older versions did not write, and clears stale recovery entries that are
+ * older than 24 hours (the recording clearly ended without cleanup running).
+ * Call once at app startup, before recoverCrashedSession().
  */
 export function migrateActiveRecovery(): void {
   const recovery = store.get('activeRecovery')
   if (!recovery) return
   const rec = recovery as unknown as Record<string, unknown>
+
+  // ── Stale recovery detection ──────────────────────────────────────────────
+  // updatedAt is set every 30 s during recording. If it is more than 24 hours
+  // ago (or missing from an old version), the recording finished long ago and
+  // the store entry is a ghost — clear it rather than attempting recovery.
+  const updatedAt = typeof rec.updatedAt === 'number' ? rec.updatedAt : null
+  const STALE_MS  = 24 * 60 * 60 * 1000  // 24 hours
+  if (updatedAt !== null && Date.now() - updatedAt > STALE_MS) {
+    store.set('activeRecovery', null)
+    console.log('[store] cleared stale activeRecovery (updatedAt was', new Date(updatedAt).toISOString(), ')')
+    return
+  }
+
+  let changed = false
+
+  // ── Legacy tempPath → outputPath migration ────────────────────────────────
   if (rec.tempPath && !rec.outputPath) {
     rec.outputPath = rec.tempPath
     delete rec.tempPath
-    store.set('activeRecovery', rec as never)
+    changed = true
     console.log('[store] migrated legacy tempPath → outputPath in activeRecovery')
+  }
+
+  // ── Fill in fields absent from older recovery formats ─────────────────────
+  if (!Array.isArray(rec.segments)) {
+    // Best effort: if outputPath exists, treat it as the sole segment
+    rec.segments = rec.outputPath ? [rec.outputPath] : []
+    changed = true
+  }
+  if (!('videoOutputPath' in rec)) {
+    rec.videoOutputPath = undefined
+    changed = true
+  }
+  if (typeof rec.phase !== 'string') {
+    rec.phase = 'recording'  // pre-phase-tracking sessions were always mid-recording
+    changed = true
+  }
+  if (typeof rec.updatedAt !== 'number') {
+    // Assign a plausible updatedAt so stale detection works on next launch
+    rec.updatedAt = Date.now()
+    changed = true
+  }
+
+  if (changed) {
+    store.set('activeRecovery', rec as never)
   }
 }
 

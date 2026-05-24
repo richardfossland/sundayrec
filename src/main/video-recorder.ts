@@ -76,7 +76,7 @@ export function autoBitrate(res?: string): number {
  */
 export function buildVideoFilterComplex(dimW: string, dimH: string, flip = false): string {
   const flipPart = flip ? 'hflip,' : ''
-  return `[0:v]${flipPart}split=2[v1][v2];[v1]scale=${dimW}:${dimH}:flags=lanczos,format=yuv420p[vout];[v2]fps=5,scale=640:-2:flags=fast_bilinear[prev]`
+  return `[0:v]${flipPart}split=2[v1][v2];[v1]scale=${dimW}:${dimH}:flags=lanczos,format=yuv420p[vout];[v2]scale=640:-2:flags=fast_bilinear[prev]`
 }
 
 export async function startVideoCapture(
@@ -180,9 +180,14 @@ export async function startVideoCapture(
   })
 
   let stderrBuf = ''
+  // Startup resolver: set to null once resolved so it is called only once.
+  // Resolved early by the first size= line (success) or by close event (error).
+  let resolveStartup: ((err: string | null) => void) | null = null
+
   // Watchdog: if no size= progress in stderr within 20 s, the camera opened but
   // is not delivering frames (capture card with no HDMI signal, slow USB camera,
   // or driver hang). Kill the process — recorder.ts onExit handler will recover.
+  // This watchdog is independent of startup detection and fires regardless.
   let firstVideoProgress = false
   const videoHangWatchdog = setTimeout(() => {
     if (!firstVideoProgress && proc.exitCode === null) {
@@ -199,6 +204,11 @@ export async function startVideoCapture(
       if (!firstVideoProgress) {
         firstVideoProgress = true
         clearTimeout(videoHangWatchdog)
+        // First size= line proves ffmpeg is actively encoding — resolve startup as success
+        if (resolveStartup) {
+          const r = resolveStartup; resolveStartup = null
+          r(null)
+        }
       }
       handle.bytesWritten = parseInt(m[1]) * 1024
       handle.onProgress?.(handle.bytesWritten)
@@ -213,18 +223,41 @@ export async function startVideoCapture(
     handle.onExit?.(code)
   })
 
-  // DirectShow takes longer to open devices; AVFoundation also can be slow on first access
-  const startupMs = process.platform === 'win32' ? 4000 : 3000
+  // Maximum wait for first video data.
+  // We resolve early on the first size= line, so this is only the safety net
+  // for devices that open slowly but eventually produce frames.
+  // The 20-second hang watchdog (above) handles the case where startup "succeeds"
+  // (process alive) but no frames ever arrive.
+  const startupMs = process.platform === 'win32' ? 10000 : 6000
+
   const startupError = await new Promise<string | null>(resolve => {
+    resolveStartup = resolve
+
     const onClose = () => {
       clearTimeout(timer)
-      const classified = classifyVideoError(stderrBuf)
-      resolve(classified || 'device_error')
+      // Only resolve if not already resolved by a size= line
+      if (resolveStartup) {
+        resolveStartup = null
+        const classified = classifyVideoError(stderrBuf)
+        resolve(classified || 'device_error')
+      }
     }
+
     const timer = setTimeout(() => {
       proc.removeListener('close', onClose)
-      resolve(null)
+      if (resolveStartup) {
+        resolveStartup = null
+        // Process is still alive but no frames yet — treat as success and let the
+        // 20-second hang watchdog handle it if frames never arrive
+        if (proc.exitCode !== null || proc.killed) {
+          resolve(classifyVideoError(stderrBuf) || 'device_error')
+        } else {
+          console.warn('[video-recorder] startup timeout — ffmpeg alive but no video data after', startupMs, 'ms; deferring to hang watchdog')
+          resolve(null)
+        }
+      }
     }, startupMs)
+
     proc.once('close', onClose)
   })
 
@@ -253,26 +286,77 @@ export async function stopVideoCapture(handle: VideoHandle): Promise<void> {
 }
 
 /**
+ * Read the container start_time of a media file using ffmpeg -i (no ffprobe needed).
+ * Returns seconds as a float, or null if unavailable.
+ *
+ * Both audio and video captures use -use_wallclock_as_timestamps 1, so their
+ * start_time is a Unix timestamp (> 1_000_000_000). Values below that threshold
+ * indicate a file without wall-clock timestamps — we skip alignment in that case.
+ */
+async function probeStartTimeSec(filePath: string): Promise<number | null> {
+  return new Promise(resolve => {
+    // ffmpeg -i without an output prints container info then exits with code 1.
+    // That's expected — we only need the stderr header dump.
+    const proc = spawn(ffmpegBin, ['-v', 'info', '-i', filePath], {
+      stdio: ['ignore', 'ignore', 'pipe']
+    })
+    let stderr = ''
+    proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-4096) })
+    const timeout = setTimeout(() => { try { proc.kill() } catch {}; resolve(null) }, 5000)
+    proc.on('close', () => {
+      clearTimeout(timeout)
+      const m = stderr.match(/Duration:.*?start:\s*([\d.]+)/)
+      if (!m) { resolve(null); return }
+      const t = parseFloat(m[1])
+      // Only treat as a wall-clock timestamp (Unix epoch seconds, year 2001+)
+      resolve(!isNaN(t) && t > 1_000_000_000 ? t : null)
+    })
+  })
+}
+
+/**
  * Mux a separate audio file + video file into a combined MP4.
  * Video stream is copied losslessly; audio is transcoded to AAC for broad compatibility.
+ *
+ * A/V sync: both captures use -use_wallclock_as_timestamps 1, so camera warm-up
+ * (typically 0.5–3 s) shows up as an offset between the two files' start_time values.
+ * We probe both files, compute the difference, and trim the audio to start exactly
+ * when the first video frame arrived — giving frame-accurate sync from the first frame.
  */
 export async function muxAudioVideo(
   audioPath: string,
   videoPath: string,
   outputPath: string
 ): Promise<boolean> {
+  // Probe both files to detect camera warm-up offset. If probing fails or the
+  // offset is implausibly large (> 60 s), fall back to no trim.
+  const [audioStart, videoStart] = await Promise.all([
+    probeStartTimeSec(audioPath),
+    probeStartTimeSec(videoPath),
+  ])
+
+  let audioTrimSec = 0
+  if (audioStart !== null && videoStart !== null) {
+    const raw = videoStart - audioStart
+    if (raw > 0.05 && raw < 60) {
+      audioTrimSec = raw
+      console.log(`[video-recorder] A/V offset detected: ${raw.toFixed(3)} s — trimming audio start`)
+    }
+  }
+
   return new Promise(resolve => {
     const proc = spawn(ffmpegBin, [
       '-nostdin', '-hide_banner',
+      // Trim audio by the measured offset so both streams start at the same
+      // wall-clock moment (the instant the first video frame was captured).
+      ...(audioTrimSec > 0 ? ['-ss', audioTrimSec.toFixed(3)] : []),
       '-i', audioPath,
       '-i', videoPath,
       '-map', '0:a',
       '-map', '1:v',
       '-c:v', 'copy',
       '-c:a', 'aac', '-b:a', '192k',
-      // Preserve wall-clock timestamps from both streams so their relative
-      // offset is maintained, then normalize the earliest start to zero.
-      '-copyts',
+      // Normalize the earliest PTS to zero after trimming.
       '-avoid_negative_ts', 'make_zero',
       '-movflags', '+faststart',
       '-y', outputPath,

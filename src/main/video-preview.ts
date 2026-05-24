@@ -138,8 +138,8 @@ export async function startPreview(
   })
   if (!input) return false
 
-  // Output at 10 fps — sufficient for live monitoring, keeps IPC + CPU load low.
-  const previewFps = 10
+  // Match the configured recording framerate so the preview faithfully represents the final recording.
+  const previewFps = opts.videoFramerate ?? 30
 
   let inputArgs: string[]
   if (process.platform === 'darwin') {

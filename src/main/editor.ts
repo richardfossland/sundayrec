@@ -10,6 +10,32 @@ import type { RecordingMetadata } from '../types'
 
 const MAX_EDIT_MS = 10 * 60 * 1000   // kill ffmpeg after 10 minutes
 
+// ── Stream probe ──────────────────────────────────────────────────────────────
+
+export interface MediaStreamInfo {
+  hasVideo: boolean
+  hasAudio: boolean
+}
+
+export async function probeMediaStreams(filePath: string): Promise<MediaStreamInfo | null> {
+  if (!fs.existsSync(filePath)) return null
+  return new Promise(resolve => {
+    const proc = spawn(ffmpegBin, ['-v', 'info', '-i', filePath], {
+      stdio: ['ignore', 'ignore', 'pipe']
+    })
+    let stderr = ''
+    proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-8192) })
+    const timeout = setTimeout(() => { try { proc.kill() } catch {}; resolve(null) }, 5000)
+    proc.on('close', () => {
+      clearTimeout(timeout)
+      resolve({
+        hasVideo: /Stream #\d+:\d+[^:]*: Video:/i.test(stderr),
+        hasAudio: /Stream #\d+:\d+[^:]*: Audio:/i.test(stderr),
+      })
+    })
+  })
+}
+
 // Atomically replace targetPath with tempPath, keeping the original safe until swap completes.
 // On POSIX: rename() replaces the target atomically (no gap where file is missing).
 // On Windows: rename() fails if target exists; use a backup to minimise the exposure window.
@@ -102,9 +128,15 @@ function spawnFfmpeg(
 }
 
 function codecArgs(fmt: string, bitrate?: number, bitDepth?: 16 | 24): string[] {
-  if (fmt === 'wav')  return ['-c:a', bitDepth === 24 ? 'pcm_s24le' : 'pcm_s16le']
-  if (fmt === 'flac') return ['-c:a', 'flac']
-  if (fmt === 'aac')  return ['-c:a', 'aac', '-b:a', `${bitrate ?? 192}k`]
+  if (fmt === 'wav')                 return ['-c:a', bitDepth === 24 ? 'pcm_s24le' : 'pcm_s16le']
+  if (fmt === 'flac')                return ['-c:a', 'flac']
+  if (fmt === 'aac' || fmt === 'm4a') return ['-c:a', 'aac',         '-b:a', `${bitrate ?? 192}k`]
+  if (fmt === 'ogg' || fmt === 'oga') return ['-c:a', 'libvorbis',   '-b:a', `${bitrate ?? 192}k`]
+  if (fmt === 'opus')                return ['-c:a', 'libopus',      '-b:a', `${bitrate ?? 128}k`]
+  if (fmt === 'aiff' || fmt === 'aif') return ['-c:a', 'pcm_s16be']
+  if (fmt === 'wma')                 return ['-c:a', 'wmav2',        '-b:a', `${bitrate ?? 192}k`]
+  if (fmt === 'mp2')                 return ['-c:a', 'mp2',          '-b:a', `${bitrate ?? 192}k`]
+  if (fmt === 'mka')                 return ['-c:a', 'flac']
   return ['-c:a', 'libmp3lame', '-b:a', `${bitrate ?? 192}k`]
 }
 
@@ -119,7 +151,8 @@ export async function saveEdited(params: EditorSaveParams): Promise<EditorSaveRe
   if (typeof duration !== 'number' || duration <= 0) return { ok: false, error: 'invalid_duration' }
 
   const rawExt = path.extname(inputPath).slice(1).toLowerCase()
-  const ext    = ['mp3', 'wav', 'flac', 'aac'].includes(rawExt) ? rawExt : 'mp3'
+  const AUDIO_SAVE_EXTS = new Set(['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'oga', 'opus', 'aiff', 'aif', 'mp2', 'wma', 'mka'])
+  const ext    = AUDIO_SAVE_EXTS.has(rawExt) ? rawExt : 'mp3'
 
   const sorted = [...cutRegions].sort((a, b) => a.start - b.start)
   const keeps: { start: number; end: number }[] = []

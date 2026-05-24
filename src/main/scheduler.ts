@@ -2,6 +2,7 @@ import schedule from 'node-schedule'
 import { Notification } from 'electron'
 import * as store from './store'
 import * as recorder from './recorder'
+import * as logger from './logger'
 import type { BrowserWindow } from 'electron'
 import type { ScheduleSlot, SpecialRecording, RecordingOpts } from '../types'
 
@@ -49,6 +50,7 @@ export function reschedule(): void {
 
   const slots    = store.get('slots')             ?? []
   const specials = store.get('specialRecordings') ?? []
+  logger.info('scheduler', 'reschedule', { slotCount: slots.length, specialCount: specials.length })
 
   const reminderMin = store.get('reminderMinutes') ?? 0
 
@@ -116,6 +118,11 @@ export function reschedule(): void {
 async function triggerStart(slot: ScheduleSlot | SpecialRecording, overrideName?: string): Promise<void> {
   if (!mainWindow) return
 
+  const slotKey = (slot as SpecialRecording).date
+    ? `special:${(slot as SpecialRecording).date}T${(slot as SpecialRecording).start}`
+    : `slot:${(slot as ScheduleSlot).start}-${(slot as ScheduleSlot).stop}`
+  logger.info('scheduler', 'trigger_start', { slotKey })
+
   const s = store.getAll()
   const deviceId = (slot as SpecialRecording).deviceId || s.deviceId
   const stopStr  = (slot as ScheduleSlot).stop || (slot as SpecialRecording).stop || '12:00'
@@ -178,6 +185,7 @@ async function triggerStart(slot: ScheduleSlot | SpecialRecording, overrideName?
   // Start recording directly in main — no longer routed through the renderer
   const result = await recorder.startSession(opts, mainWindow)
   if ('error' in result) {
+    logger.error('scheduler', 'trigger_start_failed', { error: result.error, slotKey })
     const lang = store.get('language') ?? 'no'
     const nl   = recorder.NOTIFY_LABELS[lang] ?? recorder.NOTIFY_LABELS.no
     const msg  = recorder.localizeError(result.error)
@@ -255,15 +263,27 @@ export function checkMissedRecordings(): void {
   const specials = store.get('specialRecordings') ?? []
   const now      = new Date()
 
+  let found = false
+
   slots.forEach(slot => {
     if (slotActiveNow(slot.start, slot.stop, slot.days ?? [], now, MISSED_WINDOW_MS)) {
-      triggerStart(slot).catch(err => console.error('[scheduler] missed slot start error:', err))
+      found = true
+      triggerStart(slot).catch(err => {
+        logger.error('scheduler', 'trigger_start_failed', { error: (err as Error).message })
+        console.error('[scheduler] missed slot start error:', err)
+      })
     }
   })
 
   specials.forEach(special => {
     if (specialActiveNow(special.date, special.start, special.stop, now, MISSED_WINDOW_MS)) {
-      triggerStart(special, special.name).catch(err => console.error('[scheduler] missed special start error:', err))
+      found = true
+      triggerStart(special, special.name).catch(err => {
+        logger.error('scheduler', 'trigger_start_failed', { error: (err as Error).message })
+        console.error('[scheduler] missed special start error:', err)
+      })
     }
   })
+
+  logger.info('scheduler', 'missed_check', { found })
 }

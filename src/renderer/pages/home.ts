@@ -22,6 +22,7 @@ let previewVideoUnsub:    (() => void) | undefined
 let previewMetaUnsub:     (() => void) | undefined
 let previewNoFrameTimer:  ReturnType<typeof setTimeout> | null = null
 let lastFrameTs           = 0
+let lastFrameBlobUrl:     string | null = null
 
 // ── VU overlay (inside video wrap when video-mode is on) ─────────────────────
 let _vuOrigParent:      Element | null = null
@@ -155,6 +156,7 @@ async function applyHomeVideoDeviceSelection(): Promise<void> {
 export function stopVideoPreview(): void {
   previewActive = false
   if (previewNoFrameTimer) { clearTimeout(previewNoFrameTimer); previewNoFrameTimer = null }
+  if (lastFrameBlobUrl) { URL.revokeObjectURL(lastFrameBlobUrl); lastFrameBlobUrl = null }
   previewFrameUnsub?.(); previewFrameUnsub = undefined
   previewStopUnsub?.();  previewStopUnsub  = undefined
   previewVideoUnsub?.(); previewVideoUnsub  = undefined
@@ -224,18 +226,18 @@ export function startVideoPreview(): void {
     }
   })?.catch(() => { /* IPC errors are non-fatal */ })
 
+  const frameIntervalMs = Math.floor(1000 / (settings.videoFramerate ?? 30)) - 2
   previewFrameUnsub = window.api.on('video-preview-frame', (data: unknown) => {
     if (previewNoFrameTimer) { clearTimeout(previewNoFrameTimer); previewNoFrameTimer = null }
     const now = Date.now()
-    if (now - lastFrameTs < 80) return  // ~12fps max render rate
+    if (now - lastFrameTs < frameIntervalMs) return
     lastFrameTs = now
     const arr = data as Uint8Array
     if (!img || arr.length < 4) return
-    let binary = ''
-    for (let i = 0; i < arr.length; i += 8192) {
-      binary += String.fromCharCode(...arr.subarray(i, Math.min(i + 8192, arr.length)))
-    }
-    img.src = `data:image/jpeg;base64,${btoa(binary)}`
+    const url = URL.createObjectURL(new Blob([arr], { type: 'image/jpeg' }))
+    if (lastFrameBlobUrl) URL.revokeObjectURL(lastFrameBlobUrl)
+    lastFrameBlobUrl = url
+    img.src = url
     img.style.display = ''
     if (phDiv) phDiv.style.display = 'none'
   })

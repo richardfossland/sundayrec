@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, Notification, dialog, shell, systemPreferences, powerMonitor, protocol, net } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import * as logger from './logger'
 import * as store from './store'
 import * as scheduler from './scheduler'
 import * as recorder from './recorder'
@@ -730,9 +731,12 @@ function setupIPC(): void {
     const r = await dialog.showOpenDialog(win!, {
       properties: ['openFile'],
       filters: [
-        { name: 'Lyd og video', extensions: ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'webm', 'mp4', 'mov', 'mkv', 'm4v'] },
-        { name: 'Lydfiler',     extensions: ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'webm'] },
-        { name: 'Videofiler',   extensions: ['mp4', 'mov', 'mkv', 'm4v'] },
+        { name: 'Lyd og video', extensions: [
+            'mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'oga', 'webm', 'aiff', 'aif', 'wma', 'mp2', 'mka',
+            'mp4', 'mov', 'mkv', 'm4v', 'avi', 'wmv', 'ts', 'mts', 'm2ts', 'flv', '3gp', 'asf', 'f4v',
+          ] },
+        { name: 'Lydfiler',     extensions: ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'oga', 'webm', 'aiff', 'aif', 'wma', 'mp2', 'mka'] },
+        { name: 'Videofiler',   extensions: ['mp4', 'mov', 'mkv', 'm4v', 'avi', 'wmv', 'ts', 'mts', 'm2ts', 'flv', '3gp', 'asf', 'f4v'] },
       ]
     })
     return r.canceled ? null : r.filePaths[0]
@@ -804,11 +808,17 @@ function setupIPC(): void {
     return extractAudioForPeaks(filePath)
   })
 
+  ipcMain.handle('editor-probe-streams', async (_, filePath: string) => {
+    if (typeof filePath !== 'string' || !isAllowedMediaPath(filePath)) return null
+    const { probeMediaStreams } = await import('./editor')
+    return probeMediaStreams(filePath)
+  })
+
   ipcMain.handle('editor-pick-video-file', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender) ?? mainWindow
     const r = await dialog.showOpenDialog(win!, {
       properties: ['openFile'],
-      filters: [{ name: 'Video', extensions: ['mp4', 'mov', 'mkv', 'm4v'] }]
+      filters: [{ name: 'Video', extensions: ['mp4', 'mov', 'mkv', 'm4v', 'avi', 'wmv', 'ts', 'mts', 'm2ts', 'flv', '3gp', 'asf', 'f4v'] }]
     })
     return r.canceled ? null : r.filePaths[0]
   })
@@ -920,6 +930,9 @@ function setupIPC(): void {
     return runDiagnostics(settings, mainWindow)
   })
 
+  ipcMain.handle('get-logs',          () => logger.getRecentLogs(200))
+  ipcMain.handle('get-log-file-path', () => logger.getLogFilePath())
+
 }
 
 function notify(title: string, body: string): void {
@@ -964,8 +977,10 @@ async function cleanupOldRecordings(): Promise<void> {
   if (changed) store.set('recordingHistory', remaining)
 }
 
-const ALLOWED_AUDIO_EXTS = new Set(['.mp3', '.wav', '.flac', '.aac', '.m4a', '.ogg', '.webm'])
-const ALLOWED_VIDEO_EXTS = new Set(['.mp4', '.mov', '.mkv', '.m4v'])
+const ALLOWED_AUDIO_EXTS = new Set(['.mp3', '.wav', '.flac', '.aac', '.m4a', '.ogg', '.webm',
+  '.opus', '.oga', '.aiff', '.aif', '.mp2', '.wma', '.mka'])
+const ALLOWED_VIDEO_EXTS = new Set(['.mp4', '.mov', '.mkv', '.m4v',
+  '.avi', '.wmv', '.ts', '.mts', '.m2ts', '.flv', '.3gp', '.asf', '.f4v'])
 const ALLOWED_MEDIA_EXTS = new Set([...ALLOWED_AUDIO_EXTS, ...ALLOWED_VIDEO_EXTS])
 
 function isAllowedAudioPath(p: string): boolean {

@@ -27,8 +27,10 @@ let introDuration = 0
 let outroDuration = 0
 let includeIntroOutro = false
 
-// Video state
-const VIDEO_EXTS = new Set(['.mp4', '.mov', '.mkv', '.m4v'])
+// Video state — formats always routed to the video editor path
+const VIDEO_EXTS = new Set(['.mp4', '.mov', '.m4v', '.avi', '.wmv', '.ts', '.mts', '.m2ts', '.flv', '.3gp', '.asf', '.f4v'])
+// Ambiguous formats: could be video or audio — probe to decide
+const PROBE_EXTS = new Set(['.mkv', '.webm', '.mka'])
 let isVideoFile      = false
 let videoEl: HTMLVideoElement | null = null
 let videoIntroPath   = ''
@@ -372,7 +374,13 @@ async function loadFile(fp: string): Promise<void> {
 
   // Determine if this is a video file
   const ext = ('.' + (fp.split('.').pop()?.toLowerCase() ?? '')).toLowerCase()
-  isVideoFile = VIDEO_EXTS.has(ext)
+  if (PROBE_EXTS.has(ext)) {
+    // Ambiguous container: probe for a video stream
+    const streams = await window.api.editorProbeStreams(fp)
+    isVideoFile = !streams || streams.hasVideo
+  } else {
+    isVideoFile = VIDEO_EXTS.has(ext)
+  }
 
   // Show/hide video panel and video intro/outro section
   const vPanel = $('editor-video-panel')
@@ -1307,7 +1315,10 @@ function setupDragDrop(): void {
     const file = e.dataTransfer?.files[0]
     if (!file) return
     const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
-    if (!['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'webm', 'mp4', 'mov', 'mkv', 'm4v'].includes(ext)) return
+    if (![
+      'mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'oga', 'webm', 'aiff', 'aif', 'wma', 'mp2', 'mka',
+      'mp4', 'mov', 'mkv', 'm4v', 'avi', 'wmv', 'ts', 'mts', 'm2ts', 'flv', '3gp', 'asf', 'f4v',
+    ].includes(ext)) return
     const fp = (file as File & { path?: string }).path
     if (fp) loadFile(fp)
   })

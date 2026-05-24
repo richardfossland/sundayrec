@@ -2,6 +2,14 @@ export type ChannelMode = 'stereo' | 'monoL' | 'monoR' | 'monoMix'
 export type FileFormat  = 'mp3' | 'wav' | 'flac' | 'aac'
 export type FilenamePattern = 'date' | 'church' | 'plain' | 'datetime'
 
+export type RecordingPhase =
+  | 'idle'          // no active session
+  | 'starting'      // startSession() called, ffmpeg being spawned
+  | 'recording'     // ffmpeg active, audio/video flowing
+  | 'reconnecting'  // device disconnect detected, trying to reconnect
+  | 'stopping'      // stopSession() called, waiting for ffmpeg to exit
+  | 'finalizing'    // ffmpeg exited, writing history entry
+
 export interface DeviceChannels {
   channelL: number
   channelR: number
@@ -44,10 +52,14 @@ export interface RecordingEntry {
 }
 
 export interface ActiveRecovery {
-  outputPath?: string   // v4.1+: path to the in-progress output file
-  tempPath?:   string   // legacy: pre-v4.1 temp WebM path (kept for backward compat)
-  startTime:   number
-  sessionId:   string
+  outputPath?:      string    // v4.1+: current audio file being written
+  tempPath?:        string    // legacy: pre-v4.1 temp WebM path (kept for backward compat)
+  videoOutputPath?: string    // current video file being written (if any)
+  segments:         string[]  // all completed audio segment paths (for split recordings)
+  startTime:        number
+  sessionId:        string
+  phase:            RecordingPhase
+  updatedAt:        number    // unix ms — for detecting stale recovery
 }
 
 export interface Settings {
