@@ -9,6 +9,7 @@ let isRecording = false
 let hasError    = false
 let themeDebounce: ReturnType<typeof setTimeout> | null = null
 let nextRecording: Date | null = null
+let diagnoseHandler: (() => void) | null = null
 
 const TRAY_LABELS: Record<string, [string, string, string, string, string, string, string]> = {
   //                  recording          error                    ready       open          stop          start         quit
@@ -19,6 +20,16 @@ const TRAY_LABELS: Record<string, [string, string, string, string, string, strin
   da: ['🔴 Optager…', '⚠️ Fejl — klik for detaljer', '✅ Klar', 'Åbn SundayRec', 'Stop optagelse', 'Start optagelse nu', 'Afslut'],
   pl: ['🔴 Nagrywa…', '⚠️ Błąd — kliknij po szczegóły', '✅ Gotowy', 'Otwórz SundayRec', 'Zatrzymaj nagrywanie', 'Rozpocznij nagrywanie', 'Wyjdź'],
   fr: ['🔴 Enregistrement…', '⚠️ Erreur — cliquez pour détails', '✅ Prêt', 'Ouvrir SundayRec', "Arrêter l'enregistrement", 'Démarrer un enregistrement', 'Quitter']
+}
+
+const DIAGNOSE_LABEL: Record<string, string> = {
+  no: 'Diagnoser system…',
+  en: 'Run diagnostics…',
+  de: 'Diagnose starten…',
+  sv: 'Kör diagnostik…',
+  da: 'Kør diagnostik…',
+  pl: 'Uruchom diagnostykę…',
+  fr: 'Lancer le diagnostic…',
 }
 
 const TOOLTIP: Record<string, string> = {
@@ -129,6 +140,8 @@ function updateMenu(popup = false): void {
       }
     },
     { type: 'separator' },
+    { label: DIAGNOSE_LABEL[lang] ?? DIAGNOSE_LABEL.en, click: () => diagnoseHandler?.() },
+    { type: 'separator' },
     { label: quitLbl, click: () => app.quit() }
   )
 
@@ -177,4 +190,8 @@ export function setNextRecording(date: Date | null): void {
   nextRecording = date
   updateTooltip()
   updateMenu()
+}
+
+export function setDiagnoseHandler(fn: () => void): void {
+  diagnoseHandler = fn
 }

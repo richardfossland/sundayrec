@@ -269,6 +269,34 @@ app.whenReady().then(async () => {
 
   createWindow()
   tray.create(mainWindow)
+
+  // Wire diagnose handler — runs in the main process, shows a native result dialog
+  tray.setDiagnoseHandler(async () => {
+    const settings = store.getAll()
+    const { runDiagnostics } = await import('./diagnostics')
+    let result: import('./diagnostics').DiagnosticsReport
+    try {
+      result = await runDiagnostics(settings)
+    } catch (err) {
+      await dialog.showMessageBox({ type: 'error', title: 'Diagnose', message: 'Diagnose feilet', detail: String(err), buttons: ['OK'] })
+      return
+    }
+    const savedLine  = result.savedTo ? `Rapport lagret til Skrivebord:\n${result.savedTo}` : 'Kunne ikke lagre til Skrivebord.'
+    const clipLine   = result.clipboardOk ? 'Innhold kopiert til utklippstavle.' : ''
+    const testLine   = result.captureOk ? '✅ Lydtest OK' : '❌ Lydtest feilet'
+    const detail     = [testLine, '', savedLine, clipLine].filter(Boolean).join('\n')
+    const btns       = result.savedTo ? ['Vis fil', 'OK'] : ['OK']
+    const { response } = await dialog.showMessageBox({
+      type: result.captureOk ? 'info' : 'warning',
+      title: 'SundayRec — Diagnostikk',
+      message: 'Diagnose fullført',
+      detail,
+      buttons: btns,
+      defaultId: btns.length - 1,
+    })
+    if (result.savedTo && response === 0) shell.showItemInFolder(result.savedTo)
+  })
+
   store.migrateActiveRecovery()
   recorder.recoverCrashedSession()
   scheduler.init(mainWindow)
@@ -852,6 +880,12 @@ function setupIPC(): void {
   ipcMain.handle('video-preview-stop', async () => {
     const preview = await import('./video-preview')
     preview.stopPreview()
+  })
+
+  ipcMain.handle('run-diagnostics', async () => {
+    const settings = store.getAll()
+    const { runDiagnostics } = await import('./diagnostics')
+    return runDiagnostics(settings)
   })
 
 }

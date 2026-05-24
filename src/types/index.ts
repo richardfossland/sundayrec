@@ -134,6 +134,7 @@ export interface Settings {
   /** Video framerate in fps. Valid: 10–60. Default: 30 */
   videoFramerate?: number      // fps, default 30
   videoSeparate?: boolean      // true = keep audio + video as separate files; false = mux into combined MP4
+  videoFlip?: boolean          // mirror the camera horizontally (e.g. front-facing cameras)
 
   // Editor
   askOpenEditor?: boolean

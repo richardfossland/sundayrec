@@ -318,4 +318,26 @@ describe('buildVideoFilterComplex', () => {
     // Must NOT look like two separate -vf values (which would be a regression)
     expect(fc).not.toMatch(/^scale=/)
   })
+
+  it('no flip by default — no hflip filter in output', () => {
+    expect(buildVideoFilterComplex('1280', '720')).not.toContain('hflip')
+    expect(buildVideoFilterComplex('1280', '720', false)).not.toContain('hflip')
+  })
+
+  it('flip=true adds hflip before split=2', () => {
+    const fc = buildVideoFilterComplex('1280', '720', true)
+    expect(fc).toContain('hflip')
+    // hflip must come before split so both outputs (recording + preview) are mirrored
+    expect(fc.indexOf('hflip')).toBeLessThan(fc.indexOf('split=2'))
+  })
+
+  it('flip=true preserves all other filter properties', () => {
+    const fc = buildVideoFilterComplex('1920', '1080', true)
+    expect(fc).toContain('split=2')
+    expect(fc).toContain('[vout]')
+    expect(fc).toContain('[prev]')
+    expect(fc).toContain('scale=1920:1080')
+    expect(fc).toContain('fps=5')
+    expect(fc).toContain('640:-2')
+  })
 })

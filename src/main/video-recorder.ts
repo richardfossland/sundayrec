@@ -74,8 +74,9 @@ export function autoBitrate(res?: string): number {
  *
  * Exported for unit testing.
  */
-export function buildVideoFilterComplex(dimW: string, dimH: string): string {
-  return `[0:v]split=2[v1][v2];[v1]scale=${dimW}:${dimH}:flags=lanczos,format=yuv420p[vout];[v2]fps=5,scale=640:-2:flags=fast_bilinear[prev]`
+export function buildVideoFilterComplex(dimW: string, dimH: string, flip = false): string {
+  const flipPart = flip ? 'hflip,' : ''
+  return `[0:v]${flipPart}split=2[v1][v2];[v1]scale=${dimW}:${dimH}:flags=lanczos,format=yuv420p[vout];[v2]fps=5,scale=640:-2:flags=fast_bilinear[prev]`
 }
 
 export async function startVideoCapture(
@@ -124,7 +125,7 @@ export async function startVideoCapture(
   const args: string[] = [
     '-nostdin', '-hide_banner',
     ...inputArgs,
-    '-filter_complex', buildVideoFilterComplex(dimW, dimH),
+    '-filter_complex', buildVideoFilterComplex(dimW, dimH, settings.videoFlip ?? false),
     // Primary output: H.264 recording file
     '-map', '[vout]',
     '-c:v', 'libx264',

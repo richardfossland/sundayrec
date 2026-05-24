@@ -47,6 +47,12 @@ function setVuOverlay(enabled: boolean): void {
 type HomeVideoDevice = { name: string; index: number }
 let homeVideoDevices: HomeVideoDevice[] = []
 
+function applyVideoFlipState(): void {
+  const flipped = settings.videoFlip ?? false
+  document.getElementById('video-preview-img')?.classList.toggle('video-flip', flipped)
+  document.getElementById('btn-home-video-flip')?.classList.toggle('flip-active', flipped)
+}
+
 function updateVideoToggleButton(): void {
   const btn   = document.getElementById('btn-video-toggle')
   const label = document.getElementById('video-toggle-label')
@@ -286,6 +292,14 @@ export function setupHome(): void {
     await applyHomeVideoDeviceSelection()
   })
 
+  // Horizontal flip toggle — CSS-only for preview (instant, no restart), ffmpeg hflip for recording
+  document.getElementById('btn-home-video-flip')?.addEventListener('click', async () => {
+    const nowFlipped = !(settings.videoFlip ?? false)
+    patchSettings({ videoFlip: nowFlipped })
+    await window.api.saveSettings({ ...settings })
+    applyVideoFlipState()
+  })
+
   // Inline camera device selector — save + restart preview on change
   document.getElementById('home-video-device-select')?.addEventListener('change', async () => {
     await applyHomeVideoDeviceSelection()
@@ -401,6 +415,7 @@ export async function refreshHome(): Promise<void> {
   if (progressRow) progressRow.style.display = 'none'
 
   updateVideoToggleButton()
+  applyVideoFlipState()
   loadVideoInfoStrip()
 
   const pageHome = document.getElementById('page-home')

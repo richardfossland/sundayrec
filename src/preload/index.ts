@@ -103,6 +103,8 @@ contextBridge.exposeInMainWorld('api', {
   videoPreviewStart: (opts: unknown) => ipcRenderer.invoke('video-preview-start', opts),
   videoPreviewStop:  () => ipcRenderer.invoke('video-preview-stop'),
 
+  runDiagnostics: (): Promise<{ markdown: string; savedTo: string | null; clipboardOk: boolean; captureOk: boolean }> => ipcRenderer.invoke('run-diagnostics'),
+
   on: (channel: string, fn: (...args: unknown[]) => void) => {
     if (!ALLOWED_CHANNELS.includes(channel as AllowedChannel)) return
     const sub = (_: Electron.IpcRendererEvent, ...args: unknown[]) => fn(...args)
