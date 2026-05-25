@@ -94,6 +94,11 @@ declare global {
       editorSaveVideo:         (params: unknown)  => Promise<{ ok: boolean; outputPath?: string; error?: string }>
       editorExportVideo:       (params: unknown)  => Promise<{ ok: boolean; outputPath?: string; error?: string }>
       editorProbeStreams:      (filePath: string) => Promise<{ hasVideo: boolean; hasAudio: boolean } | null>
+      masterPresets:           () => Promise<{ id: string; label: string; description: string; targetLufs: number; targetLra: number; truePeakDb: number; filters: string }[]>
+      masterPreview:           (inputPath: string, presetId: string, startSec: number, durationSec: number) => Promise<{ ok: boolean; previewPath?: string; error?: string }>
+      masterMeasure:           (inputPath: string, presetId: string) => Promise<{ ok: boolean; measurement?: { inputI: number; inputLra: number; inputTp: number; inputThresh: number; targetOffset: number }; targetLufs?: number; error?: string }>
+      masterApply:             (params: { inputPath: string; outputPath: string; presetId: string; measurement: { inputI: number; inputLra: number; inputTp: number; inputThresh: number; targetOffset: number }; jobId: string }) => Promise<{ ok: boolean; outputPath?: string; error?: string }>
+      masterCancel:            (jobId: string) => Promise<boolean>
       getLogs:                 ()                 => Promise<unknown[]>
       getLogFilePath:          ()                 => Promise<string | null>
       diagnoseAudio?:          () => Promise<{ dshow: string[]; wasapi: string[]; wasapiAvailable: boolean }>

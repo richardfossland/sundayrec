@@ -258,12 +258,18 @@ select:focus:not(:focus-visible) {
 .quick-row .btn-record { flex: 1; justify-content: center; }
 
 /* ── Home info strip ──────────────────────────────────────────── */
-.info-strip { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+/* Responsive grid: cards auto-fit and stack when window is narrow.
+   Each card needs ≥260px to comfortably show icon + body + Endre button.   */
+.info-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px; margin-bottom: 12px;
+}
 .video-info-strip { margin-bottom: 22px; }
 .video-info-strip .info-card-icon { background: rgba(240,187,71,.08); color: var(--accent2); }
 .info-card-video { border-color: var(--border2); }
 .info-card {
-  flex: 1; min-width: 160px;
+  min-width: 0;
   display: flex; align-items: center; gap: 12px;
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--r); padding: 13px 14px;
@@ -274,16 +280,21 @@ select:focus:not(:focus-visible) {
   align-items: center; justify-content: center; flex-shrink: 0;
   color: var(--accent2);
 }
-.info-card-body { flex: 1; min-width: 0; }
+.info-card-body { flex: 1 1 0; min-width: 0; }
 .info-card-label {
   font-size: 9px; font-weight: 700; letter-spacing: 1px;
   color: var(--text3); text-transform: uppercase; margin-bottom: 3px;
 }
 .info-card-value {
   font-size: 13px; font-weight: 600; color: var(--text);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  overflow-wrap: anywhere; word-break: break-word;
+  line-height: 1.3;
 }
-.info-card-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+.info-card-sub {
+  font-size: 11px; color: var(--text3); margin-top: 2px;
+  overflow-wrap: anywhere; word-break: break-word;
+  line-height: 1.35;
+}
 .info-card-action {
   font-size: 11px; font-weight: 600; color: var(--accent2);
   text-decoration: none; white-space: nowrap; flex-shrink: 0;
@@ -643,7 +654,7 @@ select:focus:not(:focus-visible) {
 .storage-text { font-size: 12px; color: var(--text2); line-height: 1.5; }
 
 /* ── Section header ────────────────────────────────────────────── */
-.section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 10px; flex-wrap: wrap; }
 .section-header h2 { font-size: 15px; font-weight: 700; letter-spacing: -.2px; }
 .view-all { font-size: 12px; color: var(--text3); text-decoration: none; cursor: pointer; transition: color .15s; font-weight: 500; }
 .view-all:hover { color: var(--red); }
@@ -827,10 +838,10 @@ select.form-input {
 .slot-row {
   display: flex; align-items: center; gap: 12px;
   padding: 12px 0; border-bottom: 1px solid var(--border);
-  font-size: 13px;
+  font-size: 13px; flex-wrap: wrap;
 }
 .slot-row:last-child { border-bottom: none; }
-.slot-days { font-weight: 600; color: var(--text); flex: 1; }
+.slot-days { font-weight: 600; color: var(--text); flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
 .slot-time  { font-size: 12px; color: var(--text2); background: var(--surface2); padding: 3px 8px; border-radius: var(--rxs); }
 .slot-edit  { cursor: pointer; color: var(--text3); font-size: 12px; text-decoration: none; transition: color .15s; }
 .slot-edit:hover { color: var(--accent2); }
@@ -838,8 +849,8 @@ select.form-input {
 .slot-del:hover { color: var(--red); }
 
 /* ── EQ bands ──────────────────────────────────────────────────── */
-.eq-row { display: flex; gap: 20px; margin-bottom: 14px; }
-.eq-band { flex: 1; text-align: center; }
+.eq-row { display: flex; gap: 20px; margin-bottom: 14px; flex-wrap: wrap; }
+.eq-band { flex: 1 1 140px; min-width: 0; text-align: center; }
 .eq-label { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
 .eq-hint  { font-size: 11px; color: var(--text3); margin-bottom: 8px; line-height: 1.4; }
 
@@ -973,7 +984,7 @@ select.form-input {
 }
 
 /* ══ RESPONSIVE — compact (≤ 880px window) ════════════════════════════
-   Content area ≈ 620px. Switch info strip to 2-column, reduce more padding.
+   Content area ≈ 620px. Tighten paddings; auto-fit grid handles columns.
    ════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 880px) {
   #main { padding: 18px 18px; }
@@ -983,23 +994,24 @@ select.form-input {
   .hero-next { display: none; }
   .hero { padding: 14px 16px; gap: 12px; margin-bottom: 14px; }
 
-  /* Info strip → 2-column grid; storage card spans full width */
-  .info-strip {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-  }
-  .info-strip .info-card:last-child { grid-column: 1 / -1; }
-  .info-card { min-width: 0; }
-
-  /* Hide "Endre" action buttons — navigation via sidebar still works */
-  .info-card-action { display: none; }
+  /* Info strip: tighter gap; auto-fit handles column count */
+  .info-strip { gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .info-card { min-width: 0; padding: 11px 12px; gap: 10px; }
+  .info-card-icon { width: 26px; height: 26px; }
 
   /* VU section: reduce padding */
   .vu-section { padding: 12px; margin-bottom: 16px; }
 
   /* Section header + history search */
   .section-header { margin-bottom: 10px; }
+}
+
+/* ══ RESPONSIVE — single column (≤ 560px window) ═══════════════════════
+   Very narrow. Force 1 col, hide "Endre" (sidebar still navigates).
+   ════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 560px) {
+  .info-strip { grid-template-columns: 1fr; }
+  .info-card-action { display: none; }
 }
 
 /* ── Calendar responsive (narrow window) ──────────────────────── */
@@ -1099,10 +1111,13 @@ select.form-input {
 
 /* ── Recording overlay ─────────────────────────────────────────── */
 .recording-overlay {
-  position: fixed; inset: 0; background: rgba(9,9,14,.97);
+  position: fixed; inset: 0;
+  /* Fully opaque so home-page content doesn't bleed through behind the overlay. */
+  background: var(--bg);
   display: flex; align-items: center; justify-content: center;
   z-index: 200;
   padding-top: 36px;  /* clear macOS traffic-light buttons (hiddenInset titlebar) */
+  overflow-y: auto;   /* allow scroll if window is shorter than content */
 }
 .rec-pulse-ring {
   position: absolute; width: 140px; height: 140px; border-radius: 50%;
@@ -1116,6 +1131,13 @@ select.form-input {
   display: flex; flex-direction: column; gap: 28px;
   width: 100%; max-width: 860px; padding: 36px 52px;
   position: relative; z-index: 1;
+  min-width: 0;
+}
+@media (max-width: 720px) {
+  .rec-layout { padding: 24px 24px; gap: 20px; }
+}
+@media (max-width: 480px) {
+  .rec-layout { padding: 16px 14px; gap: 16px; }
 }
 .rec-indicator { display: flex; align-items: center; gap: 10px; }
 
@@ -1129,14 +1151,16 @@ select.form-input {
 .rec-device-name { font-size: 12px; color: var(--text3); margin-top: 3px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
 
 /* VU section */
-.rec-vu-section { width: 100%; }
+.rec-vu-section { width: 100%; min-width: 0; }
 .rec-vu-header {
   display: flex; align-items: center; justify-content: space-between;
+  gap: 12px 18px; flex-wrap: wrap;
   margin-bottom: 22px;
 }
+.rec-vu-header > * { min-width: 0; }
 
 /* Signal status badge */
-.rec-sig-status { display: flex; align-items: center; gap: 10px; }
+.rec-sig-status { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .rec-sig-dot {
   width: 13px; height: 13px; border-radius: 50%;
   background: var(--text4); flex-shrink: 0; transition: background .2s, box-shadow .2s;
@@ -1170,19 +1194,22 @@ select.form-input {
 /* Controls strip at bottom */
 .rec-controls-row {
   display: flex; align-items: center;
-  justify-content: space-between; gap: 24px;
+  justify-content: space-between; gap: 16px 24px;
   padding-top: 8px; border-top: 1px solid rgba(255,255,255,.06);
+  flex-wrap: wrap;
 }
-.rec-timer-block { display: flex; flex-direction: column; gap: 6px; }
+.rec-controls-row > * { min-width: 0; }
+.rec-timer-block { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1 1 220px; }
 .rec-timer {
   font-size: 52px; font-weight: 200; letter-spacing: -3px;
   color: var(--text); font-variant-numeric: tabular-nums;
   font-family: 'SF Mono', 'Consolas', monospace;
   line-height: 1;
 }
-.rec-meta { display: flex; gap: 40px; }
+.rec-meta { display: flex; gap: 12px 40px; flex-wrap: wrap; }
+.rec-meta-item { min-width: 0; }
 .rec-meta-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: var(--text3); margin-bottom: 3px; text-transform: uppercase; }
-.rec-meta-val   { font-size: 15px; color: var(--text2); font-variant-numeric: tabular-nums; }
+.rec-meta-val   { font-size: 15px; color: var(--text2); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .btn-stop-big {
   padding: 15px 44px; flex-shrink: 0;
   background: rgba(239,68,68,.1); border: 1.5px solid rgba(239,68,68,.35);
@@ -1190,12 +1217,22 @@ select.form-input {
   font-size: 14px; font-weight: 700; cursor: pointer;
   transition: all .15s; letter-spacing: -.1px;
 }
+@media (max-width: 720px) {
+  .rec-meta { gap: 10px 28px; }
+  .btn-stop-big { padding: 14px 28px; flex: 1 1 100%; }
+  .rec-timer-block { flex: 1 1 100%; }
+}
+@media (max-width: 480px) {
+  .rec-timer { font-size: 40px !important; letter-spacing: -2px !important; }
+  .rec-peak-db { font-size: 21px !important; min-width: 52px !important; }
+  .rec-sig-label { font-size: 14px !important; letter-spacing: 1.5px !important; }
+}
 .btn-stop-big:hover {
   background: rgba(239,68,68,.2); border-color: var(--red);
   box-shadow: 0 0 20px rgba(239,68,68,.2);
 }
 .rec-savepath {
-  font-size: 11px; color: var(--text4); max-width: 320px;
+  font-size: 11px; color: var(--text4); max-width: 100%;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   padding: 4px 10px; background: rgba(255,255,255,.03); border-radius: var(--rxs);
 }
@@ -2495,6 +2532,33 @@ body.platform-win32  #wake-instructions-win { display: block; }
 }
 .editor-export-progress-label { font-size: 12px; color: var(--text3); white-space: nowrap; }
 
+/* ── Editor: mastering section ────────────────────────────────── */
+.editor-master-section {
+  margin-top: 16px; padding: 14px 16px;
+  background: var(--surface2); border: 1px solid var(--surface3);
+  border-radius: 8px;
+}
+.editor-master-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+}
+.editor-master-title { font-weight: 600; font-size: 14px; color: var(--text1); }
+.editor-master-intro { font-size: 12px; color: var(--text3); margin-bottom: 12px; }
+.editor-master-preset-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
+}
+.editor-master-preset-row .export-section-label { margin-bottom: 0; }
+.editor-master-preset-row select { flex: 1; max-width: 320px; }
+.editor-master-desc { font-size: 12px; color: var(--text3); margin-bottom: 12px; min-height: 16px; }
+.editor-master-actions {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px;
+}
+.editor-master-status {
+  display: flex; align-items: center; gap: 10px; margin-top: 8px;
+}
+.editor-master-result {
+  display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 13px;
+}
+
 /* ── Editor: loop button active state ─────────────────────────── */
 .btn-editor-loop.active { color: var(--accent); background: rgba(240,187,71,.12); }
 
@@ -2971,7 +3035,9 @@ body.platform-win32  #wake-instructions-win { display: block; }
 }
 
 .recording-overlay.video-active .rec-video-wrap {
-  max-height: none;
+  /* Cap height so audio meters and controls always have room.
+     Using min(50vh, …) lets the preview shrink with window height. */
+  max-height: min(50vh, 420px);
   aspect-ratio: var(--rec-video-ar, 16 / 9);
   width: 100%;
   position: relative;

@@ -1745,6 +1745,44 @@
         <span class="editor-remaining-dur" id="editor-remaining-dur">—</span>
       </div>
 
+      <!-- Mastering (publishable-ready audio) -->
+      <div id="editor-master-section" class="editor-master-section" style="display:none">
+        <div class="editor-master-header">
+          <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="opacity:.7"><path d="M5 4a1 1 0 00-1 1v10a1 1 0 102 0V5a1 1 0 00-1-1zm5 0a1 1 0 00-1 1v10a1 1 0 102 0V5a1 1 0 00-1-1zm5 0a1 1 0 00-1 1v10a1 1 0 102 0V5a1 1 0 00-1-1z"/></svg>
+          <span class="editor-master-title" data-i18n="master.title">Mastering (klargjør for publisering)</span>
+        </div>
+        <div class="editor-master-intro" data-i18n="master.intro">Standardiserer lydstyrke og lydkvalitet for podkast / streaming.</div>
+
+        <div class="editor-master-preset-row">
+          <label class="export-section-label" for="master-preset-select" data-i18n="master.presetLabel">Forhåndsinnstilling</label>
+          <select id="master-preset-select" class="form-input form-input-sm"></select>
+        </div>
+        <div id="master-preset-desc" class="editor-master-desc"></div>
+
+        <div class="editor-master-actions">
+          <button class="btn-ghost btn-sm" id="btn-master-preview" data-i18n="master.preview">Lytt på forhåndsvisning</button>
+          <button class="btn-ghost btn-sm" id="btn-master-listen-orig" data-i18n="master.previewListenOrig" style="display:none">Lytt original</button>
+          <button class="btn-primary btn-sm" id="btn-master-apply" data-i18n="master.apply">Mastre fil</button>
+          <button class="btn-ghost btn-sm" id="btn-master-cancel" data-i18n="master.cancel" style="display:none">Avbryt</button>
+        </div>
+
+        <div id="master-status-row" class="editor-master-status" style="display:none">
+          <div class="editor-export-progress-bar-wrap">
+            <div class="editor-export-progress-bar" id="master-progress-bar"></div>
+          </div>
+          <span class="editor-export-progress-label" id="master-status-label">…</span>
+        </div>
+
+        <div id="master-result-row" class="editor-master-result" style="display:none">
+          <svg viewBox="0 0 20 20" fill="currentColor" style="color:var(--green)"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>
+          <span id="master-result-text"></span>
+          <button class="btn-ghost btn-sm" id="btn-master-open-folder" data-i18n="master.openFolder" style="display:none">Åpne mappe</button>
+          <button class="btn-ghost btn-sm" id="btn-master-listen-done" data-i18n="master.listen" style="display:none">Lytt</button>
+        </div>
+
+        <audio id="master-preview-audio" style="display:none" controls></audio>
+      </div>
+
       <!-- Save bar -->
       <div class="editor-save-bar">
         <div id="editor-export-progress-row" class="editor-export-progress-row" style="display:none">

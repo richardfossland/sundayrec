@@ -18,6 +18,7 @@ const ALLOWED_CHANNELS = [
   'update-error',
   'wake-schedule-result',
   'editor-export-progress',
+  'master-progress',
   'cloud-upload-progress',
   'cloud-upload-done',
   'cloud-queue-update',
@@ -83,6 +84,14 @@ contextBridge.exposeInMainWorld('api', {
   editorSaveVideo:         (params: unknown)  => ipcRenderer.invoke('editor-save-video', params),
   editorExportVideo:       (params: unknown)  => ipcRenderer.invoke('editor-export-video', params),
   editorProbeStreams:      (filePath: string) => ipcRenderer.invoke('editor-probe-streams', filePath),
+
+  // Mastering (publishable-ready audio)
+  masterPresets:  () => ipcRenderer.invoke('master-presets'),
+  masterPreview:  (inputPath: string, presetId: string, startSec: number, durationSec: number) =>
+                    ipcRenderer.invoke('master-preview', inputPath, presetId, startSec, durationSec),
+  masterMeasure:  (inputPath: string, presetId: string) => ipcRenderer.invoke('master-measure', inputPath, presetId),
+  masterApply:    (params: unknown)                     => ipcRenderer.invoke('master-apply', params),
+  masterCancel:   (jobId: string)                       => ipcRenderer.invoke('master-cancel', jobId),
 
   pickAudioFile: () => ipcRenderer.invoke('pick-audio-file'),
 

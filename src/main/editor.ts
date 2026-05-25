@@ -6,6 +6,7 @@ import type { ChildProcess } from 'child_process'
 import { ffmpegBin } from './native-recorder'
 import { codecFor } from './recorder-utils'
 import * as store from './store'
+import { analyzeAudio } from './audio-analysis'
 import type { RecordingMetadata } from '../types'
 
 const MAX_EDIT_MS = 10 * 60 * 1000   // kill ffmpeg after 10 minutes
@@ -834,80 +835,68 @@ export async function exportVideoEdited(params: VideoExportParams): Promise<Edit
 }
 
 // ── Segment detection ─────────────────────────────────────────────────────────
+//
+// Content-aware chapter detection via the audio-analysis module. Instead of
+// only finding silence pauses (the old behaviour), we classify every 100 ms
+// frame as speech / music / silence / mixed / unknown and group same-type
+// frames into chapters. This means a 90-minute service no longer collapses
+// into one "speech" block with breaks — sermon vs hymn vs prayer vs applause
+// are surfaced as separate segments.
+//
+// Backward compatibility: the IPC contract returns `{ start, end, duration,
+// label, type }`. We keep that exact shape so the renderer needs no changes.
+// The old code emitted type='sermon' | 'section'; the new code emits the
+// content types from audio-analysis ('speech', 'music', etc.) plus a special
+// 'sermon' marker for the longest speech segment so the existing UI badge
+// (★ for sermon) still lights up correctly.
 
 export interface AudioSegment {
   start:    number
   end:      number
   duration: number
   label:    string
-  type:     'sermon' | 'section'
+  type:     string
 }
 
 export async function detectSegments(filePath: string): Promise<AudioSegment[]> {
-  return new Promise(resolve => {
-    let done = false
-    const finish = (result: AudioSegment[]) => {
-      if (done) return; done = true; resolve(result)
+  const segments = await analyzeAudio(filePath)
+
+  // Find the single longest speech segment that starts after the 5-minute
+  // mark — that's almost always the sermon in a church service (intro
+  // announcements end by then). Promote it to type='sermon' so the
+  // renderer's star-badge logic keeps working unchanged.
+  let sermonStart = -1
+  let sermonEnd   = -1
+  let longestSpeechDur = 0
+  for (const s of segments) {
+    if (s.type !== 'speech') continue
+    if (s.startSec < 300) continue
+    if (s.durationSec > longestSpeechDur) {
+      longestSpeechDur = s.durationSec
+      sermonStart = s.startSec
+      sermonEnd   = s.endSec
     }
-
-    const proc = spawn(ffmpegBin, [
-      '-hide_banner', '-i', filePath,
-      '-af', 'silencedetect=noise=-35dB:duration=2',
-      '-f', 'null', '-'
-    ], { stdio: ['ignore', 'ignore', 'pipe'] })
-
-    let stderr = ''
-    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
-
-    // Safety kill after 30 s if ffmpeg hangs (rare but possible on corrupt files)
-    const killTimer = setTimeout(() => { try { proc.kill() } catch { /* already dead */ }; finish([]) }, 30000)
-
-    proc.on('close', () => {
-      clearTimeout(killTimer)
-      const silences: { start: number; end: number }[] = []
-      let pendingStart: number | null = null
-
-      for (const line of stderr.split('\n')) {
-        const sm = line.match(/silence_start:\s*([\d.]+)/)
-        const em = line.match(/silence_end:\s*([\d.]+)/)
-        if (sm) pendingStart = parseFloat(sm[1])
-        if (em && pendingStart !== null) {
-          silences.push({ start: pendingStart, end: parseFloat(em[1]) })
-          pendingStart = null
-        }
+  }
+  // Fallback: if no segment after 5 min, just pick the overall longest speech.
+  if (sermonStart < 0) {
+    for (const s of segments) {
+      if (s.type !== 'speech') continue
+      if (s.durationSec > longestSpeechDur) {
+        longestSpeechDur = s.durationSec
+        sermonStart = s.startSec
+        sermonEnd   = s.endSec
       }
+    }
+  }
 
-      const durM = stderr.match(/Duration:\s*(\d+):(\d+):([\d.]+)/)
-      const totalDur = durM
-        ? parseInt(durM[1]) * 3600 + parseInt(durM[2]) * 60 + parseFloat(durM[3])
-        : 0
-      if (totalDur === 0) { finish([]); return }
-
-      const segments: AudioSegment[] = []
-      let cursor = 0
-      for (const sil of silences) {
-        const dur = sil.start - cursor
-        if (dur >= 30) segments.push({ start: cursor, end: sil.start, duration: dur, label: '', type: 'section' })
-        cursor = sil.end
-      }
-      const lastDur = totalDur - cursor
-      if (lastDur >= 30) segments.push({ start: cursor, end: totalDur, duration: lastDur, label: '', type: 'section' })
-
-      const candidates = segments.filter(s => s.start >= 300)
-      const sermonSeg  = (candidates.length > 0 ? candidates : segments)
-        .reduce<AudioSegment | null>((best, s) => (!best || s.duration > best.duration) ? s : best, null)
-
-      let sectionCount = 0
-      for (const s of segments) {
-        if (s === sermonSeg) {
-          s.type  = 'sermon'
-          s.label = 'Preken'
-        } else {
-          s.label = `Del ${++sectionCount}`
-        }
-      }
-
-      finish(segments)
-    })
+  return segments.map(s => {
+    const isSermon = s.startSec === sermonStart && s.endSec === sermonEnd && s.type === 'speech'
+    return {
+      start:    s.startSec,
+      end:      s.endSec,
+      duration: s.durationSec,
+      label:    isSermon ? 'Preken' : s.label,
+      type:     isSermon ? 'sermon' : s.type,
+    }
   })
 }

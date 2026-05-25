@@ -438,6 +438,23 @@
     "remainingLabel": "Resultat",
     "dropFile": "Slipp lydfil her"
   },
+  "master": {
+    "title": "Mastering (klargjør for publisering)",
+    "intro": "Standardiserer lydstyrke og lydkvalitet for podkast og streaming. Bruker EBU R128-normalisering i to passeringer.",
+    "presetLabel": "Forhåndsinnstilling",
+    "preview": "Lytt på forhåndsvisning",
+    "previewListenOrig": "Lytt original",
+    "previewListenMastered": "Lytt mastret",
+    "apply": "Mastre fil",
+    "cancel": "Avbryt",
+    "applying": "Mastrer…",
+    "done": "✓ Mastret",
+    "error": "✕ Feil",
+    "lufsBefore": "Original",
+    "lufsAfter": "Etter",
+    "openFolder": "Åpne mappe",
+    "listen": "Lytt"
+  },
   "manual": {
     "title": "Start manuelt opptak",
     "subtitle": "Opptaket starter med en gang og du stopper det selv når du er ferdig.",

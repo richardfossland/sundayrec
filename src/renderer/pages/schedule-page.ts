@@ -76,6 +76,20 @@ export function setupSchedulePage(): void {
     if (editor) editor.style.display = 'none'
   })
   document.getElementById('btn-schedule-save')?.addEventListener('click', saveScheduleSettings)
+
+  // Avanserte innstillinger — collapsible toggle. Had no click handler at all,
+  // which is why the section was empty and unresponsive when clicked.
+  document.getElementById('btn-adv-toggle')?.addEventListener('click', () => {
+    const btn     = document.getElementById('btn-adv-toggle')
+    const section = document.getElementById('adv-section')
+    const chevron = document.getElementById('adv-chevron')
+    if (!section) return
+    const isOpen = section.style.display !== 'none'
+    section.style.display = isOpen ? 'none' : 'block'
+    if (btn)     btn.setAttribute('aria-expanded', String(!isOpen))
+    if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)'
+  })
+
   document.getElementById('opt-silence')?.addEventListener('change', function (this: HTMLInputElement) {
     const silCfg = document.getElementById('silence-config')
     if (silCfg) silCfg.style.display = this.checked ? 'block' : 'none'
