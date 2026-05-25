@@ -933,7 +933,7 @@
                 <span data-i18n="publish.autoUpload">Last opp automatisk etter opptak</span>
               </label>
               <div style="display:flex;gap:6px;flex-wrap:wrap">
-                <button class="btn" data-cloud-pick-folder="google-drive" data-i18n="publish.pickFolder">Velg mappe</button>
+                <button class="btn-secondary btn-sm" data-cloud-pick-folder="google-drive" data-i18n="publish.pickFolder">Velg mappe</button>
                 <button class="btn-ghost" data-cloud-disconnect="google-drive" data-i18n="publish.disconnect">Koble fra</button>
               </div>
             </div>
@@ -963,7 +963,7 @@
                 <span data-i18n="publish.autoUpload">Last opp automatisk etter opptak</span>
               </label>
               <div style="display:flex;gap:6px;flex-wrap:wrap">
-                <button class="btn" data-cloud-pick-folder="dropbox" data-i18n="publish.pickFolder">Velg mappe</button>
+                <button class="btn-secondary btn-sm" data-cloud-pick-folder="dropbox" data-i18n="publish.pickFolder">Velg mappe</button>
                 <button class="btn-ghost" data-cloud-disconnect="dropbox" data-i18n="publish.disconnect">Koble fra</button>
               </div>
             </div>
@@ -995,7 +995,7 @@
                 <span data-i18n="publish.autoUpload">Last opp automatisk etter opptak</span>
               </label>
               <div style="display:flex;gap:6px;flex-wrap:wrap">
-                <button class="btn" data-cloud-pick-folder="onedrive" data-i18n="publish.pickFolder">Velg mappe</button>
+                <button class="btn-secondary btn-sm" data-cloud-pick-folder="onedrive" data-i18n="publish.pickFolder">Velg mappe</button>
                 <button class="btn-ghost" data-cloud-disconnect="onedrive" data-i18n="publish.disconnect">Koble fra</button>
               </div>
             </div>
@@ -1085,12 +1085,12 @@
             <div style="font-size:12px;color:#7fc488;margin-bottom:4px;font-weight:600">FEED-URL — send denne til Spotify og Apple Podcasts</div>
             <div style="display:flex;gap:6px;align-items:center">
               <input type="text" class="form-input" id="podcast-feed-url" readonly style="flex:1;font-family:monospace;font-size:12px">
-              <button class="btn" id="btn-podcast-copy-url">Kopier</button>
+              <button class="btn-secondary btn-sm" id="btn-podcast-copy-url">Kopier</button>
             </div>
           </div>
 
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-            <button class="btn" id="btn-podcast-regenerate">Generer feed nå</button>
+            <button class="btn-primary" id="btn-podcast-regenerate">Generer feed nå</button>
             <span id="podcast-status" style="font-size:12px;color:var(--text3)"></span>
           </div>
 
@@ -1121,16 +1121,16 @@
                 <label class="form-label" for="podcast-default-intro">STANDARD INTRO-JINGLE</label>
                 <div style="display:flex;gap:6px">
                   <input type="text" class="form-input" id="podcast-default-intro" readonly style="flex:1;font-size:12px" placeholder="(ingen)">
-                  <button class="btn" id="btn-podcast-pick-intro" style="font-size:12px;padding:6px 10px">Velg…</button>
-                  <button class="btn" id="btn-podcast-clear-intro" style="font-size:12px;padding:6px 10px">×</button>
+                  <button class="btn-secondary btn-sm" id="btn-podcast-pick-intro">Velg…</button>
+                  <button class="btn-ghost btn-sm" id="btn-podcast-clear-intro" aria-label="Fjern intro">×</button>
                 </div>
               </div>
               <div>
                 <label class="form-label" for="podcast-default-outro">STANDARD OUTRO-JINGLE</label>
                 <div style="display:flex;gap:6px">
                   <input type="text" class="form-input" id="podcast-default-outro" readonly style="flex:1;font-size:12px" placeholder="(ingen)">
-                  <button class="btn" id="btn-podcast-pick-outro" style="font-size:12px;padding:6px 10px">Velg…</button>
-                  <button class="btn" id="btn-podcast-clear-outro" style="font-size:12px;padding:6px 10px">×</button>
+                  <button class="btn-secondary btn-sm" id="btn-podcast-pick-outro">Velg…</button>
+                  <button class="btn-ghost btn-sm" id="btn-podcast-clear-outro" aria-label="Fjern outro">×</button>
                 </div>
               </div>
             </div>

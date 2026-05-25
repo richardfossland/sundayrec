@@ -37,18 +37,11 @@ export function setupFilesPage(): void {
   })
   document.getElementById('opt-trim-silence')?.addEventListener('change', () => {/* live preview not needed */})
 
-  // Opptaksoppførsel — silence-toggle reveals threshold/timeout config inline
+  // Opptaksoppførsel — silence-toggle reveals threshold/timeout config inline.
+  // (Dirty-bar is auto-tracked via the page-level change listener in setupDirtyBar.)
   document.getElementById('opt-silence')?.addEventListener('change', function (this: HTMLInputElement) {
     const silCfg = document.getElementById('silence-config')
     if (silCfg) silCfg.style.display = this.checked ? 'block' : 'none'
-    _markFilesDirty()
-  })
-  // Mark dirty when any of the moved recording-behaviour controls change
-  ;[
-    'opt-protect','opt-silence-threshold','opt-silence-timeout',
-    'opt-split-minutes','opt-manual-max','opt-preroll-seconds',
-  ].forEach(id => {
-    document.getElementById(id)?.addEventListener('change', () => _markFilesDirty())
   })
 
   document.getElementById('btn-files-save')?.addEventListener('click', saveFilesSettings)

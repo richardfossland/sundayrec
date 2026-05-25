@@ -178,6 +178,10 @@
     "protectTitle": "Beskytt pågående opptak mot utilsiktet stopp",
     "protectDesc": "Krever bekreftelse for å stoppe et pågående opptak",
     "advanced": "Avanserte valg",
+    "wakeSectionTitle": "Vekk maskin fra dvale",
+    "wakeCapTitle": "Maskinen din",
+    "wakeStatusTitle": "Status akkurat nå",
+    "wakeTipNote": "Tips: La maskinen stå i dvale (ikke slå den av) når du går hjem på lørdag kveld. Mac vekker ikke på batteri — tilkoblet strøm må være på.",
     "silenceTitle": "Stopp ved vedvarende stillhet",
     "silenceDesc": "Avslutter opptaket hvis lyden er stille i mer enn 5 minutter",
     "splitTitle": "Del opp filer per time",
@@ -411,7 +415,11 @@
     "trimSilenceDesc": "Fjerner stillhet i begynnelsen og slutten av filen",
     "save": "Lagre",
     "cancel": "Avbryt",
-    "confirmAutoDeleteShort": "Opptak eldre enn {n} dager slettes automatisk og kan ikke gjenopprettes. Er du sikker?"
+    "confirmAutoDeleteShort": "Opptak eldre enn {n} dager slettes automatisk og kan ikke gjenopprettes. Er du sikker?",
+    "behaviourTitle": "Opptaksoppførsel",
+    "behaviourDesc": "Finjuster hvordan opptaket starter, beskyttes og deles opp.",
+    "whileRecording": "Mens et opptak går",
+    "fileBehaviour": "Filer"
   },
   "general": {
     "title": "Generelt",
