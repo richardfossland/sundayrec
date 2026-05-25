@@ -163,6 +163,19 @@
           <span class="vu-bar-val-spacer"></span>
         </div>
       </div>
+
+      <!-- System health checks — run before a service to catch problems early -->
+      <div class="health-row" style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center">
+        <button type="button" class="btn-secondary btn-sm" id="btn-test-recording" data-i18n="home.testRecording">
+          🎙️ Test-opptak (30 sek)
+        </button>
+        <button type="button" class="btn-secondary btn-sm" id="btn-run-preflight" data-i18n="home.checkSystem">
+          ✅ Sjekk system nå
+        </button>
+        <span class="health-status" id="health-status" style="margin-left:8px;font-size:13px;color:var(--text3);align-self:center"></span>
+      </div>
+      <!-- Findings list shown after preflight runs -->
+      <ul id="preflight-findings" style="display:none;list-style:none;margin:8px 0 0 0;padding:0;font-size:13px"></ul>
     </div>
 
     <!-- Video hero panel (shown when video mode is enabled) -->
@@ -946,6 +959,24 @@
           <input type="hidden" id="email-port" value="587" />
           <button type="button" class="btn-secondary" id="btn-test-email" style="margin-top:12px" data-i18n="general.testEmail">Test e-post</button>
         </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Webhook (Slack / Discord / Teams)</div>
+        <div class="card-desc" style="font-size:13px;color:var(--text3);margin-bottom:12px">
+          Send varsler til en chat-kanal i tillegg til e-post. Lim inn webhook-URL fra Slack, Discord eller Teams.
+        </div>
+        <label class="form-label" data-i18n="general.webhookUrl">WEBHOOK-URL</label>
+        <input type="url" class="form-input" id="webhook-url" placeholder="https://hooks.slack.com/services/..." />
+        <div class="form-hint">Slack: https://hooks.slack.com/... · Discord: https://discord.com/api/webhooks/...</div>
+        <div class="toggle-row mt">
+          <div>
+            <div class="toggle-title">Send også på advarsler</div>
+            <div class="toggle-desc">Som standard sendes kun feilmeldinger. Slå på dette for å få beskjed også ved mindre problemer.</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-webhook-on-warn" /><span class="toggle-track"></span></label>
+        </div>
+        <button type="button" class="btn-secondary" id="btn-test-webhook" style="margin-top:12px">Test webhook</button>
       </div>
       <div class="page-footer">
         <button class="btn-primary" id="btn-varsler-save">Lagre</button>

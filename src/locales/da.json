@@ -49,7 +49,9 @@
     "defaultFolder": "Dokumenter/SundayRec",
     "recordingsSaved": "optagelser gemt",
     "reconnectDevice": "Tilslut {name} via USB",
-    "wakesBefore": "Computeren vækkes automatisk kl. {time}"
+    "wakesBefore": "Computeren vækkes automatisk kl. {time}",
+    "testRecording": "🎙️ Testoptagelse (30 s)",
+    "checkSystem": "✅ Tjek systemet nu"
   },
   "update": {
     "available": "Ny version {v} tilgængelig — henter…",

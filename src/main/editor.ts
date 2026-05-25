@@ -10,6 +10,48 @@ import type { RecordingMetadata } from '../types'
 
 const MAX_EDIT_MS = 10 * 60 * 1000   // kill ffmpeg after 10 minutes
 
+/**
+ * Audio formats with no encoder in ffmpeg-static — saving these losslessly
+ * means transcoding to WAV. Replace-mode on these formats would silently write
+ * WAV bytes to an .ape/.dts/etc. extension, corrupting the file. We refuse
+ * replace-mode for these and tell the user to use "save as new".
+ */
+export const FORCE_WAV_FORMATS = new Set(['ape', 'dts', 'mpc', 'ra', 'ram', 'spx', 'gsm', 'amr', '3ga'])
+
+/** Track active export processes so the UI can cancel them. Keyed by job id. */
+const activeExports = new Map<string, ChildProcess>()
+
+export function cancelExport(jobId: string): boolean {
+  const proc = activeExports.get(jobId)
+  if (!proc) return false
+  try { proc.kill('SIGTERM') } catch {}
+  activeExports.delete(jobId)
+  return true
+}
+
+/**
+ * Clean up `__editor_tmp` and `__editor_bak` files left behind by a crashed
+ * editor save. Called once at app startup. Scans the configured save folder
+ * (only — we don't walk arbitrary directories the user might be editing
+ * files from).
+ */
+export async function cleanupEditorTempFiles(saveFolder: string): Promise<number> {
+  if (!saveFolder || !fs.existsSync(saveFolder)) return 0
+  let removed = 0
+  try {
+    const entries = await fs.promises.readdir(saveFolder)
+    for (const name of entries) {
+      if (name.endsWith('.__editor_tmp') || name.endsWith('.__editor_bak')) {
+        try {
+          await fs.promises.unlink(path.join(saveFolder, name))
+          removed++
+        } catch {}
+      }
+    }
+  } catch {}
+  return removed
+}
+
 // ── Stream probe ──────────────────────────────────────────────────────────────
 
 export interface MediaStreamInfo {
@@ -75,6 +117,8 @@ export interface ExportProcessing {
 }
 
 export interface EditorExportParams {
+  /** Optional client-supplied job id — pass back via cancelExport(jobId) to abort. */
+  jobId?:       string
   inputPath:    string
   cutRegions:   CutRegion[]
   duration:     number
@@ -160,15 +204,22 @@ export async function saveEdited(params: EditorSaveParams): Promise<EditorSaveRe
   if (typeof duration !== 'number' || duration <= 0) return { ok: false, error: 'invalid_duration' }
 
   const rawExt = path.extname(inputPath).slice(1).toLowerCase()
-  // Formats with no encoder in ffmpeg-static → re-save as wav (lossless)
-  const FORCE_WAV = new Set(['ape', 'dts', 'mpc', 'ra', 'ram', 'spx', 'gsm', 'amr', '3ga'])
   const AUDIO_SAVE_EXTS = new Set([
     'mp3', 'mp1', 'mp2', 'wav', 'flac', 'aac', 'm4a', 'm4b', 'm4r',
     'ogg', 'oga', 'opus', 'aiff', 'aif', 'wma', 'mka', 'ac3', 'eac3',
     'amr', '3ga', 'caf', 'wv', 'tta', 'au', 'snd',
     'ape', 'dts', 'mpc', 'ra', 'ram', 'spx', 'gsm',
   ])
-  const ext = !AUDIO_SAVE_EXTS.has(rawExt) ? 'mp3' : FORCE_WAV.has(rawExt) ? 'wav' : rawExt
+
+  // Replace-mode on a FORCE_WAV format would write WAV bytes to a non-WAV
+  // extension — many players gracefully fall through, but in the worst case
+  // the user's original .ape archive is silently corrupted. Refuse and tell
+  // the UI to offer "save as new file" instead.
+  if (mode === 'replace' && FORCE_WAV_FORMATS.has(rawExt)) {
+    return { ok: false, error: 'force_wav_replace_unsafe' }
+  }
+
+  const ext = !AUDIO_SAVE_EXTS.has(rawExt) ? 'mp3' : FORCE_WAV_FORMATS.has(rawExt) ? 'wav' : rawExt
 
   const sorted = [...cutRegions].sort((a, b) => a.start - b.start)
   const keeps: { start: number; end: number }[] = []
@@ -405,14 +456,19 @@ export async function exportEdited(params: EditorExportParams): Promise<EditorSa
   }
 
   const { proc, promise } = spawnFfmpeg(args, duration, params.onProgress)
+  if (params.jobId) activeExports.set(params.jobId, proc)
+  // Timeout scales with file duration: ffmpeg can take ≥ 0.5× realtime for
+  // multi-pass processing. For a 4 h recording, 10 min is far too short.
+  const dynamicTimeoutMs = Math.max(MAX_EDIT_MS, Math.round(duration * 1000 * 0.6))
   const killTimer = setTimeout(() => {
     try { proc.kill('SIGTERM') } catch {}
     if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
-  }, MAX_EDIT_MS)
+  }, dynamicTimeoutMs)
 
   try {
     await promise
     clearTimeout(killTimer)
+    if (params.jobId) activeExports.delete(params.jobId)
     if (metaFilePath) fs.promises.unlink(metaFilePath).catch(() => {})
     if (mode === 'replace' && tempPath) {
       await safeReplaceFile(tempPath, inputPath)
@@ -421,10 +477,13 @@ export async function exportEdited(params: EditorExportParams): Promise<EditorSa
     return { ok: true, outputPath: outPath }
   } catch (err) {
     clearTimeout(killTimer)
+    if (params.jobId) activeExports.delete(params.jobId)
     if (metaFilePath) fs.promises.unlink(metaFilePath).catch(() => {})
     if (tempPath) fs.promises.unlink(tempPath).catch(() => {})
     const msg = (err as Error).message
     if (msg.includes('timeout')) return { ok: false, error: 'timeout' }
+    // SIGTERM cancellations end up here too — the exit-code is non-zero
+    if (msg.includes('SIGTERM') || msg.toLowerCase().includes('killed')) return { ok: false, error: 'cancelled' }
     return { ok: false, error: msg }
   }
 }

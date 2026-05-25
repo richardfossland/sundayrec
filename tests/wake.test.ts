@@ -1,6 +1,6 @@
 import { execFile } from 'child_process'
 import { powerSaveBlocker } from 'electron'
-import { reschedule } from '../src/main/wake'
+import { reschedule, _resetSchedulingCache } from '../src/main/wake'
 import * as store from '../src/main/store'
 
 jest.mock('electron')
@@ -18,6 +18,7 @@ function setPlatform(p: string): void {
 
 beforeEach(() => {
   jest.clearAllMocks()
+  _resetSchedulingCache()
   // execFile callback-style mock that auto-succeeds (used by promisify)
   mockExecFile.mockImplementation((...args: unknown[]) => {
     const cb = args[args.length - 1]

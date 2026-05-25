@@ -1,39 +1,117 @@
 import fs from 'fs'
 import path from 'path'
+import { CHUNK_SIZE, readChunk, withRetry, httpJson } from './http-util'
 
 export async function getUserInfo(token: string): Promise<{ name: string; email: string }> {
-  const res = await fetch('https://graph.microsoft.com/v1.0/me', {
-    headers: { Authorization: `Bearer ${token}` },
+  return withRetry(async () => {
+    const res = await fetch('https://graph.microsoft.com/v1.0/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const j = await httpJson<{ displayName?: string; mail?: string; userPrincipalName?: string }>(res, 'getUserInfo')
+    return { name: j.displayName ?? '', email: j.mail ?? j.userPrincipalName ?? '' }
   })
-  if (!res.ok) throw new Error(`getUserInfo failed: ${res.status}`)
-  const j = await res.json() as { displayName?: string; mail?: string; userPrincipalName?: string }
-  return { name: j.displayName ?? '', email: j.mail ?? j.userPrincipalName ?? '' }
 }
 
 export async function listFolders(token: string, parentId?: string): Promise<{ id: string; name: string }[]> {
-  const url = parentId
-    ? `https://graph.microsoft.com/v1.0/me/drive/items/${parentId}/children?$filter=folder ne null&$select=id,name`
-    : `https://graph.microsoft.com/v1.0/me/drive/root/children?$filter=folder ne null&$select=id,name`
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-  if (!res.ok) throw new Error(`listFolders failed: ${res.status}`)
-  const j = await res.json() as { value?: { id: string; name: string }[] }
-  return j.value ?? []
+  return withRetry(async () => {
+    const url = parentId
+      ? `https://graph.microsoft.com/v1.0/me/drive/items/${parentId}/children?$filter=folder ne null&$select=id,name`
+      : `https://graph.microsoft.com/v1.0/me/drive/root/children?$filter=folder ne null&$select=id,name`
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    const j = await httpJson<{ value?: { id: string; name: string }[] }>(res, 'listFolders')
+    return j.value ?? []
+  })
 }
+
+/**
+ * Upload to OneDrive using an upload session — required for anything over ~4 MB.
+ * 8 MB chunks, multiple of 320 KiB (the Graph-recommended chunk granularity).
+ * 8 * 1024 * 1024 = 8388608 / 327680 = 25.6 → not a multiple. Use 7864320
+ * (24 * 320 KiB) instead. We override CHUNK_SIZE locally.
+ */
+const ONEDRIVE_CHUNK = 24 * 320 * 1024  // 7.5 MB, multiple of 320 KiB
 
 export async function uploadFile(token: string, filePath: string, folderId?: string): Promise<string> {
   const filename = path.basename(filePath)
   const encoded  = encodeURIComponent(filename)
-  const url      = folderId
-    ? `https://graph.microsoft.com/v1.0/me/drive/items/${folderId}:/${encoded}:/content`
-    : `https://graph.microsoft.com/v1.0/me/drive/root:/${encoded}:/content`
-  const fileData = await fs.promises.readFile(filePath)
+  const stat     = await fs.promises.stat(filePath)
+  const size     = stat.size
 
-  const res = await fetch(url, {
-    method:  'PUT',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/octet-stream' },
-    body:    fileData,
+  // Step 1 — create upload session
+  const sessionUrl = folderId
+    ? `https://graph.microsoft.com/v1.0/me/drive/items/${folderId}:/${encoded}:/createUploadSession`
+    : `https://graph.microsoft.com/v1.0/me/drive/root:/${encoded}:/createUploadSession`
+
+  const sessionRes = await withRetry(async () => {
+    const r = await fetch(sessionUrl, {
+      method: 'POST',
+      headers: {
+        Authorization:  `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': 'rename', name: filename } }),
+    })
+    if (!r.ok) {
+      const body = await r.text()
+      const e = new Error(`OneDrive session failed: ${r.status} ${body}`) as Error & { status: number }
+      e.status = r.status
+      throw e
+    }
+    return r
   })
-  if (!res.ok) throw new Error(`uploadFile failed: ${res.status} ${await res.text()}`)
-  const j = await res.json() as { id: string }
-  return j.id
+
+  const session = await sessionRes.json() as { uploadUrl: string }
+  if (!session.uploadUrl) throw new Error('OneDrive: no uploadUrl in session response')
+
+  // Step 2 — upload chunks
+  let offset = 0
+  let fileId: string | null = null
+
+  while (offset < size) {
+    const remaining = size - offset
+    const chunkSize = Math.min(ONEDRIVE_CHUNK, remaining)
+    const chunk     = await readChunk(filePath, offset, chunkSize)
+    const isLast    = offset + chunkSize >= size
+
+    const res = await withRetry(async () => {
+      const r = await fetch(session.uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Length': String(chunkSize),
+          'Content-Range':  `bytes ${offset}-${offset + chunkSize - 1}/${size}`,
+        },
+        body: chunk,
+      })
+      // 202 = chunk accepted, more to come; 200/201 = upload complete
+      if (r.status === 202 || r.status === 200 || r.status === 201) return r
+      const body = await r.text()
+      const e = new Error(`OneDrive chunk failed: ${r.status} ${body}`) as Error & { status: number }
+      e.status = r.status
+      throw e
+    }, {
+      beforeRetry: async () => {
+        // GET on uploadUrl returns nextExpectedRanges — resync offset
+        const probe = await fetch(session.uploadUrl).catch(() => null)
+        if (probe && probe.ok) {
+          const j = await probe.json().catch(() => null) as { nextExpectedRanges?: string[] } | null
+          const next = j?.nextExpectedRanges?.[0]
+          if (next) {
+            const m = /^(\d+)-/.exec(next)
+            if (m) offset = parseInt(m[1], 10)
+          }
+        }
+      },
+    })
+
+    if (isLast) {
+      const j = await res.json() as { id: string }
+      fileId = j.id
+    }
+
+    offset += chunkSize
+  }
+
+  if (!fileId) throw new Error('OneDrive upload completed without file id')
+  // Cancel the upload session on failure paths is automatic — Graph auto-purges
+  return fileId
 }

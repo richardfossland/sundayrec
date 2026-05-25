@@ -38,13 +38,54 @@ process.on('SIGTERM', () => {
 
 app.setName('SundayRec')
 
-// Prevent multiple instances — must be registered before requestSingleInstanceLock
-app.on('second-instance', () => {
+// ── OAuth callback handling (sundayrec://oauth/<service>?code=…&state=…) ─────
+// On macOS, the OS dispatches the URL via app.on('open-url'). On Windows/Linux,
+// the URL arrives as the last argv item — either at cold start or via
+// second-instance when the browser launches a second copy.
+
+function consumeAuthUrlFromArgv(argv: readonly string[]): string | null {
+  for (let i = argv.length - 1; i >= 0; i--) {
+    const a = argv[i]
+    if (typeof a === 'string' && a.startsWith('sundayrec://')) return a
+  }
+  return null
+}
+
+async function dispatchAuthUrl(url: string): Promise<void> {
+  try {
+    const cloud = await import('./cloud')
+    cloud.handleAuthUrl(url)
+  } catch (err) {
+    console.error('[oauth] handleAuthUrl failed:', (err as Error).message)
+  }
+}
+
+// macOS dispatch — must be registered before app.whenReady() so cold-start URLs work
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  void dispatchAuthUrl(url)
   if (mainWindow) { mainWindow.show(); mainWindow.focus() }
+})
+
+// Prevent multiple instances — must be registered before requestSingleInstanceLock
+app.on('second-instance', (_event, argv) => {
+  if (mainWindow) { mainWindow.show(); mainWindow.focus() }
+  // Windows/Linux: a second-instance event is how the OS passes a sundayrec://
+  // URL to the already-running app. Scan argv for the OAuth callback.
+  const url = consumeAuthUrlFromArgv(argv)
+  if (url) void dispatchAuthUrl(url)
 })
 if (!app.requestSingleInstanceLock()) {
   app.quit()
   process.exit(0)
+}
+
+// Initial cold-start argv scan (Windows launches the app with sundayrec://...
+// directly the first time the browser triggers it). Defer dispatch until after
+// the window is ready so the renderer can react to status events.
+const initialAuthUrl = consumeAuthUrlFromArgv(process.argv)
+if (initialAuthUrl) {
+  app.whenReady().then(() => { void dispatchAuthUrl(initialAuthUrl) })
 }
 
 if (!app.isPackaged && process.platform === 'darwin' && app.dock) {
@@ -256,8 +297,16 @@ app.whenReady().then(async () => {
     }
   }
 
-  // Register custom URL scheme for OAuth callbacks (sundayrec://oauth/...)
-  app.setAsDefaultProtocolClient('sundayrec')
+  // Register custom URL scheme for OAuth callbacks (sundayrec://oauth/...).
+  // On Windows the installer registers it via electron-builder's `protocols`
+  // entry; this call covers macOS and dev mode.
+  if (process.defaultApp) {
+    if (process.argv.length >= 2) {
+      app.setAsDefaultProtocolClient('sundayrec', process.execPath, [path.resolve(process.argv[1])])
+    }
+  } else {
+    app.setAsDefaultProtocolClient('sundayrec')
+  }
 
   // Register media:// protocol so the renderer can stream the currently-loaded
   // video file without exposing arbitrary file:// access.
@@ -301,11 +350,30 @@ app.whenReady().then(async () => {
 
   store.migrateActiveRecovery()
   recorder.recoverCrashedSession()
+  scheduler.setBackendWarningSender((msg, sev, cat) => sendBackendWarning(mainWindow, msg, sev, cat))
   scheduler.init(mainWindow)
   updater.init(mainWindow)
   updater.check()
   setInterval(() => updater.check(), 60 * 60 * 1000)
   setupIPC()
+
+  // Kick the cloud upload queue — any entries left from a previous session
+  // (network outage, app restart mid-upload) get retried automatically.
+  import('./cloud').then(c => c.flushQueue(mainWindow)).catch(err =>
+    console.error('[cloud-queue] startup flush failed:', (err as Error).message)
+  )
+
+  // Clean up leftover editor temp/backup files from a previous crashed save.
+  // The user's save folder is the only place we own — never walk arbitrary
+  // editor sources.
+  import('./editor').then(e => e.cleanupEditorTempFiles(saveFolder)).then(n => {
+    if (n > 0) console.log(`[editor] cleaned ${n} stale temp file(s)`)
+  }).catch(err => console.error('[editor] temp cleanup failed:', (err as Error).message))
+
+  // Clean up leftover test-recordings from a previous crashed/killed session.
+  import('./test-recorder').then(t => t.cleanupOldTestRecordings()).then(n => {
+    if (n > 0) console.log(`[test-recorder] cleaned ${n} stale test file(s)`)
+  }).catch(err => console.error('[test-recorder] cleanup failed:', (err as Error).message))
 
   // Restart pre-roll after each session ends (manual or scheduled)
   recorder.setSessionEndCallback(() => {
@@ -342,7 +410,18 @@ app.whenReady().then(async () => {
 
   // On wake from sleep: check for missed recordings, refresh OS wake list, notify user
   powerMonitor.on('resume', () => {
+    // If a recording was active during sleep, ffmpeg is almost certainly dead
+    // or hung — trigger the reconnect watchdog with extra patience. Must run
+    // before scheduler.checkMissedRecordings(), which sees isActive()=true and
+    // would short-circuit otherwise.
+    if (recorder.isActive()) {
+      recorder.notifyResumed()
+    }
     scheduler.checkMissedRecordings()
+    // Re-attempt queued uploads — internet often returns shortly after wake
+    import('./cloud').then(c => c.flushQueue(mainWindow)).catch(err =>
+      console.error('[cloud-queue] resume flush failed:', (err as Error).message)
+    )
     // Restart pre-roll after wake. ffmpeg is killed by the OS during sleep, so
     // isActive may still be true while the process is dead. Stop first to reset
     // the flag, then restart after 2 s to let the audio device come back online.
@@ -643,6 +722,34 @@ function setupIPC(): void {
   })
   ipcMain.handle('stop-recording-now', () => { recorder.stopSession(); return true })
 
+  ipcMain.handle('run-test-recording', async () => {
+    const { runTestRecording } = await import('./test-recorder')
+    return runTestRecording(store.getAll())
+  })
+
+  ipcMain.handle('run-preflight', async () => {
+    return scheduler.runManualPreflight()
+  })
+
+  ipcMain.handle('test-webhook', async () => {
+    const s = store.getAll()
+    if (!s.webhookUrl) return { ok: false, error: 'no_url' }
+    try {
+      const { sendWebhook } = await import('./webhook')
+      const ok = await sendWebhook(s.webhookUrl, {
+        app:       'SundayRec',
+        church:    s.churchName || 'untitled',
+        severity:  'warn',
+        category:  'device',
+        message:   'Test fra SundayRec — webhook fungerer.',
+        timestamp: new Date().toISOString(),
+      })
+      return { ok }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
+
   ipcMain.handle('pick-folder', async () => {
     if (!mainWindow.isVisible()) mainWindow.show()
     mainWindow.focus()
@@ -715,9 +822,24 @@ function setupIPC(): void {
     store.updateHistoryNote(ts, note)
   })
 
+  // Threshold above which Web Audio decode would blow up RAM. Web Audio
+  // decodes to 32-bit float PCM at the source sample-rate — a 1 GB FLAC turns
+  // into ~5 GB of decoded PCM, which crashes the renderer. Beyond this size
+  // we make the renderer fall back to the ffmpeg-extract path (8 kHz mono
+  // WAV) which is enough for waveform display + cut finding.
+  const EDITOR_INLINE_LIMIT = 400 * 1024 * 1024  // 400 MB
+
   ipcMain.handle('editor-read-file', async (_, filePath: string) => {
     if (typeof filePath !== 'string' || !isAllowedAudioPath(filePath)) return null
-    try { return await fs.promises.readFile(filePath) } catch { return null }
+    try {
+      const stat = await fs.promises.stat(filePath)
+      if (stat.size > EDITOR_INLINE_LIMIT) {
+        // Return a sentinel object — old callers checked for falsy. New callers
+        // see { tooLarge: true } and switch to the ffmpeg-extract path.
+        return { tooLarge: true, size: stat.size }
+      }
+      return await fs.promises.readFile(filePath)
+    } catch { return null }
   })
 
   ipcMain.handle('editor-save-file', async (_, params) => {
@@ -759,6 +881,12 @@ function setupIPC(): void {
     return exportEdited({ ...params, onProgress })
   })
 
+  ipcMain.handle('editor-cancel-export', async (_, jobId: string) => {
+    if (typeof jobId !== 'string') return false
+    const { cancelExport } = await import('./editor')
+    return cancelExport(jobId)
+  })
+
   ipcMain.handle('editor-pick-output-folder', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender) ?? mainWindow
     const r = await dialog.showOpenDialog(win!, { properties: ['openDirectory', 'createDirectory'] })
@@ -794,6 +922,34 @@ function setupIPC(): void {
       await fs.promises.writeFile(metaPath, JSON.stringify(metadata, null, 2), 'utf8')
       return true
     } catch { return false }
+  })
+
+  // ── Editor cut autosave (recovery after crash mid-edit) ───────────────────
+  ipcMain.handle('editor-read-cuts-draft', async (_, filePath: string) => {
+    if (typeof filePath !== 'string' || !isAllowedMediaPath(filePath)) return null
+    const draftPath = sidecarPath(filePath, '.cuts-draft.json')
+    if (!draftPath) return null
+    try {
+      const raw = await fs.promises.readFile(draftPath, 'utf8')
+      return JSON.parse(raw)
+    } catch { return null }
+  })
+
+  ipcMain.handle('editor-save-cuts-draft', async (_, filePath: string, cuts: unknown) => {
+    if (typeof filePath !== 'string' || !isAllowedMediaPath(filePath)) return false
+    const draftPath = sidecarPath(filePath, '.cuts-draft.json')
+    if (!draftPath) return false
+    try {
+      await fs.promises.writeFile(draftPath, JSON.stringify({ cuts, ts: Date.now() }), 'utf8')
+      return true
+    } catch { return false }
+  })
+
+  ipcMain.handle('editor-delete-cuts-draft', async (_, filePath: string) => {
+    if (typeof filePath !== 'string' || !isAllowedMediaPath(filePath)) return false
+    const draftPath = sidecarPath(filePath, '.cuts-draft.json')
+    if (!draftPath) return false
+    try { await fs.promises.unlink(draftPath); return true } catch { return false }
   })
 
   ipcMain.handle('editor-detect-segments', async (_, filePath: string) => {
@@ -875,6 +1031,11 @@ function setupIPC(): void {
     return cloud.connectService(service as import('../types').CloudServiceId)
   })
 
+  ipcMain.handle('cloud-cancel-connect', async (_, service: string) => {
+    const cloud = await import('./cloud')
+    return cloud.cancelPending(service as import('../types').CloudServiceId)
+  })
+
   ipcMain.handle('cloud-disconnect', async (_, service: string) => {
     const cloud = await import('./cloud')
     return cloud.disconnectService(service as import('../types').CloudServiceId)
@@ -889,7 +1050,10 @@ function setupIPC(): void {
     if (typeof filePath !== 'string' || !isAllowedMediaPath(filePath)) return { ok: false, error: 'invalid_path' }
     try {
       const cloud = await import('./cloud')
-      await cloud.uploadFile(service as import('../types').CloudServiceId, filePath, metadata as import('../types').RecordingMetadata | undefined)
+      // Manual upload goes via the queue too so it gets retry semantics
+      const { enqueueUpload } = await import('./cloud/upload-queue')
+      enqueueUpload({ service: service as import('../types').CloudServiceId, filePath })
+      void cloud.flushQueue(mainWindow)
       return { ok: true }
     } catch (err) {
       return { ok: false, error: (err as Error).message }
@@ -906,6 +1070,39 @@ function setupIPC(): void {
   ipcMain.handle('cloud-set-folder', async (_, service: string, folderId: string, folderName: string, folderPath?: string) => {
     const cloud = await import('./cloud')
     return cloud.setFolder(service as import('../types').CloudServiceId, folderId, folderName, folderPath)
+  })
+
+  ipcMain.handle('cloud-queue-status', async () => {
+    const q = await import('./cloud/upload-queue')
+    return q.getQueueStatus()
+  })
+
+  ipcMain.handle('cloud-queue-retry', async (_, id: string) => {
+    if (typeof id !== 'string') return false
+    const q = await import('./cloud/upload-queue')
+    const ok = q.retryNow(id)
+    if (ok) {
+      const cloud = await import('./cloud')
+      void cloud.flushQueue(mainWindow)
+    }
+    return ok
+  })
+
+  ipcMain.handle('cloud-queue-remove', async (_, id: string) => {
+    if (typeof id !== 'string') return false
+    const q = await import('./cloud/upload-queue')
+    return q.removeFromQueue(id)
+  })
+
+  ipcMain.handle('cloud-queue-flush', async () => {
+    const cloud = await import('./cloud')
+    void cloud.flushQueue(mainWindow)
+    return true
+  })
+
+  ipcMain.handle('cloud-is-configured', async (_, service: string) => {
+    const cloud = await import('./cloud')
+    return cloud.isServiceConfigured(service as import('../types').CloudServiceId)
   })
 
   // ── Video ─────────────────────────────────────────────────────────────────
@@ -949,13 +1146,27 @@ function notify(title: string, body: string): void {
 
 function sendBackendWarning(win: BrowserWindow | null, msg: string, severity: 'warn' | 'error', category: 'cloud' | 'preroll' | 'wake' | 'disk' | 'device'): void {
   win?.webContents.send('backend-warning', { msg, severity, category })
+  const s = store.getAll()
   if (severity === 'error') {
-    const s = store.getAll()
     if (s.emailOnError && s.emailAddress) {
       mailer.sendError(s, store.getSmtpPassword(), `[${category}] ${msg}`).catch(err =>
         console.error('[sendBackendWarning] email send failed:', (err as Error).message)
       )
     }
+  }
+  // Webhook is independent of email — fires on errors always, and on warnings
+  // if the user has opted in. Used by churches that watch a Slack/Discord
+  // channel rather than email.
+  const fireWebhook = severity === 'error' || (severity === 'warn' && s.webhookOnWarn)
+  if (fireWebhook && s.webhookUrl) {
+    import('./webhook').then(w => w.sendWebhook(s.webhookUrl!, {
+      app:       'SundayRec',
+      church:    s.churchName || '',
+      severity,
+      category,
+      message:   msg,
+      timestamp: new Date().toISOString(),
+    })).catch(err => console.error('[sendBackendWarning] webhook failed:', (err as Error).message))
   }
 }
 
@@ -965,14 +1176,41 @@ async function cleanupOldRecordings(): Promise<void> {
   const cutoff  = Date.now() - days * 86400000
   const saveDir = path.resolve(store.get('saveFolder') ?? app.getPath('documents'))
   const history = store.getHistory()
+  const settings = store.getAll()
+
+  // Which cloud services is the user actively backing up to? Only consider the
+  // ones with both enabled=true AND autoUpload=true — those are the services
+  // where the user expects the file to be safe in the cloud before we delete
+  // it locally.
+  const expectedCloudIds: string[] = []
+  if (settings.cloudGoogleDrive?.enabled && settings.cloudGoogleDrive?.autoUpload) expectedCloudIds.push('google-drive')
+  if (settings.cloudDropbox?.enabled      && settings.cloudDropbox?.autoUpload)      expectedCloudIds.push('dropbox')
+  if (settings.cloudOneDrive?.enabled     && settings.cloudOneDrive?.autoUpload)     expectedCloudIds.push('onedrive')
+
   const remaining: typeof history = []
   let changed = false
+  let skippedAwaitingCloud = 0
+
   for (const entry of history) {
-    const shouldDelete =
+    const baseDelete =
       entry.timestamp && entry.timestamp < cutoff &&
       entry.path && entry.status === 'ok' &&
       path.resolve(entry.path).startsWith(saveDir + path.sep)
-    if (!shouldDelete) { remaining.push(entry); continue }
+    if (!baseDelete) { remaining.push(entry); continue }
+
+    // Guard against deleting recordings that haven't reached the cloud yet.
+    // If the user has cloud auto-upload enabled, every configured service must
+    // be present in entry.cloudUploaded before we drop the local copy.
+    if (expectedCloudIds.length > 0) {
+      const uploaded = new Set(entry.cloudUploaded ?? [])
+      const missing = expectedCloudIds.filter(id => !uploaded.has(id))
+      if (missing.length > 0) {
+        skippedAwaitingCloud++
+        remaining.push(entry)
+        continue
+      }
+    }
+
     try {
       await fs.promises.unlink(entry.path!)
       changed = true  // omit from remaining — file gone
@@ -983,6 +1221,9 @@ async function cleanupOldRecordings(): Promise<void> {
     }
   }
   if (changed) store.set('recordingHistory', remaining)
+  if (skippedAwaitingCloud > 0) {
+    console.log(`[cleanup] kept ${skippedAwaitingCloud} local recording(s) — waiting for cloud upload to complete`)
+  }
 }
 
 const ALLOWED_AUDIO_EXTS = new Set([

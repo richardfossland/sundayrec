@@ -26,9 +26,15 @@ export function setupCalendarPage(): void {
   document.getElementById('btn-autofill')?.addEventListener('click', async () => {
     const h = getChurchHolidays(calYear)
     if (!settings.specialRecordings) settings.specialRecordings = []
-    const existing = new Set(settings.specialRecordings.map(s => s.date))
-    Object.entries(h).forEach(([date, name]) => {
-      if (!existing.has(date)) settings.specialRecordings!.push({ date, name, start: '11:00', stop: '12:00' })
+    const existing = new Set(settings.specialRecordings.map(s => `${s.date}|${s.name}`))
+    Object.entries(h).forEach(([date, names]) => {
+      for (const name of names) {
+        const key = `${date}|${name}`
+        if (!existing.has(key)) {
+          settings.specialRecordings!.push({ date, name, start: '11:00', stop: '12:00' })
+          existing.add(key)
+        }
+      }
     })
     await window.api.saveSettings(settings)
     renderCalendar()
@@ -70,19 +76,21 @@ export function renderCalendar(): void {
     const iso        = isoDate(date)
     const dow        = (date.getDay() + 6) % 7
     const daySpec    = specials.filter(s => s.date === iso)
-    const isHoliday  = !!holidays[iso]
+    const holidayNames = holidays[iso] ?? []
+    const isHoliday  = holidayNames.length > 0
+    const holidayLabel = holidayNames.join(' · ')
     const isWeekly   = weeklySet.has(dow)
     const isToday    = iso === todayIso
     const isPast     = iso < todayIso
     const isSelected = iso === calSelectedIso
 
     let chips = ''
-    if (isHoliday)  chips += `<div class="cal-chip chip-holiday">${escHtml(holidays[iso])}</div>`
+    if (isHoliday)  chips += `<div class="cal-chip chip-holiday">${escHtml(holidayLabel)}</div>`
     if (isWeekly && !daySpec.length) chips += `<div class="cal-chip chip-weekly">Ukentlig</div>`
     daySpec.forEach(s => chips += `<div class="cal-chip chip-special">${escHtml(s.name)}</div>`)
 
     const cls = ['cal-day', isToday?'today':'', isPast?'past':'', isSelected?'selected':'', isHoliday?'is-holiday':''].filter(Boolean).join(' ')
-    html += `<div class="${cls}" data-iso="${iso}" data-holiday="${escHtml(holidays[iso]??'')}">
+    html += `<div class="${cls}" data-iso="${iso}" data-holiday="${escHtml(holidayLabel)}">
       <div class="cal-day-num">${d}</div>
       <div class="cal-chips">${chips}</div>
     </div>`
@@ -154,11 +162,15 @@ function openDayDetail(iso: string, holiday: string): void {
       })
       eventsEl.querySelectorAll('.cal-event-del').forEach(btn => {
         btn.addEventListener('click', async () => {
-          if (editingIndex === +(btn as HTMLElement).dataset.index!) {
+          const idx = +(btn as HTMLElement).dataset.index!
+          const target = settings.specialRecordings?.[idx]
+          if (!target) return
+          if (!confirm(t('calendar.confirmDelete', `Slette opptak: ${target.name} (${target.date})?`))) return
+          if (editingIndex === idx) {
             editingIndex = -1
             if (addBtn) addBtn.textContent = '+ ' + t('calendar.addRecording', 'Legg til opptak')
           }
-          settings.specialRecordings!.splice(+(btn as HTMLElement).dataset.index!, 1)
+          settings.specialRecordings!.splice(idx, 1)
           await window.api.saveSettings(settings)
           renderCalendar(); openDayDetail(iso, holiday)
         })
@@ -203,8 +215,8 @@ async function saveSpecial(): Promise<void> {
   if (nameEl) nameEl.value = ''
   await window.api.saveSettings(settings)
   renderCalendar()
-  const holiday = getChurchHolidays(new Date(date + 'T12:00:00').getFullYear())[date] ?? ''
-  openDayDetail(date, holiday)
+  const holidayNames = getChurchHolidays(new Date(date + 'T12:00:00').getFullYear())[date] ?? []
+  openDayDetail(date, holidayNames.join(' · '))
 }
 
 export function renderPlannedList(): void {
@@ -234,7 +246,11 @@ export function renderPlannedList(): void {
   }).join('')
   list.querySelectorAll('.planned-del').forEach(btn =>
     btn.addEventListener('click', async () => {
-      settings.specialRecordings!.splice(+(btn as HTMLElement).dataset.index!, 1)
+      const idx = +(btn as HTMLElement).dataset.index!
+      const target = settings.specialRecordings?.[idx]
+      if (!target) return
+      if (!confirm(t('calendar.confirmDelete', `Slette opptak: ${target.name} (${target.date})?`))) return
+      settings.specialRecordings!.splice(idx, 1)
       await window.api.saveSettings(settings)
       renderCalendar()
     })

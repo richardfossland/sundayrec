@@ -13,6 +13,8 @@ export interface TokenData {
   folderPath?:   string
   lastUpload?:   number
   lastUploadOk?: boolean
+  /** True when refresh_token was revoked (OAuth invalid_grant) — UI shows reauth banner. */
+  needsReauth?:  boolean
 }
 
 interface RawStore {
@@ -22,6 +24,15 @@ interface RawStore {
 }
 
 const store = new Store<RawStore>({ name: 'sundayrec-cloud' })
+
+let warnedNoEncryption = false
+function warnIfPlaintext(): void {
+  if (warnedNoEncryption) return
+  if (!safeStorage.isEncryptionAvailable()) {
+    warnedNoEncryption = true
+    console.warn('[cloud] safeStorage encryption unavailable — cloud tokens stored as plaintext (sundayrec-cloud.json)')
+  }
+}
 
 export function getToken(service: CloudServiceId): TokenData | null {
   const enc = store.get(service as keyof RawStore)
@@ -36,6 +47,7 @@ export function getToken(service: CloudServiceId): TokenData | null {
 
 export function setToken(service: CloudServiceId, data: TokenData | null): void {
   if (!data) { store.delete(service as keyof RawStore); return }
+  warnIfPlaintext()
   const json = JSON.stringify(data)
   const enc  = safeStorage.isEncryptionAvailable()
     ? safeStorage.encryptString(json).toString('base64')

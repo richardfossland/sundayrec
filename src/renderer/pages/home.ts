@@ -379,6 +379,109 @@ function showRecordingFinishedSummary(entry: RecordingEntry): void {
 }
 
 export function setupHome(): void {
+  // Test-recording button — runs a standalone 30-second test through the full
+  // pipeline (device → encoder → disk) and reports back signal level + file
+  // size. The user clicks this before a service to confirm everything works.
+  document.getElementById('btn-test-recording')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-test-recording') as HTMLButtonElement | null
+    const status = document.getElementById('health-status')
+    if (!btn || !status) return
+    if (window.__isRecording) {
+      status.textContent = 'Kan ikke kjøre test mens et opptak pågår.'
+      status.style.color = 'var(--red)'
+      return
+    }
+    btn.disabled = true
+    const originalText = btn.textContent ?? ''
+    let elapsed = 0
+    const TOTAL = 30
+    status.style.color = 'var(--text2)'
+    status.textContent = `Tar opp test… 0/${TOTAL} s`
+    const tick = setInterval(() => {
+      elapsed++
+      status.textContent = `Tar opp test… ${elapsed}/${TOTAL} s`
+      if (elapsed >= TOTAL) clearInterval(tick)
+    }, 1000)
+    try {
+      const r = await window.api.runTestRecording() as {
+        ok: boolean
+        signal?: 'silent' | 'low' | 'normal'
+        sizeBytes?: number
+        error?: string
+        detail?: string
+      }
+      clearInterval(tick)
+      if (r.ok) {
+        const sizeKb = r.sizeBytes ? Math.round(r.sizeBytes / 1024) : 0
+        const signalLabel = r.signal === 'normal' ? '✅ Lyd OK'
+                          : r.signal === 'low'    ? '⚠️ Svak lyd — sjekk gain på mikser'
+                          : '⚠️ Stillhet — mikser av?'
+        status.textContent = `${signalLabel} (${sizeKb} KB)`
+        status.style.color = r.signal === 'normal' ? 'var(--green)' : 'var(--orange, #ffb46b)'
+      } else {
+        status.textContent = `❌ ${r.detail ?? r.error ?? 'Ukjent feil'}`
+        status.style.color = 'var(--red)'
+      }
+    } catch (err) {
+      clearInterval(tick)
+      status.textContent = `❌ ${(err as Error).message}`
+      status.style.color = 'var(--red)'
+    } finally {
+      btn.disabled = false
+      btn.textContent = originalText
+    }
+  })
+
+  // Preflight — quick system health check (mic, disk, scheduler, network)
+  document.getElementById('btn-run-preflight')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-run-preflight') as HTMLButtonElement | null
+    const status = document.getElementById('health-status')
+    const list = document.getElementById('preflight-findings') as HTMLUListElement | null
+    if (!btn || !status || !list) return
+    btn.disabled = true
+    status.textContent = 'Sjekker…'
+    status.style.color = 'var(--text2)'
+    list.style.display = 'none'
+    list.innerHTML = ''
+    try {
+      const r = await window.api.runPreflight() as { findings: Array<{ severity: 'warn' | 'error'; category: string; message: string }> }
+      if (!r.findings || r.findings.length === 0) {
+        status.textContent = '✅ Alt ser bra ut — systemet er klart for opptak.'
+        status.style.color = 'var(--green)'
+      } else {
+        const errors = r.findings.filter(f => f.severity === 'error').length
+        const warns  = r.findings.filter(f => f.severity === 'warn').length
+        const parts: string[] = []
+        if (errors > 0) parts.push(`${errors} feil`)
+        if (warns  > 0) parts.push(`${warns} advarsel`)
+        status.textContent = `${errors > 0 ? '❌' : '⚠️'} ${parts.join(', ')}`
+        status.style.color = errors > 0 ? 'var(--red)' : 'var(--orange, #ffb46b)'
+
+        // Render each finding inline so the user sees what's wrong without
+        // chasing toasts. errors first, then warnings.
+        const sorted = [...r.findings].sort((a, b) => (a.severity === 'error' ? -1 : 1) - (b.severity === 'error' ? -1 : 1))
+        for (const f of sorted) {
+          const li = document.createElement('li')
+          const isErr = f.severity === 'error'
+          li.style.cssText = `padding:6px 10px;margin:4px 0;border-radius:6px;background:${isErr ? 'rgba(232,120,120,0.12)' : 'rgba(255,180,107,0.12)'};color:${isErr ? 'var(--red)' : 'var(--orange, #ffb46b)'};display:flex;gap:8px`
+          const icon = document.createElement('span')
+          icon.textContent = isErr ? '❌' : '⚠️'
+          icon.style.flexShrink = '0'
+          const text = document.createElement('span')
+          text.textContent = f.message
+          li.append(icon, text)
+          list.appendChild(li)
+        }
+        list.style.display = 'block'
+      }
+    } catch (err) {
+      status.textContent = `❌ ${(err as Error).message}`
+      status.style.color = 'var(--red)'
+    } finally {
+      btn.disabled = false
+    }
+  })
+
   // Video toggle button — always toggles, loads devices inline if turning on
   document.getElementById('btn-video-toggle')?.addEventListener('click', async () => {
     const nowEnabled = !(settings.videoEnabled ?? false)

@@ -67,7 +67,8 @@ export function updateFilenamePreview(): void {
   const ds      = isoDate(today)
   let name: string
   if (pattern === 'church') {
-    const hname = getChurchHolidays(today.getFullYear())[ds]
+    const names = getChurchHolidays(today.getFullYear())[ds]
+    const hname = names && names.length ? names[0] : ''
     name = hname ? `${hname.replace(/\s/g, '_')}_${ds}` : `Gudstjeneste_${ds}`
   } else if (pattern === 'plain') {
     name = `Gudstjeneste_${ds}`

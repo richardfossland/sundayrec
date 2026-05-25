@@ -49,7 +49,9 @@
     "defaultFolder": "Dokument/SundayRec",
     "recordingsSaved": "inspelningar sparade",
     "reconnectDevice": "Anslut {name} via USB",
-    "wakesBefore": "Datorn väcks automatiskt kl. {time}"
+    "wakesBefore": "Datorn väcks automatiskt kl. {time}",
+    "testRecording": "🎙️ Testinspelning (30 s)",
+    "checkSystem": "✅ Kontrollera systemet nu"
   },
   "update": {
     "available": "Ny version {v} tillgänglig — laddar ned…",

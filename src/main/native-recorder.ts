@@ -523,10 +523,16 @@ function buildAudioFilters(opts: RecordingOpts): string {
     filters.push('silenceremove=start_periods=1:start_duration=0.1:start_threshold=-50dB:stop_periods=-1:stop_duration=1:stop_threshold=-50dB')
   }
 
-  // Silence-end detection — emits silence_start/end events to stderr, parsed in startCapture
+  // Silence detection — always on. When stopOnSilence is enabled the threshold
+  // and duration come from settings (used to abort the recording). When it's
+  // off we still want a background "weak-signal" warning so a stuck mixer
+  // doesn't produce 2 hours of silence unnoticed. We pick a permissive
+  // threshold (-55 dB, 1 s) and let the warning timer (60 s) gate the alert.
   if (opts.stopOnSilence) {
     const noiseDb = Math.max(-70, Math.min(-10, Number(opts.silenceThreshold ?? -50)))
     filters.push(`silencedetect=noise=${noiseDb}dB:duration=1`)
+  } else {
+    filters.push('silencedetect=noise=-55dB:duration=1')
   }
 
   return filters.join(',')
@@ -555,6 +561,17 @@ export interface NativeHandle {
   onExit:      ((code: number | null) => void) | null
   onProgress:  ((bytes: number) => void) | null
   onSilenceEnd: (() => void) | null
+  /**
+   * Called when the input has been silent below SILENCE_WARN_DB for at least
+   * SILENCE_WARN_SEC seconds. Fired once per silent stretch — the user gets a
+   * single notification, not a flood. Does NOT stop the recording (that's
+   * onSilenceEnd, gated by opts.stopOnSilence).
+   */
+  onSilenceWarning: (() => void) | null
+  /** Last ~64 KB of stderr — let watchdog classify the failure (disk_full etc.). */
+  getStderrTail: () => string
+  /** Classified error from stderr, set on close. null while running. */
+  lastError:   string | null
 }
 
 // ── Start / stop ────────────────────────────────────────────────────────────
@@ -657,6 +674,20 @@ async function startCaptureWithInput(
     detached: false
   })
 
+  let stderrBuf = ''
+  /** Background silence warning state — fires onSilenceWarning once per
+   *  silent stretch ≥ 60 s, regardless of stopOnSilence. */
+  let silenceWarningTimer: ReturnType<typeof setTimeout> | null = null
+  let silenceWarningFired = false
+  const SILENCE_WARN_MS = 60_000
+
+  /** Throttle onProgress IPC — ffmpeg emits size= every second; over a 2 h
+   *  recording that's 7200 IPC roundtrips. Renderer just shows MB-level
+   *  bytes so 5 s resolution is plenty. The first size= still resolves
+   *  startup (separate path below). */
+  let lastProgressEmit = 0
+  const PROGRESS_THROTTLE_MS = 5000
+
   const handle: NativeHandle = {
     proc, outputPath,
     startTime: Date.now(),
@@ -665,9 +696,11 @@ async function startCaptureWithInput(
     onExit: null,
     onProgress: null,
     onSilenceEnd: null,
+    onSilenceWarning: null,
+    getStderrTail: () => stderrBuf,
+    lastError: null,
   }
 
-  let stderrBuf = ''
   let silenceTimer: ReturnType<typeof setTimeout> | null = null
   const silenceTimeoutMs = (opts.silenceTimeoutMinutes ?? 5) * 60 * 1000
 
@@ -681,23 +714,36 @@ async function startCaptureWithInput(
     // Cap at 64 KB — enough for error classification, prevents growth during long recordings
     stderrBuf = (stderrBuf + chunk).slice(-65536)
 
-    if (opts.stopOnSilence) {
-      if (chunk.includes('silence_start')) {
-        if (!silenceTimer) {
-          silenceTimer = setTimeout(() => {
-            silenceTimer = null
-            handle.onSilenceEnd?.()
-          }, silenceTimeoutMs)
-        }
-      } else if (chunk.includes('silence_end')) {
-        if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null }
+    if (chunk.includes('silence_start')) {
+      // stop-on-silence path (user-configurable timeout)
+      if (opts.stopOnSilence && !silenceTimer) {
+        silenceTimer = setTimeout(() => {
+          silenceTimer = null
+          handle.onSilenceEnd?.()
+        }, silenceTimeoutMs)
       }
+      // Always-on warning path: fires once per silent stretch ≥ 60 s
+      if (!silenceWarningTimer && !silenceWarningFired) {
+        silenceWarningTimer = setTimeout(() => {
+          silenceWarningTimer = null
+          silenceWarningFired = true
+          handle.onSilenceWarning?.()
+        }, SILENCE_WARN_MS)
+      }
+    } else if (chunk.includes('silence_end')) {
+      if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null }
+      if (silenceWarningTimer) { clearTimeout(silenceWarningTimer); silenceWarningTimer = null }
+      silenceWarningFired = false  // reset so the next silent stretch can re-warn
     }
 
     const m = chunk.match(/size=\s*(\d+)kB/)
     if (m) {
       handle.bytesWritten = parseInt(m[1]) * 1024
-      handle.onProgress?.(handle.bytesWritten)
+      const now = Date.now()
+      if (now - lastProgressEmit >= PROGRESS_THROTTLE_MS) {
+        lastProgressEmit = now
+        handle.onProgress?.(handle.bytesWritten)
+      }
       // First size= line proves ffmpeg is actively encoding — resolve startup as success
       if (resolveStartup) {
         const r = resolveStartup; resolveStartup = null
@@ -711,8 +757,13 @@ async function startCaptureWithInput(
   })
 
   proc.on('close', code => {
-    if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null }
+    if (silenceTimer)        { clearTimeout(silenceTimer);        silenceTimer        = null }
+    if (silenceWarningTimer) { clearTimeout(silenceWarningTimer); silenceWarningTimer = null }
     console.log('[native-recorder] ffmpeg exited, code:', code)
+    // Classify the failure now so the watchdog can decide whether to retry
+    if (code !== 0 && code !== null) {
+      handle.lastError = classifyFfmpegError(stderrBuf)
+    }
     handle.onExit?.(code)
   })
 
@@ -803,9 +854,18 @@ async function startCaptureWithInput(
       }
     }
 
-    // For startup_timeout on a non-retried non-Windows path, kill the hung process
+    // For startup_timeout on a non-retried non-Windows path, kill the hung process.
+    // Await its close before returning — otherwise the caller can immediately
+    // attempt a fresh spawn while the old ffmpeg still holds the audio device
+    // (AVFoundation on macOS rejects with "device already in use").
     if (startupError === STARTUP_TIMEOUT_ERROR && proc.exitCode === null && !proc.killed) {
-      try { proc.kill('SIGTERM') } catch {}
+      try {
+        proc.kill('SIGTERM')
+        await Promise.race([
+          new Promise<void>(res => proc.once('close', () => res())),
+          new Promise<void>(res => setTimeout(res, 3000)),  // hard cap
+        ])
+      } catch {}
     }
 
     return { error: startupError }

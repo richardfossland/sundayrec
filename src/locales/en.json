@@ -49,7 +49,9 @@
     "reconnectDevice": "Reconnect {name} via USB",
     "defaultFolder": "Documents/SundayRec",
     "recordingsSaved": "recordings saved",
-    "wakesBefore": "Machine wakes automatically at {time}"
+    "wakesBefore": "Machine wakes automatically at {time}",
+    "testRecording": "🎙️ Test recording (30 s)",
+    "checkSystem": "✅ Check system now"
   },
   "update": {
     "available": "New version {v} available — downloading…",

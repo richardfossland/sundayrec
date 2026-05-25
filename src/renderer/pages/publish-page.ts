@@ -1,6 +1,6 @@
 import { settings, patchSettings } from '../state'
 import { flashSaved } from '../helpers'
-import type { CloudServiceId, CloudServiceSettings, CloudStatus } from '../../types'
+import type { CloudServiceId, CloudServiceSettings, CloudStatus, CloudQueueStatus } from '../../types'
 
 type ServiceStatus = Record<CloudServiceId, CloudStatus>
 
@@ -16,24 +16,48 @@ const SERVICE_NAMES: Record<CloudServiceId, string> = {
   'onedrive':     'OneDrive',
 }
 
+const configured: Record<CloudServiceId, boolean> = {
+  'google-drive': true,
+  'dropbox':      true,
+  'onedrive':     true,
+}
+
 export function setupPublishPage(): void {
   refreshStatus()
+  refreshConfigured()
+  refreshQueue()
 
-  document.getElementById('btn-cloud-refresh')?.addEventListener('click', refreshStatus)
+  document.getElementById('btn-cloud-refresh')?.addEventListener('click', () => {
+    refreshStatus()
+    refreshQueue()
+  })
 
   // Connect/disconnect buttons
   document.querySelectorAll<HTMLElement>('[data-cloud-connect]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const service = btn.dataset.cloudConnect as CloudServiceId
+      if (!configured[service]) {
+        showServiceError(service, `${SERVICE_NAMES[service]} er ikke konfigurert i denne byggingen. Be utvikleren om en build med OAuth-nøkkel.`)
+        return
+      }
       btn.textContent = 'Kobler til…'
       btn.setAttribute('disabled', '')
-      const result = await window.api.cloudConnect(service)
-      btn.removeAttribute('disabled')
-      if (result.ok) {
-        refreshStatus()
-      } else {
+
+      // Allow the user to cancel a stuck OAuth flow
+      const cancelBtn = ensureCancelButton(btn, service)
+      cancelBtn.style.display = ''
+
+      try {
+        const result = await window.api.cloudConnect(service)
+        if (result.ok) {
+          refreshStatus()
+        } else {
+          showServiceError(service, result.error ?? 'Ukjent feil')
+        }
+      } finally {
+        btn.removeAttribute('disabled')
         btn.textContent = 'Koble til'
-        showServiceError(service, result.error ?? 'Ukjent feil')
+        cancelBtn.style.display = 'none'
       }
     })
   })
@@ -87,12 +111,35 @@ export function setupPublishPage(): void {
     showUploadStatus(service, ok ? '✓ Opplastet' : `✕ ${error ?? 'Feil'}`, !ok)
     refreshStatus()
   })
+  window.api.on('cloud-queue-update', (data: unknown) => {
+    renderQueue(data as CloudQueueStatus)
+  })
 }
 
 async function refreshStatus(): Promise<void> {
   const status = await window.api.cloudStatus() as ServiceStatus
   currentStatus = status
   renderAllCards(status)
+}
+
+async function refreshConfigured(): Promise<void> {
+  const services: CloudServiceId[] = ['google-drive', 'dropbox', 'onedrive']
+  await Promise.all(services.map(async s => {
+    try {
+      configured[s] = await window.api.cloudIsConfigured(s) as boolean
+    } catch { configured[s] = true }
+  }))
+  // Re-render so unconfigured cards show a notice
+  renderAllCards(currentStatus)
+}
+
+async function refreshQueue(): Promise<void> {
+  try {
+    const q = await window.api.cloudQueueStatus() as CloudQueueStatus
+    renderQueue(q)
+  } catch (err) {
+    console.error('[publish] refreshQueue failed:', err)
+  }
 }
 
 function renderAllCards(status: ServiceStatus): void {
@@ -124,10 +171,14 @@ function renderCard(service: CloudServiceId, status: CloudStatus): void {
         ? (status.lastUploadOk ? '✓ ' : '✕ ') + new Date(status.lastUpload).toLocaleString('no')
         : '—'
     }
+    renderReauthBanner(card, service, status.needsReauth === true)
   } else {
     connectedSection?.style.setProperty('display', 'none')
     disconnectedSection?.style.setProperty('display', '')
+    renderReauthBanner(card, service, false)
   }
+
+  renderConfiguredNotice(card, service, configured[service])
 
   const settingsKey = service === 'google-drive' ? 'cloudGoogleDrive'
                     : service === 'dropbox'       ? 'cloudDropbox'
@@ -135,6 +186,151 @@ function renderCard(service: CloudServiceId, status: CloudStatus): void {
   const cfg = settings[settingsKey]
   if (autoChk)    autoChk.checked    = cfg?.autoUpload ?? false
   if (enabledChk) enabledChk.checked = cfg?.enabled    ?? false
+}
+
+/** Inject (or remove) a "reconnect needed" banner inside a service card. */
+function renderReauthBanner(card: HTMLElement, service: CloudServiceId, needs: boolean): void {
+  let banner = card.querySelector<HTMLElement>('.cloud-reauth-banner')
+  if (!needs) { banner?.remove(); return }
+  if (!banner) {
+    banner = document.createElement('div')
+    banner.className = 'cloud-reauth-banner'
+    banner.style.cssText = 'background:#5b1f1f;color:#ffd0d0;padding:10px 12px;border-radius:8px;margin:8px 0;display:flex;gap:8px;align-items:center;justify-content:space-between'
+    const text = document.createElement('div')
+    text.textContent = `${SERVICE_NAMES[service]} trenger pålogging på nytt. Klikk for å koble til.`
+    const btn = document.createElement('button')
+    btn.textContent = 'Koble til på nytt'
+    btn.className = 'btn'
+    btn.style.cssText = 'background:#fff;color:#1a1a1a;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-weight:600'
+    btn.addEventListener('click', async () => {
+      btn.disabled = true
+      btn.textContent = 'Kobler til…'
+      try {
+        const result = await window.api.cloudConnect(service)
+        if (result.ok) refreshStatus()
+        else { btn.disabled = false; btn.textContent = 'Koble til på nytt'; showServiceError(service, result.error ?? 'Ukjent feil') }
+      } catch {
+        btn.disabled = false; btn.textContent = 'Koble til på nytt'
+      }
+    })
+    banner.append(text, btn)
+    card.prepend(banner)
+  }
+}
+
+function renderConfiguredNotice(card: HTMLElement, service: CloudServiceId, ok: boolean): void {
+  let notice = card.querySelector<HTMLElement>('.cloud-not-configured')
+  if (ok) { notice?.remove(); return }
+  if (!notice) {
+    notice = document.createElement('div')
+    notice.className = 'cloud-not-configured'
+    notice.style.cssText = 'background:#4a3a1f;color:#ffe6a8;padding:8px 12px;border-radius:8px;margin:8px 0;font-size:12px'
+    notice.textContent = `${SERVICE_NAMES[service]}-OAuth-nøkkel er ikke satt i denne byggingen.`
+    card.prepend(notice)
+  }
+}
+
+/**
+ * Inject an inline "Avbryt" button next to the connect button so the user can
+ * back out of a hung OAuth flow (browser closed, no callback fired).
+ */
+function ensureCancelButton(connectBtn: HTMLElement, service: CloudServiceId): HTMLElement {
+  let cancel = connectBtn.parentElement?.querySelector<HTMLElement>(`[data-cloud-cancel="${service}"]`)
+  if (cancel) return cancel
+  cancel = document.createElement('button')
+  cancel.dataset.cloudCancel = service
+  cancel.className = 'btn'
+  cancel.textContent = 'Avbryt'
+  cancel.style.cssText = 'margin-left:6px;display:none'
+  cancel.addEventListener('click', async () => {
+    await window.api.cloudCancelConnect(service)
+  })
+  connectBtn.parentElement?.appendChild(cancel)
+  return cancel
+}
+
+function renderQueue(q: CloudQueueStatus): void {
+  let panel = document.getElementById('cloud-queue-panel')
+  if (!panel) {
+    panel = document.createElement('div')
+    panel.id = 'cloud-queue-panel'
+    panel.style.cssText = 'margin-top:16px;padding:12px;background:#1a1f25;border-radius:8px'
+    const cloudSection = document.querySelector('#page-publish, .publish-page, .page-publish') ?? document.body
+    cloudSection.appendChild(panel)
+  }
+
+  if (q.entries.length === 0) {
+    panel.innerHTML = '<div style="color:var(--text3);font-size:12px">Ingen ventende skyopplastinger.</div>'
+    return
+  }
+
+  panel.innerHTML = '<h3 style="margin:0 0 8px 0;font-size:14px">Skyopplastinger i kø</h3>'
+  const list = document.createElement('div')
+  list.style.cssText = 'display:flex;flex-direction:column;gap:6px'
+
+  for (const e of q.entries) {
+    const row = document.createElement('div')
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px;background:#252b34;border-radius:6px;font-size:12px'
+
+    const statusBadge = document.createElement('span')
+    const badgeStyle = e.status === 'uploading' ? 'background:#1f5b3a;color:#d0ffd0'
+                    : e.status === 'failed'    ? 'background:#5b1f1f;color:#ffd0d0'
+                    : e.status === 'reauth-required' ? 'background:#5b3f1f;color:#ffe0c0'
+                    : 'background:#3a3f4a;color:#ccc'
+    statusBadge.style.cssText = `padding:2px 6px;border-radius:4px;font-size:10px;text-transform:uppercase;${badgeStyle}`
+    statusBadge.textContent = labelForStatus(e.status)
+    row.appendChild(statusBadge)
+
+    const meta = document.createElement('div')
+    meta.style.cssText = 'flex:1;display:flex;flex-direction:column'
+    const line1 = document.createElement('div')
+    line1.textContent = `${SERVICE_NAMES[e.service]} — ${e.filename}`
+    line1.style.cssText = 'font-weight:500'
+    const line2 = document.createElement('div')
+    line2.style.cssText = 'color:var(--text3);font-size:11px'
+    const nextStr = e.nextAttempt > Date.now()
+      ? `Neste forsøk: ${new Date(e.nextAttempt).toLocaleTimeString('no')}`
+      : ''
+    line2.textContent = [
+      `Forsøk: ${e.attempts}`,
+      nextStr,
+      e.lastError ? `Feil: ${e.lastError}` : '',
+    ].filter(Boolean).join(' · ')
+    meta.append(line1, line2)
+    row.appendChild(meta)
+
+    const retryBtn = document.createElement('button')
+    retryBtn.textContent = 'Prøv nå'
+    retryBtn.className = 'btn'
+    retryBtn.style.cssText = 'padding:4px 10px;font-size:11px'
+    retryBtn.addEventListener('click', async () => {
+      await window.api.cloudQueueRetry(e.id)
+      refreshQueue()
+    })
+    row.appendChild(retryBtn)
+
+    const removeBtn = document.createElement('button')
+    removeBtn.textContent = 'Fjern'
+    removeBtn.className = 'btn'
+    removeBtn.style.cssText = 'padding:4px 10px;font-size:11px;background:transparent;color:var(--red,#e87878);border:1px solid var(--red,#e87878)'
+    removeBtn.addEventListener('click', async () => {
+      await window.api.cloudQueueRemove(e.id)
+      refreshQueue()
+    })
+    row.appendChild(removeBtn)
+
+    list.appendChild(row)
+  }
+  panel.appendChild(list)
+}
+
+function labelForStatus(s: CloudQueueStatus['entries'][number]['status']): string {
+  switch (s) {
+    case 'uploading':       return 'Laster opp'
+    case 'failed':          return 'Mislyktes'
+    case 'reauth-required': return 'Logg inn'
+    default:                return 'Venter'
+  }
 }
 
 async function openFolderPicker(service: CloudServiceId): Promise<void> {
@@ -217,4 +413,5 @@ function showUploadStatus(service: CloudServiceId, message: string, isError: boo
 
 export function applyPublishSettingsToUI(): void {
   refreshStatus()
+  refreshQueue()
 }

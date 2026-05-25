@@ -68,6 +68,21 @@ export function setupGeneralPage(): void {
     if (btn) { (btn as HTMLButtonElement).disabled = false }
   })
 
+  document.getElementById('btn-test-webhook')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-test-webhook') as HTMLButtonElement | null
+    if (!btn) return
+    // Force-save the webhook URL first so the user doesn't have to click Save
+    // before testing a freshly-pasted URL.
+    const url = (document.getElementById('webhook-url') as HTMLInputElement | null)?.value.trim() ?? ''
+    if (!url) { flashMsg(btn, '✕ Lim inn URL først', false); return }
+    btn.disabled = true
+    patchSettings({ webhookUrl: url })
+    await window.api.saveSettings(settings)
+    const result = await window.api.testWebhook() as { ok: boolean; error?: string }
+    flashMsg(btn, result.ok ? '✓ Sendt — sjekk kanalen' : `✕ ${result.error ?? 'Feil'}`, result.ok)
+    btn.disabled = false
+  })
+
   document.getElementById('btn-check-updates')?.addEventListener('click', async () => {
     setUpdateStatus('pending', t('update.checking', 'Sjekker etter oppdateringer…'))
     await window.api.checkForUpdates()
@@ -188,6 +203,8 @@ export function applyGeneralSettingsToUI(): void {
   setVal('email-smtp',    settings.emailSmtp      ?? '')
   setVal('email-port',    settings.emailSmtpPort  ?? 587)
   setVal('email-user',    settings.emailSmtpUser  ?? '')
+  setVal('webhook-url',   settings.webhookUrl     ?? '')
+  setCheckbox('opt-webhook-on-warn', !!settings.webhookOnWarn)
   const passInput = document.getElementById('email-pass') as HTMLInputElement | null
   const clearBtn  = document.getElementById('btn-clear-smtp-pass') as HTMLElement | null
   if (passInput) {
@@ -232,6 +249,8 @@ async function saveGeneralSettings(): Promise<void> {
     emailSmtpPort:     +((document.getElementById('email-port')      as HTMLInputElement | null)?.value ?? 587),
     emailSmtpUser:     (document.getElementById('email-user')        as HTMLInputElement | null)?.value ?? '',
     emailSmtpPass:     (document.getElementById('email-pass')        as HTMLInputElement | null)?.value ?? '',
+    webhookUrl:        (document.getElementById('webhook-url')       as HTMLInputElement | null)?.value.trim() || undefined,
+    webhookOnWarn:     !!(document.getElementById('opt-webhook-on-warn') as HTMLInputElement | null)?.checked,
     launchAtLogin:     !!(document.getElementById('opt-autostart')         as HTMLInputElement | null)?.checked,
     showOnStartup:     !!(document.getElementById('opt-show-on-startup')   as HTMLInputElement | null)?.checked,
     autoUpdate:        !!(document.getElementById('opt-auto-update')       as HTMLInputElement | null)?.checked,

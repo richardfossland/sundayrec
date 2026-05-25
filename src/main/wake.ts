@@ -131,11 +131,55 @@ async function scheduleOsWakes(upcomingDates: Date[], allowAdmin: boolean): Prom
   return { ok: false, reason: 'unsupported' }
 }
 
+// Serialize reschedule() calls — multiple callers (startup, settings save,
+// powerMonitor.resume, 6 h interval) can fire at the same time. Without a mutex
+// two concurrent runs each call cancelall and then schedule, racing each other
+// — the loser's wake points get wiped before they're registered.
+let inflight: Promise<WakeResult> | null = null
+// Track which dates were last successfully scheduled (per platform — testing
+// flips process.platform between cases and we don't want stale entries). If
+// the next caller wants the same list, skip the work entirely.
+const lastScheduledByPlatform = new Map<string, string>()
+
+function keyOf(dates: Date[]): string {
+  return dates.map(d => d.getTime()).join('|')
+}
+
+/** Test-only: reset the dedup cache. */
+export function _resetSchedulingCache(): void {
+  lastScheduledByPlatform.clear()
+  inflight = null
+}
+
 export async function reschedule(upcomingDates: Date[], win?: BrowserWindow, allowAdmin = false): Promise<WakeResult> {
   updateBlocker(upcomingDates)
-  const result = await scheduleOsWakes(upcomingDates, allowAdmin)
-  win?.webContents.send('wake-schedule-result', result)
-  return result
+
+  // De-dupe: if the same set of dates is already scheduled, return early.
+  // Admin-elevated calls always run (user expects fresh scheduling). We also
+  // skip the cache when there are zero dates — the test suite asserts that
+  // empty calls still return { count: 0 } and don't bypass platform checks.
+  const platform = process.platform
+  const key = keyOf(upcomingDates)
+  if (!allowAdmin && upcomingDates.length > 0 && lastScheduledByPlatform.get(platform) === key) {
+    return { ok: true, count: upcomingDates.length, nextWake: upcomingDates[0].toISOString() }
+  }
+
+  // Chain new callers onto an inflight reschedule rather than racing it.
+  if (inflight) {
+    await inflight.catch(() => {})
+  }
+
+  inflight = (async () => {
+    try {
+      const result = await scheduleOsWakes(upcomingDates, allowAdmin)
+      if (result.ok && upcomingDates.length > 0) lastScheduledByPlatform.set(platform, key)
+      win?.webContents.send('wake-schedule-result', result)
+      return result
+    } finally {
+      inflight = null
+    }
+  })()
+  return inflight
 }
 
 export interface SleepConfig {

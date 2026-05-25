@@ -197,7 +197,15 @@ export function pruneHistory(): number {
 }
 
 export function exportProfile(): Omit<Settings, 'recordingHistory' | 'activeRecovery'> {
-  const { recordingHistory, activeRecovery, nextExpectedRecordingISO, hasLaunched, emailSmtpPassEnc, ...profile } = store.store
+  // Strip cloud configuration too. folderId/folderName are tied to the user's
+  // OAuth-authenticated account; they're meaningless on a different machine
+  // (where the user has to re-authenticate anyway). Easier to re-pick the
+  // backup folder than to debug a stale folderId.
+  const {
+    recordingHistory, activeRecovery, nextExpectedRecordingISO, hasLaunched, emailSmtpPassEnc,
+    cloudGoogleDrive, cloudDropbox, cloudOneDrive,
+    ...profile
+  } = store.store
   return { ...profile, emailSmtpPass: '' }
 }
 
@@ -341,6 +349,16 @@ export function markCloudUploaded(timestamp: number, serviceId: string): void {
     history[idx] = { ...entry, cloudUploaded: [...existing, serviceId] }
     set('recordingHistory', history)
   }
+}
+
+/**
+ * Locate a history entry by file path. Normalizes path separators so a Windows
+ * "C:\Users\..\rec.mp3" matches "C:/Users/../rec.mp3" written from a different
+ * code path. Used by the upload queue when entryTimestamp wasn't captured.
+ */
+export function findHistoryByPath(filePath: string): RecordingEntry | undefined {
+  const target = filePath.replace(/\\/g, '/').toLowerCase()
+  return getHistory().find(e => !!e.path && e.path.replace(/\\/g, '/').toLowerCase() === target)
 }
 
 export function reset(): void {

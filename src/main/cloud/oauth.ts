@@ -1,7 +1,11 @@
 import crypto from 'crypto'
+import http from 'http'
+import net from 'net'
 import { shell } from 'electron'
-import { CLOUD_CONFIG } from './config'
+import { CLOUD_CONFIG, isServiceConfigured } from './config'
 import type { CloudServiceId } from '../../types'
+
+const PENDING_TIMEOUT_MS = 5 * 60 * 1000  // 5 min — long enough for slow consent screens
 
 function base64url(buf: Buffer): string {
   return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
@@ -15,41 +19,154 @@ function generateChallenge(verifier: string): string {
   return base64url(crypto.createHash('sha256').update(verifier).digest())
 }
 
-interface Pending {
-  verifier: string
-  resolve: (code: string) => void
-  reject:  (err: Error)   => void
+function generateState(): string {
+  return base64url(crypto.randomBytes(16))
 }
 
+interface Pending {
+  verifier: string
+  state:    string
+  resolve:  (code: string) => void
+  reject:   (err: Error)   => void
+  timer:    NodeJS.Timeout
+}
+
+// Used for Dropbox + OneDrive (custom sundayrec:// scheme)
 const pending = new Map<CloudServiceId, Pending>()
 
-export function openAuthBrowser(service: CloudServiceId): { promise: Promise<string>; verifier: string } {
-  const verifier   = generateVerifier()
-  const challenge  = generateChallenge(verifier)
+function clearPending(service: CloudServiceId, reason: string): void {
+  const p = pending.get(service)
+  if (!p) return
+  clearTimeout(p.timer)
+  pending.delete(service)
+  p.reject(new Error(reason))
+}
+
+// ─── Google Drive: localhost redirect server ──────────────────────────────────
+//
+// Google Desktop app OAuth clients don't allow registering custom URI schemes
+// as redirect URIs. The accepted approach is http://127.0.0.1:<random-port>.
+// Google allows any loopback port for Desktop apps without registration.
+
+async function getFreePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer()
+    srv.listen(0, '127.0.0.1', () => {
+      const addr = srv.address() as net.AddressInfo
+      srv.close(() => resolve(addr.port))
+    })
+    srv.on('error', reject)
+  })
+}
+
+export async function openGoogleAuth(): Promise<{ codePromise: Promise<string>; verifier: string; redirectUri: string }> {
+  if (!isServiceConfigured('google-drive')) {
+    return {
+      codePromise: Promise.reject(new Error('OAuth client not configured for google-drive. Set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET in .env and rebuild.')),
+      verifier:    '',
+      redirectUri: '',
+    }
+  }
+
+  const port        = await getFreePort()
+  const redirectUri = `http://127.0.0.1:${port}`
+  const verifier    = generateVerifier()
+  const challenge   = generateChallenge(verifier)
+  const state       = generateState()
+
+  const codePromise = new Promise<string>((resolve, reject) => {
+    let settled = false
+    let timer: NodeJS.Timeout
+
+    const server = http.createServer((req, res) => {
+      if (settled) { res.end(); return }
+      const url = new URL(req.url ?? '/', `http://127.0.0.1:${port}`)
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+      res.end(`<!DOCTYPE html><html><body style="font-family:sans-serif;padding:2rem;max-width:480px;margin:auto">
+        <h2>Autentisering fullført</h2>
+        <p>Du kan lukke dette vinduet og gå tilbake til SundayRec.</p>
+        <script>window.close()</script>
+      </body></html>`)
+      // Destroy socket so the connection closes immediately (prevents open-handle leaks in tests)
+      res.socket?.destroy()
+      clearTimeout(timer)
+      server.close()
+      settled = true
+
+      const error = url.searchParams.get('error')
+      if (error) { reject(new Error(`OAuth nektet: ${url.searchParams.get('error_description') ?? error}`)); return }
+      if (url.searchParams.get('state') !== state) { reject(new Error('OAuth state mismatch — mulig CSRF-forsøk')); return }
+      const code = url.searchParams.get('code')
+      if (!code) { reject(new Error('OAuth callback manglet code-parameter')); return }
+      resolve(code)
+    })
+
+    server.listen(port, '127.0.0.1')
+
+    timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      server.close()
+      reject(new Error('timeout'))
+    }, PENDING_TIMEOUT_MS)
+    // unref so the timer doesn't keep the process alive if nothing else is running (e.g. in tests)
+    timer.unref()
+  })
+
+  const params = new URLSearchParams({
+    client_id:             CLOUD_CONFIG.googleDrive.clientId,
+    redirect_uri:          redirectUri,
+    response_type:         'code',
+    state,
+    code_challenge:        challenge,
+    code_challenge_method: 'S256',
+    scope:                 CLOUD_CONFIG.googleDrive.scope,
+    access_type:           'offline',
+    prompt:                'consent',
+  })
+
+  shell.openExternal(`${CLOUD_CONFIG.googleDrive.authUrl}?${params.toString()}`)
+  return { codePromise, verifier, redirectUri }
+}
+
+// ─── Dropbox + OneDrive: custom sundayrec:// scheme ──────────────────────────
+
+export function openAuthBrowser(service: Exclude<CloudServiceId, 'google-drive'>): { promise: Promise<string>; verifier: string } {
+  if (!isServiceConfigured(service)) {
+    return {
+      promise:  Promise.reject(new Error(`OAuth client not configured for ${service}. Set the env var in .env and rebuild.`)),
+      verifier: '',
+    }
+  }
+
+  clearPending(service, 'superseded')
+
+  const verifier  = generateVerifier()
+  const challenge = generateChallenge(verifier)
+  const state     = generateState()
 
   let resolve!: (code: string) => void
   let reject!:  (err: Error) => void
   const promise = new Promise<string>((res, rej) => { resolve = res; reject = rej })
 
-  pending.set(service, { verifier, resolve, reject })
+  const timer = setTimeout(() => {
+    clearPending(service, 'timeout')
+  }, PENDING_TIMEOUT_MS)
 
-  const cfg = service === 'google-drive' ? CLOUD_CONFIG.googleDrive
-            : service === 'dropbox'      ? CLOUD_CONFIG.dropbox
-            :                              CLOUD_CONFIG.oneDrive
+  pending.set(service, { verifier, state, resolve, reject, timer })
+
+  const cfg = service === 'dropbox' ? CLOUD_CONFIG.dropbox : CLOUD_CONFIG.oneDrive
 
   const params = new URLSearchParams({
     client_id:             cfg.clientId,
     redirect_uri:          cfg.redirectUri,
     response_type:         'code',
+    state,
     code_challenge:        challenge,
     code_challenge_method: 'S256',
   })
 
-  if (service === 'google-drive') {
-    params.set('scope', CLOUD_CONFIG.googleDrive.scope)
-    params.set('access_type', 'offline')
-    params.set('prompt', 'consent')
-  } else if (service === 'dropbox') {
+  if (service === 'dropbox') {
     params.set('token_access_type', 'offline')
   } else {
     params.set('scope', CLOUD_CONFIG.oneDrive.scope)
@@ -59,30 +176,79 @@ export function openAuthBrowser(service: CloudServiceId): { promise: Promise<str
   return { promise, verifier }
 }
 
-export function handleCallback(service: CloudServiceId, code: string): void {
+/**
+ * Called by the protocol-URL handler in main/index.ts when sundayrec:// fires.
+ * Only used for Dropbox and OneDrive — Google Drive uses localhost redirect.
+ */
+export function handleCallback(service: CloudServiceId, params: URLSearchParams): boolean {
+  if (service === 'google-drive') return false  // Google uses localhost, not protocol handler
+
   const p = pending.get(service)
-  if (p) { pending.delete(service); p.resolve(code) }
+  if (!p) return false
+
+  const error = params.get('error')
+  if (error) {
+    clearTimeout(p.timer)
+    pending.delete(service)
+    const desc = params.get('error_description') ?? error
+    p.reject(new Error(`OAuth denied: ${desc}`))
+    return true
+  }
+
+  const returnedState = params.get('state')
+  if (returnedState !== p.state) {
+    clearTimeout(p.timer)
+    pending.delete(service)
+    p.reject(new Error('OAuth state mismatch — possible CSRF attempt'))
+    return true
+  }
+
+  const code = params.get('code')
+  if (!code) {
+    clearTimeout(p.timer)
+    pending.delete(service)
+    p.reject(new Error('OAuth callback missing code'))
+    return true
+  }
+
+  clearTimeout(p.timer)
+  pending.delete(service)
+  p.resolve(code)
+  return true
 }
 
-export function cancelPending(service: CloudServiceId): void {
-  const p = pending.get(service)
-  if (p) { pending.delete(service); p.reject(new Error('cancelled')) }
+export function cancelPending(service: CloudServiceId): boolean {
+  if (!pending.has(service)) return false
+  clearPending(service, 'cancelled')
+  return true
 }
 
-export async function exchangeCode(service: CloudServiceId, code: string, verifier: string): Promise<{ accessToken: string; refreshToken?: string; expiresAt?: number }> {
+export function hasPending(service: CloudServiceId): boolean {
+  return pending.has(service)
+}
+
+export async function exchangeCode(
+  service: CloudServiceId,
+  code: string,
+  verifier: string,
+  redirectUriOverride?: string,
+): Promise<{ accessToken: string; refreshToken?: string; expiresAt?: number }> {
   const cfg = service === 'google-drive' ? CLOUD_CONFIG.googleDrive
             : service === 'dropbox'      ? CLOUD_CONFIG.dropbox
             :                              CLOUD_CONFIG.oneDrive
 
   const body = new URLSearchParams({
     client_id:     cfg.clientId,
-    redirect_uri:  cfg.redirectUri,
+    redirect_uri:  redirectUriOverride ?? cfg.redirectUri,
     grant_type:    'authorization_code',
     code,
     code_verifier: verifier,
   })
+  if (service === 'google-drive' && CLOUD_CONFIG.googleDrive.clientSecret) {
+    body.set('client_secret', CLOUD_CONFIG.googleDrive.clientSecret)
+  }
 
-  const res  = await fetch(cfg.tokenUrl, {
+  const res = await fetch(cfg.tokenUrl, {
     method:  'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body:    body.toString(),
@@ -97,7 +263,14 @@ export async function exchangeCode(service: CloudServiceId, code: string, verifi
   }
 }
 
-export async function refreshAccessToken(service: CloudServiceId, refreshToken: string): Promise<{ accessToken: string; expiresAt?: number }> {
+/**
+ * Refresh an access token. Throws with .code === 'invalid_grant' when the
+ * refresh token is dead — caller must mark the connection as needing reauth.
+ */
+export async function refreshAccessToken(
+  service: CloudServiceId,
+  refreshToken: string,
+): Promise<{ accessToken: string; refreshToken?: string; expiresAt?: number }> {
   const cfg = service === 'google-drive' ? CLOUD_CONFIG.googleDrive
             : service === 'dropbox'      ? CLOUD_CONFIG.dropbox
             :                              CLOUD_CONFIG.oneDrive
@@ -107,17 +280,28 @@ export async function refreshAccessToken(service: CloudServiceId, refreshToken: 
     grant_type:    'refresh_token',
     refresh_token: refreshToken,
   })
+  if (service === 'google-drive' && CLOUD_CONFIG.googleDrive.clientSecret) {
+    body.set('client_secret', CLOUD_CONFIG.googleDrive.clientSecret)
+  }
 
   const res = await fetch(cfg.tokenUrl, {
     method:  'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body:    body.toString(),
   })
-  if (!res.ok) throw new Error(`Token refresh failed: ${res.status}`)
+  if (!res.ok) {
+    const bodyText = await res.text()
+    let code: string | undefined
+    try { code = (JSON.parse(bodyText) as { error?: string }).error } catch {}
+    const err = new Error(`Token refresh failed: ${res.status} ${bodyText}`) as Error & { code?: string }
+    if (code === 'invalid_grant') err.code = 'invalid_grant'
+    throw err
+  }
 
   const json = await res.json() as Record<string, unknown>
   return {
-    accessToken: json.access_token as string,
-    expiresAt:   json.expires_in ? Date.now() + (json.expires_in as number) * 1000 : undefined,
+    accessToken:  json.access_token  as string,
+    refreshToken: json.refresh_token as string | undefined,
+    expiresAt:    json.expires_in    ? Date.now() + (json.expires_in as number) * 1000 : undefined,
   }
 }

@@ -49,7 +49,9 @@
     "defaultFolder": "Dokumenter/SundayRec",
     "recordingsSaved": "opptak lagret",
     "reconnectDevice": "Koble til {name} via USB",
-    "wakesBefore": "Maskinen vekkes automatisk kl. {time}"
+    "wakesBefore": "Maskinen vekkes automatisk kl. {time}",
+    "testRecording": "🎙️ Test-opptak (30 sek)",
+    "checkSystem": "✅ Sjekk system nå"
   },
   "update": {
     "available": "Ny versjon {v} er tilgjengelig — laster ned…",

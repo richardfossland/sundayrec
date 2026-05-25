@@ -138,6 +138,10 @@ export interface Settings {
   emailSmtpPass: string       // runtime only — always '' in store; real value in emailSmtpPassEnc
   emailSmtpPassSet?: boolean  // populated by main before sending to renderer
   emailSmtpPassEnc?: string   // internal: base64-encoded safeStorage ciphertext
+  /** Slack/Discord/generic webhook URL — POSTed on error-severity backend warnings */
+  webhookUrl?: string
+  /** Also send the webhook on warnings (in addition to errors). Default false. */
+  webhookOnWarn?: boolean
 
   // Video recording
   videoEnabled?: boolean
@@ -247,4 +251,30 @@ export interface CloudStatus {
   folderPath?: string
   lastUpload?: number
   lastUploadOk?: boolean
+  /** True when the saved refresh token has been revoked — user must reconnect. */
+  needsReauth?: boolean
+}
+
+export interface CloudUploadQueueEntry {
+  id:             string         // unique entry id (uuid-ish)
+  service:        CloudServiceId
+  filePath:       string
+  entryTimestamp?: number        // history-entry timestamp to mark as uploaded on success
+  attempts:       number         // total attempts so far
+  nextAttempt:    number         // unix ms — earliest time the worker may retry
+  lastError?:     string         // last error message (for UI)
+  enqueuedAt:     number
+  status:         'pending' | 'uploading' | 'failed' | 'reauth-required'
+}
+
+export interface CloudQueueStatus {
+  entries: Array<{
+    id: string
+    service: CloudServiceId
+    filename: string
+    attempts: number
+    nextAttempt: number
+    lastError?: string
+    status: CloudUploadQueueEntry['status']
+  }>
 }

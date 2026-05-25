@@ -1,5 +1,10 @@
+/**
+ * Map ISO date → list of holiday names. Multiple holidays can fall on the same
+ * date — e.g. Kristi himmelfartsdag occasionally lands on 1. mai or 17. mai.
+ * Returning a string[] preserves all of them; clients render with .join(' · ').
+ */
 export interface ChurchHolidays {
-  [isoDate: string]: string
+  [isoDate: string]: string[]
 }
 
 export function computeEaster(year: number): Date {
@@ -37,24 +42,40 @@ function fixed(year: number, month: number, day: number): string {
 
 export function getChurchHolidays(year: number): ChurchHolidays {
   const adv1 = adventStart(year)
-  return {
-    [easterOffset(year, -7)]:  'Palmesøndag',
-    [easterOffset(year, -3)]:  'Skjærtorsdag',
-    [easterOffset(year, -2)]:  'Langfredag',
-    [easterOffset(year,  0)]:  'Første påskedag',
-    [easterOffset(year,  1)]:  'Andre påskedag',
-    [easterOffset(year, 39)]:  'Kristi himmelfartsdag',
-    [easterOffset(year, 49)]:  'Første pinsedag',
-    [easterOffset(year, 50)]:  'Andre pinsedag',
-    [fixed(year, 1,  1)]:      'Nyttårsdag',
-    [fixed(year, 1,  6)]:      'Helligtrekongers dag',
-    [fixed(year, 5,  1)]:      'Arbeidernes dag',
-    [fixed(year, 5, 17)]:      '17. mai',
-    [fixed(year, 12, 24)]:     'Julaften',
-    [fixed(year, 12, 25)]:     'Første juledag',
-    [fixed(year, 12, 26)]:     'Andre juledag',
-    [isoDate(adv1)]:           '1. søndag i advent'
+  const out: ChurchHolidays = {}
+  const add = (iso: string, name: string) => {
+    const cur = out[iso]
+    if (cur) cur.push(name)
+    else out[iso] = [name]
   }
+  add(easterOffset(year, -7),  'Palmesøndag')
+  add(easterOffset(year, -3),  'Skjærtorsdag')
+  add(easterOffset(year, -2),  'Langfredag')
+  add(easterOffset(year,  0),  'Første påskedag')
+  add(easterOffset(year,  1),  'Andre påskedag')
+  add(easterOffset(year, 39),  'Kristi himmelfartsdag')
+  add(easterOffset(year, 49),  'Første pinsedag')
+  add(easterOffset(year, 50),  'Andre pinsedag')
+  add(fixed(year, 1,  1),      'Nyttårsdag')
+  add(fixed(year, 1,  6),      'Helligtrekongers dag')
+  add(fixed(year, 5,  1),      'Arbeidernes dag')
+  add(fixed(year, 5, 17),      '17. mai')
+  // Allehelgensdag — første søndag i november. A widely-observed Norwegian
+  // church holiday with a special service that some congregations want to
+  // mark on the calendar.
+  add(isoDate(firstSundayOfNovember(year)), 'Allehelgensdag')
+  add(fixed(year, 12, 24),     'Julaften')
+  add(fixed(year, 12, 25),     'Første juledag')
+  add(fixed(year, 12, 26),     'Andre juledag')
+  add(isoDate(adv1),           '1. søndag i advent')
+  return out
+}
+
+function firstSundayOfNovember(year: number): Date {
+  const d = new Date(year, 10, 1)
+  const dow = d.getDay()  // 0 = Sunday
+  const daysToAdd = dow === 0 ? 0 : (7 - dow)
+  return new Date(year, 10, 1 + daysToAdd)
 }
 
 export function churchCalendarName(date: Date): string {

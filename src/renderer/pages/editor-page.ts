@@ -318,12 +318,18 @@ export function setupEditorPage(): void {
   setupDragDrop()
 
   if (canvas && canvas.parentElement) {
-    new ResizeObserver(() => { syncCanvasSize(); drawWaveform() }).observe(canvas.parentElement)
+    // Track the observer so repeated setupEditorPage() calls (after a renderer
+    // reload, for example) don't leak observers. Single observer for app life.
+    if (resizeObserver) resizeObserver.disconnect()
+    resizeObserver = new ResizeObserver(() => { syncCanvasSize(); drawWaveform() })
+    resizeObserver.observe(canvas.parentElement)
   }
 
   showState('empty')
   updateEditorIntroOutroDisplay()
 }
+
+let resizeObserver: ResizeObserver | null = null
 
 export function openEditorWithFile(fp: string): void {
   window.showPage('editor')
@@ -337,6 +343,15 @@ export function deactivateEditor(): void {
   audioBuffer = null
   introBuffer = null
   outroBuffer = null
+  // Release peaks/cuts/etc so we don't hold MB+ of arrays in memory between
+  // recording sessions. New loadFile() will populate them fresh.
+  peaks = null
+  cuts = []
+  cutHistory = []
+  cutHistoryIdx = -1
+  suggestions = []
+  clipTimes = []
+  meta = { title: '', speaker: '', description: '', chapters: [] }
   // Cleanup video element
   if (videoEl) {
     videoEl.pause()
@@ -351,6 +366,37 @@ export function deactivateEditor(): void {
 async function pickAndLoad(): Promise<void> {
   const fp = await window.api.editorPickFile()
   if (fp) loadFile(fp)
+}
+
+/**
+ * Fallback loader for huge audio files that would crash decodeAudioData.
+ * Uses the ffmpeg-extract path (8 kHz mono WAV) — phone-call quality, but
+ * sufficient for waveform display and cut selection. Sets audioBuffer,
+ * peaks, duration. Returns false if the load failed.
+ */
+async function loadViaFfmpegExtract(fp: string, seq: number): Promise<boolean> {
+  const result = await window.api.editorExtractAudioPeaks(fp) as { data: Uint8Array | ArrayBuffer; duration: number } | null
+  if (seq !== loadSeq) return false
+  if (!result) { showState('empty'); return false }
+
+  const u8 = result.data instanceof Uint8Array ? result.data : new Uint8Array(result.data as ArrayBuffer)
+  const ab = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer
+
+  let localCtx: AudioContext | null = null
+  try {
+    localCtx = new AudioContext()
+    const buf = await localCtx.decodeAudioData(ab)
+    if (seq !== loadSeq) { localCtx.close().catch(() => {}); return false }
+    audioCtx    = localCtx
+    audioBuffer = buf
+    duration    = result.duration > 0 ? result.duration : buf.duration
+    peaks       = computePeaks(audioBuffer)
+    return true
+  } catch {
+    localCtx?.close().catch(() => {})
+    showState('empty')
+    return false
+  }
 }
 
 async function loadFile(fp: string): Promise<void> {
@@ -456,26 +502,35 @@ async function loadFile(fp: string): Promise<void> {
       }
     }
   } else if (WEB_AUDIO_EXTS.has(ext)) {
-    // Browser-decodable audio: read raw bytes → Web Audio API
-    const raw = await window.api.editorReadFile(fp)
+    // Browser-decodable audio: read raw bytes → Web Audio API.
+    // Files above EDITOR_INLINE_LIMIT (400 MB) come back as { tooLarge: true }
+    // and we fall through to the ffmpeg-extract path so we don't OOM the
+    // renderer (Web Audio decodes to 32-bit float — a 1 GB FLAC = 5+ GB PCM).
+    const raw = await window.api.editorReadFile(fp) as unknown
     if (!raw) { showState('empty'); return }
 
-    const u8 = raw instanceof Uint8Array ? raw : new Uint8Array(raw as ArrayBuffer)
-    const ab  = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer
+    if (typeof raw === 'object' && raw !== null && 'tooLarge' in raw && (raw as { tooLarge: boolean }).tooLarge) {
+      console.log('[editor] file too large for Web Audio, using ffmpeg-extract path')
+      const ok = await loadViaFfmpegExtract(fp, seq)
+      if (!ok) return
+    } else {
+      const u8 = raw instanceof Uint8Array ? raw : new Uint8Array(raw as ArrayBuffer)
+      const ab  = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer
 
-    let localCtx: AudioContext | null = null
-    try {
-      localCtx = new AudioContext()
-      const buf = await localCtx.decodeAudioData(ab)
-      if (seq !== loadSeq) { localCtx.close().catch(() => {}); return }
-      audioCtx    = localCtx
-      audioBuffer = buf
-      duration    = audioBuffer.duration
-      peaks       = computePeaks(audioBuffer)
-    } catch {
-      localCtx?.close().catch(() => {})
-      showState('empty')
-      return
+      let localCtx: AudioContext | null = null
+      try {
+        localCtx = new AudioContext()
+        const buf = await localCtx.decodeAudioData(ab)
+        if (seq !== loadSeq) { localCtx.close().catch(() => {}); return }
+        audioCtx    = localCtx
+        audioBuffer = buf
+        duration    = audioBuffer.duration
+        peaks       = computePeaks(audioBuffer)
+      } catch {
+        localCtx?.close().catch(() => {})
+        showState('empty')
+        return
+      }
     }
   } else {
     // Exotic audio (wma, ape, flac-in-mka, ac3, amr, etc.):
@@ -515,6 +570,24 @@ async function loadFile(fp: string): Promise<void> {
 
   // Load metadata sidecar
   loadMetadataSidecar(fp, fname)
+
+  // Restore unsaved cuts from a previous editing session that ended abruptly.
+  // The sidecar is written every 2 s during editing and cleared on successful
+  // export — finding one here means we crashed or were closed mid-edit.
+  try {
+    const draft = await window.api.editorReadCutsDraft(fp) as { cuts?: Array<{ start: number; end: number }>; ts?: number } | null
+    if (draft && Array.isArray(draft.cuts) && draft.cuts.length > 0 && seq === loadSeq) {
+      // Only restore if draft is fresher than 7 days (avoid surprising the user
+      // with months-old leftover edits).
+      const ageMs = draft.ts ? Date.now() - draft.ts : 0
+      if (!draft.ts || ageMs < 7 * 86400_000) {
+        cuts = draft.cuts.filter(c => typeof c.start === 'number' && typeof c.end === 'number' && c.end > c.start)
+        cutHistory = [JSON.parse(JSON.stringify(cuts))]
+        cutHistoryIdx = 0
+        console.log('[editor] restored', cuts.length, 'unsaved cut(s) from draft')
+      }
+    }
+  } catch {}
 
   renderCutList()
   updateRemainingDisplay()
@@ -798,6 +871,12 @@ function renderSuggestions(): void {
 }
 
 function computePeaks(buf: AudioBuffer): Float32Array {
+  // Synchronous peak computation — used for short files where the cost is
+  // negligible. Long files come in pre-downsampled via the ffmpeg-extract
+  // path (8 kHz mono), so even a 4 h preacher recording is only ~115 M
+  // samples here. For typical sermon lengths (1-3 h) this completes in well
+  // under a second on a modern CPU. If you hit a file that lags the UI,
+  // route it through `computePeaksAsync` instead.
   const RATE = 100
   const total = Math.ceil(buf.duration * RATE)
   const out   = new Float32Array(total)
@@ -816,6 +895,42 @@ function computePeaks(buf: AudioBuffer): Float32Array {
     }
     out[i] = pk
     if (pk >= 0.99) clipTimes.push(i / RATE)
+  }
+  return out
+}
+
+/**
+ * Async peak computation. Yields back to the event loop every CHUNK frames
+ * so the UI thread stays responsive while crunching a multi-gigabyte
+ * AudioBuffer. Currently unused (the sync path is fast enough for the
+ * downsampled inputs we feed it), but kept here so the routing can switch
+ * over without a code rewrite if profiling shows otherwise.
+ */
+// @ts-expect-error retained for future use
+async function _computePeaksAsync(buf: AudioBuffer): Promise<Float32Array> {
+  const RATE = 100
+  const total = Math.ceil(buf.duration * RATE)
+  const out   = new Float32Array(total)
+  const ch0   = buf.getChannelData(0)
+  const ch1   = buf.numberOfChannels > 1 ? buf.getChannelData(1) : ch0
+  const spp   = Math.floor(buf.sampleRate / RATE)
+  clipTimes   = []
+
+  const CHUNK = 2000  // yield every ~20 s of output (at 100 samples/s)
+  for (let i = 0; i < total; i++) {
+    const s = i * spp
+    const e = Math.min(s + spp, ch0.length)
+    let pk = 0
+    for (let j = s; j < e; j++) {
+      const v = Math.max(Math.abs(ch0[j]), Math.abs(ch1[j]))
+      if (v > pk) pk = v
+    }
+    out[i] = pk
+    if (pk >= 0.99) clipTimes.push(i / RATE)
+    if ((i & (CHUNK - 1)) === 0 && i > 0) {
+      // Yield: drains the microtask queue and lets paint events run.
+      await new Promise(resolve => setTimeout(resolve, 0))
+    }
   }
   return out
 }
@@ -1438,6 +1553,27 @@ function pushCutHistory(): void {
   cutHistory.push(JSON.parse(JSON.stringify(cuts)))
   if (cutHistory.length > 50) cutHistory.shift()
   cutHistoryIdx = cutHistory.length - 1
+  // Persist cuts to a draft sidecar so a crash mid-edit doesn't lose the work
+  scheduleDraftSave()
+}
+
+let draftSaveTimer: ReturnType<typeof setTimeout> | null = null
+function scheduleDraftSave(): void {
+  if (!filePath) return
+  if (draftSaveTimer) clearTimeout(draftSaveTimer)
+  // Debounce 2 s — avoid IPC spam during rapid drag operations
+  draftSaveTimer = setTimeout(() => {
+    draftSaveTimer = null
+    const fp = filePath
+    if (!fp) return
+    window.api.editorSaveCutsDraft(fp, cuts).catch(() => {})
+  }, 2000)
+}
+
+/** Called after a successful save/export to remove the draft. */
+export function clearEditorDraft(): void {
+  if (draftSaveTimer) { clearTimeout(draftSaveTimer); draftSaveTimer = null }
+  if (filePath) window.api.editorDeleteCutsDraft(filePath).catch(() => {})
 }
 
 function addCut(s: number, e: number): void {
@@ -1809,6 +1945,26 @@ function togglePlay(preview: boolean): void {
   startPlay(preview)
 }
 
+// Track the current onEnded listener so we can remove it on manual stopPlay.
+// Without removal, repeated start/stop accumulates dead listeners on videoEl
+// (the once:true flag fires-and-removes, but only when the event actually
+// fires — manual stop never fires it).
+let videoEndedHandler: (() => void) | null = null
+
+function attachVideoEndedHandler(onEnded: () => void): void {
+  if (!videoEl) return
+  if (videoEndedHandler) videoEl.removeEventListener('ended', videoEndedHandler)
+  videoEndedHandler = onEnded
+  videoEl.addEventListener('ended', onEnded, { once: true })
+}
+
+function detachVideoEndedHandler(): void {
+  if (videoEl && videoEndedHandler) {
+    videoEl.removeEventListener('ended', videoEndedHandler)
+    videoEndedHandler = null
+  }
+}
+
 function startPlay(preview: boolean): void {
   // Video-only mode: no audio buffer, but video element can still play
   if (isVideoFile && videoEl && !audioBuffer) {
@@ -1817,12 +1973,12 @@ function startPlay(preview: boolean): void {
     isPlaying    = true
     videoEl.currentTime = playStartSec
     videoEl.play().catch(() => {})
-    const onEnded = () => {
+    attachVideoEndedHandler(() => {
+      videoEndedHandler = null
       if (!isPlaying) return
       if (isLooping) { stopPlay(); playStartSec = loopStartSec; startPlay(isPreview) }
       else { isPlaying = false; cancelAnimationFrame(rafId); updatePlayIcon(); drawWaveform() }
-    }
-    videoEl.addEventListener('ended', onEnded, { once: true })
+    })
     updatePlayIcon()
     animate()
     return
@@ -1839,7 +1995,8 @@ function startPlay(preview: boolean): void {
     videoEl.play().catch(() => {})
 
     // On natural end, handle loop / stop
-    const onEnded = () => {
+    attachVideoEndedHandler(() => {
+      videoEndedHandler = null
       if (!isPlaying) return
       if (isLooping) {
         stopPlay()
@@ -1851,8 +2008,7 @@ function startPlay(preview: boolean): void {
         updatePlayIcon()
         drawWaveform()
       }
-    }
-    videoEl.addEventListener('ended', onEnded, { once: true })
+    })
 
     updatePlayIcon()
     animate()
@@ -1934,6 +2090,7 @@ function startPlay(preview: boolean): void {
 }
 
 function stopPlay(): void {
+  detachVideoEndedHandler()
   if (isVideoFile && videoEl) {
     if (isPlaying) {
       playStartSec = videoEl.currentTime
@@ -2137,9 +2294,36 @@ async function runExport(): Promise<void> {
     const fname = (result.outputPath ?? '').split(/[/\\]/).pop() ?? ''
     if (text) text.textContent = (t('editor.saveOk') || '✓ Eksportert') + (fname ? ' — ' + fname : '')
     if (row) row.setAttribute('data-ok', 'true')
+    clearEditorDraft()  // export succeeded — drop the autosave sidecar
   } else {
-    if (text) text.textContent = (t('editor.saveError') || '✕ Feil') + (result.error ? ': ' + result.error : '')
+    if (text) text.textContent = describeExportError(result.error)
     if (row) row.removeAttribute('data-ok')
+  }
+}
+
+/**
+ * Map an export error code from the main process to a user-friendly Norwegian
+ * sentence. Falls back to the raw code so an unfamiliar error still surfaces
+ * something the user can search for.
+ */
+function describeExportError(err: string | undefined): string {
+  switch (err) {
+    case 'force_wav_replace_unsafe':
+      return '✕ Kan ikke overskrive originalfilen i dette formatet. Bruk "Lagre som ny fil" i stedet.'
+    case 'no_audio_remaining':
+      return '✕ Ingen lyd igjen — kuttene dekker hele opptaket. Fjern minst ett kutt før du eksporterer.'
+    case 'cancelled':
+      return '✕ Eksport avbrutt.'
+    case 'timeout':
+      return '✕ Eksporten tok for lang tid og ble stoppet. Prøv igjen, eller del filen i flere mindre opptak.'
+    case 'invalid_path':
+    case 'file_not_found':
+      return '✕ Originalfilen er ikke tilgjengelig — er disken frakoblet?'
+    case 'invalid_duration':
+    case 'invalid_cut_regions':
+      return '✕ Intern feil i kuttdataene. Prøv å laste filen på nytt.'
+    default:
+      return (t('editor.saveError') || '✕ Feil') + (err ? ': ' + err : '')
   }
 }
 

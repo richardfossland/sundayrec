@@ -1,4 +1,5 @@
 import path from 'path'
+import fs from 'fs'
 import type { BrowserWindow } from 'electron'
 import * as tokenStore from './token-store'
 import * as oauth from './oauth'
@@ -7,33 +8,96 @@ import * as dropbox from './dropbox'
 import * as oneDrive from './onedrive'
 import * as store from '../store'
 import * as logger from '../logger'
+import { processQueue, enqueueUpload } from './upload-queue'
 import type { CloudServiceId, CloudStatus, RecordingMetadata } from '../../types'
 
-// Re-export handleCallback so main/index.ts can call it from the URL handler
-export { handleCallback, cancelPending } from './oauth'
+export { isServiceConfigured } from './config'
+export { cancelPending, hasPending } from './oauth'
+
+const PROACTIVE_REFRESH_MS = 5 * 60 * 1000  // refresh tokens 5 min before expiry
+
+// Per-service refresh-promise to avoid concurrent token-refresh races
+const refreshInflight = new Map<CloudServiceId, Promise<string>>()
+
+/**
+ * Parse a sundayrec://oauth/<service>?... callback URL and resolve the pending
+ * OAuth promise. Returns true if a pending auth was matched.
+ */
+export function handleAuthUrl(url: string): boolean {
+  try {
+    const u = new URL(url)
+    if (u.protocol !== 'sundayrec:') return false
+    // host can be 'oauth' and path '/<service>', or host can be the service if no path-rewriting
+    const parts = (u.host + u.pathname).split('/').filter(Boolean)
+    // Expect ["oauth", "<service>"]
+    if (parts[0] !== 'oauth' || !parts[1]) return false
+    const service = parts[1] as CloudServiceId
+    if (service !== 'google-drive' && service !== 'dropbox' && service !== 'onedrive') return false
+    return oauth.handleCallback(service, u.searchParams)
+  } catch {
+    return false
+  }
+}
+
+async function refreshOne(service: CloudServiceId, refreshToken: string): Promise<string> {
+  try {
+    const refreshed = await oauth.refreshAccessToken(service, refreshToken)
+    const update: Partial<tokenStore.TokenData> = {
+      accessToken: refreshed.accessToken,
+      expiresAt:   refreshed.expiresAt,
+      needsReauth: false,
+    }
+    if (refreshed.refreshToken) update.refreshToken = refreshed.refreshToken
+    tokenStore.updateTokenFields(service, update)
+    logger.debug('cloud', 'token_refreshed', { service })
+    return refreshed.accessToken
+  } catch (err) {
+    const e = err as Error & { code?: string }
+    logger.error('cloud', 'token_refresh_failed', { service, error: e.message, code: e.code })
+    if (e.code === 'invalid_grant') {
+      tokenStore.updateTokenFields(service, { needsReauth: true })
+    }
+    throw err
+  }
+}
 
 async function getValidToken(service: CloudServiceId): Promise<string> {
   const tok = tokenStore.getToken(service)
   if (!tok) throw new Error('not_connected')
-  if (tok.expiresAt && Date.now() > tok.expiresAt - 60_000 && tok.refreshToken) {
-    try {
-      const refreshed = await oauth.refreshAccessToken(service, tok.refreshToken)
-      tokenStore.updateTokenFields(service, { accessToken: refreshed.accessToken, expiresAt: refreshed.expiresAt })
-      logger.debug('cloud', 'token_refreshed', { service })
-      return refreshed.accessToken
-    } catch (err) {
-      logger.error('cloud', 'token_refresh_failed', { service, error: (err as Error).message })
-      throw err
+  if (tok.needsReauth) throw new Error('needs_reauth')
+
+  const expired = tok.expiresAt && Date.now() > tok.expiresAt - PROACTIVE_REFRESH_MS
+  if (expired && tok.refreshToken) {
+    // Coalesce concurrent refreshes (e.g. two uploads starting at once)
+    let inflight = refreshInflight.get(service)
+    if (!inflight) {
+      inflight = refreshOne(service, tok.refreshToken)
+        .finally(() => refreshInflight.delete(service))
+      refreshInflight.set(service, inflight)
     }
+    return inflight
   }
   return tok.accessToken
 }
 
 export async function connectService(service: CloudServiceId): Promise<{ ok: boolean; accountName?: string; error?: string }> {
   try {
-    const { promise, verifier } = oauth.openAuthBrowser(service)
-    const code   = await promise
-    const tokens = await oauth.exchangeCode(service, code, verifier)
+    let code: string
+    let verifier: string
+    let redirectUri: string | undefined
+
+    if (service === 'google-drive') {
+      const auth = await oauth.openGoogleAuth()
+      code        = await auth.codePromise
+      verifier    = auth.verifier
+      redirectUri = auth.redirectUri
+    } else {
+      const auth = oauth.openAuthBrowser(service)
+      code     = await auth.promise
+      verifier = auth.verifier
+    }
+
+    const tokens = await oauth.exchangeCode(service, code, verifier, redirectUri)
 
     let accountName = '', accountEmail = ''
     if (service === 'google-drive') {
@@ -47,7 +111,7 @@ export async function connectService(service: CloudServiceId): Promise<{ ok: boo
       accountName = info.name; accountEmail = info.email
     }
 
-    tokenStore.setToken(service, { ...tokens, accountName, accountEmail })
+    tokenStore.setToken(service, { ...tokens, accountName, accountEmail, needsReauth: false })
     return { ok: true, accountName }
   } catch (err) {
     return { ok: false, error: (err as Error).message }
@@ -64,13 +128,28 @@ export function getStatus(): Record<CloudServiceId, CloudStatus> {
   for (const id of ids) {
     const tok = tokenStore.getToken(id)
     result[id] = tok
-      ? { connected: true, accountName: tok.accountName, accountEmail: tok.accountEmail, folderId: tok.folderId, folderName: tok.folderName, folderPath: tok.folderPath, lastUpload: tok.lastUpload, lastUploadOk: tok.lastUploadOk }
+      ? {
+          connected:     true,
+          accountName:   tok.accountName,
+          accountEmail:  tok.accountEmail,
+          folderId:      tok.folderId,
+          folderName:    tok.folderName,
+          folderPath:    tok.folderPath,
+          lastUpload:    tok.lastUpload,
+          lastUploadOk:  tok.lastUploadOk,
+          needsReauth:   tok.needsReauth ?? false,
+        }
       : { connected: false }
   }
   return result
 }
 
+/**
+ * Direct upload (used by manual UI actions and by the queue worker).
+ * Throws on failure — callers decide whether to retry.
+ */
 export async function uploadFile(service: CloudServiceId, filePath: string, metadata?: RecordingMetadata, entryTimestamp?: number): Promise<void> {
+  if (!fs.existsSync(filePath)) throw new Error('file_not_found')
   const token = await getValidToken(service)
   const tok   = tokenStore.getToken(service)!
 
@@ -98,11 +177,12 @@ export function setFolder(service: CloudServiceId, folderId: string, folderName:
   tokenStore.updateTokenFields(service, { folderId, folderName, folderPath })
 }
 
-export async function autoUploadAfterRecording(
-  filePath: string,
-  win: BrowserWindow,
-  sendWarning?: (msg: string, severity: 'warn' | 'error', category: 'cloud') => void
-): Promise<void> {
+/**
+ * After a recording finishes, enqueue uploads for every enabled cloud service
+ * that has autoUpload turned on. The queue handles retries, backoff, and
+ * resuming after network outages.
+ */
+export function autoUploadAfterRecording(filePath: string, win: BrowserWindow): void {
   const settings = store.getAll()
   const map: { id: CloudServiceId; cfg: typeof settings.cloudGoogleDrive }[] = [
     { id: 'google-drive', cfg: settings.cloudGoogleDrive },
@@ -110,28 +190,23 @@ export async function autoUploadAfterRecording(
     { id: 'onedrive',     cfg: settings.cloudOneDrive },
   ]
 
-  // Find the history entry timestamp for this file so we can mark it uploaded
-  const history = store.getHistory()
-  const entryTimestamp = history.find(e => e.path === filePath)?.timestamp
+  // Use path-normalized lookup — Windows can store the same file with either
+  // separator depending on which code path wrote the entry.
+  const entry = store.findHistoryByPath(filePath)
+  const entryTimestamp = entry?.timestamp
 
   for (const { id, cfg } of map) {
     if (!cfg?.enabled || !cfg.autoUpload) continue
     if (!tokenStore.getToken(id)) continue
-    const filename = path.basename(filePath)
-    const uploadStart = Date.now()
-    logger.info('cloud', 'auto_upload_start', { service: id, filename })
-    try {
-      win.webContents.send('cloud-upload-progress', { service: id, filename })
-      await uploadFile(id, filePath, undefined, entryTimestamp)
-      win.webContents.send('cloud-upload-done', { service: id, ok: true })
-      logger.info('cloud', 'auto_upload_ok', { service: id, filename, durationMs: Date.now() - uploadStart })
-    } catch (err) {
-      tokenStore.updateTokenFields(id, { lastUpload: Date.now(), lastUploadOk: false })
-      win.webContents.send('cloud-upload-done', { service: id, ok: false, error: (err as Error).message })
-      const errMsg = `Cloud upload failed (${id}): ${(err as Error).message}`
-      logger.error('cloud', 'auto_upload_failed', { service: id, error: (err as Error).message })
-      console.error('[cloud]', errMsg)
-      sendWarning?.(errMsg, 'error', 'cloud')
-    }
+    enqueueUpload({ service: id, filePath, entryTimestamp })
+    logger.info('cloud', 'auto_upload_queued', { service: id, filename: path.basename(filePath) })
   }
+
+  // Kick the queue worker immediately
+  void processQueue(win)
+}
+
+/** Run the queue once — used by the wake/resume handler and on app start. */
+export function flushQueue(win: BrowserWindow): Promise<void> {
+  return processQueue(win)
 }

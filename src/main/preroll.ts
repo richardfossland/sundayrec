@@ -101,6 +101,10 @@ async function startLoop(opts: RecordingOpts, attempt: number): Promise<void> {
     if (isActive) {
       // Auto-restart after natural 90 s cap (or unexpected exit); reset retry counter on success
       setTimeout(() => startLoop(opts, 0).catch(e => console.error('[preroll] loop error:', e)), 200)
+    } else {
+      // Pre-roll was deactivated mid-segment — the 90 s WAV chunk we just
+      // produced will never be harvested, so it's pure disk litter. Remove it.
+      fs.promises.unlink(filePath).catch(() => {})
     }
   })
 }

@@ -57,31 +57,55 @@ describe('getChurchHolidays', () => {
   const h2025 = getChurchHolidays(2025)
 
   test('Easter week 2025', () => {
-    expect(h2025['2025-04-13']).toBe('Palmesøndag')
-    expect(h2025['2025-04-17']).toBe('Skjærtorsdag')
-    expect(h2025['2025-04-18']).toBe('Langfredag')
-    expect(h2025['2025-04-20']).toBe('Første påskedag')
-    expect(h2025['2025-04-21']).toBe('Andre påskedag')
+    expect(h2025['2025-04-13']).toEqual(['Palmesøndag'])
+    expect(h2025['2025-04-17']).toEqual(['Skjærtorsdag'])
+    expect(h2025['2025-04-18']).toEqual(['Langfredag'])
+    expect(h2025['2025-04-20']).toEqual(['Første påskedag'])
+    expect(h2025['2025-04-21']).toEqual(['Andre påskedag'])
   })
 
   test('Ascension and Pentecost 2025', () => {
-    expect(h2025['2025-05-29']).toBe('Kristi himmelfartsdag')
-    expect(h2025['2025-06-08']).toBe('Første pinsedag')
-    expect(h2025['2025-06-09']).toBe('Andre pinsedag')
+    expect(h2025['2025-05-29']).toEqual(['Kristi himmelfartsdag'])
+    expect(h2025['2025-06-08']).toEqual(['Første pinsedag'])
+    expect(h2025['2025-06-09']).toEqual(['Andre pinsedag'])
   })
 
   test('fixed Norwegian holidays 2025', () => {
-    expect(h2025['2025-01-01']).toBe('Nyttårsdag')
-    expect(h2025['2025-01-06']).toBe('Helligtrekongers dag')
-    expect(h2025['2025-05-01']).toBe('Arbeidernes dag')
-    expect(h2025['2025-05-17']).toBe('17. mai')
-    expect(h2025['2025-12-24']).toBe('Julaften')
-    expect(h2025['2025-12-25']).toBe('Første juledag')
-    expect(h2025['2025-12-26']).toBe('Andre juledag')
+    expect(h2025['2025-01-01']).toEqual(['Nyttårsdag'])
+    expect(h2025['2025-01-06']).toEqual(['Helligtrekongers dag'])
+    expect(h2025['2025-05-01']).toEqual(['Arbeidernes dag'])
+    expect(h2025['2025-05-17']).toEqual(['17. mai'])
+    expect(h2025['2025-12-24']).toEqual(['Julaften'])
+    expect(h2025['2025-12-25']).toEqual(['Første juledag'])
+    expect(h2025['2025-12-26']).toEqual(['Andre juledag'])
   })
 
   test('1. advent 2025', () => {
-    expect(h2025['2025-11-30']).toBe('1. søndag i advent')
+    expect(h2025['2025-11-30']).toEqual(['1. søndag i advent'])
+  })
+
+  test('Allehelgensdag 2025 — første søndag i november', () => {
+    expect(h2025['2025-11-02']).toEqual(['Allehelgensdag'])
+  })
+
+  // 2008: Kristi himmelfartsdag = May 1 (Easter = March 23 + 39 = May 1)
+  // Earlier code overwrote 'Kristi himmelfartsdag' with 'Arbeidernes dag'.
+  // Now both should be present on the same date.
+  test('Kristi himmelfartsdag og Arbeidernes dag kolliderer i 2008', () => {
+    const h2008 = getChurchHolidays(2008)
+    expect(h2008['2008-05-01']).toContain('Kristi himmelfartsdag')
+    expect(h2008['2008-05-01']).toContain('Arbeidernes dag')
+    expect(h2008['2008-05-01']).toHaveLength(2)
+  })
+
+  // 1954: Kristi himmelfartsdag was May 27 (no collision)
+  // but spot-check that a collision-prone year handles correctly.
+  test('Bryter ikke på normalt år uten kollisjon', () => {
+    const h = getChurchHolidays(2026)
+    // Kristi himmelfartsdag 2026 = May 14, not 1. or 17.
+    expect(h['2026-05-14']).toEqual(['Kristi himmelfartsdag'])
+    expect(h['2026-05-01']).toEqual(['Arbeidernes dag'])
+    expect(h['2026-05-17']).toEqual(['17. mai'])
   })
 })
 

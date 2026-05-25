@@ -49,7 +49,9 @@
     "defaultFolder": "Dokumente/SundayRec",
     "recordingsSaved": "Aufnahmen gespeichert",
     "reconnectDevice": "{name} per USB verbinden",
-    "wakesBefore": "Computer wird automatisch um {time} Uhr geweckt"
+    "wakesBefore": "Computer wird automatisch um {time} Uhr geweckt",
+    "testRecording": "🎙️ Testaufnahme (30 s)",
+    "checkSystem": "✅ System jetzt prüfen"
   },
   "update": {
     "available": "Neue Version {v} verfügbar — wird heruntergeladen…",

@@ -33,7 +33,7 @@ import * as tray from './tray'
 import * as mailer from './mailer'
 import * as logger from './logger'
 import { localDateStr, buildFilename, sanitizeFilename, formatDuration } from './recorder-utils'
-import { startCapture, stopCapture, ffmpegBin, buildCodecArgs } from './native-recorder'
+import { startCapture, stopCapture, ffmpegBin, buildCodecArgs, resolveDeviceInput } from './native-recorder'
 import * as preroll from './preroll'
 import type { NativeHandle } from './native-recorder'
 import { startVideoCapture, stopVideoCapture, muxAudioVideo } from './video-recorder'
@@ -281,6 +281,48 @@ export function getActiveSessionOpts(): RecordingOpts | null {
   return activeSession?.settings ?? null
 }
 
+/**
+ * Called by main/index.ts when the OS reports a power-resume. If a recording
+ * was active during sleep, ffmpeg may be dead, hung, or healthy — we can't
+ * tell from process state alone. Compute the wall-clock gap since the last
+ * audio-progress event: > 90 s strongly implies the device was suspended,
+ * so kick the reconnect watchdog with extra patience.
+ *
+ * This is the missing half of the watchdog story: stuckTimer triggers based
+ * on its own setInterval clock, which doesn't advance during sleep. Without
+ * this resume hook a recording-after-sleep would silently produce no audio
+ * until the user noticed manually.
+ */
+export function notifyResumed(): void {
+  const session = activeSession
+  if (!session || session.stopping) return
+  const gapMs = Date.now() - session.lastProgressAt
+  // 90 s threshold — long enough to avoid false positives from brief CPU stalls,
+  // short enough to catch real sleep periods quickly. OS sleep is typically
+  // measured in minutes; CPU stalls are usually < 30 s.
+  if (gapMs < 90_000) {
+    logger.info('recorder', 'resume: progress was recent, no recovery needed', { gapMs })
+    return
+  }
+  logger.warn('recorder', 'resume: long progress gap — assuming sleep, triggering reconnect', { gapMs })
+  // Force-kill the (likely dead) ffmpeg process so handle.onExit fires and
+  // doesn't compete with our manual watchdog trigger.
+  try {
+    const proc = session.handle.proc
+    if (proc.exitCode === null && !proc.killed) {
+      proc.kill('SIGKILL')
+    }
+  } catch (err) {
+    logger.warn('recorder', 'resume: kill ffmpeg failed', { msg: (err as Error).message })
+  }
+  stopStuckTimer(session)
+  // Give the watchdog a clean reconnect-counter window after sleep — pretend
+  // we haven't burned attempts on whatever happened before the system slept.
+  // Cap at 5 attempts so we don't loop forever on a bad device.
+  session.reconnectCount = Math.max(0, session.reconnectCount - 5)
+  startWatchdog(session)
+}
+
 // ── Pre-recording safety checks ──────────────────────────────────────────────
 
 async function preflightCheck(settings: RecordingOpts, onWarn?: (msg: string) => void): Promise<{ error: string } | null> {
@@ -333,7 +375,40 @@ async function preflightCheck(settings: RecordingOpts, onWarn?: (msg: string) =>
     }
   }
 
+  // 5. Verify the configured audio device is still attached. If the user has
+  // explicitly selected a device (e.g. their USB mixer) but it is not present,
+  // the resolver silently falls back to the first available device — which on
+  // a laptop is the built-in mic. That would silently record the room ambience
+  // instead of the mixer feed. Warn the user so they can investigate.
+  const expectedName = (settings.deviceName ?? '').trim()
+  if (expectedName) {
+    try {
+      const input = await resolveDeviceInput(settings)
+      if (!input) {
+        return { error: 'device_not_found' }
+      }
+      if (!isSameDevice(expectedName, input.resolvedName)) {
+        const msg = `Lagret enhet "${expectedName}" ble ikke funnet. Tar opp fra "${input.resolvedName}" i stedet.`
+        logger.warn('recorder', 'configured device missing, using fallback', { expected: expectedName, resolved: input.resolvedName })
+        onWarn?.(msg)
+      }
+    } catch (err) {
+      logger.warn('recorder', 'device probe failed (continuing)', { msg: (err as Error).message })
+    }
+  }
+
   return null
+}
+
+/** Case-insensitive, whitespace-collapsed device name comparison. */
+function isSameDevice(a: string, b: string): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
+  const na = norm(a)
+  const nb = norm(b)
+  if (na === nb) return true
+  // Allow partial matches in either direction — ffmpeg device names sometimes
+  // get suffixed/prefixed by the OS (e.g. "Microphone (USB Audio Device)").
+  return na.includes(nb) || nb.includes(na)
 }
 
 export async function startSession(
@@ -475,6 +550,20 @@ export async function startSession(
     stopSession()
   }
 
+  // Background silence warning — fires when no audio detected for ≥60 s, even
+  // when stopOnSilence is off. Catches the "mixer was muted" case where the
+  // recording would otherwise complete as a giant silent file with no warning.
+  handle.onSilenceWarning = () => {
+    logger.warn('recorder', 'prolonged silence detected — possible mute/disconnected mixer')
+    safeSend(win, 'backend-warning', {
+      msg:       'Ingen lyd registrert på over ett minutt. Sjekk at mikseren er på og at riktig kanal er valgt.',
+      severity:  'warn',
+      category:  'device',
+    })
+    // Notify renderer to surface the weak-signal toast (renderer may already be hidden)
+    safeSend(win, 'recording-error', { error: 'weak_signal', message: 'Lavt signal — sjekk mikser/mikrofon.' })
+  }
+
   // Interval split — stop and auto-restart after N minutes (handled entirely in main)
   if (settings.splitMinutes && settings.splitMinutes > 0) {
     const sess = activeSession
@@ -503,23 +592,7 @@ export async function startSession(
   // Stuck detector: if no progress in 60 s while not stopping, trigger watchdog.
   // Also check byte progression — bytes not increasing despite time passing means
   // the encoder is hung (e.g. USB device stalled without closing the handle).
-  let lastBytesSnapshot = 0
-  activeSession.stuckTimer = setInterval(() => {
-    const s = activeSession
-    if (!s || s.sessionId !== sessionId || s.stopping) return
-    const currentBytes = s.handle.bytesWritten ?? 0
-    if (Date.now() - s.lastProgressAt > 60000) {
-      logger.warn('recorder', 'no audio progress for 60 s — treating as device failure')
-      stopStuckTimer(s)
-      startWatchdog(s)
-    } else if (currentBytes > 0 && currentBytes === lastBytesSnapshot) {
-      logger.warn('recorder', 'bytes not progressing — possible encoder hang', { bytes: currentBytes })
-      stopStuckTimer(s)
-      startWatchdog(s)
-    } else {
-      lastBytesSnapshot = currentBytes
-    }
-  }, 15000)
+  installStuckTimer(activeSession, sessionId)
 
   // Watchdog — handles unexpected ffmpeg exit (USB disconnect, driver crash)
   handle.onExit = code => {
@@ -738,10 +811,9 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
     safeSend(session.win, 'recording-finished', videoEntry)
   }
 
-  // Cloud auto-upload (fire-and-forget)
-  import('./cloud').then(c => c.autoUploadAfterRecording(session.outputPath, session.win, (msg, severity, category) => {
-    safeSend(session.win, 'backend-warning', { msg, severity, category })
-  })).catch(err =>
+  // Cloud auto-upload — enqueues per configured service; the queue handles
+  // retries, backoff, and pausing during the next recording.
+  import('./cloud').then(c => c.autoUploadAfterRecording(session.outputPath, session.win)).catch(err =>
     logger.error('recorder', 'cloud upload error', { msg: String(err) })
   )
 
@@ -754,9 +826,13 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
       notify('SundayRec', `${getNL().done}: ${path.basename(session.outputPath)}`)
     }
 
-    // Stop renderer monitoring, notify history, then start new session
+    // Stop renderer monitoring, notify history, then start new session.
+    // Reset phase BEFORE calling startSession — otherwise the guard at the top
+    // of startSession sees _phase === 'finalizing' and rejects with
+    // 'already_recording', silently skipping the split-restart.
     safeSend(session.win, 'recording-overlay-stop', {})
     safeSend(session.win, 'recording-finished', { ...entry, splitRestart: true })
+    _phase = 'idle'
 
     const nextResult = await startSession(nextOpts, session.win)
     if ('ok' in nextResult) {
@@ -931,23 +1007,67 @@ async function mergeSegments(segments: string[]): Promise<boolean> {
 
 // ── Watchdog: reconnect after unexpected ffmpeg death ───────────────────────
 
-// 10 attempts with exponential backoff: 2s, 3s, 4s, 5s, 5s… ≈ 50 s total window
-const MAX_RECONNECT_ATTEMPTS = 10
-
-function reconnectDelay(attempt: number): number {
-  return Math.min(2000 + attempt * 1000, 5000)
+/** Install a 15-s polling stuck-timer on the session. Shared between the initial
+ *  spawn and the reconnect path so both branches detect hung encoders identically. */
+function installStuckTimer(session: Session, sessionId: string): void {
+  let lastBytesSnapshot = 0
+  session.stuckTimer = setInterval(() => {
+    const s = activeSession
+    if (!s || s.sessionId !== sessionId || s.stopping) return
+    const currentBytes = s.handle.bytesWritten ?? 0
+    if (Date.now() - s.lastProgressAt > 60000) {
+      logger.warn('recorder', 'no audio progress for 60 s — treating as device failure')
+      stopStuckTimer(s)
+      startWatchdog(s)
+    } else if (currentBytes > 0 && currentBytes === lastBytesSnapshot) {
+      logger.warn('recorder', 'bytes not progressing — possible encoder hang', { bytes: currentBytes })
+      stopStuckTimer(s)
+      startWatchdog(s)
+    } else {
+      lastBytesSnapshot = currentBytes
+    }
+  }, 15000)
 }
 
+// 20 attempts with exponential backoff capped at 10 s: gives ~3 min total
+// window. Sized for the "pastor snubled in USB cable" scenario — long enough
+// to find and reconnect the cable, short enough to give up on a truly-dead
+// device before the whole service is wasted. The cap stops the watchdog from
+// snowballing into multi-minute delays between attempts.
+const MAX_RECONNECT_ATTEMPTS = 20
+
+function reconnectDelay(attempt: number): number {
+  return Math.min(2000 + attempt * 1500, 10000)
+}
+
+// Errors that won't be fixed by retrying — bail out immediately rather than
+// burn 10 reconnect attempts. The user needs to see the real reason now.
+const FATAL_RECONNECT_ERRORS = new Set([
+  'disk_full',
+  'device_permission_denied',
+  'ffmpeg_missing',
+  'no_device',
+])
+
 function startWatchdog(session: Session): void {
+  // If the last ffmpeg exit was classified as a fatal condition, retrying is
+  // pointless — disk will still be full, permission still denied, etc.
+  const lastErr = session.handle.lastError
+  if (lastErr && FATAL_RECONNECT_ERRORS.has(lastErr)) {
+    logger.warn('recorder', 'fatal error — skipping reconnect', { error: lastErr })
+    failSession(session, lastErr)
+    return
+  }
+
   if (session.reconnectCount >= MAX_RECONNECT_ATTEMPTS) {
-    failSession(session, 'device_disconnected')
+    failSession(session, lastErr ?? 'device_disconnected')
     return
   }
 
   _phase = 'reconnecting'
   stopStuckTimer(session)
   safeSend(session.win, 'recording-reconnecting', {})
-  logger.warn('recorder', 'ffmpeg died unexpectedly — starting reconnect watchdog')
+  logger.warn('recorder', 'ffmpeg died unexpectedly — starting reconnect watchdog', { lastError: lastErr ?? 'unknown' })
 
   let attempts = 0
   const tryReconnect = async () => {
@@ -1028,16 +1148,10 @@ function startWatchdog(session: Session): void {
       else startWatchdog(session)
     }
 
-    // Restart stuck detector for new segment
-    session.stuckTimer = setInterval(() => {
-      const s = activeSession
-      if (!s || s.sessionId !== session.sessionId || s.stopping) return
-      if (Date.now() - s.lastProgressAt > 60000) {
-        logger.warn('recorder', 'reconnected segment stuck — triggering watchdog again')
-        stopStuckTimer(s)
-        startWatchdog(s)
-      }
-    }, 15000)
+    // Restart stuck detector for new segment — use the shared helper so the
+    // reconnected path detects bytes-not-progressing the same way the initial
+    // path does (previously only the time-based check ran on reconnect).
+    installStuckTimer(session, session.sessionId)
 
     safeSend(session.win, 'recording-reconnected', {})
     notify('SundayRec', getNL().reconnected)
@@ -1083,6 +1197,35 @@ export function recoverCrashedSession(): void {
   const filePath = (recovery as { outputPath?: string; tempPath?: string }).outputPath
                 ?? (recovery as { tempPath?: string }).tempPath
   if (!filePath || !fs.existsSync(filePath)) return
+
+  // If the crashed session had reconnect-segments, restore each that still
+  // exists as its own history entry before remuxing the primary file. Merging
+  // them with ffmpeg after a crash would require all segments to be intact
+  // AND identically-encoded; partial-on-disk segments are too risky to concat
+  // automatically. Surfacing each segment in history lets the user open and
+  // merge them manually in the editor.
+  const segments = Array.isArray((recovery as { segments?: string[] }).segments)
+    ? (recovery as { segments: string[] }).segments
+    : []
+  const extraSegments = segments.filter(p => p && p !== filePath && fs.existsSync(p))
+  for (const seg of extraSegments) {
+    try {
+      const segStat = fs.statSync(seg)
+      if (segStat.size < 5000) { unlinkSilent(seg); continue }
+      const segDate = new Date(recovery.startTime)
+      store.addHistory({
+        date:      localDateStr(segDate),
+        startTime: segDate.toTimeString().slice(0, 5),
+        duration:  '—',
+        filename:  path.basename(seg),
+        path:      seg,
+        status:    'ok',
+        note:      'Gjenopprettet (delfil)',
+      })
+    } catch (err) {
+      logger.warn('recorder', 'recovery segment scan failed', { msg: (err as Error).message })
+    }
+  }
 
   const stat = fs.statSync(filePath)
   if (stat.size < 5000) { unlinkSilent(filePath); return }

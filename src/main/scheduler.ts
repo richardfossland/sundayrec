@@ -11,6 +11,14 @@ const LOCAL_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone
 const jobs = new Map<string, schedule.Job>()
 let mainWindow: BrowserWindow | null = null
 
+// Set by index.ts so we can route preflight findings through sendBackendWarning
+// (email/webhook/tray). Imported here would cause a circular dependency.
+type BackendWarningSender = (msg: string, severity: 'warn' | 'error', category: 'cloud' | 'preroll' | 'wake' | 'disk' | 'device') => void
+let backendWarningSender: BackendWarningSender | null = null
+export function setBackendWarningSender(fn: BackendWarningSender): void {
+  backendWarningSender = fn
+}
+
 export function uiDayToJsDay(uiDay: number): number {
   return (uiDay + 1) % 7  // UI: 0=Mon…6=Sun → node-schedule: 0=Sun…6=Sat
 }
@@ -58,6 +66,12 @@ export function reschedule(): void {
     const [sh, sm] = (slot.start || '11:00').split(':').map(Number)
     const [eh, em] = (slot.stop  || '12:00').split(':').map(Number)
 
+    // Detect midnight-crossing: if stop is ≤ start in clock terms, the stop
+    // belongs to the next day. Without this the stop rule fires on the same
+    // weekday as start (i.e. before it has run), so the recording never stops
+    // until the next occurrence — a full week of continuous recording.
+    const crossesMidnight = (eh < sh) || (eh === sh && em <= sm)
+
     ;(slot.days ?? []).forEach(uiDay => {
       const jsDay = uiDayToJsDay(uiDay)
 
@@ -67,8 +81,9 @@ export function reschedule(): void {
         triggerStart(slot).catch(err => console.error('[scheduler] start error:', err))
       }))
 
+      const stopJsDay = crossesMidnight ? (jsDay + 1) % 7 : jsDay
       const stopRule = new schedule.RecurrenceRule()
-      stopRule.dayOfWeek = jsDay; stopRule.hour = eh; stopRule.minute = em; stopRule.tz = LOCAL_TZ
+      stopRule.dayOfWeek = stopJsDay; stopRule.hour = eh; stopRule.minute = em; stopRule.tz = LOCAL_TZ
       jobs.set(`slot-${idx}-${uiDay}-stop`, schedule.scheduleJob(stopRule, () => triggerStop()))
 
       if (reminderMin > 0) {
@@ -81,6 +96,20 @@ export function reschedule(): void {
         remRule.dayOfWeek = remJsDay; remRule.hour = remH; remRule.minute = remM; remRule.tz = LOCAL_TZ
         jobs.set(`slot-${idx}-${uiDay}-reminder`, schedule.scheduleJob(remRule, () => triggerReminder(reminderMin)))
       }
+
+      // Preflight 30 min before scheduled start — runs the same health check
+      // as before-manual-recording, but in the background so the user gets
+      // an email/webhook/tray alert long enough in advance to do something
+      // about it.
+      const PREFLIGHT_LEAD_MIN = 30
+      const pfTotalMin = sh * 60 + sm - PREFLIGHT_LEAD_MIN
+      const pfNormMin  = ((pfTotalMin % 1440) + 1440) % 1440
+      const pfH = Math.floor(pfNormMin / 60)
+      const pfM = pfNormMin % 60
+      const pfJsDay = pfTotalMin < 0 ? ((jsDay + 6) % 7) : jsDay
+      const pfRule = new schedule.RecurrenceRule()
+      pfRule.dayOfWeek = pfJsDay; pfRule.hour = pfH; pfRule.minute = pfM; pfRule.tz = LOCAL_TZ
+      jobs.set(`slot-${idx}-${uiDay}-preflight`, schedule.scheduleJob(pfRule, () => triggerPreflight()))
     })
   })
 
@@ -94,6 +123,8 @@ export function reschedule(): void {
     store.set('specialRecordings', prunedSpecials)
     console.log(`[scheduler] pruned ${specials.length - prunedSpecials.length} expired special recording(s)`)
   }
+
+  const PREFLIGHT_LEAD_MIN = 30
 
   specials.forEach((special, idx) => {
     const startDate = new Date(`${special.date}T${special.start || '11:00'}`)
@@ -110,6 +141,11 @@ export function reschedule(): void {
         if (remDate > new Date()) {
           jobs.set(`special-${idx}-reminder`, schedule.scheduleJob(remDate, () => triggerReminder(reminderMin)))
         }
+      }
+      // Preflight 30 min before — same as for weekly slots
+      const pfDate = new Date(startDate.getTime() - PREFLIGHT_LEAD_MIN * 60000)
+      if (pfDate > new Date()) {
+        jobs.set(`special-${idx}-preflight`, schedule.scheduleJob(pfDate, () => triggerPreflight()))
       }
     }
   })
@@ -225,6 +261,31 @@ function triggerReminder(minutesBefore: number): void {
   if (Notification.isSupported()) new Notification({ title: 'SundayRec', body }).show()
 }
 
+function triggerPreflight(): void {
+  // Lazy-import to avoid circular dependency (preflight loads recorder for
+  // resolveDeviceInput; scheduler is loaded by recorder).
+  import('./preflight').then(p => p.runScheduledPreflight((msg, severity, category) => {
+    if (backendWarningSender) {
+      // Use the main-process sender — this also fires email + webhook.
+      backendWarningSender(msg, severity, category)
+    } else {
+      // Fallback when the sender isn't wired (eg unit tests).
+      mainWindow?.webContents.send('backend-warning', { msg, severity, category })
+    }
+    if (Notification.isSupported() && severity === 'error') {
+      new Notification({ title: 'SundayRec — preflight', body: msg }).show()
+    }
+  })).catch(err => logger.error('scheduler', 'preflight_failed', { msg: String(err) }))
+}
+
+/** Run preflight on demand from the UI (e.g. "Check now" button). */
+export async function runManualPreflight(): Promise<unknown> {
+  const p = await import('./preflight')
+  return p.runScheduledPreflight((msg, severity, category) => {
+    if (backendWarningSender) backendWarningSender(msg, severity, category)
+  })
+}
+
 export function getNextRecording(): { key: string; date: Date } | null {
   let next: { key: string; date: Date } | null = null
   let nextMs = Infinity
@@ -253,8 +314,14 @@ export function getUpcomingDates(days = 14): Date[] {
   return dates.sort((a, b) => a.getTime() - b.getTime())
 }
 
-// 25-minute window: machine wakes 10 min before recording; slow boots can take 10-15 min
-const MISSED_WINDOW_MS = 25 * 60000
+// Window for late-starting an in-progress slot. Extended from 25 → 60 min so
+// a congregation that started 45 min late still gets the rest captured rather
+// than no recording at all. The user only loses the early portion.
+const MISSED_WINDOW_MS = 60 * 60000
+
+// Look back 24 h for slots/specials we never got around to running. Anything
+// outside that window is too stale to surface meaningfully.
+const MISSED_LOG_WINDOW_MS = 24 * 60 * 60000
 
 export function checkMissedRecordings(): void {
   if (!mainWindow) return
@@ -264,10 +331,12 @@ export function checkMissedRecordings(): void {
   const now      = new Date()
 
   let found = false
+  const triggered = new Set<string>()
 
   slots.forEach(slot => {
     if (slotActiveNow(slot.start, slot.stop, slot.days ?? [], now, MISSED_WINDOW_MS)) {
       found = true
+      triggered.add(slotKeyOf(slot, now))
       triggerStart(slot).catch(err => {
         logger.error('scheduler', 'trigger_start_failed', { error: (err as Error).message })
         console.error('[scheduler] missed slot start error:', err)
@@ -278,6 +347,7 @@ export function checkMissedRecordings(): void {
   specials.forEach(special => {
     if (specialActiveNow(special.date, special.start, special.stop, now, MISSED_WINDOW_MS)) {
       found = true
+      triggered.add(`special:${special.date}:${special.start}`)
       triggerStart(special, special.name).catch(err => {
         logger.error('scheduler', 'trigger_start_failed', { error: (err as Error).message })
         console.error('[scheduler] missed special start error:', err)
@@ -285,5 +355,93 @@ export function checkMissedRecordings(): void {
     }
   })
 
+  // Log any slots/specials whose start time was within the last 24 h, but is
+  // older than MISSED_WINDOW_MS — too late to record but recent enough that
+  // the user should see "this didn't happen" in their history.
+  logMissedRecordings(slots, specials, now, triggered)
+
   logger.info('scheduler', 'missed_check', { found })
+}
+
+function slotKeyOf(slot: ScheduleSlot, now: Date): string {
+  return `slot:${now.getDay()}:${slot.start}-${slot.stop}`
+}
+
+/**
+ * Inspects scheduled slots and specials whose start time fell within the past
+ * 24 h. If the start time is older than MISSED_WINDOW_MS (couldn't be late-
+ * started any more) AND we don't already have a history entry that covers it,
+ * write a `status:'missed'` row so the user can see in retrospect.
+ */
+function logMissedRecordings(
+  slots: ScheduleSlot[],
+  specials: SpecialRecording[],
+  now: Date,
+  triggered: Set<string>
+): void {
+  const history = store.getHistory()
+  const startCutoff = now.getTime() - MISSED_LOG_WINDOW_MS
+
+  // Walk slots: for each enabled (day, time), compute the most recent start
+  // time before now. If it falls inside the log-window AND outside the
+  // start-window, it's a candidate.
+  for (const slot of slots) {
+    const [sh, sm] = (slot.start || '11:00').split(':').map(Number)
+    for (const uiDay of slot.days ?? []) {
+      const jsDay = uiDayToJsDay(uiDay)
+      // Most recent occurrence ≤ now
+      const candidate = mostRecentOccurrence(jsDay, sh, sm, now)
+      const ageMs = now.getTime() - candidate.getTime()
+      if (ageMs <= MISSED_WINDOW_MS) continue          // still inside late-start window
+      if (candidate.getTime() < startCutoff) continue   // older than 24 h
+      if (triggered.has(slotKeyOf(slot, candidate))) continue
+      if (historyCovers(history, candidate)) continue
+      addMissedHistory(candidate, `Ukentlig opptak (${slot.start}–${slot.stop})`)
+    }
+  }
+
+  // Walk specials: their date+start is absolute
+  for (const sp of specials) {
+    const startDate = new Date(`${sp.date}T${sp.start || '11:00'}`)
+    const ageMs = now.getTime() - startDate.getTime()
+    if (ageMs <= MISSED_WINDOW_MS) continue
+    if (startDate.getTime() < startCutoff) continue
+    if (triggered.has(`special:${sp.date}:${sp.start}`)) continue
+    if (historyCovers(history, startDate)) continue
+    addMissedHistory(startDate, sp.name || 'Spesialopptak')
+  }
+}
+
+function mostRecentOccurrence(jsDay: number, hour: number, min: number, now: Date): Date {
+  const today = now.getDay()
+  // Compute days back: 0 if today matches AND time has already passed, else
+  // days from the previous matching weekday.
+  let daysBack = (today - jsDay + 7) % 7
+  const todayAt = new Date(now); todayAt.setHours(hour, min, 0, 0)
+  if (daysBack === 0 && todayAt > now) daysBack = 7
+  const out = new Date(now)
+  out.setDate(out.getDate() - daysBack)
+  out.setHours(hour, min, 0, 0)
+  return out
+}
+
+function historyCovers(history: ReturnType<typeof store.getHistory>, when: Date): boolean {
+  const target = when.getTime()
+  // Coverage = a history entry within ±30 min of the expected start time, or
+  // an entry already marked 'missed' for the same time.
+  return history.some(e => e.timestamp && Math.abs(e.timestamp - target) < 30 * 60000)
+}
+
+function addMissedHistory(when: Date, label: string): void {
+  store.addHistory({
+    date:      `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, '0')}-${String(when.getDate()).padStart(2, '0')}`,
+    startTime: `${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}`,
+    duration:  '—',
+    filename:  label,
+    status:    'error',
+    error:     'missed_recording',
+    note:      'Planlagt opptak ble ikke utført (maskinen var av eller appen ikke kjørte).',
+    timestamp: when.getTime(),
+  })
+  logger.warn('scheduler', 'logged missed recording', { label, when: when.toISOString() })
 }

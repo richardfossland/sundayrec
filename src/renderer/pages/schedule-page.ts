@@ -248,7 +248,13 @@ async function saveSlot(): Promise<void> {
   const maxEl = document.getElementById('slot-max') as HTMLInputElement | null
   const maxV  = maxEl ? (+maxEl.value || null) : null
   if (!days.length) { alert(t('schedule.errNoDays')); return }
-  if (!start || !stop || start === stop) { alert(t('schedule.errTimes')); return }
+  // Strict HH:MM validation — a keyboard-injection or unusual locale could
+  // produce something like "9.30" that scheduler.ts later defaults to 11:00.
+  const HHMM = /^([01]?\d|2[0-3]):[0-5]\d$/
+  if (!start || !stop || !HHMM.test(start) || !HHMM.test(stop)) {
+    alert(t('schedule.errTimes')); return
+  }
+  if (start === stop) { alert(t('schedule.errTimes')); return }
   const slot: ScheduleSlot = { days, start, stop, ...(maxV ? { max: maxV } : {}) }
   if (!settings.slots) settings.slots = []
   if (editingSlotIndex >= 0) settings.slots[editingSlotIndex] = slot
