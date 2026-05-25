@@ -8,20 +8,16 @@ Automatisk opptaker for gudstjenester og kirkelige arrangementer. Koble til en U
 
 ### Mac
 
-1. Last ned **`SundayRec-3.1.0-arm64.dmg`** (Apple Silicon / M1–M4) eller **`SundayRec-3.1.0.dmg`** (Intel) fra [siste versjon](https://github.com/richardfossland/sundayrec/releases/latest)
+1. Last ned siste versjon fra [siste versjon](https://github.com/richardfossland/sundayrec/releases/latest) (Apple Silicon / M1–M4 eller Intel)
 2. Åpne `.dmg`-filen
 3. Dra **SundayRec** til **Applications**-mappen
-4. Hvis macOS sier «appen er skadet og kan ikke åpnes»: åpne **Terminal** og kjør:
-   ```
-   xattr -cr /Applications/SundayRec.app
-   ```
-   Åpne deretter appen normalt.
+4. Åpne appen normalt
 
-> **Hvorfor skjer dette?** SundayRec er ikke signert med en Apple Developer-sertifikat. macOS blokkerer apper lastet ned fra internett som ikke er notarisert. Kommandoen over fjerner karanteneflagget og lar appen kjøre.
+> **SundayRec er signert med et Apple Developer ID-sertifikat og notarisert av Apple.** Appen åpnes uten advarsler på macOS.
 
 ### Windows
 
-1. Last ned **`SundayRec-Setup-3.0.0.exe`** fra [siste versjon](https://github.com/richardfossland/sundayrec/releases/latest)
+1. Last ned siste versjon fra [siste versjon](https://github.com/richardfossland/sundayrec/releases/latest)
 2. Kjør installasjonsfilen
 3. Følg veiviseren — velg installasjonsmappe om ønskelig
 4. SundayRec legges til i Start-menyen og skrivebordet
@@ -58,7 +54,7 @@ Programmet oppdaterer seg selv automatisk i bakgrunnen. Du trenger ikke gjøre n
 
 ## Støttede lydformater
 
-MP3, WAV, FLAC, AAC
+MP3, WAV, FLAC, AAC, WMA, OGG, OGA, OPUS, AIFF, AIF, AC3, EAC3, DTS, AMR, CAF, WV, TTA, AU, APE, MPC og flere (30+ formater totalt)
 
 ---
 
