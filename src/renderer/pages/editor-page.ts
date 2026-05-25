@@ -6,6 +6,7 @@ import {
 } from './editor-processing'
 import { destroyEQCanvas } from './editor-eq-canvas'
 import { settings, patchSettings } from '../state'
+import { escHtml as escapeHtml } from '../helpers'
 import type { ChapterMarker, RecordingMetadata } from '../../types'
 
 interface Cut { start: number; end: number }
@@ -319,6 +320,7 @@ export function setupEditorPage(): void {
   setupMinimapInteraction()
   setupKeyboardShortcuts()
   setupDragDrop()
+  setupReviewBanner()
 
   if (canvas && canvas.parentElement) {
     // Track the observer so repeated setupEditorPage() calls (after a renderer
@@ -335,8 +337,196 @@ export function setupEditorPage(): void {
 let resizeObserver: ResizeObserver | null = null
 
 export function openEditorWithFile(fp: string): void {
+  reviewPrepId = null
+  loadAndUpdateReviewBanner()
   window.showPage('editor')
   loadFile(fp)
+}
+
+// ── Review mode state (prep-and-review v5.0) ──────────────────────────────
+// When non-null, the editor is in "review mode" — it pre-applies suggested
+// cuts/preset/jingles from the queue entry and shows the green publish banner.
+let reviewPrepId: string | null = null
+let reviewPrep: import('../../types').EpisodePrep | null = null
+
+/**
+ * Entry point from the home-page review queue. Opens the editor, loads the
+ * recording, pre-applies the suggested sermon trim as cuts (cut before
+ * suggestedTrim.startSec + cut after suggestedTrim.endSec), pre-selects the
+ * mastering preset, and surfaces a "Klargjort for publisering" banner with
+ * the three big action buttons.
+ */
+export async function openEditorReviewMode(prepId: string, filePath: string): Promise<void> {
+  reviewPrepId = prepId
+  try {
+    const entry = await window.api.reviewQueueGet(prepId)
+    reviewPrep = entry?.prep ?? null
+  } catch {
+    reviewPrep = null
+  }
+  loadAndUpdateReviewBanner()
+  window.showPage('editor')
+  await loadFile(filePath)
+  // After loadFile sets `duration`, apply the suggested trim as cuts. We have
+  // to wait one tick for showState('workspace') and the canvas to settle.
+  requestAnimationFrame(() => applyReviewModeDefaults())
+}
+
+function applyReviewModeDefaults(): void {
+  if (!reviewPrep || !duration) return
+  const trim = reviewPrep.suggestedTrim
+  // Pre-apply the suggested trim as cuts (everything before + after).
+  if (trim && trim.endSec > trim.startSec) {
+    cuts = []
+    if (trim.startSec > 0.5) {
+      cuts.push({ start: 0, end: Math.min(trim.startSec, duration) })
+    }
+    if (trim.endSec < duration - 0.5) {
+      cuts.push({ start: Math.max(0, trim.endSec), end: duration })
+    }
+    pushCutHistory()
+    renderCutList()
+    updateRemainingDisplay()
+    drawWaveform()
+    drawMinimap()
+  }
+  // Pre-select master preset
+  const presetSel = $('editor-master-preset') as HTMLSelectElement | null
+  if (presetSel && reviewPrep.masterPreset) {
+    presetSel.value = reviewPrep.masterPreset
+    presetSel.dispatchEvent(new Event('change'))
+  }
+}
+
+function loadAndUpdateReviewBanner(): void {
+  const banner = $('editor-review-banner')
+  if (!banner) return
+  banner.style.display = reviewPrepId ? '' : 'none'
+
+  if (!reviewPrep || !reviewPrepId) return
+
+  // Attention reasons block
+  const attention = $('editor-review-attention')
+  if (attention) {
+    const reasons = reviewPrep.attentionReasons ?? []
+    if (reasons.length > 0) {
+      attention.innerHTML = '<strong>⚠ Trenger oppmerksomhet:</strong><ul style="margin:4px 0 0 18px;padding:0">' +
+        reasons.map(r => `<li>${escapeHtml(r)}</li>`).join('') + '</ul>'
+      attention.style.display = ''
+    } else {
+      attention.style.display = 'none'
+    }
+  }
+
+  // Banner detail
+  const detail = $('editor-review-banner-detail')
+  if (detail) {
+    if (reviewPrep.suggestedTrim) {
+      const lenMin = Math.round((reviewPrep.suggestedTrim.endSec - reviewPrep.suggestedTrim.startSec) / 60)
+      detail.textContent = `Vi har detektert ${lenMin} min preken og foreslått trim. Gå over og trykk publiser.`
+    } else {
+      detail.textContent = 'Vi fant ingen klar preken-blokk. Sjekk filen før publisering.'
+    }
+  }
+
+  // Jingle dropdowns reflect current prep state
+  const introSel = $('editor-review-intro-select') as HTMLSelectElement | null
+  const outroSel = $('editor-review-outro-select') as HTMLSelectElement | null
+  const introLbl = $('editor-review-intro-label')
+  const outroLbl = $('editor-review-outro-label')
+  if (introSel) {
+    const ip = reviewPrep.introPath
+    introSel.value = ip == null ? 'none' : (ip === settings.editorIntroPath ? 'default' : 'custom')
+    if (introLbl) introLbl.textContent = ip ? ip.split(/[/\\]/).pop() ?? '' : ''
+  }
+  if (outroSel) {
+    const op = reviewPrep.outroPath
+    outroSel.value = op == null ? 'none' : (op === settings.editorOutroPath ? 'default' : 'custom')
+    if (outroLbl) outroLbl.textContent = op ? op.split(/[/\\]/).pop() ?? '' : ''
+  }
+}
+
+function setupReviewBanner(): void {
+  $('btn-review-publish')?.addEventListener('click', async () => {
+    if (!reviewPrepId) return
+    const btn = $('btn-review-publish') as HTMLButtonElement | null
+    if (!btn) return
+    // Idempotency: disable immediately on first click
+    if (btn.disabled) return
+    btn.disabled = true
+    const orig = btn.textContent
+    btn.textContent = 'Publiserer…'
+    try {
+      const r = await window.api.reviewQueuePublish(reviewPrepId)
+      if (r.ok) {
+        btn.textContent = '✓ Publisert!'
+        setTimeout(() => {
+          reviewPrepId = null
+          reviewPrep = null
+          loadAndUpdateReviewBanner()
+          window.showPage('home')
+        }, 1500)
+      } else {
+        btn.disabled = false
+        btn.textContent = orig
+        alert(`Kunne ikke publisere: ${r.error ?? 'ukjent feil'}`)
+      }
+    } catch (err) {
+      btn.disabled = false
+      btn.textContent = orig
+      alert(`Kunne ikke publisere: ${(err as Error).message}`)
+    }
+  })
+
+  $('btn-review-edit')?.addEventListener('click', () => {
+    // Drop the review banner so the user gets the normal editor — the file
+    // and cuts stay loaded, they just lose the publish-button shortcut.
+    reviewPrepId = null
+    loadAndUpdateReviewBanner()
+  })
+
+  $('btn-review-discard')?.addEventListener('click', async () => {
+    if (!reviewPrepId) return
+    if (!confirm('Forkast denne episoden? Selve opptaket beholdes, men det vil ikke publiseres.')) return
+    await window.api.reviewQueueDiscard(reviewPrepId)
+    reviewPrepId = null
+    reviewPrep = null
+    loadAndUpdateReviewBanner()
+    window.showPage('home')
+  })
+
+  // Jingle selectors
+  $('editor-review-intro-select')?.addEventListener('change', async () => {
+    if (!reviewPrepId) return
+    const sel = $('editor-review-intro-select') as HTMLSelectElement
+    let introPath: string | null | undefined
+    if (sel.value === 'default') introPath = settings.editorIntroPath ?? null
+    else if (sel.value === 'none') introPath = null
+    else {
+      const fp = await window.api.pickAudioFile()
+      if (!fp) { sel.value = reviewPrep?.introPath ? 'custom' : 'default'; return }
+      introPath = fp
+    }
+    await window.api.reviewQueueUpdateJingles(reviewPrepId, { introPath })
+    if (reviewPrep) reviewPrep.introPath = introPath ?? undefined
+    loadAndUpdateReviewBanner()
+  })
+
+  $('editor-review-outro-select')?.addEventListener('change', async () => {
+    if (!reviewPrepId) return
+    const sel = $('editor-review-outro-select') as HTMLSelectElement
+    let outroPath: string | null | undefined
+    if (sel.value === 'default') outroPath = settings.editorOutroPath ?? null
+    else if (sel.value === 'none') outroPath = null
+    else {
+      const fp = await window.api.pickAudioFile()
+      if (!fp) { sel.value = reviewPrep?.outroPath ? 'custom' : 'default'; return }
+      outroPath = fp
+    }
+    await window.api.reviewQueueUpdateJingles(reviewPrepId, { outroPath })
+    if (reviewPrep) reviewPrep.outroPath = outroPath ?? undefined
+    loadAndUpdateReviewBanner()
+  })
 }
 
 export function deactivateEditor(): void {
@@ -363,6 +553,9 @@ export function deactivateEditor(): void {
   }
   isVideoFile = false
   destroyEQCanvas()
+  reviewPrepId = null
+  reviewPrep = null
+  loadAndUpdateReviewBanner()
 }
 
 // ── File loading ──────────────────────────────────────────────────────────

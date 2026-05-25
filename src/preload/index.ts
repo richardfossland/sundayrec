@@ -29,6 +29,8 @@ const ALLOWED_CHANNELS = [
   'video-capture-error',
   'email-test-status',
   'backend-warning',
+  'test-wake-progress',
+  'review-queue-update',
 ] as const
 
 type AllowedChannel = typeof ALLOWED_CHANNELS[number]
@@ -113,6 +115,18 @@ contextBridge.exposeInMainWorld('api', {
   cloudQueueFlush:     ()                => ipcRenderer.invoke('cloud-queue-flush'),
   podcastRegenerate:   (service: string) => ipcRenderer.invoke('podcast-regenerate', service),
 
+  // Review queue (prep-and-review v5.0)
+  reviewQueueList:    () => ipcRenderer.invoke('review-queue-list'),
+  reviewQueueGet:     (id: string) => ipcRenderer.invoke('review-queue-get', id),
+  reviewQueuePublish: (id: string) => ipcRenderer.invoke('review-queue-publish', id),
+  reviewQueueDiscard: (id: string) => ipcRenderer.invoke('review-queue-discard', id),
+  reviewQueueUpdateTrim: (id: string, trim: { startSec: number; endSec: number }) =>
+    ipcRenderer.invoke('review-queue-update-trim', id, trim),
+  reviewQueueUpdateMasterPreset: (id: string, presetId: string) =>
+    ipcRenderer.invoke('review-queue-update-master-preset', id, presetId),
+  reviewQueueUpdateJingles: (id: string, jingles: { introPath?: string | null; outroPath?: string | null }) =>
+    ipcRenderer.invoke('review-queue-update-jingles', id, jingles),
+
   checkForUpdates: ()        => ipcRenderer.invoke('check-for-updates'),
   installUpdate:   ()        => ipcRenderer.invoke('install-update'),
   getPlatform:     ()        => ipcRenderer.invoke('get-platform'),
@@ -122,6 +136,16 @@ contextBridge.exposeInMainWorld('api', {
   getSleepConfig:       ()   => ipcRenderer.invoke('get-sleep-config'),
   fixMacSleep:          ()   => ipcRenderer.invoke('fix-mac-sleep'),
   fixWinWakeTimers:     ()   => ipcRenderer.invoke('fix-win-wake-timers'),
+
+  // Wake verification + test-wake
+  wakeDetectCapabilities: () => ipcRenderer.invoke('wake-detect-capabilities'),
+  wakeVerifyScheduled:    () => ipcRenderer.invoke('wake-verify-scheduled'),
+  wakeCheckPower:         () => ipcRenderer.invoke('wake-check-power'),
+  wakeCheckStandby:       () => ipcRenderer.invoke('wake-check-standby'),
+  wakeTest:               (secondsAhead?: number) => ipcRenderer.invoke('wake-test', secondsAhead),
+  wakeCancelTest:         () => ipcRenderer.invoke('wake-cancel-test'),
+  wakeFailureHistory:     () => ipcRenderer.invoke('wake-failure-history'),
+  wakeClearFailureHistory:() => ipcRenderer.invoke('wake-clear-failure-history'),
 
   notifyError:      (data: unknown) => ipcRenderer.send('recording-error', data),
   notifyWeakSignal: () => ipcRenderer.send('weak-signal'),

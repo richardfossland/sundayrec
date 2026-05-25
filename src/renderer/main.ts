@@ -10,7 +10,7 @@ import { setupCalendarPage, renderCalendar, renderPlannedList } from './pages/ca
 import { setupFilesPage, applyFilesSettingsToUI, updateFilenamePreview, toggleMp3Quality } from './pages/files-page'
 import { setupGeneralPage, applyGeneralSettingsToUI } from './pages/general-page'
 import { setupRecording } from './pages/recording'
-import { setupEditorPage, openEditorWithFile, deactivateEditor } from './pages/editor-page'
+import { setupEditorPage, openEditorWithFile, openEditorReviewMode, deactivateEditor } from './pages/editor-page'
 import { checkAndShowOnboarding, showOnboarding } from './pages/onboarding'
 import { setupVideoPage, applyVideoSettingsToUI, refreshVideoDevices } from './pages/video-page'
 import { setupPublishPage, applyPublishSettingsToUI } from './pages/publish-page'
@@ -23,6 +23,7 @@ declare global {
     showOnboarding: () => void
     __isRecording: boolean
     openEditorWithFile: (filePath: string) => void
+    openEditorReviewMode?: (prepId: string, filePath: string) => void
     api: {
       getSettings:         () => Promise<Settings>
       saveSettings:        (s: Settings) => Promise<boolean>
@@ -55,6 +56,45 @@ declare global {
       getSleepConfig:       () => Promise<unknown>
       fixMacSleep:          () => Promise<{ ok: boolean; message?: string }>
       fixWinWakeTimers:     () => Promise<{ ok: boolean; message?: string }>
+      wakeDetectCapabilities: () => Promise<{
+        platform: 'mac-arm' | 'mac-intel' | 'win' | 'linux' | 'other'
+        canWakeFromSleep: boolean
+        canWakeFromOff:   boolean
+        needsAdmin:       boolean
+        knownIssues:      string[]
+        recommendations:  string[]
+      }>
+      wakeVerifyScheduled: () => Promise<{
+        capabilities: {
+          platform: 'mac-arm' | 'mac-intel' | 'win' | 'linux' | 'other'
+          canWakeFromSleep: boolean
+          canWakeFromOff:   boolean
+          needsAdmin:       boolean
+          knownIssues:      string[]
+          recommendations:  string[]
+        }
+        expectedWakes:  string[]
+        observedWakes:  { scheduledAt: string; ownerLabel: string }[]
+        hasMismatch:    boolean
+        onBattery:      boolean | null
+        standbyEnabled: boolean | null
+      }>
+      wakeCheckPower:   () => Promise<boolean | null>
+      wakeCheckStandby: () => Promise<boolean | null>
+      wakeTest:         (secondsAhead?: number) => Promise<{
+        ok: boolean
+        reason?: 'no_sleep' | 'no_resume' | 'too_late' | 'cancelled' | 'unsupported' | 'error'
+        message?:      string
+        scheduledFor?: string
+        actualAt?:     string
+        deltaSec?:     number
+      }>
+      wakeCancelTest:          () => Promise<boolean>
+      wakeFailureHistory:      () => Promise<{
+        timestamp: number; scheduledAt: string; kind: 'missed' | 'test_ok' | 'test_fail';
+        label: string; reason?: string; deltaSec?: number
+      }[]>
+      wakeClearFailureHistory: () => Promise<boolean>
       notifyError:         (data: unknown) => void
       notifyWeakSignal:    () => void
       on:                  (channel: string, fn: (...args: unknown[]) => void) => (() => void) | undefined
@@ -85,6 +125,13 @@ declare global {
       cloudQueueRemove:    (id: string) => Promise<boolean>
       cloudQueueFlush:     () => Promise<boolean>
       podcastRegenerate:   (service: string) => Promise<{ ok: boolean; feedUrl?: string; episodeCount: number; error?: string }>
+      reviewQueueList:                () => Promise<import('../types').ReviewQueueEntry[]>
+      reviewQueueGet:                 (id: string) => Promise<import('../types').ReviewQueueEntry | null>
+      reviewQueuePublish:             (id: string) => Promise<{ ok: boolean; error?: string }>
+      reviewQueueDiscard:             (id: string) => Promise<boolean>
+      reviewQueueUpdateTrim:          (id: string, trim: { startSec: number; endSec: number }) => Promise<boolean>
+      reviewQueueUpdateMasterPreset:  (id: string, presetId: string) => Promise<boolean>
+      reviewQueueUpdateJingles:       (id: string, jingles: { introPath?: string | null; outroPath?: string | null }) => Promise<boolean>
       listVideoDevices:  () => Promise<{ name: string; index: number }[]>
       videoPreviewStart: (opts: unknown) => Promise<boolean>
       videoPreviewStop:  () => Promise<void>
@@ -242,6 +289,7 @@ async function init(): Promise<void> {
   setupSettingsTabs()
 
   window.openEditorWithFile = openEditorWithFile
+  window.openEditorReviewMode = openEditorReviewMode
 
   // Fetch app version from main (sandbox-safe — no fs/path in preload)
   window.appVersion = await window.api.getAppVersion().catch(() => '—')

@@ -96,7 +96,13 @@ export function setupSchedulePage(): void {
   })
   document.getElementById('opt-wake')?.addEventListener('change', function (this: HTMLInputElement) {
     setWakeDetailsVisible(this.checked)
-    if (this.checked) void loadSleepConfig()
+    if (this.checked) {
+      void loadSleepConfig()
+      void refreshWakeReliability()
+    } else {
+      const card = document.getElementById('wake-reliability-card')
+      if (card) card.style.display = 'none'
+    }
   })
   document.getElementById('wake-hibernate-toggle')?.addEventListener('click', () => {
     const body    = document.getElementById('wake-hibernate-body')
@@ -144,6 +150,191 @@ export function setupSchedulePage(): void {
 
   const cleanup = window.api.on('wake-schedule-result', wakeResultToStatus)
   window.addEventListener('beforeunload', () => cleanup?.())
+
+  // ── Wake-reliability card wiring ──────────────────────────────────────────
+  document.getElementById('btn-wake-verify-refresh')?.addEventListener('click', () => {
+    void refreshWakeReliability()
+  })
+  document.getElementById('btn-wake-standby-fix')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-wake-standby-fix') as HTMLButtonElement | null
+    if (btn) { btn.disabled = true; btn.textContent = t('schedule.sleepFixing', 'Fikser…') }
+    try {
+      const result = await window.api.fixMacSleep()
+      if (result.ok) {
+        await refreshWakeReliability()
+      }
+    } catch { /* ignore */ }
+    finally {
+      if (btn) { btn.disabled = false; btn.textContent = t('wake.standby.fix', 'Slå av dyp dvale') }
+    }
+  })
+  document.getElementById('btn-test-wake')?.addEventListener('click', () => { void onTestWakeClick() })
+  document.getElementById('btn-cancel-test-wake')?.addEventListener('click', async () => {
+    await window.api.wakeCancelTest()
+  })
+
+  const cleanupProgress = window.api.on('test-wake-progress', (...args: unknown[]) => {
+    const data = args[0] as { phase?: string; message?: string }
+    const progEl = document.getElementById('wake-test-progress')
+    if (!progEl) return
+    progEl.style.display = 'block'
+    progEl.textContent = data.message ?? data.phase ?? ''
+  })
+  window.addEventListener('beforeunload', () => cleanupProgress?.())
+}
+
+// ── Wake-reliability helpers ────────────────────────────────────────────────
+
+const PLATFORM_LABELS: Record<string, string> = {
+  'mac-arm':   'Apple Silicon-Mac (M-serie) — kan vekkes fra dvale, ikke fra avslått',
+  'mac-intel': 'Intel Mac — kan vekkes fra dvale og avslått (krever manuell aktivering for sistnevnte)',
+  'win':       'Windows — kan vekkes fra dvale; oppstart fra fullstendig avslått krever BIOS-konfig',
+  'linux':     'Linux — automatisk wake støttes ikke',
+  'other':     'Plattform støttes ikke for automatisk wake',
+}
+
+async function onTestWakeClick(): Promise<void> {
+  const sure = confirm(
+    t('wake.test.confirm',
+      'Maskinen vil sove i opptil 60 sekunder og deretter prøve å våkne av seg selv.\n\n' +
+      'Lukk uferdig arbeid først. Fortsette?')
+  )
+  if (!sure) return
+  const testBtn   = document.getElementById('btn-test-wake')         as HTMLButtonElement | null
+  const cancelBtn = document.getElementById('btn-cancel-test-wake')  as HTMLButtonElement | null
+  if (testBtn)   testBtn.disabled = true
+  if (cancelBtn) cancelBtn.style.display = ''
+  try {
+    const result = await window.api.wakeTest(60)
+    const progEl = document.getElementById('wake-test-progress')
+    if (progEl) {
+      if (result.ok) {
+        progEl.textContent = `${t('wake.test.success', '✓ Vekket')} — ${t('wake.test.delay', 'forsinkelse')} ${result.deltaSec}s`
+      } else if (result.reason === 'cancelled') {
+        progEl.textContent = t('wake.test.cancelled', 'Avbrutt.')
+      } else {
+        progEl.textContent = `${t('wake.test.failure', '✕ Test feilet')}: ${result.reason ?? 'ukjent'}`
+      }
+    }
+    await refreshWakeReliability()
+  } finally {
+    if (testBtn)   testBtn.disabled = false
+    if (cancelBtn) cancelBtn.style.display = 'none'
+  }
+}
+
+async function refreshWakeReliability(): Promise<void> {
+  const card = document.getElementById('wake-reliability-card')
+  if (!card) return
+  try {
+    const caps = await window.api.wakeDetectCapabilities()
+    const status = await window.api.wakeVerifyScheduled()
+
+    // Capability summary
+    const capText = document.getElementById('wake-capability-text')
+    if (capText) capText.textContent = PLATFORM_LABELS[caps.platform] ?? caps.platform
+    const issuesEl = document.getElementById('wake-capability-issues')
+    if (issuesEl) {
+      if (caps.knownIssues.length > 0) {
+        issuesEl.innerHTML = caps.knownIssues.map(i => `<li>${escHtml(i)}</li>`).join('')
+        issuesEl.style.display = 'block'
+      } else {
+        issuesEl.style.display = 'none'
+      }
+    }
+
+    // Power source
+    const powerDot  = document.getElementById('wake-power-dot')
+    const powerText = document.getElementById('wake-power-text')
+    if (powerDot && powerText) {
+      if (status.onBattery === true) {
+        powerDot.className  = 'wake-status-dot error'
+        powerText.textContent = t('wake.power.onBattery', 'På batteri — wake vil sannsynligvis ikke fungere.')
+      } else if (status.onBattery === false) {
+        powerDot.className  = 'wake-status-dot ok'
+        powerText.textContent = t('wake.power.onAc', 'Tilkoblet strøm — OK.')
+      } else {
+        powerDot.className  = 'wake-status-dot off'
+        powerText.textContent = t('wake.power.unknown', 'Kunne ikke avgjøre strømkilde.')
+      }
+    }
+
+    // Standby (macOS-only)
+    const standbyRow  = document.getElementById('wake-standby-row')
+    const standbyDot  = document.getElementById('wake-standby-dot')
+    const standbyText = document.getElementById('wake-standby-text')
+    const standbyBtn  = document.getElementById('btn-wake-standby-fix')
+    if (standbyRow && standbyDot && standbyText && standbyBtn) {
+      if (status.standbyEnabled === true) {
+        standbyRow.style.display = ''
+        standbyDot.className = 'wake-status-dot error'
+        standbyText.textContent = t('wake.standby.warning', 'Standby (dyp dvale) er aktivert — kan sabotere wake på Apple Silicon.')
+        standbyBtn.style.display = ''
+      } else if (status.standbyEnabled === false) {
+        standbyRow.style.display = ''
+        standbyDot.className = 'wake-status-dot ok'
+        standbyText.textContent = t('wake.standby.ok', 'Standby er deaktivert — OK.')
+        standbyBtn.style.display = 'none'
+      } else {
+        standbyRow.style.display = 'none'
+      }
+    }
+
+    // Observed vs expected wakes
+    const verifyDot  = document.getElementById('wake-verify-dot')
+    const verifyText = document.getElementById('wake-verify-text')
+    if (verifyDot && verifyText) {
+      const exp = status.expectedWakes.length
+      const obs = status.observedWakes.length
+      if (exp === 0) {
+        verifyDot.className = 'wake-status-dot off'
+        verifyText.textContent = t('wake.verify.none', 'Ingen wake-jobber forventet — du har ingen kommende opptak.')
+      } else if (!status.hasMismatch) {
+        verifyDot.className = 'wake-status-dot ok'
+        verifyText.textContent = `${obs}/${exp} ${t('wake.verify.confirmed', 'bekreftet i OS')}.`
+      } else {
+        verifyDot.className = 'wake-status-dot error'
+        verifyText.textContent = `${obs}/${exp} ${t('wake.verify.mismatch', 'bekreftet i OS — noen mangler. Klikk «Planlegg oppvåkning» for å sette dem på nytt.')}`
+      }
+    }
+
+    // Platform-specific note
+    const noteEl = document.getElementById('wake-platform-note')
+    if (noteEl) {
+      const note = caps.recommendations.join(' ')
+      if (note) {
+        noteEl.textContent = note
+        noteEl.style.display = ''
+      } else {
+        noteEl.style.display = 'none'
+      }
+    }
+
+    // Last test-wake
+    const history = await window.api.wakeFailureHistory()
+    const lastTest = history.find(e => e.kind === 'test_ok' || e.kind === 'test_fail')
+    const lastDot  = document.getElementById('wake-last-test-dot')
+    const lastText = document.getElementById('wake-last-test-text')
+    if (lastDot && lastText) {
+      if (lastTest) {
+        const when = new Date(lastTest.timestamp).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+        if (lastTest.kind === 'test_ok') {
+          lastDot.className = 'wake-status-dot ok'
+          lastText.textContent = `${t('wake.lastTest.ok', 'Siste test OK')} (${when}, ${t('wake.test.delay', 'forsinkelse')} ${lastTest.deltaSec}s)`
+        } else {
+          lastDot.className = 'wake-status-dot error'
+          lastText.textContent = `${t('wake.lastTest.fail', 'Siste test feilet')} (${when}, ${lastTest.reason ?? '?'})`
+        }
+      } else {
+        lastDot.className = 'wake-status-dot off'
+        lastText.textContent = t('wake.lastTest.none', 'Ikke testet ennå.')
+      }
+    }
+
+    card.style.display = ''
+  } catch (err) {
+    console.error('[wake-reliability] refresh failed:', err)
+  }
 }
 
 export function applyScheduleSettingsToUI(): void {
@@ -158,7 +349,10 @@ export function applyScheduleSettingsToUI(): void {
   if (wakeEl) {
     wakeEl.checked = !!settings.wakeFromSleep
     setWakeDetailsVisible(!!settings.wakeFromSleep)
-    if (settings.wakeFromSleep) void loadSleepConfig()
+    if (settings.wakeFromSleep) {
+      void loadSleepConfig()
+      void refreshWakeReliability()
+    }
   }
   if (protectEl)    protectEl.checked   = settings.protectRecording !== false
   if (silenceEl) {

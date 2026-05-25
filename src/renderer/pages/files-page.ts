@@ -48,9 +48,36 @@ export function setupFilesPage(): void {
   ;[
     'podcast-title','podcast-author','podcast-description','podcast-language',
     'podcast-category','podcast-email','podcast-link','podcast-image','podcast-service',
+    'podcast-default-master-preset','opt-podcast-auto-prep',
   ].forEach(id => {
     document.getElementById(id)?.addEventListener('input',  () => _markPublishDirty())
     document.getElementById(id)?.addEventListener('change', () => _markPublishDirty())
+  })
+
+  // Prep-and-review intro/outro file pickers
+  document.getElementById('btn-podcast-pick-intro')?.addEventListener('click', async () => {
+    const fp = await window.api.pickAudioFile()
+    if (!fp) return
+    const inp = document.getElementById('podcast-default-intro') as HTMLInputElement | null
+    if (inp) inp.value = fp
+    _markPublishDirty()
+  })
+  document.getElementById('btn-podcast-clear-intro')?.addEventListener('click', () => {
+    const inp = document.getElementById('podcast-default-intro') as HTMLInputElement | null
+    if (inp) inp.value = ''
+    _markPublishDirty()
+  })
+  document.getElementById('btn-podcast-pick-outro')?.addEventListener('click', async () => {
+    const fp = await window.api.pickAudioFile()
+    if (!fp) return
+    const inp = document.getElementById('podcast-default-outro') as HTMLInputElement | null
+    if (inp) inp.value = fp
+    _markPublishDirty()
+  })
+  document.getElementById('btn-podcast-clear-outro')?.addEventListener('click', () => {
+    const inp = document.getElementById('podcast-default-outro') as HTMLInputElement | null
+    if (inp) inp.value = ''
+    _markPublishDirty()
   })
 
   // Publish-tab save/cancel — runs the same saveFilesSettings since cloud+podcast
@@ -150,6 +177,16 @@ export function applyFilesSettingsToUI(): void {
   if (svcEl)   svcEl.value = p?.service ?? 'google-drive'
   if (p?.feedUrl) showFeedUrl(p.feedUrl)
 
+  // Prep-and-review extras (v5.0)
+  const autoPrepEl = document.getElementById('opt-podcast-auto-prep') as HTMLInputElement | null
+  if (autoPrepEl) autoPrepEl.checked = (p as { autoPrepEnabled?: boolean } | undefined)?.autoPrepEnabled !== false
+  const presetEl = document.getElementById('podcast-default-master-preset') as HTMLSelectElement | null
+  if (presetEl) presetEl.value = (p as { defaultMasterPreset?: string } | undefined)?.defaultMasterPreset ?? 'speech-clear'
+  const introEl = document.getElementById('podcast-default-intro') as HTMLInputElement | null
+  if (introEl) introEl.value = (p as { defaultIntroPath?: string } | undefined)?.defaultIntroPath ?? ''
+  const outroEl = document.getElementById('podcast-default-outro') as HTMLInputElement | null
+  if (outroEl) outroEl.value = (p as { defaultOutroPath?: string } | undefined)?.defaultOutroPath ?? ''
+
   toggleMp3Quality()
   updateFilenamePreview()
 }
@@ -206,6 +243,11 @@ async function saveFilesSettings(): Promise<void> {
     link:        (document.getElementById('podcast-link')        as HTMLInputElement | null)?.value.trim() || undefined,
     imageUrl:    (document.getElementById('podcast-image')       as HTMLInputElement | null)?.value.trim() || undefined,
     feedUrl:     settings.podcast?.feedUrl,  // preserve last published URL across saves
+    // Prep-and-review (v5.0) extras
+    autoPrepEnabled:     (document.getElementById('opt-podcast-auto-prep') as HTMLInputElement | null)?.checked !== false,
+    defaultMasterPreset: (document.getElementById('podcast-default-master-preset') as HTMLSelectElement | null)?.value || 'speech-clear',
+    defaultIntroPath:    (document.getElementById('podcast-default-intro') as HTMLInputElement | null)?.value.trim() || undefined,
+    defaultOutroPath:    (document.getElementById('podcast-default-outro') as HTMLInputElement | null)?.value.trim() || undefined,
   }
 
   patchSettings({

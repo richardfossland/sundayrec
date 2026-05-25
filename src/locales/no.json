@@ -104,6 +104,30 @@
     "confirmDeleteErrors": "Slett alle feiloppføringer?",
     "deleteEntry": "Slett oppføring"
   },
+  "review": {
+    "queueTitle": "Klare for gjennomgang og publisering",
+    "queueCount": "{n} episoder",
+    "queueCountOne": "1 episode",
+    "needsAttention": "Trenger oppmerksomhet",
+    "openReview": "Gjennomgå →",
+    "sermonGuess": "Preken antatt: {min} min",
+    "sermonNotFound": "Preken ikke detektert",
+    "bannerTitle": "Klargjort for publisering",
+    "bannerDetail": "Vi har detektert prekenen og foreslått trim. Gå over og trykk publiser.",
+    "bannerNoSermon": "Vi fant ingen klar preken-blokk. Sjekk filen før publisering.",
+    "publishBtn": "✓ Godkjenn og publiser",
+    "editBtn": "↻ Endre detaljer",
+    "discardBtn": "✗ Ikke publiser denne uka",
+    "discardConfirm": "Forkast denne episoden? Selve opptaket beholdes, men det vil ikke publiseres.",
+    "publishing": "Publiserer…",
+    "publishedOk": "✓ Publisert!",
+    "publishFailed": "Kunne ikke publisere: {error}",
+    "introLabel": "Intro:",
+    "outroLabel": "Outro:",
+    "jingleDefault": "Standard fra innstillinger",
+    "jingleNone": "Ingen",
+    "jingleCustom": "Velg annen…"
+  },
   "schedule": {
     "title": "Ukentlig tidsplan",
     "subtitle": "Faste opptak som gjentas automatisk hver uke.",
@@ -205,6 +229,60 @@
     "flowRecord": "Opptak starter",
     "wakeScheduledLabel": "PLANLAGTE OPPVÅKNINGER",
     "sysSettingsLabel": "SYSTEMINNSTILLINGER"
+  },
+  "wake": {
+    "reliability": {
+      "title": "Wake-pålitelighet"
+    },
+    "capability": {
+      "loading": "Sjekker maskinens vekkeegenskaper…",
+      "appleSilicon": "Apple Silicon-Mac (M-serie) — kan vekkes fra dvale, ikke fra avslått",
+      "intelMac": "Intel Mac — kan vekkes fra dvale; oppstart fra avslått krever manuell aktivering",
+      "windows": "Windows — kan vekkes fra dvale; oppstart fra fullstendig avslått krever BIOS-konfig",
+      "linux": "Linux — automatisk wake støttes ikke",
+      "other": "Plattform støttes ikke for automatisk wake"
+    },
+    "power": {
+      "checking": "Sjekker strømkilde…",
+      "onBattery": "På batteri — wake vil sannsynligvis ikke fungere.",
+      "onAc": "Tilkoblet strøm — OK.",
+      "unknown": "Kunne ikke avgjøre strømkilde."
+    },
+    "standby": {
+      "warning": "Standby (dyp dvale) er aktivert — kan sabotere wake på Apple Silicon.",
+      "ok": "Standby er deaktivert — OK.",
+      "fix": "Slå av dyp dvale"
+    },
+    "verify": {
+      "checking": "Sjekker hva som faktisk er planlagt i OS…",
+      "refresh": "Oppdater",
+      "none": "Ingen wake-jobber forventet — du har ingen kommende opptak.",
+      "confirmed": "bekreftet i OS",
+      "mismatch": "bekreftet i OS — noen mangler. Klikk «Planlegg oppvåkning» for å sette dem på nytt."
+    },
+    "lastTest": {
+      "none": "Ikke testet ennå.",
+      "ok": "Siste test OK",
+      "fail": "Siste test feilet"
+    },
+    "test": {
+      "btn": "Test wake nå (60 sek)",
+      "cancel": "Avbryt",
+      "confirm": "Maskinen vil sove i opptil 60 sekunder og deretter prøve å våkne av seg selv.\n\nLukk uferdig arbeid først. Fortsette?",
+      "scheduling": "Planlegger wake…",
+      "sleeping": "Maskinen sover nå…",
+      "waiting": "Venter på oppvåkning…",
+      "success": "✓ Vekket",
+      "failure": "✕ Test feilet",
+      "cancelled": "Avbrutt.",
+      "delay": "forsinkelse"
+    },
+    "battery": {
+      "warning": "Maskinen er på batteri — wake vil sannsynligvis ikke fungere."
+    },
+    "bios": {
+      "info": "Hvis test-wake feiler på Windows, må «Wake on RTC» være aktivert i BIOS-en. Det kan ikke aktiveres fra programvaren."
+    }
   },
   "calendar": {
     "title": "Kirkekalender",

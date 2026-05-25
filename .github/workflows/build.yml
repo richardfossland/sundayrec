@@ -55,6 +55,12 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # OAuth credentials baked into the build via electron-vite loadEnv.
+          # Without these, the released app shows "OAuth-nøkkel er ikke satt".
+          GOOGLE_CLIENT_ID:     ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          DROPBOX_APP_KEY:      ${{ secrets.DROPBOX_APP_KEY }}
+          ONEDRIVE_CLIENT_ID:   ${{ secrets.ONEDRIVE_CLIENT_ID }}
 
       - name: Verify signature and notarization
         run: |
@@ -86,3 +92,7 @@ jobs:
         run: npx electron-vite build && npx electron-builder --win --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GOOGLE_CLIENT_ID:     ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          DROPBOX_APP_KEY:      ${{ secrets.DROPBOX_APP_KEY }}
+          ONEDRIVE_CLIENT_ID:   ${{ secrets.ONEDRIVE_CLIENT_ID }}

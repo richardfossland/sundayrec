@@ -4,6 +4,7 @@ import { fmtCountdown, fmtStorageHours, fmtDate, escHtml, flashMsg } from '../he
 import { startVU, stopVU } from './home-vu'
 import { getAudioDevices } from '../audio/capture'
 import { normalizeFrameData } from '../../shared/normalize-frame-data'
+import { refreshReviewQueue, setupReviewQueueListeners } from './review-queue-home'
 
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 
@@ -671,11 +672,22 @@ export function setupHome(): void {
       }
     })
   })
+
+  // Wire up the review-queue card — listens to IPC events from main so the card
+  // updates instantly when a new prep lands or the user publishes/discards.
+  setupReviewQueueListeners()
 }
 
 export async function refreshHome(): Promise<void> {
   const next = await window.api.getNextRecording()
-  await Promise.all([loadNextRecording(next), loadDiskSpace(), loadRecentHistory(), checkStatus(next), loadHomeInfoStrip()])
+  await Promise.all([
+    loadNextRecording(next),
+    loadDiskSpace(),
+    loadRecentHistory(),
+    checkStatus(next),
+    loadHomeInfoStrip(),
+    refreshReviewQueue(),
+  ])
   startVU()
 
   // Hide video progress row (only shown during active recording)

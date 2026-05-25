@@ -66,6 +66,90 @@ export interface PodcastSettings {
   email?:      string   // owner contact email (required by Apple)
   /** Set after the first successful publish — the URL the user submits to Spotify/Apple */
   feedUrl?:    string
+
+  // ── Prep-and-review pipeline (v5.0) ──────────────────────────────────────
+  /** When podcast.enabled is true, automatically run prep + queue the episode
+   *  for human review after each successful recording. Default true. */
+  autoPrepEnabled?:     boolean
+  /** Per-church default intro jingle (applies to every prepped episode unless
+   *  the user overrides per-episode). Defaults to settings.editorIntroPath. */
+  defaultIntroPath?:    string
+  /** Per-church default outro jingle (applies to every prepped episode unless
+   *  the user overrides per-episode). Defaults to settings.editorOutroPath. */
+  defaultOutroPath?:    string
+  /** Master preset used by the prep pipeline. Default 'speech-clear'. */
+  defaultMasterPreset?: string
+}
+
+/**
+ * Audio analysis segment (mirror of AnalysisSegment in main/audio-analysis.ts)
+ * stored on EpisodePrep for renderer-side display without re-running analysis.
+ */
+export interface PrepAnalysisSegment {
+  startSec:    number
+  endSec:      number
+  durationSec: number
+  type:        'silence' | 'speech' | 'music' | 'mixed' | 'unknown'
+  confidence:  number
+  avgRmsDb:    number
+  label:       string
+}
+
+/**
+ * Status of an EpisodePrep through its lifecycle.
+ *
+ *   analyzing       — background analysis running
+ *   ready           — prep complete, all defaults applied, no concerns
+ *   needs-attention — prep complete, but the suggested sermon segment is
+ *                     low-confidence or absent. Human review required.
+ *   published       — user clicked "Godkjenn og publiser" and the upload
+ *                     pipeline ran to completion.
+ *   discarded       — user clicked "Ikke publiser denne uka".
+ */
+export type EpisodePrepStatus = 'analyzing' | 'ready' | 'needs-attention' | 'published' | 'discarded'
+
+export interface EpisodePrep {
+  id:                string                       // uuid
+  recordingPath:     string                       // source file
+  timestamp:         number                       // when recording finished
+  status:            EpisodePrepStatus
+  analysisSegments?: PrepAnalysisSegment[]        // raw segments from audio-analysis.ts
+  /** Sermon-only range derived from segments — the area between startSec and
+   *  endSec is "keep", everything else is intended to be cut. */
+  suggestedTrim?:    { startSec: number; endSec: number }
+  /** 0..1 — how confident we are that suggestedTrim covers the sermon. */
+  sermonConfidence?: number
+  masterPreset:      string                       // default 'speech-clear'
+  introPath?:        string                       // null = no intro for this episode
+  outroPath?:        string                       // null = no outro for this episode
+  /** Norwegian — why this needs human review beyond normal QC. */
+  attentionReasons?: string[]
+  /** Reserved for Phase 2 YouTube auto-publish. Currently unused. */
+  publishYoutube?:   boolean
+  createdAt:         number
+  updatedAt:         number
+  /** Set after a successful publish — guards against double-publishing
+   *  if the user clicks the button twice. */
+  publishedAt?:      number
+  /** History timestamp of the source recording entry (used to mark the
+   *  recording as published when this prep is published). */
+  recordingTimestamp?: number
+}
+
+/**
+ * A single entry in the human-review queue. Wraps EpisodePrep with bookkeeping
+ * (reminder count, age). Stored in electron-store under key `reviewQueue`.
+ */
+export interface ReviewQueueEntry {
+  id:        string
+  prep:      EpisodePrep
+  addedAt:   number
+  /** Reminders sent so far: 0 = none, 1 = 24h sent, 2 = 48h sent, 3 = 7d sent.
+   *  At 4, the entry has been auto-discarded (14d) — but at that point the
+   *  entry is removed from the queue rather than kept around. */
+  reminded:  number
+  /** Days since addedAt — computed on read from getQueue(), not persisted. */
+  ageInDays: number
 }
 
 export interface ActiveRecovery {
@@ -186,6 +270,9 @@ export interface Settings {
   // Podcast publishing (RSS feed auto-generated from uploaded recordings)
   podcast?: PodcastSettings
 
+  // Prep-and-review queue (v5.0) — persisted via electron-store
+  reviewQueue?: ReviewQueueEntry[]
+
   // Updates
   autoUpdate: boolean
 
@@ -201,6 +288,9 @@ export interface Settings {
 
   // History (internal — never exported)
   recordingHistory?: RecordingEntry[]
+
+  // Wake reliability — capped log of recent missed wakes and test-wake outcomes (max 20)
+  wakeFailureHistory?: WakeFailureEntry[]
 }
 
 export interface RecordingOpts extends Partial<Settings> {
@@ -226,6 +316,26 @@ export interface WakeResult {
   nextWake?: string | null   // ISO string of next scheduled wake point
   reason?: 'disabled' | 'cancelled' | 'permission' | 'unsupported' | 'error'
   message?: string
+}
+
+/**
+ * Stored log of wake-attempt outcomes — produced by checkMissedRecordings (failure)
+ * and by testWake (success/failure). Used by the UI to show recent wake history.
+ * Capped at 20 entries (oldest dropped).
+ */
+export interface WakeFailureEntry {
+  /** unix ms — when the missed-wake or test-wake outcome was recorded */
+  timestamp:   number
+  /** ISO string — what time the wake was supposed to fire */
+  scheduledAt: string
+  /** 'missed' = scheduled recording never ran. 'test_ok' / 'test_fail' = manual test result. */
+  kind:        'missed' | 'test_ok' | 'test_fail'
+  /** Human-readable label (slot name, "Spesialopptak", "Test-wake") */
+  label:       string
+  /** Free-form reason (e.g. 'no_resume', 'too_late', 'on_battery', or empty) */
+  reason?:     string
+  /** Actual delta in seconds between expected and observed (test-wake only) */
+  deltaSec?:   number
 }
 
 export interface UpdateProgress {

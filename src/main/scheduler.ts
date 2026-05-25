@@ -510,5 +510,18 @@ function addMissedHistory(when: Date, label: string): void {
     note:      'Planlagt opptak ble ikke utført (maskinen var av eller appen ikke kjørte).',
     timestamp: when.getTime(),
   })
+  // Also log to the wake-failure ring buffer so the UI can show
+  // "Last 3 wake-attempts: 2 successful, 1 failed (24. mai)".
+  try {
+    store.addWakeFailureEntry({
+      timestamp:   Date.now(),
+      scheduledAt: when.toISOString(),
+      kind:        'missed',
+      label,
+      reason:      'missed_recording',
+    })
+  } catch (err) {
+    logger.warn('scheduler', 'wake_failure_log_failed', { msg: (err as Error).message })
+  }
   logger.warn('scheduler', 'logged missed recording', { label, when: when.toISOString() })
 }

@@ -1,4 +1,4 @@
-import { powerSaveBlocker } from 'electron'
+import { powerSaveBlocker, powerMonitor } from 'electron'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import type { BrowserWindow } from 'electron'
@@ -270,4 +270,225 @@ export async function fixWinWakeTimers(): Promise<{ ok: boolean; message?: strin
     }
     return { ok: false, message: (e as Error).message }
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//   testWake — schedule a near-future wake, sleep the system, measure resume
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type TestWakeReason =
+  | 'no_sleep'      // system never actually went to sleep
+  | 'no_resume'     // slept but didn't wake within the window
+  | 'too_late'      // woke, but more than 30s past the scheduled wake time
+  | 'cancelled'     // user / API cancelled before completion
+  | 'unsupported'   // platform doesn't support sleep
+  | 'error'         // other failure
+
+export interface TestWakeResult {
+  ok:           boolean
+  reason?:      TestWakeReason
+  message?:     string
+  scheduledFor?:string   // ISO time we asked the OS to wake at
+  actualAt?:    string   // ISO time the resume event fired
+  /** Positive when actual is later than scheduled; can be negative if it woke early. */
+  deltaSec?:    number
+}
+
+export type TestWakePhase = 'scheduling' | 'sleeping' | 'waiting' | 'resumed' | 'cancelled' | 'failed'
+
+interface TestWakeState {
+  cancelled:   boolean
+  resumed:     boolean
+  expectedMs:  number
+  resolveFn:   ((r: TestWakeResult) => void) | null
+  timer:       NodeJS.Timeout | null
+  resumeHandler: (() => void) | null
+}
+
+let activeTestWake: TestWakeState | null = null
+
+function sendProgress(win: BrowserWindow | undefined, phase: TestWakePhase, message: string): void {
+  try { win?.webContents.send('test-wake-progress', { phase, message }) } catch { /* ignore */ }
+}
+
+/**
+ * Schedule a wake N seconds from now, programmatically put the system to sleep,
+ * then wait for powerMonitor.resume. Returns success if the system slept and
+ * resumed within (secondsAhead + 30s) and the actual wake was within 30s of
+ * the scheduled time.
+ *
+ * CAUTION: This will sleep the user's machine. The renderer MUST show a
+ * confirmation dialog before calling this.
+ */
+export async function testWake(secondsAhead: number, win?: BrowserWindow): Promise<TestWakeResult> {
+  if (process.platform !== 'darwin' && process.platform !== 'win32') {
+    return { ok: false, reason: 'unsupported', message: 'platform' }
+  }
+
+  // Cancel any in-flight test before starting a new one.
+  if (activeTestWake) cancelTestWake()
+
+  // Clamp secondsAhead defensively: too short risks pmset rounding it down,
+  // too long is just annoying.
+  const sec = Math.max(20, Math.min(secondsAhead, 600))
+  const scheduledFor = new Date(Date.now() + sec * 1000)
+
+  sendProgress(win, 'scheduling', `Planlegger test-wake om ${sec} sekunder…`)
+
+  // 1. Schedule the wake via the existing reschedule machinery.
+  //    LEAD_MINUTES (10) is subtracted inside scheduleOsWakes, so we pass
+  //    (scheduledFor + LEAD_MINUTES) as the "upcoming recording" date.
+  const lead = LEAD_MINUTES * 60 * 1000
+  const fakeRecordingDate = new Date(scheduledFor.getTime() + lead)
+
+  let scheduleResult: WakeResult
+  try {
+    scheduleResult = await reschedule([fakeRecordingDate], win, false)
+  } catch (e) {
+    sendProgress(win, 'failed', `Kunne ikke planlegge wake: ${(e as Error).message}`)
+    return { ok: false, reason: 'error', message: (e as Error).message }
+  }
+  if (!scheduleResult.ok) {
+    sendProgress(win, 'failed', `Kunne ikke planlegge wake: ${scheduleResult.reason ?? 'ukjent'}`)
+    return {
+      ok:      false,
+      reason:  scheduleResult.reason === 'cancelled' ? 'cancelled' : 'error',
+      message: scheduleResult.message ?? scheduleResult.reason,
+    }
+  }
+
+  // 2. Set up the resume listener and a max-wait timer.
+  // Slack of 90s = 30s "too_late" window + 60s extra grace for a resume that
+  // finally fires after the OS slow-pathed the wake. If we hit max-wait we
+  // declare no_resume.
+  const expectedMs = scheduledFor.getTime()
+  const maxWaitMs  = sec * 1000 + 90_000
+
+  return new Promise<TestWakeResult>(resolve => {
+    const state: TestWakeState = {
+      cancelled:    false,
+      resumed:      false,
+      expectedMs,
+      resolveFn:    resolve,
+      timer:        null,
+      resumeHandler:null,
+    }
+    activeTestWake = state
+
+    const cleanup = (): void => {
+      if (state.timer) { clearTimeout(state.timer); state.timer = null }
+      if (state.resumeHandler) {
+        try { powerMonitor.off('resume', state.resumeHandler) } catch { /* ignore */ }
+        state.resumeHandler = null
+      }
+      if (activeTestWake === state) activeTestWake = null
+    }
+
+    const finish = (r: TestWakeResult): void => {
+      cleanup()
+      // Record to wake-failure history so the UI can show "last test"
+      try {
+        if (r.ok) {
+          store.addWakeFailureEntry({
+            timestamp:   Date.now(),
+            scheduledAt: scheduledFor.toISOString(),
+            kind:        'test_ok',
+            label:       'Test-wake',
+            deltaSec:    r.deltaSec,
+          })
+        } else {
+          store.addWakeFailureEntry({
+            timestamp:   Date.now(),
+            scheduledAt: scheduledFor.toISOString(),
+            kind:        'test_fail',
+            label:       'Test-wake',
+            reason:      r.reason,
+            deltaSec:    r.deltaSec,
+          })
+        }
+      } catch { /* store may be unavailable in tests */ }
+      resolve(r)
+    }
+
+    state.resumeHandler = (): void => {
+      if (state.cancelled) return
+      const now = Date.now()
+      const deltaSec = Math.round((now - expectedMs) / 1000)
+      state.resumed = true
+      sendProgress(win, 'resumed', `Vekket — forsinkelse ${deltaSec}s`)
+      // > 30s late = "too_late". Early or up to +30s is OK.
+      if (deltaSec > 30) {
+        finish({
+          ok: false, reason: 'too_late', deltaSec,
+          scheduledFor: scheduledFor.toISOString(),
+          actualAt:     new Date(now).toISOString(),
+        })
+      } else {
+        finish({
+          ok: true, deltaSec,
+          scheduledFor: scheduledFor.toISOString(),
+          actualAt:     new Date(now).toISOString(),
+        })
+      }
+    }
+    try { powerMonitor.on('resume', state.resumeHandler) } catch { /* ignore */ }
+
+    state.timer = setTimeout(() => {
+      if (state.cancelled || state.resumed) return
+      sendProgress(win, 'failed', 'Maskinen våknet ikke i tide.')
+      finish({
+        ok:           false,
+        reason:       'no_resume',
+        scheduledFor: scheduledFor.toISOString(),
+      })
+    }, maxWaitMs)
+
+    // 3. Trigger system sleep — short delay so the renderer can show "Sover om 3…"
+    sendProgress(win, 'sleeping', 'Sover nå…')
+    setTimeout(() => {
+      if (state.cancelled) return
+      sendProgress(win, 'waiting', 'Venter på oppvåkning…')
+      void triggerSystemSleep().catch(err => {
+        if (state.cancelled || state.resumed) return
+        sendProgress(win, 'failed', `Kunne ikke sovne: ${(err as Error).message}`)
+        finish({ ok: false, reason: 'no_sleep', message: (err as Error).message })
+      })
+    }, 3000)
+  })
+}
+
+/** Cancels an in-flight testWake. Resolves the pending promise with { reason: 'cancelled' }. */
+export function cancelTestWake(): boolean {
+  const state = activeTestWake
+  if (!state) return false
+  state.cancelled = true
+  if (state.timer) { clearTimeout(state.timer); state.timer = null }
+  if (state.resumeHandler) {
+    try { powerMonitor.off('resume', state.resumeHandler) } catch { /* ignore */ }
+    state.resumeHandler = null
+  }
+  if (state.resolveFn) {
+    state.resolveFn({ ok: false, reason: 'cancelled' })
+    state.resolveFn = null
+  }
+  activeTestWake = null
+  return true
+}
+
+/** True if a testWake is currently waiting. Exported for unit tests + IPC guard. */
+export function isTestWakeActive(): boolean {
+  return activeTestWake !== null
+}
+
+async function triggerSystemSleep(): Promise<void> {
+  if (process.platform === 'darwin') {
+    await execFileAsync('pmset', ['sleepnow'], { timeout: 5000 })
+    return
+  }
+  if (process.platform === 'win32') {
+    // rundll32 powrprof,SetSuspendState 0,1,0 — sleep (not hibernate), force, no wake-events disabled
+    await execFileAsync('rundll32.exe', ['powrprof.dll,SetSuspendState', '0,1,0'], { timeout: 5000 })
+    return
+  }
+  throw new Error('unsupported platform')
 }

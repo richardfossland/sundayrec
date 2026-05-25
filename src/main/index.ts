@@ -629,6 +629,43 @@ function setupIPC(): void {
   ipcMain.handle('fix-mac-sleep',           () => wake.fixMacSleep())
   ipcMain.handle('fix-win-wake-timers',     () => wake.fixWinWakeTimers())
 
+  // ── Wake verification & test-wake ─────────────────────────────────────────
+  ipcMain.handle('wake-detect-capabilities', async () => {
+    const wv = await import('./wake-verification')
+    return wv.detectCapabilities()
+  })
+  ipcMain.handle('wake-verify-scheduled', async () => {
+    const wv = await import('./wake-verification')
+    // Mirror what scheduleOsWakes scheduled: lead-time-shifted upcoming dates.
+    const LEAD_MIN = 10
+    const expected = scheduler.getUpcomingDates().map(d => new Date(d.getTime() - LEAD_MIN * 60_000))
+    const status = await wv.verifyScheduledWakes(expected)
+    // Serialise Date instances for the renderer
+    return {
+      ...status,
+      expectedWakes: status.expectedWakes.map(d => d.toISOString()),
+      observedWakes: status.observedWakes.map(o => ({
+        scheduledAt: o.scheduledAt.toISOString(),
+        ownerLabel:  o.ownerLabel,
+      })),
+    }
+  })
+  ipcMain.handle('wake-check-power', async () => {
+    const wv = await import('./wake-verification')
+    return wv.checkPowerSource()
+  })
+  ipcMain.handle('wake-check-standby', async () => {
+    const wv = await import('./wake-verification')
+    return wv.checkStandbyEnabled()
+  })
+  ipcMain.handle('wake-test', async (_, secondsAhead?: number) => {
+    const sec = typeof secondsAhead === 'number' && secondsAhead > 0 ? secondsAhead : 60
+    return wake.testWake(sec, mainWindow)
+  })
+  ipcMain.handle('wake-cancel-test', () => wake.cancelTestWake())
+  ipcMain.handle('wake-failure-history', () => store.getWakeFailureHistory())
+  ipcMain.handle('wake-clear-failure-history', () => { store.clearWakeFailureHistory(); return true })
+
   ipcMain.handle('export-profile', () => store.exportProfile())
   ipcMain.handle('import-profile', (_, json: string) => {
     const ok = store.importProfile(json)
@@ -1177,6 +1214,111 @@ function setupIPC(): void {
     const cloud = await import('./cloud')
     return cloud.regeneratePodcastFeedManual(service as import('../types').CloudServiceId)
   })
+
+  // ── Review queue (prep-and-review v5.0) ───────────────────────────────────
+  ipcMain.handle('review-queue-list', async () => {
+    const rq = await import('./review-queue')
+    return rq.getQueue()
+  })
+
+  ipcMain.handle('review-queue-get', async (_, id: string) => {
+    if (typeof id !== 'string') return null
+    const rq = await import('./review-queue')
+    return rq.getQueueEntry(id)
+  })
+
+  ipcMain.handle('review-queue-update-trim', async (_, id: string, trim: { startSec: number; endSec: number }) => {
+    if (typeof id !== 'string') return false
+    if (!trim || typeof trim.startSec !== 'number' || typeof trim.endSec !== 'number') return false
+    if (trim.endSec <= trim.startSec) return false
+    const rq = await import('./review-queue')
+    const ok = rq.updateEntry(id, { suggestedTrim: trim })
+    if (ok) try { mainWindow.webContents.send('review-queue-update', { reason: 'patched', id }) } catch {}
+    return ok
+  })
+
+  ipcMain.handle('review-queue-update-master-preset', async (_, id: string, presetId: string) => {
+    if (typeof id !== 'string' || typeof presetId !== 'string') return false
+    const rq = await import('./review-queue')
+    const ok = rq.updateEntry(id, { masterPreset: presetId })
+    if (ok) try { mainWindow.webContents.send('review-queue-update', { reason: 'patched', id }) } catch {}
+    return ok
+  })
+
+  ipcMain.handle('review-queue-update-jingles', async (
+    _, id: string, jingles: { introPath?: string | null; outroPath?: string | null },
+  ) => {
+    if (typeof id !== 'string' || !jingles || typeof jingles !== 'object') return false
+    const rq = await import('./review-queue')
+    const patch: { introPath?: string; outroPath?: string } = {}
+    if ('introPath' in jingles) patch.introPath = jingles.introPath ?? undefined
+    if ('outroPath' in jingles) patch.outroPath = jingles.outroPath ?? undefined
+    const ok = rq.updateEntry(id, patch)
+    if (ok) try { mainWindow.webContents.send('review-queue-update', { reason: 'patched', id }) } catch {}
+    return ok
+  })
+
+  ipcMain.handle('review-queue-discard', async (_, id: string) => {
+    if (typeof id !== 'string') return false
+    const rq = await import('./review-queue')
+    rq.markDiscarded(id)
+    const removed = rq.removeFromQueue(id)
+    if (removed) try { mainWindow.webContents.send('review-queue-update', { reason: 'discarded', id }) } catch {}
+    return removed
+  })
+
+  // Tracks in-flight publishes to enforce idempotency — clicking the button
+  // twice within the same prep id MUST result in a single publish.
+  const publishInFlight = new Set<string>()
+
+  ipcMain.handle('review-queue-publish', async (_, id: string) => {
+    if (typeof id !== 'string') return { ok: false, error: 'invalid_id' }
+    const rq = await import('./review-queue')
+    const entry = rq.getQueueEntry(id)
+    if (!entry) return { ok: false, error: 'not_found' }
+    if (entry.prep.status === 'published' || entry.prep.publishedAt) {
+      return { ok: false, error: 'already_published' }
+    }
+    if (publishInFlight.has(id)) return { ok: false, error: 'in_progress' }
+    publishInFlight.add(id)
+    try {
+      // Step 1 — mark as published so a re-entrant call is rejected even
+      // before the upload finishes. publishedAt is set immediately.
+      rq.markPublished(id)
+
+      // Step 2 — for v1 we treat the existing recording file as the publish
+      // target. The cloud auto-upload will have run already; we just kick the
+      // RSS regenerate which inserts this episode into the public feed.
+      const podcast = store.get('podcast')
+      if (podcast?.enabled) {
+        const cloud = await import('./cloud')
+        await cloud.regeneratePodcastFeedManual(podcast.service)
+      }
+
+      // Step 3 — emit renderer update so the queue card refreshes
+      try { mainWindow.webContents.send('review-queue-update', { reason: 'published', id }) } catch {}
+
+      // Step 4 — remove from queue (v1 keeps history of publication via
+      // history entries already; the queue is for pending items only).
+      rq.removeFromQueue(id)
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    } finally {
+      publishInFlight.delete(id)
+    }
+  })
+  // Note: kick off reminder processing once at startup + hourly thereafter.
+  // Scheduler will be re-checked further down (in app.whenReady).
+  setInterval(() => {
+    import('./review-queue').then(rq => rq.processReminders(mainWindow))
+      .catch(err => console.error('[review-queue] reminders error:', (err as Error).message))
+  }, 60 * 60 * 1000)
+  // Also run once shortly after startup so 24 h+ items get caught.
+  setTimeout(() => {
+    import('./review-queue').then(rq => rq.processReminders(mainWindow))
+      .catch(() => {})
+  }, 30_000)
 
   ipcMain.handle('cloud-is-configured', async (_, service: string) => {
     const cloud = await import('./cloud')

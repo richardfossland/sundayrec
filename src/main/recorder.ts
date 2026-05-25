@@ -882,6 +882,23 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
   if (store.get('notifyStop') !== false) {
     notify('SundayRec', `${getNL().done}: ${path.basename(doneFile)}`)
   }
+
+  // Prep-and-review pipeline (v5.0). Kicks off in the background — never
+  // blocks the recorder. Triggers only when the user has podcast publishing
+  // enabled AND has not explicitly disabled autoPrepEnabled.
+  const settingsForPrep = store.getAll() as Settings & {
+    podcast?: { enabled?: boolean; autoPrepEnabled?: boolean }
+  }
+  const podcastOn = settingsForPrep.podcast?.enabled === true
+  const autoPrepOn = settingsForPrep.podcast?.autoPrepEnabled !== false   // default true when podcast on
+  if (audioFileKept && podcastOn && autoPrepOn && session.outputPath) {
+    void import('./prep-episode').then(p =>
+      p.prepEpisodeAsync(session.outputPath, session.win),
+    ).catch(err =>
+      logger.warn('recorder', 'prepEpisode_failed', { error: (err as Error).message }),
+    )
+  }
+
   _phase = 'idle'
   notifyIdle()
   sessionEndCallback?.()

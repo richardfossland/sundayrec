@@ -1,7 +1,7 @@
 import Store from 'electron-store'
 import { safeStorage } from 'electron'
 import fs from 'fs'
-import type { Settings, RecordingEntry } from '../types'
+import type { Settings, RecordingEntry, WakeFailureEntry } from '../types'
 
 const defaults: Settings = {
   language: null,
@@ -68,7 +68,8 @@ const defaults: Settings = {
 
   activeRecovery: null,
   nextExpectedRecordingISO: null,
-  recordingHistory: []
+  recordingHistory: [],
+  wakeFailureHistory: []
 }
 
 const store = new Store<Settings>({
@@ -398,4 +399,23 @@ export function findHistoryByPath(filePath: string): RecordingEntry | undefined 
 export function reset(): void {
   store.clear()
   _lastHistoryTs = 0
+}
+
+// --- Wake failure history ---
+
+const WAKE_FAILURE_MAX = 20
+
+export function getWakeFailureHistory(): WakeFailureEntry[] {
+  return (store.get('wakeFailureHistory' as keyof Settings) as WakeFailureEntry[] | undefined) ?? []
+}
+
+/** Append a wake-failure or test-wake outcome. Capped at WAKE_FAILURE_MAX entries (newest-first). */
+export function addWakeFailureEntry(entry: WakeFailureEntry): void {
+  const list = getWakeFailureHistory()
+  list.unshift(entry)
+  store.set('wakeFailureHistory' as keyof Settings, list.slice(0, WAKE_FAILURE_MAX) as never)
+}
+
+export function clearWakeFailureHistory(): void {
+  store.set('wakeFailureHistory' as keyof Settings, [] as never)
 }
