@@ -13,7 +13,7 @@ permissions:
   contents: write
 
 jobs:
-  # ── Tests: run on every push and PR, block builds if they fail ──
+  # ── Tests: run on every push and PR ──────────────────────────────────────
   test:
     runs-on: ubuntu-latest
     steps:
@@ -30,9 +30,10 @@ jobs:
       - name: Run tests
         run: npm test
 
-  # ── macOS: signs + notarizes when Developer ID secrets are configured ──
+  # ── macOS: build, sign and notarize — only on version tags ──────────────
   build-mac:
     needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
@@ -45,8 +46,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build, sign, and notarize
-        run: npx electron-vite build && npx electron-builder --mac --publish onTagOrDraft
+      - name: Build, sign and notarize
+        run: npx electron-vite build && npx electron-builder --mac --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.MAC_CERTS }}
@@ -55,22 +56,21 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      - name: Verify code signature and notarization
+      - name: Verify signature and notarization
         run: |
-          DMG=$(find release -name "*.dmg" | head -1)
-          if [ -z "$DMG" ]; then echo "ERROR: No DMG found in release/"; exit 1; fi
-          echo "DMG: $DMG"
+          DMG=$(find release -name "*.dmg" | grep -v arm64 | head -1)
+          [ -z "$DMG" ] && echo "ERROR: No DMG found" && exit 1
           hdiutil attach "$DMG" -mountpoint /tmp/dmg_verify -nobrowse -quiet
           APP=$(find /tmp/dmg_verify -name "*.app" -maxdepth 1 | head -1)
-          echo "App: $APP"
-          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign --verify --deep --strict "$APP"
           spctl --assess --verbose "$APP"
           hdiutil detach /tmp/dmg_verify -quiet
 
-  # ── Windows: unsigned build (Azure Trusted Signing when credentials are set) ──
+  # ── Windows: build and publish — only on version tags ───────────────────
   build-win:
     needs: test
-    runs-on: windows-2025
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
 
@@ -82,13 +82,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build and sign
-        run: npm run build:win -- --publish onTagOrDraft
+      - name: Build and publish
+        run: npx electron-vite build && npx electron-builder --win --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
-          AZURE_CODE_SIGNING_ACCOUNT_NAME: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT_NAME }}
-          AZURE_CERT_PROFILE_NAME: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
