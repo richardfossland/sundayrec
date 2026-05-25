@@ -1,10 +1,4 @@
 import { t } from '../i18n'
-import {
-  setupProcessingPanel, buildAudioChain, getFFmpegFilters,
-  analyzeAndComputeNormGain, analyzeBuffer, hasAnyProcessing,
-  getProcessingState, setNormEnabled, getGainReduction
-} from './editor-processing'
-import { destroyEQCanvas } from './editor-eq-canvas'
 import { settings, patchSettings } from '../state'
 import { escHtml as escapeHtml } from '../helpers'
 import type { ChapterMarker, RecordingMetadata } from '../../types'
@@ -70,6 +64,12 @@ let exportOutputFolder = ''
 
 // Clipping detection
 let clipTimes: number[] = []
+
+// Peak normalization gain (applied to playback + waveform render + export).
+// 0 = no normalization. Positive values amplify, negative attenuate.
+// Lives in memory only — not persisted across editor sessions (the cuts
+// draft sidecar tracks cuts; this gain is recomputed on demand).
+let audioGainDb = 0
 
 // Loop playback
 let isLooping    = false
@@ -149,33 +149,32 @@ export function setupEditorPage(): void {
     })
   })
 
-  // Processing panel toggle
-  $('btn-proc-toggle')?.addEventListener('click', () => {
-    const panel = $('editor-proc-panel')
-    if (!panel) return
-    const open = panel.style.display === 'none' || panel.style.display === ''
-    panel.style.display = open ? '' : 'none'
-    $('btn-proc-toggle')?.classList.toggle('active', open)
-  })
-
-  // Normalization analysis request from processing panel
-  document.addEventListener('proc-analyze-request', async () => {
-    if (!audioBuffer) return
-    const gain = analyzeAndComputeNormGain(audioBuffer)
-    const normResult = $('proc-norm-result')
-    if (normResult) {
-      const { peakDb, lufs } = analyzeBuffer(audioBuffer)
-      normResult.textContent = `Peak: ${peakDb.toFixed(1)} dBFS · LUFS: ${lufs.toFixed(1)} · Gain: ${gain >= 0 ? '+' : ''}${gain.toFixed(1)} dB`
+  // Peak normalization (Premiere-style "Normalize Max Peaks"): scans the
+  // already-decoded peaks array, computes the gain needed to bring max peak
+  // to -1 dBFS (1 dB safety headroom), and scales the waveform render +
+  // export pipeline accordingly. Idempotent — clicking when already
+  // normalized is a no-op.
+  $('btn-normalize-peak')?.addEventListener('click', () => {
+    if (!peaks || peaks.length === 0) return
+    if (audioGainDb !== 0) return     // already normalized — idempotent
+    const gain = computePeakGain(peaks)
+    if (!isFinite(gain) || Math.abs(gain) < 0.05) {
+      // Already at (or above) target — show that explicitly
+      setNormalizeUI(0, /*alreadyAtTarget*/ true)
+      return
     }
-    setNormEnabled(true)
-    const toggle = $('proc-norm-enable') as HTMLInputElement | null
-    if (toggle) toggle.checked = true
+    audioGainDb = gain
+    setNormalizeUI(gain, false)
+    drawWaveform()
+    drawMinimap()
   })
 
-  setupProcessingPanel(() => {
-    // called when any processing toggle changes — redraw waveform indicator
-    const badge = $('proc-active-badge')
-    if (badge) badge.style.display = hasAnyProcessing() ? '' : 'none'
+  $('btn-normalize-reset')?.addEventListener('click', () => {
+    if (audioGainDb === 0) return
+    audioGainDb = 0
+    setNormalizeUI(0, false)
+    drawWaveform()
+    drawMinimap()
   })
 
   $('btn-editor-prompt-open')?.addEventListener('click', () => {
@@ -552,7 +551,8 @@ export function deactivateEditor(): void {
     videoEl.load()
   }
   isVideoFile = false
-  destroyEQCanvas()
+  audioGainDb = 0
+  setNormalizeUI(0, false)
   reviewPrepId = null
   reviewPrep = null
   loadAndUpdateReviewBanner()
@@ -612,6 +612,9 @@ async function loadFile(fp: string): Promise<void> {
   playStartSec = 0
   meta = { title: '', speaker: '', description: '', chapters: [] }
   metaDirty = false
+  // Fresh file → drop any previous peak-normalize gain and reset the UI.
+  audioGainDb = 0
+  setNormalizeUI(0, false)
   renderSuggestions()
 
   showState('loading')
@@ -1137,6 +1140,89 @@ async function _computePeaksAsync(buf: AudioBuffer): Promise<Float32Array> {
   return out
 }
 
+// ── Peak normalization helpers ────────────────────────────────────────────
+//
+// We work off the in-memory `peaks` array (downsampled at 100 Hz) rather
+// than calling ffmpeg's `volumedetect`. The peaks data is downsampled from
+// the actual audio samples, so its maximum is a tight upper bound on the
+// true peak — accurate enough for a normalize button. The actual export
+// uses ffmpeg's `volume={N}dB` filter applied to the original (un-downsampled)
+// samples, so the rendered file is sample-accurate regardless.
+
+/**
+ * Compute the gain (in dB) needed to bring the maximum absolute peak in
+ * `pks` to -1 dBFS (1 dB of safety headroom — prevents clipping after
+ * encoding/codec processing). Returns 0 if the input is silent or already
+ * at/above the target.
+ *
+ * Peaks here are floats in 0..1 (normalized magnitudes), produced by
+ * `computePeaks()`. We never see uint8 input here, but the helper also
+ * handles a normalized > 1 fallback just in case.
+ */
+function computePeakGain(pks: Float32Array): number {
+  let max = 0
+  for (let i = 0; i < pks.length; i++) {
+    const v = Math.abs(pks[i])
+    if (v > max) max = v
+  }
+  if (max <= 0) return 0
+  // Defensive: if a future caller hands us uint8-style 0..255 data, rescale.
+  const normalizedMax = max > 1.001 ? max / 128 : max
+  const currentDb = 20 * Math.log10(normalizedMax)
+  // Target -1 dBFS. If we're already at or above target, no gain.
+  if (currentDb >= -1) return 0
+  return -1 - currentDb
+}
+
+/** Linear gain factor for the current `audioGainDb` (1.0 = no change). */
+function gainFactor(): number {
+  return audioGainDb === 0 ? 1 : Math.pow(10, audioGainDb / 20)
+}
+
+/**
+ * Build the audio-filter list passed to the main-process export pipeline.
+ * Currently a single `volume={N}dB` filter when normalization has been
+ * applied — composed with intro/outro concat and other filters in
+ * `src/main/editor.ts` exactly as the previous proc-panel filter list was.
+ */
+function getExportFilters(): string[] {
+  if (audioGainDb === 0) return []
+  return [`volume=${audioGainDb.toFixed(2)}dB`]
+}
+
+/**
+ * Update the normalize button + status line to reflect the current gain.
+ * `gainDb === 0` and `alreadyAtTarget === true` means we ran the check but
+ * the file's peak is already at/above -1 dBFS — show a friendly notice
+ * instead of pretending nothing happened.
+ */
+function setNormalizeUI(gainDb: number, alreadyAtTarget: boolean): void {
+  const btn    = $('btn-normalize-peak') as HTMLButtonElement | null
+  const label  = $('btn-normalize-label')
+  const status = $('editor-normalize-status')
+  const reset  = $('btn-normalize-reset')
+  if (!btn || !label || !status) return
+
+  if (gainDb !== 0) {
+    btn.classList.add('is-applied')
+    status.classList.add('is-applied')
+    const sign = gainDb >= 0 ? '+' : ''
+    label.textContent = `✓ ${t('editor.normalizeApplied', 'Normalisert')} (${sign}${gainDb.toFixed(1)} dB)`
+    status.textContent = t('editor.normalizeResult', 'Toppunkt nå -1 dBFS — trygg for eksport.')
+    if (reset) reset.style.display = ''
+  } else {
+    btn.classList.remove('is-applied')
+    status.classList.remove('is-applied')
+    label.textContent = t('editor.normalizePeak', 'Normaliser lydnivå')
+    if (alreadyAtTarget) {
+      status.textContent = t('editor.normalizeAlready', 'Toppunktet er allerede ved -1 dBFS — ingen endring nødvendig.')
+    } else {
+      status.textContent = t('editor.normalizeHint', 'Justerer toppunktet til -1 dBFS for trygg sluttmiks.')
+    }
+    if (reset) reset.style.display = 'none'
+  }
+}
+
 // ── Drawing ───────────────────────────────────────────────────────────────
 function syncCanvasSize(): void {
   if (!canvas) return
@@ -1235,12 +1321,16 @@ function drawWaveform(): void {
   }
 
   // ── Waveform bars (symmetric, mirrored above + below centre) ──────
+  // Bars are scaled by the current `audioGainDb` so any peak-normalization
+  // is immediately visible — same gain factor we'll apply in ffmpeg at
+  // export time.
+  const gFac = gainFactor()
   for (let px = 0; px < W; px++) {
     const sec = vpStart + (px / W) * (vpEnd - vpStart)
     const pi  = Math.floor(sec * 100)
     if (pi < 0 || pi >= peaks.length) continue
 
-    const barH  = peaks[pi] * maxBar
+    const barH  = Math.min(maxBar, peaks[pi] * gFac * maxBar)
     const inCut = isInCut(sec) || (isDragging && isInDrag(sec))
     const isPast = sec < curSec && (isPlaying || playStartSec > 0)
 
@@ -1523,11 +1613,13 @@ function drawMinimap(): void {
   const ACCENT = cssVar('--accent') || '#F0BB47'
   const midY   = H / 2
 
+  const gFac = gainFactor()
+  const maxBar = (H - 6) / 2
   for (let px = 0; px < W; px++) {
     const sec  = (px / W) * duration
     const pi   = Math.floor(sec * 100)
     if (pi < 0 || pi >= peaks.length) continue
-    const barH = peaks[pi] * (H - 6) / 2
+    const barH = Math.min(maxBar, peaks[pi] * gFac * maxBar)
     const inCut = isInCut(sec)
     ctx.fillStyle   = inCut ? '#ef4444' : ACCENT
     ctx.globalAlpha = inCut ? 0.55 : 0.55
@@ -1932,11 +2024,13 @@ function makeCutThumbnailSvg(cut: Cut): string {
   const endIdx   = Math.ceil(cut.end * 100)
   const count    = Math.max(1, endIdx - startIdx)
   const midY     = H / 2
+  const maxH     = midY - 2
+  const gFac     = gainFactor()
   const rects: string[] = []
   for (let px = 0; px < W; px++) {
     const pi = startIdx + Math.floor(px / W * count)
     if (pi >= peaks.length) break
-    const h = peaks[pi] * (midY - 2)
+    const h = Math.min(maxH, peaks[pi] * gFac * maxH)
     rects.push(`<rect x="${px}" y="${(midY - h).toFixed(1)}" width="1" height="${(h * 2).toFixed(1)}"/>`)
   }
   return `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="display:block">${rects.join('')}</svg>`
@@ -2232,7 +2326,11 @@ function startPlay(preview: boolean): void {
   let firstSec = -1
 
   const mixGain = audioCtx.createGain()
-  buildAudioChain(audioCtx, mixGain, audioCtx.destination)
+  // Apply the user-set peak-normalization gain to playback. This mirrors
+  // the ffmpeg `volume={gainDb}dB` filter we add at export time so what
+  // they hear during preview matches what they'll get in the exported file.
+  mixGain.gain.value = gainFactor()
+  mixGain.connect(audioCtx.destination)
 
   // Schedule intro before main content (only when at start and preview mode)
   if (includeIntroOutro && introBuffer && playStartSec < 0.1) {
@@ -2343,17 +2441,7 @@ function animate(): void {
   updateTimecode(curSec)
   autoScrollToPlayhead(curSec)
   drawWaveform()
-  updateGRMeter()
   rafId = requestAnimationFrame(animate)
-}
-
-function updateGRMeter(): void {
-  const reduction = getGainReduction()
-  const bar = document.getElementById('proc-gr-bar')
-  const val = document.getElementById('proc-gr-val')
-  const pct = Math.min(100, Math.max(0, -reduction * 100 / 20))
-  if (bar) bar.style.width = pct + '%'
-  if (val) val.textContent = reduction.toFixed(1) + ' dB'
 }
 
 function updatePlayIcon(): void {
@@ -2386,16 +2474,17 @@ function openExportModal(): void {
   if (fmtSection)  fmtSection.style.display  = isVideoFile ? 'none' : ''
   if (videoNotice) videoNotice.style.display = isVideoFile ? '' : 'none'
 
-  // Update processing summary
-  const summary = $('export-proc-summary')
-  if (summary) {
-    const active = []
-    const ps = getProcessingState()
-    if (ps.normalize.enabled)  active.push('Normalisering')
-    if (ps.compressor.enabled) active.push('Kompressor')
-    if (ps.eq.enabled)         active.push('Grafisk EQ')
-    if (ps.limiter.enabled)    active.push('Limiter')
-    summary.textContent = active.length ? active.join(' · ') : 'Ingen lydbehandling'
+  // Update gain summary — only shown when peak normalize has been applied.
+  const procRow  = $('export-proc-row')
+  const summary  = $('export-proc-summary')
+  if (procRow && summary) {
+    if (audioGainDb !== 0) {
+      const sign = audioGainDb >= 0 ? '+' : ''
+      summary.textContent = `${t('editor.normalizeApplied', 'Normalisert')} (${sign}${audioGainDb.toFixed(1)} dB → -1 dBFS)`
+      procRow.style.display = ''
+    } else {
+      procRow.style.display = 'none'
+    }
   }
   const ioRow     = $('export-io-row')
   const ioSummary = $('export-io-summary')
@@ -2462,7 +2551,7 @@ async function runExport(): Promise<void> {
       duration,
       mode,
       outputFolder: exportOutputFolder || undefined,
-      processing: { ffmpegFilters: getFFmpegFilters() },
+      processing: { ffmpegFilters: getExportFilters() },
       introPath:  (includeIntroOutro && videoIntroPath) ? videoIntroPath : undefined,
       outroPath:  (includeIntroOutro && videoOutroPath) ? videoOutroPath : undefined,
       metadata:   meta,
@@ -2477,7 +2566,7 @@ async function runExport(): Promise<void> {
       outputFormat: fmt,
       outputBitrate:  bitrate,
       outputBitDepth: bitDepth,
-      processing: { ffmpegFilters: getFFmpegFilters() },
+      processing: { ffmpegFilters: getExportFilters() },
       introPath:  (includeIntroOutro && settings.editorIntroPath) ? settings.editorIntroPath : undefined,
       outroPath:  (includeIntroOutro && settings.editorOutroPath) ? settings.editorOutroPath : undefined,
       metadata:   meta,

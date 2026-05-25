@@ -848,16 +848,6 @@ select.form-input {
 .slot-del   { cursor: pointer; color: var(--text3); font-size: 18px; margin-left: 4px; line-height: 1; transition: color .15s; }
 .slot-del:hover { color: var(--red); }
 
-/* ── EQ bands ──────────────────────────────────────────────────── */
-.eq-row { display: flex; gap: 20px; margin-bottom: 14px; flex-wrap: wrap; }
-.eq-band { flex: 1 1 140px; min-width: 0; text-align: center; }
-.eq-label { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
-.eq-hint  { font-size: 11px; color: var(--text3); margin-bottom: 8px; line-height: 1.4; }
-
-/* ── Compressor / Limiter ──────────────────────────────────────── */
-.proc-disabled { opacity: .35; pointer-events: none; transition: opacity .2s; }
-.proc-disabled.active { opacity: 1; pointer-events: auto; }
-
 /* ── Calendar ──────────────────────────────────────────────────── */
 .cal-layout { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
 .cal-card   { flex: 1; min-width: 340px; }
@@ -1757,209 +1747,52 @@ body.platform-win32  #wake-instructions-win { display: block; }
 #editor-workspace > * { min-width: 0; width: 100%; box-sizing: border-box; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
 
-/* ── Processing badge on toolbar button — see visual-polish section ── */
-
-/* ── Processing panel ────────────────────────────────────────────── */
-.editor-proc-panel {
+/* ── Editor — Peak normalize panel ────────────────────────────────
+   Single button + status + reset link. Sits directly below the main
+   waveform canvas so the visible gain change is obviously tied to it. */
+.editor-normalize-panel {
   margin-top: 10px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   background: var(--surface); border: 1px solid var(--border2);
-  border-radius: var(--r); overflow: hidden;
-  animation: cutSlideIn .2s cubic-bezier(.22,1,.36,1);
+  border-radius: var(--r); padding: 10px 14px;
 }
 
-.proc-tabs {
-  display: flex; gap: 0;
-  background: var(--surface2); border-bottom: 1px solid var(--border);
+.btn-normalize {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border2); border-radius: var(--rsm);
+  padding: 7px 14px; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: background .15s, border-color .15s, color .15s;
+  flex-shrink: 0;
 }
-.proc-tab {
-  flex: 1; padding: 9px 4px; background: none; border: none;
-  color: var(--text3); font-size: 12px; font-weight: 600; cursor: pointer;
-  transition: color .15s, background .15s; border-right: 1px solid var(--border);
-  letter-spacing: -.1px;
+.btn-normalize:hover {
+  background: var(--surface3); border-color: var(--accent-border);
+  color: var(--accent2);
 }
-.proc-tab:last-child { border-right: none; }
-.proc-tab:hover { color: var(--text2); background: var(--surface3); }
-.proc-tab.active { color: var(--accent2); background: var(--surface); box-shadow: inset 0 -2px 0 var(--accent); }
-
-.proc-body { padding: 14px 16px; }
-
-.proc-row {
-  display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
-}
-.proc-row-cols { flex-wrap: wrap; }
-
-/* Toggle switch */
-.proc-toggle-label {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer;
-}
-.proc-toggle-input { display: none; }
-.proc-toggle-track {
-  width: 34px; height: 18px; border-radius: 9px;
-  background: var(--surface3); border: 1px solid var(--border2);
-  position: relative; flex-shrink: 0; transition: background .2s;
-}
-.proc-toggle-track::after {
-  content: ''; position: absolute;
-  left: 2px; top: 2px; width: 12px; height: 12px;
-  border-radius: 50%; background: var(--text3);
-  transition: transform .2s, background .2s;
-}
-.proc-toggle-input:checked + .proc-toggle-track {
-  background: var(--accent); border-color: var(--accent);
-}
-.proc-toggle-input:checked + .proc-toggle-track::after {
-  transform: translateX(16px); background: #fff;
-}
-
-.proc-radio-label {
-  display: flex; align-items: center; gap: 5px;
-  font-size: 12px; color: var(--text2); cursor: pointer;
-}
-.proc-radio-label input { accent-color: var(--accent); }
-
-.proc-select {
-  margin-left: auto;
-  background: var(--surface2); border: 1px solid var(--border2);
-  color: var(--text); border-radius: var(--rxs); padding: 4px 8px;
-  font-size: 12px; cursor: pointer;
-}
-
-.proc-params-grid { display: flex; flex-direction: column; gap: 8px; }
-
-.proc-param-row {
-  display: flex; align-items: center; gap: 10px;
-}
-.proc-param-label {
-  font-size: 11px; font-weight: 600; color: var(--text3);
-  text-transform: uppercase; letter-spacing: .04em;
-  width: 60px; flex-shrink: 0;
-}
-.proc-slider {
-  flex: 1; -webkit-appearance: none; appearance: none;
-  height: 4px; border-radius: 2px;
-  background: var(--surface3); outline: none; cursor: pointer;
-}
-.proc-slider::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 14px; height: 14px;
-  border-radius: 50%; background: var(--accent2);
-  border: 2px solid var(--surface); box-shadow: 0 1px 4px rgba(0,0,0,.4);
-  cursor: pointer; transition: transform .1s;
-}
-.proc-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
-.proc-param-val {
-  font-size: 11px; font-variant-numeric: tabular-nums;
-  color: var(--text2); width: 72px; text-align: right; flex-shrink: 0;
-}
-
-/* Gain reduction meter */
-.proc-gr-row {
-  display: flex; align-items: center; gap: 10px; margin-top: 10px;
-}
-.proc-gr-track {
-  flex: 1; height: 6px; background: var(--surface3);
-  border-radius: 3px; overflow: hidden;
-}
-.proc-gr-bar {
-  height: 100%; width: 0%; background: linear-gradient(90deg, var(--green), var(--orange));
-  border-radius: 3px; transition: width .1s;
-}
-.proc-gr-val {
-  font-size: 11px; color: var(--orange); font-variant-numeric: tabular-nums;
-  width: 48px; text-align: right; flex-shrink: 0;
-}
-
-/* ── Logic-style parametric EQ ───────────────────────────────────── */
-
-/* EQ body: allow extra height, no scroll */
-.proc-body-eq-full {
-  padding: 10px 12px 12px;
-}
-
-/* Toolbar row */
-.eq-toolbar {
-  display: flex; align-items: center; gap: 10px;
-  margin-bottom: 10px; flex-wrap: wrap;
-}
-.eq-toolbar .proc-toggle-label { flex-shrink: 0; }
-.eq-toolbar .btn-ghost { flex-shrink: 0; margin-left: auto; }
-
-/* Preset bar */
-.eq-preset-bar {
-  display: flex; gap: 4px; flex-wrap: wrap; flex: 1;
-}
-.eq-preset-btn {
-  padding: 4px 10px; border-radius: 20px;
-  border: 1px solid var(--border2); background: var(--surface2);
-  color: var(--text2); font-size: 11px; font-weight: 600; cursor: pointer;
-  transition: background .15s, border-color .15s, color .15s;
-  white-space: nowrap;
-}
-.eq-preset-btn:hover { background: var(--surface3); color: var(--text); }
-.eq-preset-btn.active {
+.btn-normalize.is-applied {
   background: var(--accent-bg); border-color: var(--accent-border);
   color: var(--accent2);
 }
+.btn-normalize:disabled {
+  opacity: .55; cursor: default; pointer-events: none;
+}
+.btn-normalize-icon { flex-shrink: 0; }
 
-/* Large EQ canvas */
-.proc-eq-canvas-large {
-  display: block; width: 100%; height: 260px;
-  border-radius: 8px; border: 1px solid var(--border);
-  background: #090912; margin-bottom: 8px;
-  cursor: crosshair;
+.editor-normalize-status {
+  flex: 1; min-width: 0;
+  font-size: 12px; color: var(--text3); line-height: 1.4;
+  font-variant-numeric: tabular-nums;
 }
+.editor-normalize-status.is-applied { color: var(--text2); }
 
-/* Band info bar */
-.eq-band-info {
-  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: var(--rsm); padding: 6px 10px;
-  font-size: 11px; font-variant-numeric: tabular-nums;
+.editor-normalize-reset {
+  background: none; border: none; color: var(--text3);
+  font-size: 12px; cursor: pointer; padding: 2px 4px;
+  text-decoration: underline; text-underline-offset: 3px;
+  transition: color .15s;
+  flex-shrink: 0;
 }
-.eq-info-dot {
-  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
-  background: var(--accent);
-}
-.eq-info-type { font-weight: 700; color: var(--text); letter-spacing: .04em; }
-.eq-info-freq { color: var(--text); font-weight: 600; }
-.eq-info-gain { color: var(--accent2); font-weight: 600; }
-.eq-info-sep  { color: var(--text3); }
-.eq-info-qlabel { color: var(--text3); font-size: 10px; text-transform: uppercase; }
-.eq-info-q    { color: var(--text2); }
-.eq-info-hint {
-  margin-left: auto; color: var(--text3); font-size: 10px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-
-/* ── Noise & Reverb tab ──────────────────────────────────────────── */
-.noise-section { padding: 4px 0; }
-.noise-divider { height: 1px; background: var(--border); margin: 14px 0; }
-.noise-level-row {
-  display: flex; align-items: center; gap: 10px; margin-top: 10px;
-}
-.level-btn-group { display: flex; gap: 4px; }
-.noise-level-btn, .reverb-level-btn {
-  padding: 5px 14px; border-radius: 20px;
-  border: 1px solid var(--border2); background: var(--surface2);
-  color: var(--text2); font-size: 11px; font-weight: 600; cursor: pointer;
-  transition: background .15s, border-color .15s, color .15s;
-}
-.noise-level-btn:hover, .reverb-level-btn:hover {
-  background: var(--surface3); color: var(--text);
-}
-.noise-level-btn.active, .reverb-level-btn.active {
-  background: var(--accent-bg); border-color: var(--accent-border);
-  color: var(--accent2);
-}
-
-/* Normalization result */
-.proc-norm-result {
-  font-size: 11px; color: var(--text2); flex: 1;
-}
-
-.proc-desc {
-  font-size: 12px; color: var(--text3); line-height: 1.5; margin-top: 8px;
-}
+.editor-normalize-reset:hover { color: var(--text); }
 
 /* ── Export modal ─────────────────────────────────────────────────── */
 .export-modal { width: 440px; }
@@ -2215,16 +2048,6 @@ body.platform-win32  #wake-instructions-win { display: block; }
   animation: shimmerSlide 1.5s linear infinite;
 }
 
-/* ── Proc panel — active tab indicator: see existing .proc-tab.active ── */
-
-/* ── Proc toggle badge — pulse when active ────────────────────── */
-.proc-badge {
-  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
-  background: var(--green); box-shadow: 0 0 6px rgba(34,197,94,.5);
-  animation: pdot 1.5s ease-in-out infinite;
-  vertical-align: middle; font-size: 0; line-height: 0;
-}
-
 /* ── Sidebar recording dot — bigger aura ──────────────────────── */
 .status-dot.recording {
   box-shadow: 0 0 0 4px rgba(239,68,68,.15), 0 0 10px rgba(239,68,68,.6);
@@ -2258,17 +2081,6 @@ body.platform-win32  #wake-instructions-win { display: block; }
   box-shadow: 0 0 8px rgba(240,187,71,.3);
 }
 
-/* ── Proc slider — styled range ───────────────────────────────── */
-.proc-slider {
-  accent-color: var(--accent);
-}
-.proc-slider::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
-  background: var(--accent); box-shadow: 0 0 0 3px rgba(240,187,71,.2), var(--shadow-sm);
-  transition: box-shadow .15s;
-}
-.proc-slider::-webkit-slider-thumb:hover { box-shadow: 0 0 0 5px rgba(240,187,71,.25), var(--shadow-sm); }
-
 /* ── Cal day — today pulse ────────────────────────────────────── */
 .cal-day.today .cal-day-num {
   box-shadow: 0 0 10px rgba(240,187,71,.4);
@@ -2292,9 +2104,6 @@ body.platform-win32  #wake-instructions-win { display: block; }
 .nav-link.active {
   box-shadow: inset 0 0 12px rgba(240,187,71,.05);
 }
-
-/* ── Editor proc panel — wider tabs ──────────────────────────── */
-.proc-tab { font-size: 11px; letter-spacing: -.1px; }
 
 /* ── Intro/outro path display in settings ─────────────────────── */
 .intro-outro-path {
