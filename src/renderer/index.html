@@ -702,15 +702,14 @@
       </div>
 
       <div class="card">
-        <div class="card-title" data-i18n="audio.volume">Inngangsvolum</div>
-        <div class="vol-slider-wrap">
-          <svg class="vol-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.617.793L4.828 14H3a1 1 0 01-1-1V7a1 1 0 011-1h1.828l3.555-2.793a1 1 0 011 .076zM12.293 7.293a1 1 0 011.414 0A4.978 4.978 0 0115 10a4.978 4.978 0 01-1.293 2.707 1 1 0 01-1.414-1.414A2.978 2.978 0 0013 10a2.978 2.978 0 00-.707-1.293 1 1 0 010-1.414z"/></svg>
-          <input type="range" id="input-volume" min="0" max="100" value="100" class="slider vol-slider" />
-          <span class="vol-badge" id="volume-value">100%</span>
-        </div>
-        <div class="form-hint">Juster heller volumet direkte på mikseren for best lydkvalitet. 100% = ingen endring.</div>
+        <!-- Inngangsvolum-slideren er fjernet i v4.31 — ble bestemt at SundayRec
+             skal lagre rå audio og overlate volum/dynamikk-justering til editor.
+             Backend bruker fortsatt inputVolume-feltet i Settings (default 100,
+             dvs. ingen endring), så eksisterende brukere med en annen verdi får
+             den fortsatt anvendt. -->
+        <input type="hidden" id="input-volume" value="100" />
 
-        <div class="card-title" style="margin-top:20px" data-i18n="audio.channels">Kanaler</div>
+        <div class="card-title" data-i18n="audio.channels">Kanaler</div>
         <div class="option-cards" id="channels-group">
           <label class="option-card">
             <input type="radio" name="channels" value="stereo" checked />
@@ -766,20 +765,16 @@
           <option value="48000" selected>48000</option>
         </select>
 
-        <div class="card-title" style="margin-top:20px">Lydforbedringer</div>
-        <div class="toggle-row" style="margin-top:8px">
-          <div>
-            <div class="toggle-title">Jevn ut lydnivå</div>
-            <div class="toggle-desc">Reduserer plutselige volum-topper automatisk under opptak</div>
-          </div>
-          <label class="toggle"><input type="checkbox" id="opt-compressor" /><span class="toggle-track"></span></label>
-        </div>
-        <!-- Kompressor-detaljer skjult — bruker faste standardverdier -->
+        <!-- Lydforbedringer (kompressor + limiter + EQ) er fjernet fra opptak-
+             pipelinen i v4.31. Filosofien er nå: ta opp rått, etterbehandle i
+             editoren (Normaliser-knapp, Mastering-presets). Skjulte felter
+             beholdes med defaults så eksisterende user-settings fortsatt
+             parses uten feil. -->
+        <input type="hidden" id="opt-compressor" />
         <input type="hidden" id="comp-threshold" value="-24" />
         <input type="hidden" id="comp-ratio"     value="4" />
         <input type="hidden" id="comp-attack"    value="10" />
         <input type="hidden" id="comp-release"   value="200" />
-        <!-- Limiter alltid aktiv — ikke eksponert i UI -->
         <input type="hidden" id="opt-limiter"    value="true" />
         <input type="hidden" id="limiter-ceiling" value="-1" />
       </div>
@@ -896,10 +891,7 @@
       </div>
       <!-- ── Sky-backup (Google Drive / Dropbox / OneDrive) ──────── -->
       <div class="card">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <div class="card-title" data-i18n="publish.title" style="margin:0">Sky-backup</div>
-          <button class="btn" id="btn-cloud-refresh" data-i18n="publish.refresh">Oppdater</button>
-        </div>
+        <div class="card-title" data-i18n="publish.title">Sky-backup</div>
         <p class="card-desc" data-i18n="publish.desc">Last opp opptakene automatisk til Google Drive eller Dropbox — som ekstra sikkerhet og for enkel deling. Du kan koble til flere tjenester samtidig.</p>
 
         <div class="cloud-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:12px">

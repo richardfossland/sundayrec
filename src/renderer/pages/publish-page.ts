@@ -27,11 +27,6 @@ export function setupPublishPage(): void {
   refreshConfigured()
   refreshQueue()
 
-  document.getElementById('btn-cloud-refresh')?.addEventListener('click', () => {
-    refreshStatus()
-    refreshQueue()
-  })
-
   // Connect/disconnect buttons
   document.querySelectorAll<HTMLElement>('[data-cloud-connect]').forEach(btn => {
     btn.addEventListener('click', async () => {
