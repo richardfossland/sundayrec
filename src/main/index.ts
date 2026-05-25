@@ -819,6 +819,10 @@ function setupIPC(): void {
 
   ipcMain.handle('update-history-note', (_, ts: number, note: string) => {
     if (typeof ts !== 'number' || typeof note !== 'string') return
+    // Cap note length — without this a compromised renderer could write
+    // arbitrarily large strings into the settings file and bloat startup time.
+    // 4 KB is plenty for a free-form human note.
+    if (note.length > 4096) note = note.slice(0, 4096)
     store.updateHistoryNote(ts, note)
   })
 

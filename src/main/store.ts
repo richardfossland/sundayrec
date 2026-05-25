@@ -157,6 +157,30 @@ export function addHistory(entry: RecordingEntry): void {
   store.set('recordingHistory', history.slice(0, 200))
 }
 
+/**
+ * Append a back-dated history entry (e.g. a "missed recording" marker) using
+ * the caller-supplied timestamp instead of clobbering it with now(). The entry
+ * is inserted in chronological position so the history stays sorted newest-first.
+ *
+ * Unlike addHistory(), this does NOT bump the monotonic counter — a missed
+ * entry from yesterday shouldn't push tomorrow's entry forward.
+ */
+export function addHistoryWithTimestamp(entry: RecordingEntry & { timestamp: number }): void {
+  const history = getHistory()
+  // Insert maintaining newest-first order
+  let inserted = false
+  for (let i = 0; i < history.length; i++) {
+    const ts = history[i].timestamp ?? 0
+    if (entry.timestamp > ts) {
+      history.splice(i, 0, { ...entry })
+      inserted = true
+      break
+    }
+  }
+  if (!inserted) history.push({ ...entry })
+  store.set('recordingHistory', history.slice(0, 200))
+}
+
 export function deleteHistoryEntry(timestamp: number): void {
   store.set('recordingHistory', getHistory().filter(e => e.timestamp !== timestamp))
 }

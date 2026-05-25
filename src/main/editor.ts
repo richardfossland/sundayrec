@@ -518,7 +518,12 @@ export async function extractAudioForPeaks(filePath: string): Promise<ExtractAud
     proc.stdout?.on('data', (d: Buffer) => chunks.push(d))
     proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
 
+    // Safety kill after 2 min. Cleared on close to avoid keeping a timer
+    // reference alive for 2 minutes after every successful peaks extraction.
+    const killTimer = setTimeout(() => { try { proc.kill('SIGTERM') } catch { /* already dead */ } }, 120_000)
+
     proc.on('close', code => {
+      clearTimeout(killTimer)
       if (code !== 0 || chunks.length === 0) { resolve(null); return }
       const data = Buffer.concat(chunks)
 
@@ -531,9 +536,6 @@ export async function extractAudioForPeaks(filePath: string): Promise<ExtractAud
 
       resolve({ data, duration })
     })
-
-    // Safety kill after 2 min
-    setTimeout(() => { try { proc.kill('SIGTERM') } catch {} }, 120_000)
   })
 }
 
@@ -857,7 +859,11 @@ export async function detectSegments(filePath: string): Promise<AudioSegment[]> 
     let stderr = ''
     proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
 
+    // Safety kill after 30 s if ffmpeg hangs (rare but possible on corrupt files)
+    const killTimer = setTimeout(() => { try { proc.kill() } catch { /* already dead */ }; finish([]) }, 30000)
+
     proc.on('close', () => {
+      clearTimeout(killTimer)
       const silences: { start: number; end: number }[] = []
       let pendingStart: number | null = null
 
@@ -903,7 +909,5 @@ export async function detectSegments(filePath: string): Promise<AudioSegment[]> 
 
       finish(segments)
     })
-
-    setTimeout(() => { try { proc.kill() } catch {}; finish([]) }, 30000)
   })
 }

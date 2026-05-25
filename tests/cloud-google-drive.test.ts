@@ -429,19 +429,17 @@ describe('google-drive.uploadFile — transient failures', () => {
     expect(Buffer.compare(retryCall.init.body as Buffer, data.subarray(CHUNK_SIZE))).toBe(0)
   })
 
-  it.skip('BUG: completes with file id even if probe advances offset past last chunk', async () => {
+  it('completes with file id when probe returns 200 with metadata after past-EOF resync', async () => {
     const size = CHUNK_SIZE * 2
     const data = crypto.randomBytes(size)
     const fp = writeTmpFile('resync-bug2.mp3', data)
     fetchQueue.push({ status: 200, headers: { Location: 'https://u/s' } })
     fetchQueue.push({ status: 503 }) // chunk 1 fails
-    // probe says server already has ALL bytes
-    fetchQueue.push({ status: 308, headers: { Range: `bytes=0-${size - 1}` } })
-    // Expected correct behavior: upload is complete, get file metadata
-    // (in practice the provider would need to issue one more request to
-    // retrieve the file id, or the probe should return 200 with body)
+    // probe finds the upload already complete — Drive returns 200 with the
+    // file metadata body in this case.
+    fetchQueue.push({ status: 200, json: { id: 'fix-id', md5Checksum: md5Hex(data) } })
     const id = await uploadFile('tkn', fp)
-    expect(id).toBeDefined()
+    expect(id).toBe('fix-id')
   })
 })
 

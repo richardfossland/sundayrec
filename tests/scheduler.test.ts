@@ -21,6 +21,7 @@ jest.mock('../src/main/store', () => ({
   getAll:     jest.fn(() => ({})),
   getHistory: jest.fn(() => []),
   addHistory: jest.fn(),
+  addHistoryWithTimestamp: jest.fn(),
 }))
 jest.mock('../src/main/logger', () => ({
   info:  jest.fn(),
@@ -45,7 +46,7 @@ import * as logger from '../src/main/logger'
 
 const mockStoreGet        = store.get        as unknown as jest.Mock
 const mockStoreGetHistory = store.getHistory as unknown as jest.Mock
-const mockStoreAddHistory = store.addHistory as unknown as jest.Mock
+const mockStoreAddHistory = store.addHistoryWithTimestamp as unknown as jest.Mock
 const mockLogger = {
   warn:  logger.warn  as unknown as jest.Mock,
   info:  logger.info  as unknown as jest.Mock,

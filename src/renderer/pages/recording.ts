@@ -529,7 +529,7 @@ function showOverlay(opts: RecordingOpts): void {
           if (wrap) wrap.style.setProperty('--rec-video-ar', `${dims.w} / ${dims.h}`)
         }
       }
-      const url = URL.createObjectURL(new Blob([arr], { type: 'image/jpeg' }))
+      const url = URL.createObjectURL(new Blob([arr as BlobPart], { type: 'image/jpeg' }))
       if (recFrameBlobUrl) URL.revokeObjectURL(recFrameBlobUrl)
       recFrameBlobUrl = url
       recImg.src = url

@@ -470,7 +470,10 @@ function historyCovers(history: ReturnType<typeof store.getHistory>, when: Date)
 }
 
 function addMissedHistory(when: Date, label: string): void {
-  store.addHistory({
+  // Use addHistoryWithTimestamp — addHistory would clobber `timestamp` with
+  // Date.now(), making historyCovers() unable to detect this entry on the next
+  // checkMissedRecordings() pass (timestamp would be hours off from `when`).
+  store.addHistoryWithTimestamp({
     date:      `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, '0')}-${String(when.getDate()).padStart(2, '0')}`,
     startTime: `${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}`,
     duration:  '—',

@@ -241,7 +241,9 @@ export function startVideoPreview(): void {
     // blob and the <img> goes blank with no error.
     const arr = normalizeFrameData(data)
     if (!img || !arr || arr.length < 4) return
-    const url = URL.createObjectURL(new Blob([arr], { type: 'image/jpeg' }))
+    // Cast: TS 6 narrows Blob input to exclude SharedArrayBuffer-backed views,
+    // but normalizeFrameData always returns a regular ArrayBuffer-backed view.
+    const url = URL.createObjectURL(new Blob([arr as BlobPart], { type: 'image/jpeg' }))
     if (lastFrameBlobUrl) URL.revokeObjectURL(lastFrameBlobUrl)
     lastFrameBlobUrl = url
     img.src = url

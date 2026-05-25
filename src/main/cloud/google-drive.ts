@@ -84,19 +84,30 @@ export async function uploadFile(token: string, filePath: string, folderId?: str
   // offset rather than re-sending the original (now-wrong) chunk buffer.
   // `attemptChunkSize` / `attemptIsLast` are written by `op` and read after
   // `withRetry` resolves so the outer loop knows how far to advance.
+  //
+  // `probeFileId` / `probeMd5` are populated when `beforeRetry`'s probe finds
+  // the server has already accepted all bytes (returns 200/201 with the file
+  // metadata body). In that case we short-circuit the outer loop and use those
+  // values as if the final chunk had succeeded.
   let offset = 0
   let fileId: string | null = null
+  let probeFileId: string | null = null
+  let probeMd5: string | undefined
 
   while (offset < size) {
     let attemptChunkSize = 0
     let attemptIsLast    = false
 
     const res = await withRetry(async () => {
+      // If beforeRetry's probe already captured the file id (server signalled
+      // the upload was complete with a 200/201 metadata response), there's no
+      // more chunk work to do — return a sentinel so the outer loop can exit.
+      if (probeFileId) return null as unknown as Response
       const remaining = size - offset
       if (remaining <= 0) {
-        // beforeRetry advanced offset past EOF — server has all bytes but we
-        // never observed the 200/201 final response. Surface as a specific
-        // error so the queue can decide whether to re-upload from scratch.
+        // beforeRetry advanced offset past EOF without capturing the file id
+        // via probe. Server claims it has all bytes but didn't return the
+        // metadata body — surface as a specific error.
         throw new Error('Drive resume: server reported complete but no final response observed')
       }
       attemptChunkSize = Math.min(CHUNK_SIZE, remaining)
@@ -119,12 +130,27 @@ export async function uploadFile(token: string, filePath: string, folderId?: str
       throw e
     }, {
       beforeRetry: async () => {
-        // Query upload status to resync offset after a transient failure
+        // Query upload status to resync offset after a transient failure.
         const probe = await fetch(uploadUrl, {
           method: 'PUT',
           headers: { 'Content-Length': '0', 'Content-Range': `bytes */${size}` },
         }).catch(() => null)
-        if (probe && (probe.status === 308 || probe.status === 200)) {
+        if (!probe) return
+        if (probe.status === 200 || probe.status === 201) {
+          // Upload is already complete — body contains file metadata. Capture
+          // the id (and md5 if present) so the outer loop can short-circuit.
+          try {
+            const j = await probe.json() as { id?: string; md5Checksum?: string }
+            if (j && j.id) {
+              probeFileId = j.id
+              probeMd5    = j.md5Checksum
+              // Advance past EOF so the while-loop exits cleanly.
+              offset = size
+            }
+          } catch { /* ignore parse errors — fall through to error path */ }
+          return
+        }
+        if (probe.status === 308) {
           const range = probe.headers.get('Range')
           if (range) {
             // Range: bytes=0-N — N is the last byte server has
@@ -134,6 +160,12 @@ export async function uploadFile(token: string, filePath: string, folderId?: str
         }
       },
     })
+
+    // If beforeRetry's probe already captured the file id, the resync moved
+    // offset to size and any subsequent op invocation would throw. But the op
+    // that succeeded just before this point may have been the probe path —
+    // either way, exit the outer loop now.
+    if (probeFileId) break
 
     if (attemptIsLast) {
       const j = await res.json() as { id: string; md5Checksum?: string }
@@ -150,6 +182,19 @@ export async function uploadFile(token: string, filePath: string, folderId?: str
     }
 
     offset += attemptChunkSize
+  }
+
+  // If the final 200 was never observed via a chunk PUT but the probe found
+  // the upload already complete, use the probe-captured file id and run the
+  // same integrity check we would have run on the final chunk response.
+  if (!fileId && probeFileId) {
+    fileId = probeFileId
+    if (probeMd5) {
+      const localMd5 = await md5OfFile(filePath)
+      if (localMd5 !== probeMd5) {
+        throw new Error(`Drive checksum mismatch: ${localMd5} ≠ ${probeMd5}`)
+      }
+    }
   }
 
   if (!fileId) throw new Error('Drive upload completed without file id')

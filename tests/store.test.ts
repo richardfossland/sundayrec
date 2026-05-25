@@ -47,6 +47,66 @@ describe('addHistory', () => {
   })
 })
 
+// ─── addHistoryWithTimestamp ─────────────────────────────────────────────────
+
+describe('addHistoryWithTimestamp', () => {
+  it('preserves the supplied timestamp (does not stamp now)', () => {
+    const yesterday = Date.now() - 24 * 60 * 60 * 1000
+    store.addHistoryWithTimestamp({
+      date: '2026-05-24', startTime: '11:00', duration: '—',
+      filename: 'missed.mp3', status: 'error', error: 'missed_recording',
+      timestamp: yesterday,
+    })
+    const h = store.getHistory()
+    expect(h[0].timestamp).toBe(yesterday)
+  })
+
+  it('inserts a back-dated entry in correct chronological position', () => {
+    // Add a recent entry, then a back-dated one — back-dated should land at index 1
+    store.addHistory({ filename: 'recent.mp3', duration: 10, status: 'ok' } as any)
+    const oneHourAgo = Date.now() - 60 * 60 * 1000
+    store.addHistoryWithTimestamp({
+      date: '2026-05-25', startTime: '10:00', duration: '—',
+      filename: 'older.mp3', status: 'error', error: 'missed_recording',
+      timestamp: oneHourAgo,
+    })
+    const h = store.getHistory()
+    expect(h).toHaveLength(2)
+    expect(h[0].filename).toBe('recent.mp3')
+    expect(h[1].filename).toBe('older.mp3')
+    expect(h[1].timestamp).toBe(oneHourAgo)
+  })
+
+  it('inserts a future-dated entry at the top', () => {
+    store.addHistory({ filename: 'now.mp3', duration: 10, status: 'ok' } as any)
+    const future = Date.now() + 60 * 60 * 1000
+    store.addHistoryWithTimestamp({
+      date: '2026-05-25', startTime: '20:00', duration: '—',
+      filename: 'future.mp3', status: 'scheduled', timestamp: future,
+    })
+    expect(store.getHistory()[0].filename).toBe('future.mp3')
+  })
+
+  it('back-dated entry does not interfere with subsequent addHistory monotonic ordering', () => {
+    // Back-dated missed entry (yesterday) should not push tomorrow's addHistory back.
+    jest.useFakeTimers()
+    jest.setSystemTime(1_000_000)
+    const yesterday = 500_000
+    store.addHistoryWithTimestamp({
+      date: '2026-05-24', startTime: '11:00', duration: '—',
+      filename: 'missed.mp3', status: 'error', error: 'missed_recording',
+      timestamp: yesterday,
+    })
+    jest.setSystemTime(2_000_000)
+    store.addHistory({ filename: 'next.mp3', duration: 10, status: 'ok' } as any)
+    jest.useRealTimers()
+    const nextEntry = store.getHistory().find(e => e.filename === 'next.mp3')!
+    // addHistory sees yesterday as history[0]? — but it should still produce a time near 2_000_000
+    expect(nextEntry.timestamp).toBeGreaterThanOrEqual(2_000_000)
+    expect(nextEntry.timestamp).toBeLessThan(3_000_000)
+  })
+})
+
 // ─── deleteHistoryEntry ───────────────────────────────────────────────────────
 
 describe('deleteHistoryEntry', () => {

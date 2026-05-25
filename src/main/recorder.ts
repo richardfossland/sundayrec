@@ -1299,7 +1299,14 @@ export function recoverCrashedSession(): void {
       try {
         fs.renameSync(filePath, out)
         notify('SundayRec', getNL().recovered.replace('{file}', path.basename(out)))
-      } catch {}
+      } catch (err) {
+        // Both remux AND rename failed — partial file is unrecoverable. Surface
+        // this so the user at least sees something in the logs to investigate.
+        logger.error('recorder', 'recovery rename also failed — partial file abandoned', {
+          file: path.basename(filePath),
+          msg: (err as Error).message
+        })
+      }
     }
   })
 }

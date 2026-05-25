@@ -906,7 +906,7 @@ function computePeaks(buf: AudioBuffer): Float32Array {
  * downsampled inputs we feed it), but kept here so the routing can switch
  * over without a code rewrite if profiling shows otherwise.
  */
-// @ts-expect-error retained for future use
+// Underscore prefix marks this as intentionally unused (TS no-unused convention).
 async function _computePeaksAsync(buf: AudioBuffer): Promise<Float32Array> {
   const RATE = 100
   const total = Math.ceil(buf.duration * RATE)

@@ -173,14 +173,14 @@ export async function processQueue(win: BrowserWindow | null): Promise<void> {
       next.attempts += 1
       save(entries)
       notifyStatus(win)
-      win?.webContents.send('cloud-upload-progress', { service: next.service, filename: path.basename(next.filePath) })
+      safeSend(win, 'cloud-upload-progress', { service: next.service, filename: path.basename(next.filePath) })
 
       try {
         await uploadFile(next.service, next.filePath, undefined, next.entryTimestamp)
         // Success — remove from queue
         const after = load().filter(e => e.id !== next.id)
         save(after)
-        win?.webContents.send('cloud-upload-done', { service: next.service, ok: true })
+        safeSend(win, 'cloud-upload-done', { service: next.service, ok: true })
         logger.info('cloud-queue', 'upload_ok', { service: next.service, filename: path.basename(next.filePath), attempts: next.attempts })
       } catch (err) {
         const msg = (err as Error).message
@@ -199,7 +199,7 @@ export async function processQueue(win: BrowserWindow | null): Promise<void> {
           }
           save(load().map(x => x.id === cur.id ? cur : x))
         }
-        win?.webContents.send('cloud-upload-done', { service: next.service, ok: false, error: msg })
+        safeSend(win, 'cloud-upload-done', { service: next.service, ok: false, error: msg })
         logger.warn('cloud-queue', 'upload_failed', { service: next.service, filename: path.basename(next.filePath), attempt: next.attempts, error: msg })
       }
 
@@ -228,6 +228,20 @@ function scheduleNextWakeup(win: BrowserWindow | null): void {
 function notifyStatus(win: BrowserWindow | null): void {
   if (!win || win.isDestroyed()) return
   win.webContents.send('cloud-queue-update', getQueueStatus())
+}
+
+/**
+ * Guard against sending IPC to a destroyed window — same pattern as
+ * recorder.ts:safeSend. Without this, win?.webContents.send() throws when the
+ * window is closed mid-upload (user quit during a long upload, for example).
+ */
+function safeSend(win: BrowserWindow | null, channel: string, payload?: unknown): void {
+  if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return
+  try {
+    win.webContents.send(channel, payload)
+  } catch (err) {
+    logger.warn('cloud-queue', `safeSend(${channel}) failed`, { msg: (err as Error).message })
+  }
 }
 
 /** Cancel the scheduled wakeup — used during app shutdown. */
