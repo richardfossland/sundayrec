@@ -1196,6 +1196,45 @@ function failSession(session: Session, reason: string): void {
   stopStuckTimer(session)
   clearRecoveryInterval()
   stopBlockers()
+
+  // Preserve any partial segments that hit disk before the failure. Without
+  // this, a 90-minute recording cut short by a permanent USB-disconnect ends
+  // up entirely absent from history — even though most of it is intact on the
+  // file system. Walk segments[] and add history entries for any file > 5 KB
+  // so the user can find the partial recording in the editor.
+  const recDate = new Date(session.sessionStartTime)
+  let salvaged = 0
+  for (const segPath of session.segments) {
+    try {
+      if (!fs.existsSync(segPath)) continue
+      const stat = fs.statSync(segPath)
+      if (stat.size < 5000) continue
+      const segDurSec = Math.max(0, Math.round((stat.mtimeMs - session.sessionStartTime) / 1000))
+      store.addHistory({
+        date:          localDateStr(recDate),
+        startTime:     recDate.toTimeString().slice(0, 5),
+        duration:      formatDuration(segDurSec),
+        filename:      path.basename(segPath),
+        path:          segPath,
+        status:        'error',
+        error:         reason,
+        note:          'Avbrutt opptak — delfil bevart',
+        durationSec:   segDurSec,
+        fileSizeBytes: stat.size,
+      })
+      salvaged++
+    } catch (err) {
+      logger.warn('recorder', 'failSession segment scan failed', {
+        path: segPath, msg: (err as Error).message,
+      })
+    }
+  }
+  if (salvaged > 0) {
+    logger.info('recorder', 'failSession salvaged partial segments', { count: salvaged, reason })
+  }
+
+  // Clear recovery AFTER segments are added so a crash during failSession's
+  // history writes can still be recovered next launch.
   store.set('activeRecovery', null)
 
   // Clean up any orphaned pre-roll temp file

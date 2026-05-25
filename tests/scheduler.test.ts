@@ -42,11 +42,13 @@ import {
   getNextRecording,
 } from '../src/main/scheduler'
 import * as store from '../src/main/store'
+import * as recorder from '../src/main/recorder'
 import * as logger from '../src/main/logger'
 
 const mockStoreGet        = store.get        as unknown as jest.Mock
 const mockStoreGetHistory = store.getHistory as unknown as jest.Mock
 const mockStoreAddHistory = store.addHistoryWithTimestamp as unknown as jest.Mock
+const mockRecorderStart   = recorder.startSession as unknown as jest.Mock
 const mockLogger = {
   warn:  logger.warn  as unknown as jest.Mock,
   info:  logger.info  as unknown as jest.Mock,
@@ -755,5 +757,160 @@ describe('midnight-crossing slots — scheduler.reschedule()', () => {
     const start = new Date('2026-03-28T22:00:00.000Z').getTime()
     const stop  = new Date('2026-03-29T00:30:00.000Z').getTime()
     expect((stop - start) / 3_600_000).toBeCloseTo(2.5, 5)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Scheduled slot rejected by recorder — history-entry fallback
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Real-world scenario: a manual recording is already running when a weekly
+// scheduled slot's start time fires. recorder.startSession returns
+// `{ error: 'already_recording' }`. Without the fallback logged here, the
+// skipped scheduled slot vanishes from history — the user has no record that
+// the scheduled recording was supposed to happen.
+
+describe('scheduled slot rejected → history entry fallback', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    jest.useFakeTimers()
+    // Pin "now" to Sun 2026-05-17 11:02 — inside the slotActiveNow window
+    // for a slot scheduled at 11:00.
+    jest.setSystemTime(new Date(2026, 4, 17, 11, 2, 0))
+    mockStoreGetHistory.mockReturnValue([])
+    mockStoreGet.mockImplementation(() => null)
+    init(mockWin)
+  })
+  afterEach(() => {
+    cancelAllSchedulerJobs()
+    jest.useRealTimers()
+    // Restore default mock for subsequent test files
+    mockRecorderStart.mockResolvedValue({ ok: true })
+  })
+
+  it('logs an "already_recording" history entry for the skipped slot', async () => {
+    mockRecorderStart.mockResolvedValue({ error: 'already_recording' })
+    mockStoreGet.mockImplementation((key: string) => {
+      if (key === 'slots') return [{ days: [6], start: '11:00', stop: '12:00' }]
+      if (key === 'specialRecordings') return []
+      if (key === 'reminderMinutes') return 0
+      return null
+    })
+
+    // checkMissedRecordings will call triggerStart for the active slot.
+    checkMissedRecordings()
+    // Flush the async triggerStart microtasks
+    for (let i = 0; i < 30; i++) await Promise.resolve()
+
+    const calls = mockStoreAddHistory.mock.calls
+    const skipEntry = calls.find(c => {
+      const e = c[0] as { error?: string; note?: string }
+      return e.error === 'already_recording'
+    })
+    expect(skipEntry).toBeDefined()
+    expect(skipEntry![0].status).toBe('error')
+    expect(skipEntry![0].note).toMatch(/Hoppet over/i)
+    expect(skipEntry![0].filename).toMatch(/11:00/)
+  })
+
+  it('logs an entry for the skipped special recording', async () => {
+    mockRecorderStart.mockResolvedValue({ error: 'already_recording' })
+    mockStoreGet.mockImplementation((key: string) => {
+      if (key === 'slots') return []
+      if (key === 'specialRecordings') return [{
+        date: '2026-05-17', start: '11:00', stop: '12:00', name: 'Konfirmasjon',
+      }]
+      if (key === 'reminderMinutes') return 0
+      return null
+    })
+
+    checkMissedRecordings()
+    for (let i = 0; i < 30; i++) await Promise.resolve()
+
+    const calls = mockStoreAddHistory.mock.calls
+    const skipEntry = calls.find(c => {
+      const e = c[0] as { error?: string; filename?: string }
+      return e.error === 'already_recording'
+    })
+    expect(skipEntry).toBeDefined()
+    expect(skipEntry![0].filename).toBe('Konfirmasjon')
+  })
+
+  it('logs a generic "Planlagt opptak startet ikke" note for non-already_recording errors', async () => {
+    mockRecorderStart.mockResolvedValue({ error: 'device_not_found' })
+    mockStoreGet.mockImplementation((key: string) => {
+      if (key === 'slots') return [{ days: [6], start: '11:00', stop: '12:00' }]
+      if (key === 'specialRecordings') return []
+      if (key === 'reminderMinutes') return 0
+      return null
+    })
+
+    checkMissedRecordings()
+    for (let i = 0; i < 30; i++) await Promise.resolve()
+
+    const calls = mockStoreAddHistory.mock.calls
+    const errEntry = calls.find(c => {
+      const e = c[0] as { error?: string }
+      return e.error === 'device_not_found'
+    })
+    expect(errEntry).toBeDefined()
+    expect(errEntry![0].note).toMatch(/Planlagt opptak startet ikke/i)
+  })
+
+  it('does NOT log a skipped-slot history entry when start succeeds', async () => {
+    mockRecorderStart.mockResolvedValue({ ok: true })
+    mockStoreGet.mockImplementation((key: string) => {
+      if (key === 'slots') return [{ days: [6], start: '11:00', stop: '12:00' }]
+      if (key === 'specialRecordings') return []
+      if (key === 'reminderMinutes') return 0
+      return null
+    })
+
+    checkMissedRecordings()
+    for (let i = 0; i < 30; i++) await Promise.resolve()
+
+    const calls = mockStoreAddHistory.mock.calls
+    const errEntry = calls.find(c => {
+      const e = c[0] as { status?: string }
+      return e.status === 'error'
+    })
+    expect(errEntry).toBeUndefined()
+  })
+
+  it('still suppresses the renderer error banner for already_recording (preserves UI invariant)', async () => {
+    mockRecorderStart.mockResolvedValue({ error: 'already_recording' })
+    mockStoreGet.mockImplementation((key: string) => {
+      if (key === 'slots') return [{ days: [6], start: '11:00', stop: '12:00' }]
+      if (key === 'specialRecordings') return []
+      if (key === 'reminderMinutes') return 0
+      return null
+    })
+    ;(mockWin.webContents.send as jest.Mock).mockClear()
+
+    checkMissedRecordings()
+    for (let i = 0; i < 30; i++) await Promise.resolve()
+
+    const sendCalls = (mockWin.webContents.send as jest.Mock).mock.calls
+    const errorBanner = sendCalls.find(c => c[0] === 'recording-error')
+    expect(errorBanner).toBeUndefined()
+  })
+
+  it('does emit a renderer recording-error for non-already_recording errors', async () => {
+    mockRecorderStart.mockResolvedValue({ error: 'device_not_found' })
+    mockStoreGet.mockImplementation((key: string) => {
+      if (key === 'slots') return [{ days: [6], start: '11:00', stop: '12:00' }]
+      if (key === 'specialRecordings') return []
+      if (key === 'reminderMinutes') return 0
+      return null
+    })
+    ;(mockWin.webContents.send as jest.Mock).mockClear()
+
+    checkMissedRecordings()
+    for (let i = 0; i < 30; i++) await Promise.resolve()
+
+    const sendCalls = (mockWin.webContents.send as jest.Mock).mock.calls
+    const errorBanner = sendCalls.find(c => c[0] === 'recording-error')
+    expect(errorBanner).toBeDefined()
+    expect((errorBanner![1] as { error: string }).error).toBe('device_not_found')
   })
 })

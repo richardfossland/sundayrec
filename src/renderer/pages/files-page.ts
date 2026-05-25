@@ -2,14 +2,21 @@ import { settings, patchSettings } from '../state'
 import type { FileFormat, FilenamePattern, PodcastSettings } from '../../types'
 import { flashSaved, setVal, setRadio, isoDate, setupDirtyBar } from '../helpers'
 import { getChurchHolidays } from '../../shared/church-calendar'
+import { t } from '../i18n'
 
 let _markFilesClean = () => {}
 let _markFilesDirty = () => {}
+let _markPublishClean = () => {}
+let _markPublishDirty = () => {}
 
 export function setupFilesPage(): void {
   const bar = setupDirtyBar('settings-files')
   _markFilesClean = bar.clean
   _markFilesDirty = bar.dirty
+  // Publish tab has its own footer (sky-backup + podcast moved here)
+  const pubBar = setupDirtyBar('settings-publish')
+  _markPublishClean = pubBar.clean
+  _markPublishDirty = pubBar.dirty
 
   document.getElementById('btn-pick-folder')?.addEventListener('click', async () => {
     const folder = await window.api.pickFolder()
@@ -36,15 +43,20 @@ export function setupFilesPage(): void {
   document.getElementById('opt-podcast-enabled')?.addEventListener('change', function (this: HTMLInputElement) {
     const cfg = document.getElementById('podcast-config')
     if (cfg) cfg.style.display = this.checked ? 'flex' : 'none'
-    _markFilesDirty()
+    _markPublishDirty()
   })
   ;[
     'podcast-title','podcast-author','podcast-description','podcast-language',
     'podcast-category','podcast-email','podcast-link','podcast-image','podcast-service',
   ].forEach(id => {
-    document.getElementById(id)?.addEventListener('input',  () => _markFilesDirty())
-    document.getElementById(id)?.addEventListener('change', () => _markFilesDirty())
+    document.getElementById(id)?.addEventListener('input',  () => _markPublishDirty())
+    document.getElementById(id)?.addEventListener('change', () => _markPublishDirty())
   })
+
+  // Publish-tab save/cancel — runs the same saveFilesSettings since cloud+podcast
+  // settings are part of the same Settings object and saved through one IPC call.
+  document.getElementById('btn-publish-save')?.addEventListener('click', saveFilesSettings)
+  document.getElementById('btn-publish-cancel')?.addEventListener('click', () => applyFilesSettingsToUI())
 
   document.getElementById('btn-podcast-copy-url')?.addEventListener('click', () => {
     const inp = document.getElementById('podcast-feed-url') as HTMLInputElement | null
@@ -101,6 +113,7 @@ function showFeedUrl(url: string): void {
 
 export function applyFilesSettingsToUI(): void {
   _markFilesClean()
+  _markPublishClean()
   setVal('save-folder', settings.saveFolder ?? '')
   const patternEl = document.getElementById('pattern-select') as HTMLSelectElement | null
   if (patternEl) patternEl.value = settings.filenamePattern ?? 'date'
@@ -174,7 +187,8 @@ async function saveFilesSettings(): Promise<void> {
   const days = autoDelEl?.checked ? (+(autoDelDays?.value ?? '') || 90) : 0
 
   if (days > 0 && days < 30) {
-    const msg = `Opptak eldre enn ${days} dager slettes automatisk og kan ikke gjenopprettes. Er du sikker?`
+    const msg = t('files.confirmAutoDeleteShort', 'Opptak eldre enn {n} dager slettes automatisk og kan ikke gjenopprettes. Er du sikker?')
+      .replace('{n}', String(days))
     if (!confirm(msg)) return
   }
 
@@ -205,5 +219,11 @@ async function saveFilesSettings(): Promise<void> {
   })
   await window.api.saveSettings(settings)
   _markFilesClean()
-  flashSaved(document.getElementById('btn-files-save'))
+  _markPublishClean()
+  // Flash the save button on whichever tab is active
+  const activeTab = document.querySelector<HTMLElement>('#settings-tabs .inner-tab.active')?.dataset.tab
+  const flashBtn = activeTab === 'settings-publish'
+    ? document.getElementById('btn-publish-save')
+    : document.getElementById('btn-files-save')
+  flashSaved(flashBtn)
 }

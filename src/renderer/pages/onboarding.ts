@@ -335,9 +335,10 @@ function sDone(body: HTMLElement): void {
     <h2 class="ob-title">Alt er klart!</h2>
     <p class="ob-desc">SundayRec er klar til å ta opp gudstjenester. Du kan endre alle innstillinger i menyen når som helst.</p>
     <div class="ob-tips">
-      <div class="ob-tip"><strong>Hjem</strong> — Se status på mikrofon og neste opptak</div>
-      <div class="ob-tip"><strong>Planlegging</strong> — Legg til og endre opptakstider</div>
-      <div class="ob-tip"><strong>Innstillinger</strong> — Juster lydkvalitet og lagringsmappe</div>
+      <div class="ob-tip"><strong>Hjem</strong> — Sjekk status, kjør test-opptak, og se neste planlagte opptak</div>
+      <div class="ob-tip"><strong>Tidsplan</strong> — Legg til ukentlige opptak og spesialdager (jul, påske)</div>
+      <div class="ob-tip"><strong>Innstillinger → Lyd</strong> — Bytt mikser, juster volum og kjør test-opptak</div>
+      <div class="ob-tip"><strong>Innstillinger → Publisering</strong> <em>(valgfritt)</em> — Koble til Google Drive / Dropbox / OneDrive for automatisk sky-backup</div>
     </div>
     <div class="ob-actions">
       <button class="btn-primary" id="ob-done" style="justify-content:center">Åpne SundayRec →</button>

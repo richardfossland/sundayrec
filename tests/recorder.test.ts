@@ -1082,3 +1082,134 @@ describe('tray integration', () => {
     expect((tray.setRecording as jest.Mock).mock.calls.some(c => c[0] === false)).toBe(true)
   })
 })
+
+// ════════════════════════════════════════════════════════════════════════════
+// failSession — partial-segment salvage on permanent device failure
+// ════════════════════════════════════════════════════════════════════════════
+//
+// When the watchdog gives up (all reconnects failed, or a fatal error like
+// disk_full was raised), failSession previously cleared activeRecovery and
+// returned silently — the partial audio file was abandoned with no history
+// entry. This block verifies the salvage path that adds a history entry for
+// any partial file > 5 KB so the user can find it after a botched recording.
+
+describe('failSession — salvaging partial segments', () => {
+  it('adds an error-status history entry when the partial file is preserved', async () => {
+    const handle = makeHandle('/tmp/svc.mp3')
+    ;(nativeRecorder.startCapture as jest.Mock).mockResolvedValueOnce(handle)
+    const win = makeWindow()
+    await startSession(baseSettings, win)
+
+    ;(fs.existsSync as jest.Mock).mockReturnValue(true)
+    ;(fs.statSync as jest.Mock).mockReturnValue({
+      size: 5_242_880,  // 5 MB
+      mtimeMs: Date.now() + 120_000,
+    })
+
+    handle.lastError = 'disk_full'  // fatal — skips reconnect, goes straight to failSession
+    handle.onExit!(1)
+    await flush(20)
+
+    const salvaged = (store.addHistory as jest.Mock).mock.calls.find((c: unknown[]) => {
+      const e = c[0] as { status?: string; error?: string }
+      return e.status === 'error' && e.error === 'disk_full'
+    })
+    expect(salvaged).toBeDefined()
+    expect((salvaged![0] as { fileSizeBytes: number }).fileSizeBytes).toBe(5_242_880)
+    expect((salvaged![0] as { note: string }).note).toMatch(/Avbrutt/i)
+    expect((salvaged![0] as { durationSec: number }).durationSec).toBeGreaterThan(0)
+  })
+
+  it('clears activeRecovery AFTER the salvage entry is written (crash-safety order)', async () => {
+    const handle = makeHandle('/tmp/svc.mp3')
+    ;(nativeRecorder.startCapture as jest.Mock).mockResolvedValueOnce(handle)
+    const win = makeWindow()
+    await startSession(baseSettings, win)
+
+    ;(fs.existsSync as jest.Mock).mockReturnValue(true)
+    ;(fs.statSync as jest.Mock).mockReturnValue({ size: 10_000, mtimeMs: Date.now() })
+
+    // Track order of operations: salvage history-add should happen BEFORE
+    // activeRecovery is cleared.
+    const ops: string[] = []
+    const origAdd = (store.addHistory as jest.Mock).getMockImplementation()
+    const origSet = (store.set as jest.Mock).getMockImplementation()
+    ;(store.addHistory as jest.Mock).mockImplementation((e: unknown) => {
+      ops.push('addHistory')
+      return origAdd?.(e)
+    })
+    ;(store.set as jest.Mock).mockImplementation((k: string, v: unknown) => {
+      if (k === 'activeRecovery' && v === null) ops.push('clearRecovery')
+      return origSet?.(k, v)
+    })
+
+    handle.lastError = 'disk_full'
+    handle.onExit!(1)
+    await flush(20)
+
+    const addIdx   = ops.indexOf('addHistory')
+    const clearIdx = ops.indexOf('clearRecovery')
+    // Both happened
+    expect(addIdx).toBeGreaterThanOrEqual(0)
+    expect(clearIdx).toBeGreaterThanOrEqual(0)
+    // History write came first
+    expect(addIdx).toBeLessThan(clearIdx)
+  })
+
+  it('skips segments below the 5 KB sanity threshold (no junk history entries)', async () => {
+    const handle = makeHandle('/tmp/svc.mp3')
+    ;(nativeRecorder.startCapture as jest.Mock).mockResolvedValueOnce(handle)
+    const win = makeWindow()
+    await startSession(baseSettings, win)
+
+    ;(fs.existsSync as jest.Mock).mockReturnValue(true)
+    ;(fs.statSync as jest.Mock).mockReturnValue({ size: 200, mtimeMs: Date.now() })
+
+    handle.lastError = 'disk_full'
+    handle.onExit!(1)
+    await flush(20)
+
+    const salvaged = (store.addHistory as jest.Mock).mock.calls.find((c: unknown[]) => {
+      const e = c[0] as { status?: string }
+      return e.status === 'error'
+    })
+    expect(salvaged).toBeUndefined()
+  })
+
+  it('does not throw when fs.statSync throws (best-effort salvage)', async () => {
+    const handle = makeHandle('/tmp/svc.mp3')
+    ;(nativeRecorder.startCapture as jest.Mock).mockResolvedValueOnce(handle)
+    const win = makeWindow()
+    await startSession(baseSettings, win)
+
+    ;(fs.existsSync as jest.Mock).mockReturnValue(true)
+    ;(fs.statSync as jest.Mock).mockImplementation(() => { throw new Error('EIO') })
+
+    handle.lastError = 'disk_full'
+    expect(() => handle.onExit!(1)).not.toThrow()
+    await flush(20)
+    expect(getPhase()).toBe('idle')
+  })
+
+  it('uses sessionStartTime (not handle.startTime) to compute the entry date', async () => {
+    const handle = makeHandle('/tmp/svc.mp3')
+    ;(nativeRecorder.startCapture as jest.Mock).mockResolvedValueOnce(handle)
+    const win = makeWindow()
+    await startSession(baseSettings, win)
+
+    ;(fs.existsSync as jest.Mock).mockReturnValue(true)
+    ;(fs.statSync as jest.Mock).mockReturnValue({ size: 100_000, mtimeMs: Date.now() })
+
+    handle.lastError = 'disk_full'
+    handle.onExit!(1)
+    await flush(20)
+
+    const salvaged = (store.addHistory as jest.Mock).mock.calls.find((c: unknown[]) => {
+      const e = c[0] as { status?: string }
+      return e.status === 'error'
+    })
+    expect(salvaged).toBeDefined()
+    expect((salvaged![0] as { date: string }).date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect((salvaged![0] as { startTime: string }).startTime).toMatch(/^\d{2}:\d{2}$/)
+  })
+})

@@ -98,7 +98,8 @@ export function setupPublishPage(): void {
   document.addEventListener('cloud-manual-upload', async (e: Event) => {
     const detail = (e as CustomEvent).detail as { service: CloudServiceId; filePath: string }
     await window.api.cloudUploadFile(detail.service, detail.filePath)
-    flashSaved(document.getElementById('btn-files-save'))
+    // Sky-backup is now on the Publisering tab; fall back to files-save if not present.
+    flashSaved(document.getElementById('btn-publish-save') ?? document.getElementById('btn-files-save'))
   })
 
   // Listen for upload progress/done from main

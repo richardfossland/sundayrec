@@ -263,6 +263,33 @@ async function triggerStart(slot: ScheduleSlot | SpecialRecording, overrideName?
     const nl   = recorder.NOTIFY_LABELS[lang] ?? recorder.NOTIFY_LABELS.no
     const msg  = recorder.localizeError(result.error)
     if (Notification.isSupported()) new Notification({ title: nl.err, body: msg }).show()
+
+    // Log a history entry for the skipped scheduled slot so the user has a
+    // record that the recording was supposed to run. Without this, an
+    // overlapping slot (or a slot fired while a manual recording is active)
+    // simply vanishes — there's nothing in history to show what was missed.
+    const now = new Date()
+    const slotName = overrideName
+      ?? (slot as SpecialRecording).name
+      ?? `${(slot as ScheduleSlot).start ?? ''}–${(slot as ScheduleSlot).stop ?? ''}`
+    const skipNote = result.error === 'already_recording'
+      ? 'Hoppet over — et annet opptak var i gang'
+      : `Planlagt opptak startet ikke: ${msg}`
+    try {
+      store.addHistoryWithTimestamp({
+        date:      `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
+        startTime: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
+        duration:  '—',
+        filename:  slotName,
+        status:    'error',
+        error:     result.error,
+        note:      skipNote,
+        timestamp: now.getTime(),
+      })
+    } catch (err) {
+      logger.warn('scheduler', 'skipped_slot_history_failed', { msg: (err as Error).message })
+    }
+
     // Don't show an error banner when a manual recording is already active —
     // the UI correctly shows the in-progress recording; a banner would be confusing.
     if (result.error !== 'already_recording') {

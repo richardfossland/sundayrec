@@ -50,6 +50,20 @@ function updateNextRecordingPreview(): void {
 }
 
 export function setupSchedulePage(): void {
+  // How-it-works dismissible card — once dismissed, hidden for this session
+  document.getElementById('btn-schedule-howto-dismiss')?.addEventListener('click', e => {
+    e.preventDefault()
+    const card = document.getElementById('schedule-howto-card')
+    if (card) card.style.display = 'none'
+    try { localStorage.setItem('sundayrec.scheduleHowtoDismissed', '1') } catch { /* ignore */ }
+  })
+  try {
+    if (localStorage.getItem('sundayrec.scheduleHowtoDismissed') === '1') {
+      const card = document.getElementById('schedule-howto-card')
+      if (card) card.style.display = 'none'
+    }
+  } catch { /* ignore */ }
+
   document.getElementById('btn-add-slot')?.addEventListener('click', () => openSlotEditor(-1))
   document.getElementById('btn-slot-save')?.addEventListener('click', saveSlot)
   document.getElementById('slot-start')?.addEventListener('change', () => {
@@ -193,7 +207,12 @@ export function renderSlotsList(): void {
   const slots = settings.slots ?? []
   const days  = tArr('schedule.days', ['Man','Tir','Ons','Tor','Fre','Lør','Søn'])
   if (!slots.length) {
-    list.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:8px 0">${t('schedule.noSlots')}</div>`
+    const emptyTitle = t('schedule.noSlotsTitle', 'Ingen ukentlige opptak satt opp ennå')
+    const emptyHint  = t('schedule.noSlotsHint',  'Klikk «Legg til tidspunkt» nedenfor for å starte et fast ukentlig opptak — f.eks. søndag kl. 11.')
+    list.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:10px 0;line-height:1.5">
+      <div style="font-weight:600;color:var(--text2);margin-bottom:3px">📅 ${escHtml(emptyTitle)}</div>
+      <div>${escHtml(emptyHint)}</div>
+    </div>`
     updateNextRecordingPreview()
     return
   }

@@ -388,15 +388,16 @@ function showRecordingFinishedSummary(entry: RecordingEntry): void {
 }
 
 export function setupHome(): void {
-  // Test-recording button — runs a standalone 30-second test through the full
-  // pipeline (device → encoder → disk) and reports back signal level + file
-  // size. The user clicks this before a service to confirm everything works.
-  document.getElementById('btn-test-recording')?.addEventListener('click', async () => {
-    const btn = document.getElementById('btn-test-recording') as HTMLButtonElement | null
-    const status = document.getElementById('health-status')
+  // Wire up Test-recording and Preflight buttons. Both used to live on Home but
+  // were moved to Settings → Lyd in the UX reorganization. The "btn-go-health"
+  // anchor on Home jumps to that section. Buttons are bound by ID so both the
+  // old IDs (if present anywhere) and the new "-settings" IDs are handled.
+  const runTestRecording = async (btnId: string, statusId: string): Promise<void> => {
+    const btn = document.getElementById(btnId) as HTMLButtonElement | null
+    const status = document.getElementById(statusId)
     if (!btn || !status) return
     if (window.__isRecording) {
-      status.textContent = 'Kan ikke kjøre test mens et opptak pågår.'
+      status.textContent = t('home.testBusy', 'Kan ikke kjøre test mens et opptak pågår.')
       status.style.color = 'var(--red)'
       return
     }
@@ -405,10 +406,13 @@ export function setupHome(): void {
     let elapsed = 0
     const TOTAL = 30
     status.style.color = 'var(--text2)'
-    status.textContent = `Tar opp test… 0/${TOTAL} s`
+    const fmtProgress = (n: number): string =>
+      t('home.testProgress', 'Tar opp test… {n}/{total} s')
+        .replace('{n}', String(n)).replace('{total}', String(TOTAL))
+    status.textContent = fmtProgress(0)
     const tick = setInterval(() => {
       elapsed++
-      status.textContent = `Tar opp test… ${elapsed}/${TOTAL} s`
+      status.textContent = fmtProgress(elapsed)
       if (elapsed >= TOTAL) clearInterval(tick)
     }, 1000)
     try {
@@ -422,13 +426,13 @@ export function setupHome(): void {
       clearInterval(tick)
       if (r.ok) {
         const sizeKb = r.sizeBytes ? Math.round(r.sizeBytes / 1024) : 0
-        const signalLabel = r.signal === 'normal' ? '✅ Lyd OK'
-                          : r.signal === 'low'    ? '⚠️ Svak lyd — sjekk gain på mikser'
-                          : '⚠️ Stillhet — mikser av?'
+        const signalLabel = r.signal === 'normal' ? t('home.testSignalOk',     '✅ Lyd OK')
+                          : r.signal === 'low'    ? t('home.testSignalLow',    '⚠️ Svak lyd — sjekk gain på mikser')
+                          :                         t('home.testSignalSilent', '⚠️ Stillhet — mikser av?')
         status.textContent = `${signalLabel} (${sizeKb} KB)`
         status.style.color = r.signal === 'normal' ? 'var(--green)' : 'var(--orange, #ffb46b)'
       } else {
-        status.textContent = `❌ ${r.detail ?? r.error ?? 'Ukjent feil'}`
+        status.textContent = `❌ ${r.detail ?? r.error ?? t('home.testUnknownError', 'Ukjent feil')}`
         status.style.color = 'var(--red)'
       }
     } catch (err) {
@@ -439,16 +443,15 @@ export function setupHome(): void {
       btn.disabled = false
       btn.textContent = originalText
     }
-  })
+  }
 
-  // Preflight — quick system health check (mic, disk, scheduler, network)
-  document.getElementById('btn-run-preflight')?.addEventListener('click', async () => {
-    const btn = document.getElementById('btn-run-preflight') as HTMLButtonElement | null
-    const status = document.getElementById('health-status')
-    const list = document.getElementById('preflight-findings') as HTMLUListElement | null
+  const runPreflight = async (btnId: string, statusId: string, listId: string): Promise<void> => {
+    const btn = document.getElementById(btnId) as HTMLButtonElement | null
+    const status = document.getElementById(statusId)
+    const list = document.getElementById(listId) as HTMLUListElement | null
     if (!btn || !status || !list) return
     btn.disabled = true
-    status.textContent = 'Sjekker…'
+    status.textContent = t('home.checking', 'Sjekker…')
     status.style.color = 'var(--text2)'
     list.style.display = 'none'
     list.innerHTML = ''
@@ -466,8 +469,6 @@ export function setupHome(): void {
         status.textContent = `${errors > 0 ? '❌' : '⚠️'} ${parts.join(', ')}`
         status.style.color = errors > 0 ? 'var(--red)' : 'var(--orange, #ffb46b)'
 
-        // Render each finding inline so the user sees what's wrong without
-        // chasing toasts. errors first, then warnings.
         const sorted = [...r.findings].sort((a, b) => (a.severity === 'error' ? -1 : 1) - (b.severity === 'error' ? -1 : 1))
         for (const f of sorted) {
           const li = document.createElement('li')
@@ -489,6 +490,22 @@ export function setupHome(): void {
     } finally {
       btn.disabled = false
     }
+  }
+
+  // Bind to both old (legacy IDs on Home, if present) and new (-settings) IDs
+  document.getElementById('btn-test-recording')?.addEventListener('click', () => runTestRecording('btn-test-recording', 'health-status'))
+  document.getElementById('btn-run-preflight')?.addEventListener('click',  () => runPreflight('btn-run-preflight',  'health-status', 'preflight-findings'))
+  document.getElementById('btn-test-recording-settings')?.addEventListener('click', () => runTestRecording('btn-test-recording-settings', 'health-status-settings'))
+  document.getElementById('btn-run-preflight-settings')?.addEventListener('click',  () => runPreflight('btn-run-preflight-settings',  'health-status-settings', 'preflight-findings-settings'))
+
+  // Home → Settings → Lyd quick-jump (replaces the old inline test buttons)
+  document.getElementById('btn-go-health')?.addEventListener('click', e => {
+    e.preventDefault()
+    window.showPage('settings')
+    document.querySelector<HTMLElement>('#settings-tabs .inner-tab[data-tab="settings-audio"]')?.click()
+    requestAnimationFrame(() => {
+      document.getElementById('btn-test-recording-settings')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
   })
 
   // Video toggle button — always toggles, loads devices inline if turning on
@@ -704,7 +721,14 @@ async function loadNextRecording(prefetchedNext?: { date: string } | null): Prom
   if (!next) {
     if (dateEl)    dateEl.textContent  = '—'
     if (cntEl)     cntEl.textContent   = ''
-    if (titleEl)   titleEl.textContent = t('home.readyTitle', 'Alt er klart')
+    // When no schedule is configured, nudge the user toward Tidsplan
+    const slots = (settings.slots ?? []).length
+    const specials = (settings.specialRecordings ?? []).length
+    if (titleEl) {
+      titleEl.textContent = (slots === 0 && specials === 0)
+        ? t('home.readyNoSchedule', 'Klar — sett opp en tidsplan for å starte automatisk')
+        : t('home.readyTitle', 'Alt er klart')
+    }
     if (heroNextEl) heroNextEl.style.display = 'none'
     return
   }
@@ -928,7 +952,7 @@ export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntr
 
     const aDel = document.createElement('a')
     aDel.href = '#'; aDel.className = 'hist-action hist-del'
-    aDel.title = 'Slett oppføring'
+    aDel.title = t('history.deleteEntry', 'Slett oppføring')
     aDel.innerHTML = '<svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"/></svg>'
     aDel.addEventListener('click', async e => {
       e.preventDefault()

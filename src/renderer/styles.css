@@ -188,9 +188,9 @@ body.platform-win32 ::-webkit-scrollbar-thumb { border-radius: 4px; }
   padding: 20px 24px; border-radius: var(--r); margin-bottom: 20px;
 }
 .global-error-banner {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: flex-start; gap: 10px;
   margin: 12px 20px 0;
-  padding: 10px 14px;
+  padding: 12px 14px;
   border-radius: 10px;
   background: rgba(239,68,68,.13);
   border: 1px solid rgba(239,68,68,.35);
@@ -198,8 +198,10 @@ body.platform-win32 ::-webkit-scrollbar-thumb { border-radius: 4px; }
   font-size: 13px;
   animation: fadeIn .25s ease;
 }
-.global-error-icon { flex-shrink: 0; font-size: 15px; }
-.global-error-msg  { flex: 1; line-height: 1.4; }
+.global-error-icon { flex-shrink: 0; font-size: 16px; margin-top: 1px; }
+.global-error-body { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.global-error-msg  { line-height: 1.4; font-weight: 500; }
+.global-error-hint { font-size: 12px; color: rgba(252,165,165,.78); line-height: 1.4; }
 .global-error-close {
   flex-shrink: 0; background: none; border: none; cursor: pointer;
   color: #fca5a5; font-size: 14px; padding: 2px 6px; border-radius: 4px;
@@ -2423,7 +2425,16 @@ body.platform-win32  #wake-instructions-win { display: block; }
 .editor-segment-dismiss:hover { color: var(--red); background: rgba(239,68,68,.08); }
 
 /* ── Publish (cloud) settings page ───────────────────────────── */
-.cloud-card { margin-bottom: 12px; }
+.cloud-card { margin-bottom: 12px; transition: border-color .15s, transform .15s; }
+.cloud-card:hover { border-color: rgba(122,170,255,.35) !important; }
+.cloud-card .cloud-connected { animation: fadeIn .2s ease; }
+.cloud-card .cloud-disconnected button { width: 100%; justify-content: center; padding: 10px 14px; font-weight: 600; }
+.cloud-not-configured { font-size: 12px; line-height: 1.4; }
+.cloud-grid { gap: 10px !important; }
+.cloud-account-name, .cloud-folder-name { word-break: break-word; }
+.cloud-error { font-size: 12px; color: var(--red); padding: 6px 10px; background: rgba(239,68,68,.08); border-radius: 6px; margin-top: 6px; }
+.schedule-howto { animation: fadeIn .2s ease; }
+.schedule-howto-dismiss:hover { opacity: .7; }
 .cloud-card-header {
   display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
 }

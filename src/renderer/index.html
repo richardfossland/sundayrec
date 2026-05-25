@@ -77,7 +77,10 @@
   <!-- Global recording-error banner (shown from any page) -->
   <div id="global-error-banner" class="global-error-banner" style="display:none">
     <span class="global-error-icon">⚠️</span>
-    <span id="global-error-msg" class="global-error-msg"></span>
+    <div class="global-error-body">
+      <span id="global-error-msg" class="global-error-msg"></span>
+      <span id="global-error-hint" class="global-error-hint" data-i18n="error.tryAgainHint">Hvis problemet vedvarer, sjekk Sjekk system i Lyd-innstillingene eller restart programmet.</span>
+    </div>
     <button id="global-error-close" class="global-error-close" aria-label="Lukk">✕</button>
   </div>
 
@@ -164,18 +167,10 @@
         </div>
       </div>
 
-      <!-- System health checks — run before a service to catch problems early -->
+      <!-- Quick link to system-checks (moved to Settings → Lyd) -->
       <div class="health-row" style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center">
-        <button type="button" class="btn-secondary btn-sm" id="btn-test-recording" data-i18n="home.testRecording">
-          🎙️ Test-opptak (30 sek)
-        </button>
-        <button type="button" class="btn-secondary btn-sm" id="btn-run-preflight" data-i18n="home.checkSystem">
-          ✅ Sjekk system nå
-        </button>
-        <span class="health-status" id="health-status" style="margin-left:8px;font-size:13px;color:var(--text3);align-self:center"></span>
+        <a href="#" class="setup-hint-link" id="btn-go-health" data-i18n="home.goCheck">Test og sjekk system →</a>
       </div>
-      <!-- Findings list shown after preflight runs -->
-      <ul id="preflight-findings" style="display:none;list-style:none;margin:8px 0 0 0;padding:0;font-size:13px"></ul>
     </div>
 
     <!-- Video hero panel (shown when video mode is enabled) -->
@@ -325,7 +320,17 @@
 
     <div class="page-header">
       <h1 data-i18n="nav.schedule">Tidsplan</h1>
-      <p class="subtitle" data-i18n="schedule.subtitle">Faste opptak som gjentas automatisk hver uke.</p>
+      <p class="subtitle" data-i18n="schedule.subtitle">Faste ukentlige opptak + spesialdager (jul, påske, konfirmasjon o.l.).</p>
+    </div>
+
+    <!-- How it works hint — non-intrusive, helps non-technical users -->
+    <div class="schedule-howto" id="schedule-howto-card" style="background:rgba(122,170,255,.07);border:1px solid rgba(122,170,255,.25);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--text2);line-height:1.5;display:flex;gap:10px;align-items:flex-start">
+      <span style="font-size:16px;flex-shrink:0;margin-top:1px">💡</span>
+      <div style="flex:1">
+        <strong style="color:var(--text)" data-i18n="schedule.howtoTitle">Slik fungerer det:</strong>
+        <span data-i18n="schedule.howtoBody">Klikk på en dag i kalenderen for å legge til et engangsopptak (f.eks. en konfirmasjon). For faste ukentlige opptak (f.eks. gudstjeneste hver søndag kl. 11), bruk «Ukentlig tidsplan» nedenfor.</span>
+        <a href="#" class="schedule-howto-dismiss" id="btn-schedule-howto-dismiss" style="color:var(--accent);font-size:12px;margin-left:6px;text-decoration:none" data-i18n="schedule.howtoDismiss">Skjul</a>
+      </div>
     </div>
 
     <!-- Calendar — shown first for immediate overview -->
@@ -386,6 +391,7 @@
     <!-- Weekly recurring schedule -->
     <div class="card">
       <div class="card-title" data-i18n="schedule.title">Ukentlig tidsplan</div>
+      <p class="card-desc" data-i18n="schedule.weeklyDesc">Faste opptak som gjentas hver uke — for eksempel gudstjeneste hver søndag. Maskinen starter og stopper opptaket automatisk, selv om ingen er til stede.</p>
       <div id="slots-list"></div>
       <div id="schedule-next-preview" class="schedule-next-preview"></div>
       <button class="btn-secondary mt" id="btn-add-slot" data-i18n="schedule.addSlot">Legg til tidspunkt</button>
@@ -558,21 +564,23 @@
   <section id="page-settings" class="page">
     <div class="inner-tabs" id="settings-tabs">
       <button class="inner-tab active" data-tab="settings-audio" data-i18n="nav.audio">Lyd</button>
-      <button class="inner-tab" data-tab="settings-files">Opptak</button>
-      <button class="inner-tab" data-tab="settings-video">Video</button>
-      <button class="inner-tab" data-tab="settings-notifications">Varsler</button>
-      <button class="inner-tab" data-tab="settings-general">System</button>
+      <button class="inner-tab" data-tab="settings-video" data-i18n="nav.video">Video</button>
+      <button class="inner-tab" data-tab="settings-files" data-i18n="nav.files">Opptak</button>
+      <button class="inner-tab" data-tab="settings-publish" data-i18n="nav.publish">Publisering</button>
+      <button class="inner-tab" data-tab="settings-notifications" data-i18n="nav.notifications">Varsler</button>
+      <button class="inner-tab" data-tab="settings-general" data-i18n="nav.system">System</button>
     </div>
 
     <!-- ── Lydkilde ────────────────────────────────────────────── -->
     <div id="settings-audio" class="inner-page active">
       <div class="card">
         <div class="card-title" data-i18n="audio.available">Tilgjengelige enheter</div>
+        <p class="card-desc" data-i18n="audio.deviceHelp">Velg mikseren eller lydkortet som tar opp lyden i kirken. USB-mikser anbefales fremfor innebygd mikrofon.</p>
         <div id="device-list"></div>
         <div id="device-ffmpeg-warn" class="device-warn-strip" style="display:none">
-          ⚠ ffmpeg finner ikke denne lydenheten. Opptak kan feile. Prøv å velge enheten på nytt.
+          ⚠ Lydenheten ble ikke gjenkjent. Prøv å velge enheten på nytt — eller koble fra og koble til USB-kabelen.
         </div>
-        <p class="form-hint" style="margin-top:12px;margin-bottom:0">Ser du ikke riktig enhet? Kontroller at lydkortet er koblet til og at driveren er installert.</p>
+        <p class="form-hint" style="margin-top:12px;margin-bottom:0" data-i18n="audio.deviceNotShown">Ser du ikke riktig enhet? Kontroller at lydkortet er koblet til og at driveren er installert.</p>
         <div class="audio-test-section">
           <div class="audio-test-info">
             <div class="toggle-title" data-i18n="audio.testTitle">Test lydkilde</div>
@@ -580,11 +588,11 @@
           </div>
           <div style="display:flex;gap:8px;align-items:center">
             <button class="btn-secondary" id="btn-test-audio" data-i18n="audio.testBtn">Test lyd</button>
-            <button class="btn-secondary btn-sm" id="btn-audio-diagnose">Diagnose</button>
+            <button class="btn-secondary btn-sm" id="btn-audio-diagnose" data-i18n="audio.diagnose">Diagnose</button>
           </div>
         </div>
         <div id="test-audio-warn" class="test-warn" style="display:none">
-          ⚠️ Pass på feedback — hold mikrofonen unna høyttalerne!
+          <span data-i18n="audio.feedbackWarn">⚠️ Pass på feedback — hold mikrofonen unna høyttalerne!</span>
         </div>
         <div id="test-vu-section" style="display:none;margin-top:8px">
           <div class="vu-bar-group">
@@ -598,6 +606,22 @@
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- ── System health checks — moved here from Home ─────────── -->
+      <div class="card">
+        <div class="card-title" data-i18n="audio.healthTitle">Sjekk at alt fungerer</div>
+        <p class="card-desc" data-i18n="audio.healthDesc">Kjør disse før en gudstjeneste for å være sikker på at opptaket vil starte uten problemer. Vi anbefaler å kjøre et test-opptak før hver første gudstjeneste etter at noe har endret seg (ny mikser, nytt utstyr, oppdatering).</p>
+        <div class="health-row" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">
+          <button type="button" class="btn-secondary" id="btn-test-recording-settings" data-i18n="home.testRecording">
+            🎙️ Test-opptak (30 sek)
+          </button>
+          <button type="button" class="btn-secondary" id="btn-run-preflight-settings" data-i18n="home.checkSystem">
+            ✅ Sjekk system nå
+          </button>
+          <span class="health-status" id="health-status-settings" style="margin-left:8px;font-size:13px;color:var(--text3);align-self:center"></span>
+        </div>
+        <ul id="preflight-findings-settings" style="display:none;list-style:none;margin:8px 0 0 0;padding:0;font-size:13px"></ul>
       </div>
 
       <div class="card" id="channel-select-card" style="display:none">
@@ -708,7 +732,8 @@
     <!-- ── Filer ───────────────────────────────────────────────── -->
     <div id="settings-files" class="inner-page">
       <div class="card">
-        <div class="card-title" data-i18n="files.saveFolder">Lagringsmappe</div>
+        <div class="card-title" data-i18n="files.saveFolder">Hvor opptakene lagres</div>
+        <p class="card-desc" data-i18n="files.saveFolderDesc">Alle opptak havner her som lokale filer. Tips: velg en mappe på en ekstern disk hvis du tar opp ofte og har stor harddisk.</p>
         <label class="form-label" data-i18n="files.saveTo">LAGRES I</label>
         <div class="folder-row">
           <input type="text" class="form-input" id="save-folder" readonly />
@@ -717,8 +742,8 @@
       </div>
       <div class="card">
         <div class="card-title" data-i18n="files.pattern">Filnavn</div>
-        <p class="card-desc" data-i18n="files.smartNameDesc">Programmet gjenkjenner kirkelige høytider og kan bruke det riktige norske navnet automatisk.</p>
-        <label class="form-label">NAVNEFORMAT</label>
+        <p class="card-desc" data-i18n="files.smartNameDesc">Programmet gjenkjenner kirkelige høytider og kan bruke det riktige norske navnet automatisk (f.eks. «Påskedag»).</p>
+        <label class="form-label" data-i18n="files.nameFormat">NAVNEFORMAT</label>
         <select class="form-input" id="pattern-select" style="max-width:360px">
           <option value="date" data-i18n="files.patternDate">Dato (standard)</option>
           <option value="church" data-i18n="files.patternChurch">Kirkelig navn + dato</option>
@@ -796,13 +821,25 @@
           <label class="toggle"><input type="checkbox" id="opt-trim-silence" /><span class="toggle-track"></span></label>
         </div>
       </div>
+      <div class="page-footer">
+        <button class="btn-primary" id="btn-files-save" data-i18n="files.save">Lagre</button>
+        <button class="btn-ghost" id="btn-files-cancel" data-i18n="files.cancel">Avbryt</button>
+      </div>
+    </div>
+
+    <!-- ── Publisering (sky-backup + podcast) ─────────────────────── -->
+    <div id="settings-publish" class="inner-page">
+      <div class="card">
+        <div class="card-title" data-i18n="publish.intro">Del opptakene utenfor kirken</div>
+        <p class="card-desc" data-i18n="publish.introDesc">Her setter du opp automatisk sky-backup og — hvis dere ønsker — en podcast som gjør gudstjenestene tilgjengelige i Spotify og Apple Podcasts. Alt er valgfritt.</p>
+      </div>
       <!-- ── Sky-backup (Google Drive / Dropbox / OneDrive) ──────── -->
       <div class="card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
           <div class="card-title" data-i18n="publish.title" style="margin:0">Sky-backup</div>
           <button class="btn" id="btn-cloud-refresh" data-i18n="publish.refresh">Oppdater</button>
         </div>
-        <p class="card-desc" data-i18n="publish.desc">Last opp opptakene automatisk til Google Drive, Dropbox eller OneDrive — som ekstra sikkerhet og for enkel deling.</p>
+        <p class="card-desc" data-i18n="publish.desc">Last opp opptakene automatisk til Google Drive, Dropbox eller OneDrive — som ekstra sikkerhet og for enkel deling. Du kan koble til flere tjenester samtidig.</p>
 
         <div class="cloud-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:12px">
 
@@ -999,8 +1036,8 @@
       </div>
 
       <div class="page-footer">
-        <button class="btn-primary" id="btn-files-save" data-i18n="files.save">Lagre</button>
-        <button class="btn-ghost" id="btn-files-cancel" data-i18n="files.cancel">Avbryt</button>
+        <button class="btn-primary" id="btn-publish-save" data-i18n="publish.save">Lagre</button>
+        <button class="btn-ghost" id="btn-publish-cancel" data-i18n="publish.cancel">Avbryt</button>
       </div>
     </div>
 
@@ -1190,8 +1227,9 @@
     <div id="settings-general" class="inner-page">
       <div class="card">
         <div class="card-title" data-i18n="general.language">Språk</div>
+        <p class="card-desc" data-i18n="general.langCardDesc">Velg språket du foretrekker. SundayRec støtter syv språk — alle menyer og varsler tilpasses umiddelbart.</p>
         <label class="form-label" data-i18n="general.appLanguage">APPSPRÅK</label>
-        <select class="form-input" id="language-select">
+        <select class="form-input" id="language-select" style="max-width:280px">
           <option value="no">🇳🇴 Norsk</option>
           <option value="en">🇬🇧 English</option>
           <option value="de">🇩🇪 Deutsch</option>
@@ -1204,18 +1242,12 @@
       </div>
       <div class="card">
         <div class="card-title" data-i18n="general.profile">Kirkeprofil</div>
-        <p class="card-desc" style="margin-bottom:12px">Brukes i filnavn og e-postvarsler.</p>
+        <p class="card-desc" style="margin-bottom:12px" data-i18n="general.profileDesc">Brukes i filnavn, varslings-e-poster og podcast-RSS. Disse feltene er valgfrie men anbefalt.</p>
         <label class="form-label" data-i18n="general.church">MENIGHET / KIRKE</label>
         <input type="text" class="form-input" id="church-name" data-i18n-placeholder="general.churchPlaceholder" placeholder="Alta Frikirke" />
         <label class="form-label mt" data-i18n="general.responsible">ANSVARLIG PERSON</label>
         <input type="text" class="form-input" id="responsible-person" data-i18n-placeholder="general.responsiblePlaceholder" placeholder="Navn" />
-      </div>
-      <div class="card">
-        <div class="card-title">Hjelp &amp; opplæring</div>
-        <p class="card-desc">Konfigurer lydkilde, test lyden og sett opp søndagsopptak på nytt — nyttig for ny ansvarlig person.</p>
-        <button type="button" class="btn-secondary" id="btn-show-onboarding" style="margin-top:8px">
-          Åpne oppstartsveileder
-        </button>
+        <div class="form-hint" data-i18n="general.responsibleHint">Personen som får e-post hvis opptaket feiler (krever e-postvarsler i Varsler-fanen).</div>
       </div>
       <div class="card">
         <div class="card-title" data-i18n="general.system">System</div>
@@ -1267,22 +1299,30 @@
         </div>
       </div>
       <div class="card">
-        <div class="card-title">Rediger — standardklipp</div>
-        <p class="card-desc">Intro- og outro-filer som brukes som standard når du redigerer nye opptak i Rediger-siden.</p>
+        <div class="card-title" data-i18n="general.editorDefaults">Rediger — standardklipp</div>
+        <p class="card-desc" data-i18n="general.editorDefaultsDesc">Intro- og outro-filer som brukes som standard når du redigerer nye opptak i Rediger-siden. La feltene være tomme hvis dere ikke har faste intro/outro.</p>
 
-        <label class="form-label">STANDARD INTRO-KLIPP</label>
+        <label class="form-label" data-i18n="general.defaultIntro">STANDARD INTRO-KLIPP</label>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
           <span id="general-editor-intro-display" style="flex:1;font-size:13px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Ingen fil valgt</span>
-          <button class="btn-secondary btn-sm" id="btn-pick-editor-intro">Velg fil</button>
+          <button class="btn-secondary btn-sm" id="btn-pick-editor-intro" data-i18n="general.pickFile">Velg fil</button>
           <button class="btn-ghost btn-sm" id="btn-clear-editor-intro" style="display:none">✕</button>
         </div>
 
-        <label class="form-label mt">STANDARD OUTRO-KLIPP</label>
+        <label class="form-label mt" data-i18n="general.defaultOutro">STANDARD OUTRO-KLIPP</label>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
           <span id="general-editor-outro-display" style="flex:1;font-size:13px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Ingen fil valgt</span>
-          <button class="btn-secondary btn-sm" id="btn-pick-editor-outro">Velg fil</button>
+          <button class="btn-secondary btn-sm" id="btn-pick-editor-outro" data-i18n="general.pickFile">Velg fil</button>
           <button class="btn-ghost btn-sm" id="btn-clear-editor-outro" style="display:none">✕</button>
         </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" data-i18n="general.helpTitle">Hjelp og opplæring</div>
+        <p class="card-desc" data-i18n="general.helpDesc">Åpne oppstartsveilederen på nytt — nyttig hvis det kommer ny ansvarlig person, eller hvis du bare vil sjekke at alt er riktig satt opp.</p>
+        <button type="button" class="btn-secondary" id="btn-show-onboarding" style="margin-top:8px" data-i18n="general.openOnboarding">
+          Åpne oppstartsveileder
+        </button>
       </div>
 
       <div class="page-footer">

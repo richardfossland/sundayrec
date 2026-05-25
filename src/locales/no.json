@@ -40,6 +40,9 @@
     "refresh": "🔄 Oppdater",
     "howToFix": "Slik løser du det",
     "readyTitleDay": "Alt er klart til {day} {time}",
+    "readyNoSchedule": "Klar — sett opp en tidsplan for å starte automatisk",
+    "checking": "Sjekker…",
+    "testBusy": "Kan ikke kjøre test mens et opptak pågår.",
     "audioDevice": "LYDKILDE",
     "formatLabel": "FORMAT",
     "saveFolder": "LAGRES TIL",
@@ -51,7 +54,12 @@
     "reconnectDevice": "Koble til {name} via USB",
     "wakesBefore": "Maskinen vekkes automatisk kl. {time}",
     "testRecording": "🎙️ Test-opptak (30 sek)",
-    "checkSystem": "✅ Sjekk system nå"
+    "checkSystem": "✅ Sjekk system nå",
+    "testProgress": "Tar opp test… {n}/{total} s",
+    "testSignalOk": "✅ Lyd OK",
+    "testSignalLow": "⚠️ Svak lyd — sjekk gain på mikser",
+    "testSignalSilent": "⚠️ Stillhet — mikser av?",
+    "testUnknownError": "Ukjent feil"
   },
   "update": {
     "available": "Ny versjon {v} er tilgjengelig — laster ned…",
@@ -65,7 +73,9 @@
     "toastAvailableTitle": "Oppdatering tilgjengelig",
     "toastAvailableText": "Versjon {v} lastes ned…",
     "toastReadyTitle": "Klar for installasjon",
-    "toastReadyText": "Versjon {v} er lastet ned"
+    "toastReadyText": "Versjon {v} er lastet ned",
+    "availableMac": "Versjon {v} — klikk for å laste ned",
+    "toastAvailableMac": "Versjon {v} — klikk for å laste ned"
   },
   "history": {
     "title": "Historikk",
@@ -91,7 +101,8 @@
     "addNote": "Legg til notat",
     "editNote": "Rediger notat",
     "notePlaceholder": "Skriv notat…",
-    "confirmDeleteErrors": "Slett alle feiloppføringer?"
+    "confirmDeleteErrors": "Slett alle feiloppføringer?",
+    "deleteEntry": "Slett oppføring"
   },
   "schedule": {
     "title": "Ukentlig tidsplan",
@@ -159,6 +170,11 @@
     "confirmDeleteSlot": "Slett dette tidspunktet?",
     "deleteSlotTitle": "Slett",
     "dayLabel": "DAG",
+    "atTime": "kl.",
+    "nextPreviewPrefix": "Neste opptak",
+    "noSlotsTitle": "Ingen ukentlige opptak satt opp ennå",
+    "noSlotsHint": "Klikk «Legg til tidspunkt» nedenfor for å starte et fast ukentlig opptak — f.eks. søndag kl. 11.",
+    "sleepFixNoAdmin": "Krever administratorrettigheter — kjør SundayRec som administrator",
     "reminderTitle": "Påminnelse før opptak",
     "reminderDesc": "Systemvarsel N minutter før planlagt opptak starter",
     "manualMaxTitle": "Maks varighet — manuelle opptak",
@@ -234,7 +250,9 @@
     "today": "I dag",
     "autofillShort": "Kirkehøytider",
     "hintShort": "Klikk på en dag for å legge til opptak",
-    "updateRecording": "Oppdater opptak"
+    "updateRecording": "Oppdater opptak",
+    "confirmDelete": "Slette opptak: {name} ({date})?",
+    "errPastDate": "Datoen er allerede passert — opptak vil ikke starte"
   },
   "audio": {
     "title": "Lydkilde",
@@ -314,7 +332,8 @@
     "trimSilence": "Trim stillhet",
     "trimSilenceDesc": "Fjerner stillhet i begynnelsen og slutten av filen",
     "save": "Lagre",
-    "cancel": "Avbryt"
+    "cancel": "Avbryt",
+    "confirmAutoDeleteShort": "Opptak eldre enn {n} dager slettes automatisk og kan ikke gjenopprettes. Er du sikker?"
   },
   "general": {
     "title": "Generelt",
@@ -359,7 +378,8 @@
     "testEmailFail": "✕ Sending feilet",
     "testEmailNoConfig": "Fyll inn SMTP-innstillinger",
     "askOpenEditor": "Spør om redigering etter opptak",
-    "askOpenEditorDesc": "Vis varsel om å åpne filen i Rediger etter at opptaket er fullført"
+    "askOpenEditorDesc": "Vis varsel om å åpne filen i Rediger etter at opptaket er fullført",
+    "noClipSelected": "Ingen fil valgt"
   },
   "editor": {
     "title": "Rediger lydfil",
@@ -448,7 +468,20 @@
     "errorPermission": "Mikrofontilgang nektet — åpne Systeminnstillinger og gi tilgang",
     "errorDeviceNotFound": "Lydenheten ble ikke funnet — sjekk USB-tilkoblingen",
     "errorOverconstrained": "Lydenheten støtter ikke valgte innstillinger",
-    "errorNotReadable": "Lydenheten er i bruk av et annet program"
+    "errorNotReadable": "Lydenheten er i bruk av et annet program",
+    "errorDeviceError": "Feil ved åpning av lydenhet — prøv å koble til på nytt",
+    "errorAlreadyRecording": "Et opptak er allerede i gang",
+    "errorEmpty": "Opptaket er tomt — ingen lyd ble mottatt fra enheten",
+    "errorFolderPermission": "Ingen tilgang til lagringsmappen — sjekk at mappen er skrivbar",
+    "errorFolderError": "Kan ikke opprette lagringsmappe — sjekk diskplass og tillatelser",
+    "errorDeviceDisconnected": "Lydenheten ble koblet fra under opptak — sjekk tilkoblingen",
+    "errorDiskFull": "Disken er full — frigjør plass og prøv igjen",
+    "errorFfmpegMissing": "Intern feil: opptaksbinær mangler — installer appen på nytt",
+    "errorStuck": "Opptaket stoppet — ingen lyd fra enheten i 60 sekunder"
+  },
+  "video": {
+    "minBitrateWarn": "Minste bitrate er 500 kbps",
+    "maxBitrateWarn": "Største bitrate er 50 000 kbps"
   },
   "wizard": {
     "step1": "Lydkilde",
