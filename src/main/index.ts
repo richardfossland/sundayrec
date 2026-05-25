@@ -1100,6 +1100,11 @@ function setupIPC(): void {
     return true
   })
 
+  ipcMain.handle('podcast-regenerate', async (_, service: string) => {
+    const cloud = await import('./cloud')
+    return cloud.regeneratePodcastFeedManual(service as import('../types').CloudServiceId)
+  })
+
   ipcMain.handle('cloud-is-configured', async (_, service: string) => {
     const cloud = await import('./cloud')
     return cloud.isServiceConfigured(service as import('../types').CloudServiceId)

@@ -49,6 +49,23 @@ export interface RecordingEntry {
   fileSizeBytes?: number    // actual file size on disk after recording
   durationSec?: number      // recording duration in seconds
   cloudUploaded?: string[]  // cloud service IDs where this file was uploaded: ['google-drive', 'dropbox', 'onedrive']
+  cloudUrls?: Record<string, string>  // service ID → public/share URL (used by podcast RSS feed)
+}
+
+export interface PodcastSettings {
+  enabled:     boolean
+  service:     'google-drive' | 'dropbox' | 'onedrive'  // which cloud service hosts the audio + feed
+  title:       string
+  description: string
+  author:      string
+  language:    string   // ISO 639-1, default 'no'
+  category:    string   // iTunes category, default 'Religion & Spirituality'
+  explicit:    boolean
+  link?:       string   // church homepage
+  imageUrl?:   string   // cover art (1400-3000px square)
+  email?:      string   // owner contact email (required by Apple)
+  /** Set after the first successful publish — the URL the user submits to Spotify/Apple */
+  feedUrl?:    string
 }
 
 export interface ActiveRecovery {
@@ -165,6 +182,9 @@ export interface Settings {
   cloudGoogleDrive?: CloudServiceSettings
   cloudDropbox?: CloudServiceSettings
   cloudOneDrive?: CloudServiceSettings
+
+  // Podcast publishing (RSS feed auto-generated from uploaded recordings)
+  podcast?: PodcastSettings
 
   // Updates
   autoUpdate: boolean

@@ -153,8 +153,9 @@ export async function uploadFile(service: CloudServiceId, filePath: string, meta
   const token = await getValidToken(service)
   const tok   = tokenStore.getToken(service)!
 
+  let uploadedFileId: string | undefined
   if (service === 'google-drive') {
-    await googleDrive.uploadFile(token, filePath, tok.folderId, metadata)
+    uploadedFileId = await googleDrive.uploadFile(token, filePath, tok.folderId, metadata)
   } else if (service === 'dropbox') {
     await dropbox.uploadFile(token, filePath, tok.folderPath)
   } else {
@@ -164,6 +165,20 @@ export async function uploadFile(service: CloudServiceId, filePath: string, meta
   if (entryTimestamp !== undefined) {
     store.markCloudUploaded(entryTimestamp, service)
   }
+
+  // Best-effort podcast publishing — never let it break the upload.
+  // Lazy-imported to avoid loading XML/file logic when podcast is disabled.
+  if (uploadedFileId) {
+    void import('../publish').then(p =>
+      p.onCloudUploadComplete(service, filePath, uploadedFileId!, entryTimestamp, getValidToken),
+    ).catch(err => logger.warn('cloud', 'podcast_publish_failed', { error: (err as Error).message }))
+  }
+}
+
+/** Manual "Regenerate podcast feed now" — invoked from UI button. */
+export async function regeneratePodcastFeedManual(service: CloudServiceId): Promise<{ ok: boolean; feedUrl?: string; episodeCount: number; error?: string }> {
+  const p = await import('../publish')
+  return p.regeneratePodcastFeed(service, getValidToken)
 }
 
 export async function listFolders(service: CloudServiceId, parentId?: string): Promise<{ id: string; name: string; path?: string }[]> {

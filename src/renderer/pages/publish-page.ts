@@ -255,7 +255,8 @@ function renderQueue(q: CloudQueueStatus): void {
     panel = document.createElement('div')
     panel.id = 'cloud-queue-panel'
     panel.style.cssText = 'margin-top:16px;padding:12px;background:#1a1f25;border-radius:8px'
-    const cloudSection = document.querySelector('#page-publish, .publish-page, .page-publish') ?? document.body
+    // Anchor lives inside Settings → Filer (sky-backup-kortet). Fallback til body.
+    const cloudSection = document.querySelector('#cloud-queue-anchor') ?? document.body
     cloudSection.appendChild(panel)
   }
 

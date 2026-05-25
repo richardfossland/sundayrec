@@ -1,5 +1,5 @@
 import { settings, patchSettings } from '../state'
-import type { FileFormat, FilenamePattern } from '../../types'
+import type { FileFormat, FilenamePattern, PodcastSettings } from '../../types'
 import { flashSaved, setVal, setRadio, isoDate, setupDirtyBar } from '../helpers'
 import { getChurchHolidays } from '../../shared/church-calendar'
 
@@ -31,6 +31,72 @@ export function setupFilesPage(): void {
   document.getElementById('opt-trim-silence')?.addEventListener('change', () => {/* live preview not needed */})
   document.getElementById('btn-files-save')?.addEventListener('click', saveFilesSettings)
   document.getElementById('btn-files-cancel')?.addEventListener('click', () => applyFilesSettingsToUI())
+
+  // Podcast: toggle config visibility + regenerate button + copy URL
+  document.getElementById('opt-podcast-enabled')?.addEventListener('change', function (this: HTMLInputElement) {
+    const cfg = document.getElementById('podcast-config')
+    if (cfg) cfg.style.display = this.checked ? 'flex' : 'none'
+    _markFilesDirty()
+  })
+  ;[
+    'podcast-title','podcast-author','podcast-description','podcast-language',
+    'podcast-category','podcast-email','podcast-link','podcast-image','podcast-service',
+  ].forEach(id => {
+    document.getElementById(id)?.addEventListener('input',  () => _markFilesDirty())
+    document.getElementById(id)?.addEventListener('change', () => _markFilesDirty())
+  })
+
+  document.getElementById('btn-podcast-copy-url')?.addEventListener('click', () => {
+    const inp = document.getElementById('podcast-feed-url') as HTMLInputElement | null
+    if (inp?.value) {
+      navigator.clipboard.writeText(inp.value).catch(() => {})
+      const status = document.getElementById('podcast-status')
+      if (status) {
+        status.textContent = '✓ Kopiert'
+        setTimeout(() => { if (status) status.textContent = '' }, 2000)
+      }
+    }
+  })
+
+  document.getElementById('btn-podcast-regenerate')?.addEventListener('click', async () => {
+    const btn    = document.getElementById('btn-podcast-regenerate') as HTMLButtonElement | null
+    const status = document.getElementById('podcast-status')
+    if (!btn || !status) return
+    // Save first so the latest config is used
+    await saveFilesSettings()
+    btn.disabled = true
+    status.textContent = 'Genererer…'
+    try {
+      const service = (document.getElementById('podcast-service') as HTMLSelectElement | null)?.value ?? 'google-drive'
+      const result  = await window.api.podcastRegenerate(service)
+      if (result.ok) {
+        status.textContent = `✓ ${result.episodeCount} episode${result.episodeCount === 1 ? '' : 'r'} publisert`
+        if (result.feedUrl) {
+          settings.podcast = { ...(settings.podcast ?? {} as PodcastSettings), feedUrl: result.feedUrl }
+          showFeedUrl(result.feedUrl)
+        }
+      } else {
+        const reason = result.error === 'not_connected' ? 'koble til skytjenesten først'
+                     : result.error === 'no_save_folder' ? 'velg lagringsmappe først'
+                     : result.error === 'podcast_disabled' ? 'aktiver podcast først'
+                     : result.error ?? 'ukjent feil'
+        status.textContent = `✕ ${reason}`
+      }
+    } catch (err) {
+      status.textContent = `✕ ${(err as Error).message}`
+    } finally {
+      btn.disabled = false
+    }
+  })
+}
+
+function showFeedUrl(url: string): void {
+  const row = document.getElementById('podcast-feed-url-row')
+  const inp = document.getElementById('podcast-feed-url') as HTMLInputElement | null
+  if (row && inp) {
+    inp.value = url
+    row.style.display = ''
+  }
 }
 
 export function applyFilesSettingsToUI(): void {
@@ -50,6 +116,27 @@ export function applyFilesSettingsToUI(): void {
   }
   const trimEl = document.getElementById('opt-trim-silence') as HTMLInputElement | null
   if (trimEl) trimEl.checked = !!settings.trimSilence
+
+  // Podcast
+  const p = settings.podcast
+  const enabledEl = document.getElementById('opt-podcast-enabled') as HTMLInputElement | null
+  const cfgEl     = document.getElementById('podcast-config')
+  if (enabledEl) enabledEl.checked = !!p?.enabled
+  if (cfgEl)     cfgEl.style.display = p?.enabled ? 'flex' : 'none'
+  setVal('podcast-title',       p?.title       ?? '')
+  setVal('podcast-author',      p?.author      ?? '')
+  setVal('podcast-description', p?.description ?? '')
+  setVal('podcast-email',       p?.email       ?? '')
+  setVal('podcast-link',        p?.link        ?? '')
+  setVal('podcast-image',       p?.imageUrl    ?? '')
+  const langEl = document.getElementById('podcast-language') as HTMLSelectElement | null
+  if (langEl) langEl.value = p?.language ?? 'no'
+  const catEl  = document.getElementById('podcast-category') as HTMLSelectElement | null
+  if (catEl)   catEl.value = p?.category ?? 'Religion & Spirituality'
+  const svcEl  = document.getElementById('podcast-service') as HTMLSelectElement | null
+  if (svcEl)   svcEl.value = p?.service ?? 'google-drive'
+  if (p?.feedUrl) showFeedUrl(p.feedUrl)
+
   toggleMp3Quality()
   updateFilenamePreview()
 }
@@ -91,6 +178,22 @@ async function saveFilesSettings(): Promise<void> {
     if (!confirm(msg)) return
   }
 
+  const podcastEnabled = !!(document.getElementById('opt-podcast-enabled') as HTMLInputElement | null)?.checked
+  const podcast: PodcastSettings = {
+    enabled:     podcastEnabled,
+    service:     ((document.getElementById('podcast-service') as HTMLSelectElement | null)?.value ?? 'google-drive') as PodcastSettings['service'],
+    title:       (document.getElementById('podcast-title')       as HTMLInputElement | null)?.value.trim() ?? '',
+    author:      (document.getElementById('podcast-author')      as HTMLInputElement | null)?.value.trim() ?? '',
+    description: (document.getElementById('podcast-description') as HTMLTextAreaElement | null)?.value.trim() ?? '',
+    language:    (document.getElementById('podcast-language')    as HTMLSelectElement | null)?.value ?? 'no',
+    category:    (document.getElementById('podcast-category')    as HTMLSelectElement | null)?.value ?? 'Religion & Spirituality',
+    explicit:    false,
+    email:       (document.getElementById('podcast-email')       as HTMLInputElement | null)?.value.trim() || undefined,
+    link:        (document.getElementById('podcast-link')        as HTMLInputElement | null)?.value.trim() || undefined,
+    imageUrl:    (document.getElementById('podcast-image')       as HTMLInputElement | null)?.value.trim() || undefined,
+    feedUrl:     settings.podcast?.feedUrl,  // preserve last published URL across saves
+  }
+
   patchSettings({
     saveFolder:      (document.getElementById('save-folder') as HTMLInputElement | null)?.value ?? '',
     filenamePattern: ((document.getElementById('pattern-select') as HTMLSelectElement | null)?.value ?? 'date') as FilenamePattern,
@@ -98,6 +201,7 @@ async function saveFilesSettings(): Promise<void> {
     bitrate:         (document.querySelector('input[name="bitrate"]:checked') as HTMLInputElement | null)?.value ?? '192',
     autoDeleteDays:  days,
     trimSilence:     !!(document.getElementById('opt-trim-silence') as HTMLInputElement | null)?.checked,
+    podcast,
   })
   await window.api.saveSettings(settings)
   _markFilesClean()

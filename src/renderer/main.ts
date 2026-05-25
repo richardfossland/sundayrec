@@ -13,6 +13,7 @@ import { setupRecording } from './pages/recording'
 import { setupEditorPage, openEditorWithFile, deactivateEditor } from './pages/editor-page'
 import { checkAndShowOnboarding, showOnboarding } from './pages/onboarding'
 import { setupVideoPage, applyVideoSettingsToUI, refreshVideoDevices } from './pages/video-page'
+import { setupPublishPage, applyPublishSettingsToUI } from './pages/publish-page'
 
 // Expose globals that sub-modules need
 declare global {
@@ -65,12 +66,13 @@ declare global {
       pickAudioFile:          ()                 => Promise<string | null>
       listAsioDrivers:        ()                 => Promise<string[]>
       listFfmpegAudioDevices: () => Promise<{ name: string; index: number }[]>
-      cloudConnect:     (service: string) => Promise<{ ok: boolean; accountName?: string; error?: string }>
-      cloudDisconnect:  (service: string) => Promise<void>
-      cloudStatus:      ()                => Promise<Record<string, unknown>>
-      cloudUploadFile:  (service: string, filePath: string, metadata?: unknown) => Promise<{ ok: boolean; error?: string }>
-      cloudListFolders: (service: string, parentId?: string) => Promise<{ id: string; name: string; path?: string }[]>
-      cloudSetFolder:   (service: string, folderId: string, folderName: string, folderPath?: string) => Promise<void>
+      cloudConnect:      (service: string) => Promise<{ ok: boolean; accountName?: string; error?: string }>
+      cloudDisconnect:   (service: string) => Promise<void>
+      cloudStatus:       ()                => Promise<Record<string, unknown>>
+      cloudUploadFile:   (service: string, filePath: string, metadata?: unknown) => Promise<{ ok: boolean; error?: string }>
+      cloudListFolders:  (service: string, parentId?: string) => Promise<{ id: string; name: string; path?: string }[]>
+      cloudSetFolder:    (service: string, folderId: string, folderName: string, folderPath?: string) => Promise<void>
+      podcastRegenerate: (service: string) => Promise<{ ok: boolean; feedUrl?: string; episodeCount: number; error?: string }>
       listVideoDevices:  () => Promise<{ name: string; index: number }[]>
       videoPreviewStart: (opts: unknown) => Promise<boolean>
       videoPreviewStop:  () => Promise<void>
@@ -102,6 +104,7 @@ function applyAllSettingsToUI(s: Settings): void {
   applyFilesSettingsToUI()
   applyGeneralSettingsToUI()
   applyVideoSettingsToUI()
+  applyPublishSettingsToUI()
   loadVideoInfoStrip()
   renderSlotsList()
   renderPlannedList()
@@ -140,12 +143,50 @@ function setupSettingsTabs(): void {
   })
 }
 
+/**
+ * Verify that blob: URLs can be loaded into <img> tags. The video preview path
+ * depends on this — frames arrive as JPEG buffers and are displayed via
+ * URL.createObjectURL(new Blob(...)). If the CSP forgets to allow blob:, frames
+ * still arrive but img.src silently fails (CSP violation goes to console as a
+ * warning, not as a JS error). To catch that regression early, this runs on
+ * startup and surfaces a visible banner if it fails.
+ *
+ * The smallest valid JPEG is 134 bytes — we embed a 1×1 white one as base64.
+ */
+function verifyBlobUrlsAllowed(): void {
+  const tinyJpegB64 = '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAr/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AL+AB//Z'
+  const bytes = Uint8Array.from(atob(tinyJpegB64), c => c.charCodeAt(0))
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' }))
+  const img = new Image()
+  let settled = false
+  const done = (ok: boolean): void => {
+    if (settled) return
+    settled = true
+    URL.revokeObjectURL(url)
+    if (!ok) {
+      console.error('[main] CSP smoke test FAILED — blob: URLs are blocked. Check Content-Security-Policy meta tag in index.html — img-src must include blob:.')
+      const banner = document.getElementById('global-error-banner')
+      const msg    = document.getElementById('global-error-msg')
+      if (msg)    msg.textContent = 'Konfigurasjonsfeil: kamera-preview vil ikke fungere (CSP blokkerer blob:-URL-er). Restart appen — hvis problemet vedvarer, kontakt support.'
+      if (banner) banner.style.display = ''
+    }
+  }
+  img.onload  = () => done(true)
+  img.onerror = () => done(false)
+  // Belt-and-braces: if neither fires within 3 s assume CSP block.
+  setTimeout(() => done(false), 3000)
+  img.src = url
+}
+
 async function init(): Promise<void> {
   // Set globals consumed by sub-modules
   window.showPage       = showPage
   window.loadSettings   = loadSettings
   window.showOnboarding = showOnboarding
   window.__isRecording  = false
+
+  // Fail loud on CSP regressions that break the video-preview display path.
+  verifyBlobUrlsAllowed()
 
   const ua = navigator.userAgent.toLowerCase()
   if (ua.includes('mac')) {
@@ -179,6 +220,7 @@ async function init(): Promise<void> {
   setupVideoPage()
   setupRecording()
   setupEditorPage()
+  setupPublishPage()
   setupClipReset()
   setupSettingsTabs()
 

@@ -351,6 +351,16 @@ export function markCloudUploaded(timestamp: number, serviceId: string): void {
   }
 }
 
+/** Save the public/share URL for an uploaded recording. Used by the podcast feed. */
+export function setCloudUrl(timestamp: number, serviceId: string, url: string): void {
+  const history = get('recordingHistory') ?? []
+  const idx = history.findIndex(e => e.timestamp === timestamp)
+  if (idx < 0) return
+  const entry = history[idx]
+  history[idx] = { ...entry, cloudUrls: { ...(entry.cloudUrls ?? {}), [serviceId]: url } }
+  set('recordingHistory', history)
+}
+
 /**
  * Locate a history entry by file path. Normalizes path separators so a Windows
  * "C:\Users\..\rec.mp3" matches "C:/Users/../rec.mp3" written from a different

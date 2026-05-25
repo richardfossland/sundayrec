@@ -170,5 +170,37 @@ function audioMime(filename: string): string {
   return 'audio/mpeg'
 }
 
+/**
+ * Make a Drive file readable by anyone with the link, and return a direct-
+ * download URL suitable for use in a podcast RSS `<enclosure>`. The user
+ * MUST explicitly enable podcast publishing for this to be invoked.
+ *
+ * Returns null if anything fails so the caller can fall back gracefully.
+ */
+export async function createPublicShareUrl(token: string, fileId: string): Promise<string | null> {
+  try {
+    // Grant 'anyone with the link' read permission. Idempotent — Drive
+    // ignores duplicates.
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/permissions?supportsAllDrives=true`, {
+      method:  'POST',
+      headers: {
+        Authorization:  `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ role: 'reader', type: 'anyone' }),
+    })
+    if (!r.ok && r.status !== 409) {
+      // 409 = already shared. Anything else is a real failure.
+      const body = await r.text()
+      throw new Error(`Drive share-link failed: ${r.status} ${body}`)
+    }
+    // Public direct-download URL. Drive shows a virus-scan interstitial for
+    // files >25 MB unless &confirm=t is appended (works on most large files).
+    return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}&confirm=t`
+  } catch {
+    return null
+  }
+}
+
 // Silence unused-import warning
 void httpOk

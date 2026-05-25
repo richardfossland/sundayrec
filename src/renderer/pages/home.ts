@@ -3,6 +3,7 @@ import { settings, patchSettings } from '../state'
 import { fmtCountdown, fmtStorageHours, fmtDate, escHtml, flashMsg } from '../helpers'
 import { startVU, stopVU } from './home-vu'
 import { getAudioDevices } from '../audio/capture'
+import { normalizeFrameData } from '../../shared/normalize-frame-data'
 
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 
@@ -232,8 +233,14 @@ export function startVideoPreview(): void {
     const now = Date.now()
     if (now - lastFrameTs < frameIntervalMs) return
     lastFrameTs = now
-    const arr = data as Uint8Array
-    if (!img || arr.length < 4) return
+    // IPC payloads cross the contextBridge through structured clone. Depending on
+    // Electron version and the original Node Buffer's backing store, `data` can
+    // arrive as a Uint8Array, a Buffer-like object, an ArrayBuffer, or rarely a
+    // plain object with numeric indices. Normalize to a Uint8Array before
+    // building the Blob — without this, `new Blob([data])` produces a 0-byte
+    // blob and the <img> goes blank with no error.
+    const arr = normalizeFrameData(data)
+    if (!img || !arr || arr.length < 4) return
     const url = URL.createObjectURL(new Blob([arr], { type: 'image/jpeg' }))
     if (lastFrameBlobUrl) URL.revokeObjectURL(lastFrameBlobUrl)
     lastFrameBlobUrl = url

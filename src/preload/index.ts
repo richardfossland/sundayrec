@@ -102,6 +102,7 @@ contextBridge.exposeInMainWorld('api', {
   cloudQueueRetry:     (id: string)      => ipcRenderer.invoke('cloud-queue-retry', id),
   cloudQueueRemove:    (id: string)      => ipcRenderer.invoke('cloud-queue-remove', id),
   cloudQueueFlush:     ()                => ipcRenderer.invoke('cloud-queue-flush'),
+  podcastRegenerate:   (service: string) => ipcRenderer.invoke('podcast-regenerate', service),
 
   checkForUpdates: ()        => ipcRenderer.invoke('check-for-updates'),
   installUpdate:   ()        => ipcRenderer.invoke('install-update'),
