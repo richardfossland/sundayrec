@@ -16,7 +16,7 @@
     "build:mac": "bash scripts/build-mac.sh",
     "build:win": "electron-vite build && electron-builder --win",
     "build:all": "bash scripts/build-mac.sh && electron-builder --win",
-    "test": "jest",
+    "test": "cross-env TZ=Europe/Oslo jest",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
@@ -31,6 +31,7 @@
     "@types/node": "^25.9.1",
     "@types/node-schedule": "^2.1.8",
     "@types/nodemailer": "^8.0.0",
+    "cross-env": "^10.1.0",
     "electron": "^42.2.0",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
