@@ -490,6 +490,8 @@
     "saveError": "✕ Feil ved lagring",
     "promptTitle": "Vil du redigere opptaket?",
     "promptOpen": "Åpne i Rediger",
+    "reviewEdit": "↻ Endre detaljer",
+    "reviewDiscard": "✗ Ikke publiser denne uka",
     "normalizePeak": "Normaliser lydnivå",
     "normalizeHint": "Justerer toppunktet til -1 dBFS for trygg sluttmiks.",
     "normalizeApplied": "Normalisert",

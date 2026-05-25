@@ -100,13 +100,8 @@ export function setupSchedulePage(): void {
       if (card) card.style.display = 'none'
     }
   })
-  document.getElementById('wake-hibernate-toggle')?.addEventListener('click', () => {
-    const body    = document.getElementById('wake-hibernate-body')
-    const chevron = document.getElementById('wake-hibernate-chevron')
-    const open    = body?.style.display !== 'none'
-    if (body)    body.style.display      = open ? 'none' : 'block'
-    if (chevron) chevron.style.transform = open ? '' : 'rotate(90deg)'
-  })
+  // wake-hibernate-* collapsible was removed when the Avanserte-section was
+  // restructured into "Vekk maskin fra dvale" in v4.31. Handler dropped.
   document.getElementById('btn-schedule-wake')?.addEventListener('click', async () => {
     const btn = document.getElementById('btn-schedule-wake') as HTMLButtonElement | null
     if (btn) btn.disabled = true

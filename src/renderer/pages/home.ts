@@ -493,9 +493,8 @@ export function setupHome(): void {
     }
   }
 
-  // Bind to both old (legacy IDs on Home, if present) and new (-settings) IDs
-  document.getElementById('btn-test-recording')?.addEventListener('click', () => runTestRecording('btn-test-recording', 'health-status'))
-  document.getElementById('btn-run-preflight')?.addEventListener('click',  () => runPreflight('btn-run-preflight',  'health-status', 'preflight-findings'))
+  // Legacy IDs (btn-test-recording / btn-run-preflight) were removed from the
+  // Home card in v4.31 — buttons now live exclusively on Innstillinger → Lyd.
   document.getElementById('btn-test-recording-settings')?.addEventListener('click', () => runTestRecording('btn-test-recording-settings', 'health-status-settings'))
   document.getElementById('btn-run-preflight-settings')?.addEventListener('click',  () => runPreflight('btn-run-preflight-settings',  'health-status-settings', 'preflight-findings-settings'))
 
@@ -682,6 +681,23 @@ export function setupHome(): void {
   // Wire up the review-queue card — listens to IPC events from main so the card
   // updates instantly when a new prep lands or the user publishes/discards.
   setupReviewQueueListeners()
+
+  // Tray menu hooks: clicking "📬 N episoder klare" or "Sjekk system nå" in the
+  // tray must surface the relevant UI. main.ts in main-process emits these
+  // channels — see src/main/tray.ts.
+  window.api.on('tray-open-review-queue', () => {
+    window.showPage('home')
+    refreshReviewQueue().then(() => {
+      document.getElementById('review-queue-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }).catch(() => {})
+  })
+  window.api.on('tray-run-preflight', () => {
+    window.showPage('settings')
+    document.querySelector<HTMLElement>('#settings-tabs .inner-tab[data-tab="settings-audio"]')?.click()
+    requestAnimationFrame(() => {
+      document.getElementById('btn-run-preflight-settings')?.click()
+    })
+  })
 }
 
 export async function refreshHome(): Promise<void> {

@@ -369,7 +369,10 @@ export async function exportEdited(params: EditorExportParams): Promise<EditorSa
     fs.writeFileSync(metaFilePath, lines.join('\n'), 'utf8')
   }
 
-  const procFilters = processing.ffmpegFilters ?? []
+  // Defensive: older callers / programmatic batch jobs may omit `processing`
+  // entirely. Treat that as "no extra ffmpeg filters" rather than crashing
+  // with a TypeError that an IPC client can't recover from.
+  const procFilters = processing?.ffmpegFilters ?? []
 
   // Input index tracking
   const mainInputIdx = hasIntro ? 1 : 0
@@ -657,7 +660,8 @@ export async function saveVideoEdited(params: VideoSaveParams): Promise<EditorSa
   const { outPath, tempPath } = videoOutPath(inputPath, mode)
   fs.mkdirSync(path.dirname(outPath), { recursive: true })
 
-  const procFilters = processing.ffmpegFilters ?? []
+  // Defensive: handle callers that omit `processing` entirely.
+  const procFilters = processing?.ffmpegFilters ?? []
   const { filterComplex, vOut, aOut } = buildVideoFilterComplex(0, keeps, procFilters)
 
   // Metadata file
@@ -760,7 +764,8 @@ export async function exportVideoEdited(params: VideoExportParams): Promise<Edit
     inputArgs.push('-i', metaFilePath)
   }
 
-  const procFilters = processing.ffmpegFilters ?? []
+  // Defensive: handle callers that omit `processing` entirely.
+  const procFilters = processing?.ffmpegFilters ?? []
   const { filterComplex: mainFilter, vOut: vMain, aOut: aMain } =
     buildVideoFilterComplex(mainIdx, keeps, procFilters)
 

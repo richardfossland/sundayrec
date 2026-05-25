@@ -60,6 +60,23 @@ async function dispatchAuthUrl(url: string): Promise<void> {
   }
 }
 
+/**
+ * Keep the tray menu's "📬 N episoder klare" badge in sync with the persisted
+ * review queue. Called whenever the queue may have changed (prep added, item
+ * published, item discarded) and once at startup.
+ */
+async function syncTrayReviewQueueCount(): Promise<void> {
+  try {
+    const rq = await import('./review-queue')
+    const pending = rq.getQueue().filter(e =>
+      e.prep.status !== 'published' && e.prep.status !== 'discarded'
+    ).length
+    tray.setReviewQueueCount(pending)
+  } catch (err) {
+    console.error('[tray] sync review-queue count failed:', (err as Error).message)
+  }
+}
+
 // macOS dispatch — must be registered before app.whenReady() so cold-start URLs work
 app.on('open-url', (event, url) => {
   event.preventDefault()
@@ -411,6 +428,7 @@ app.whenReady().then(async () => {
     sendBackendWarning(mainWindow, `Wake scheduling failed: ${(err as Error).message}`, 'warn', 'wake')
   })
   tray.setNextRecording(initialUpcoming[0] ?? null)
+  void syncTrayReviewQueueCount()
 
   // On wake from sleep: check for missed recordings, refresh OS wake list, notify user
   powerMonitor.on('resume', () => {
@@ -1210,9 +1228,21 @@ function setupIPC(): void {
     return true
   })
 
+  // Coalesce concurrent regenerate requests per service. Two quick clicks
+  // (or a publish-after-export running while auto-publish from upload-complete
+  // is mid-flight) otherwise race to write podcast.xml and upload it.
+  const podcastRegenInflight = new Map<string, Promise<unknown>>()
   ipcMain.handle('podcast-regenerate', async (_, service: string) => {
+    if (typeof service !== 'string' || !service) {
+      return { ok: false, episodeCount: 0, error: 'invalid_service' }
+    }
+    const existing = podcastRegenInflight.get(service)
+    if (existing) return existing
     const cloud = await import('./cloud')
-    return cloud.regeneratePodcastFeedManual(service as import('../types').CloudServiceId)
+    const promise = cloud.regeneratePodcastFeedManual(service as import('../types').CloudServiceId)
+      .finally(() => podcastRegenInflight.delete(service))
+    podcastRegenInflight.set(service, promise)
+    return promise
   })
 
   // ── Review queue (prep-and-review v5.0) ───────────────────────────────────
@@ -1263,7 +1293,10 @@ function setupIPC(): void {
     const rq = await import('./review-queue')
     rq.markDiscarded(id)
     const removed = rq.removeFromQueue(id)
-    if (removed) try { mainWindow.webContents.send('review-queue-update', { reason: 'discarded', id }) } catch {}
+    if (removed) {
+      try { mainWindow.webContents.send('review-queue-update', { reason: 'discarded', id }) } catch {}
+      void syncTrayReviewQueueCount()
+    }
     return removed
   })
 
@@ -1301,6 +1334,7 @@ function setupIPC(): void {
       // Step 4 — remove from queue (v1 keeps history of publication via
       // history entries already; the queue is for pending items only).
       rq.removeFromQueue(id)
+      void syncTrayReviewQueueCount()
       return { ok: true }
     } catch (err) {
       return { ok: false, error: (err as Error).message }
@@ -1312,11 +1346,13 @@ function setupIPC(): void {
   // Scheduler will be re-checked further down (in app.whenReady).
   setInterval(() => {
     import('./review-queue').then(rq => rq.processReminders(mainWindow))
+      .then(() => syncTrayReviewQueueCount())
       .catch(err => console.error('[review-queue] reminders error:', (err as Error).message))
   }, 60 * 60 * 1000)
   // Also run once shortly after startup so 24 h+ items get caught.
   setTimeout(() => {
     import('./review-queue').then(rq => rq.processReminders(mainWindow))
+      .then(() => syncTrayReviewQueueCount())
       .catch(() => {})
   }, 30_000)
 

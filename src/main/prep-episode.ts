@@ -306,6 +306,17 @@ export async function prepEpisodeAsync(recordingPath: string, win: BrowserWindow
     const reviewQueue = await import('./review-queue')
     reviewQueue.addToQueue(prep)
 
+    // Refresh the tray menu badge so users see "📬 N episoder klare" immediately.
+    try {
+      const tray = await import('./tray')
+      const pending = reviewQueue.getQueue().filter(e =>
+        e.prep.status !== 'published' && e.prep.status !== 'discarded'
+      ).length
+      tray.setReviewQueueCount(pending)
+    } catch (err) {
+      logger.warn('prep', 'tray_sync_failed', { error: (err as Error).message })
+    }
+
     logger.info('prep', 'prep_complete', {
       id:               prep.id,
       status:           prep.status,

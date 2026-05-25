@@ -296,6 +296,25 @@ export function importProfile(json: string): boolean {
       }
     }
 
+    // ── Audio-FX clamping — guards against a malformed profile JSON crashing
+    // ffmpeg with an invalid filter param (e.g. ratio=0, threshold=NaN). Even
+    // though the UI no longer exposes these sliders, the recorder still reads
+    // these values when building the input filter chain.
+    if (typeof profile.inputVolume    === 'number') profile.inputVolume    = clampNum(profile.inputVolume,    0,   200, 100)
+    if (typeof profile.compThreshold  === 'number') profile.compThreshold  = clampNum(profile.compThreshold,  -60, 0,   -24)
+    if (typeof profile.compRatio      === 'number') profile.compRatio      = clampNum(profile.compRatio,      1,   100, 4)
+    if (typeof profile.compAttack     === 'number') profile.compAttack     = clampNum(profile.compAttack,     0.1, 2000, 10)
+    if (typeof profile.compRelease    === 'number') profile.compRelease    = clampNum(profile.compRelease,    1,   9000, 200)
+    if (typeof profile.limiterCeiling === 'number') profile.limiterCeiling = clampNum(profile.limiterCeiling, -10, 0,   -1)
+
+    // ── Schedule advanced numeric fields ──
+    if (typeof profile.reminderMinutes      === 'number') profile.reminderMinutes      = clampNum(profile.reminderMinutes,      0, 60,   0)
+    if (typeof profile.preRollSeconds       === 'number') profile.preRollSeconds       = clampNum(profile.preRollSeconds,       0, 60,   0)
+    if (typeof profile.silenceThreshold     === 'number') profile.silenceThreshold     = clampNum(profile.silenceThreshold,     -90, 0, -50)
+    if (typeof profile.silenceTimeoutMinutes === 'number') profile.silenceTimeoutMinutes = clampNum(profile.silenceTimeoutMinutes, 1, 120, 5)
+    if (typeof profile.autoDeleteDays       === 'number') profile.autoDeleteDays       = clampNum(profile.autoDeleteDays,       0, 3650, 0)
+    if (typeof profile.emailSmtpPort        === 'number') profile.emailSmtpPort        = clampNum(profile.emailSmtpPort,        1, 65535, 587)
+
     const { recordingHistory, activeRecovery, emailSmtpPassEnc, emailSmtpPassSet, emailSmtpPass, ...safe } = profile
     Object.entries(safe).forEach(([k, v]) => store.set(k as keyof Settings, v as never))
     if (emailSmtpPass) setSmtpPassword(emailSmtpPass)

@@ -10,6 +10,8 @@ const ALLOWED_CHANNELS = [
   'recording-reconnected',
   'tray-start-recording',
   'tray-stop-recording',
+  'tray-open-review-queue',
+  'tray-run-preflight',
   'update-available',
   'update-not-available',
   'update-checking',

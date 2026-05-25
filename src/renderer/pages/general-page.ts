@@ -24,39 +24,10 @@ export function setupGeneralPage(): void {
     if (clearBtn)  clearBtn.style.display = 'none'
   })
 
-  document.getElementById('btn-export')?.addEventListener('click', async () => {
-    const data = await window.api.exportProfile()
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const a = Object.assign(document.createElement('a'), {
-      href: URL.createObjectURL(blob),
-      download: `sundayrec-${settings.churchName || 'profil'}.json`
-    })
-    a.click()
-  })
-
-  document.getElementById('btn-import')?.addEventListener('click', () => {
-    const input = Object.assign(document.createElement('input'), { type: 'file', accept: '.json' })
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0]
-      if (!file) return
-      const text = await file.text()
-      const ok   = await window.api.importProfile(text)
-      const btn  = document.getElementById('btn-import')
-      if (ok) {
-        await window.loadSettings()
-        flashMsg(btn, '✓ ' + t('general.importOk', 'Profil importert!'), true)
-      } else {
-        flashMsg(btn, '✕ ' + t('general.importFail', 'Ugyldig profil-fil.'), false)
-      }
-    }
-    input.click()
-  })
-
-  document.getElementById('btn-restore')?.addEventListener('click', async () => {
-    if (!confirm(t('general.confirmReset'))) return
-    await window.api.resetSettings()
-    await window.loadSettings()
-  })
+  // Note: btn-export / btn-import / btn-restore handlers were removed in v4.31
+  // when the System tab was simplified. The corresponding IPC handlers
+  // (export-profile / import-profile / reset-settings) remain available for
+  // any future re-introduction or tests.
 
   document.getElementById('btn-test-email')?.addEventListener('click', async () => {
     const btn = document.getElementById('btn-test-email')
