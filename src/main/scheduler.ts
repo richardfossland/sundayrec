@@ -66,20 +66,57 @@ export function reschedule(): void {
     const [sh, sm] = (slot.start || '11:00').split(':').map(Number)
     const [eh, em] = (slot.stop  || '12:00').split(':').map(Number)
 
-    // Detect midnight-crossing: if stop is ≤ start in clock terms, the stop
+    // Reject degenerate slots (start === stop). The UI blocks this, but it can
+    // slip in via direct settings-file edits or imported profiles. Without
+    // this guard, the crossesMidnight branch turns the slot into a 24-hour
+    // continuous recording — almost certainly not what the user wanted.
+    if (sh === eh && sm === em) {
+      logger.warn('scheduler', 'degenerate_slot_skipped', { start: slot.start, stop: slot.stop })
+      backendWarningSender?.(
+        `Opptaksplan "${slot.start}–${slot.stop}" har samme start- og stopptid — hoppes over.`,
+        'warn',
+        'wake',
+      )
+      return
+    }
+
+    // Detect midnight-crossing: if stop is < start in clock terms, the stop
     // belongs to the next day. Without this the stop rule fires on the same
     // weekday as start (i.e. before it has run), so the recording never stops
     // until the next occurrence — a full week of continuous recording.
-    const crossesMidnight = (eh < sh) || (eh === sh && em <= sm)
+    const crossesMidnight = (eh < sh) || (eh === sh && em < sm)
 
     ;(slot.days ?? []).forEach(uiDay => {
       const jsDay = uiDayToJsDay(uiDay)
 
       const startRule = new schedule.RecurrenceRule()
       startRule.dayOfWeek = jsDay; startRule.hour = sh; startRule.minute = sm; startRule.tz = LOCAL_TZ
-      jobs.set(`slot-${idx}-${uiDay}-start`, schedule.scheduleJob(startRule, () => {
+      const startJob = schedule.scheduleJob(startRule, () => {
         triggerStart(slot).catch(err => console.error('[scheduler] start error:', err))
-      }))
+      })
+      jobs.set(`slot-${idx}-${uiDay}-start`, startJob)
+
+      // DST gap detection: a weekly slot's next invocation is at most 7 days
+      // ahead. If node-schedule returns >7.5 days out, the local time likely
+      // falls in the spring-forward gap (eg 02:30 Oslo on the DST Sunday —
+      // that time doesn't exist, so node-schedule silently jumps to the
+      // following week). Warn the user so they know one occurrence is lost.
+      const nextInv = startJob?.nextInvocation?.() as Date | null
+      if (nextInv) {
+        const daysAhead = (nextInv.getTime() - Date.now()) / 86_400_000
+        if (daysAhead > 7.5) {
+          logger.warn('scheduler', 'dst_gap_skip', {
+            start:     slot.start,
+            stop:      slot.stop,
+            daysAhead: Math.round(daysAhead),
+          })
+          backendWarningSender?.(
+            `Opptak "${slot.start}–${slot.stop}" hopper over neste uke fordi tiden ikke eksisterer på grunn av sommertid-overgang.`,
+            'warn',
+            'wake',
+          )
+        }
+      }
 
       const stopJsDay = crossesMidnight ? (jsDay + 1) % 7 : jsDay
       const stopRule = new schedule.RecurrenceRule()
