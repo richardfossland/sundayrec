@@ -77,21 +77,37 @@ export async function uploadFile(token: string, filePath: string, folderId?: str
 
   // Step 2 — upload chunks. Drive requires that chunk sizes are multiples of 256 KB
   // (except the final chunk). 8 MB satisfies that.
+  //
+  // The chunk read + Content-Range computation MUST happen inside the retry `op`
+  // closure. `beforeRetry` can mutate `offset` based on the server's view of
+  // what it received, so a retry attempt needs to re-read the file at the new
+  // offset rather than re-sending the original (now-wrong) chunk buffer.
+  // `attemptChunkSize` / `attemptIsLast` are written by `op` and read after
+  // `withRetry` resolves so the outer loop knows how far to advance.
   let offset = 0
   let fileId: string | null = null
 
   while (offset < size) {
-    const remaining = size - offset
-    const chunkSize = Math.min(CHUNK_SIZE, remaining)
-    const chunk     = await readChunk(filePath, offset, chunkSize)
-    const isLast    = offset + chunkSize >= size
+    let attemptChunkSize = 0
+    let attemptIsLast    = false
 
     const res = await withRetry(async () => {
+      const remaining = size - offset
+      if (remaining <= 0) {
+        // beforeRetry advanced offset past EOF — server has all bytes but we
+        // never observed the 200/201 final response. Surface as a specific
+        // error so the queue can decide whether to re-upload from scratch.
+        throw new Error('Drive resume: server reported complete but no final response observed')
+      }
+      attemptChunkSize = Math.min(CHUNK_SIZE, remaining)
+      attemptIsLast    = offset + attemptChunkSize >= size
+      const chunk      = await readChunk(filePath, offset, attemptChunkSize)
+
       const r = await fetch(uploadUrl, {
         method: 'PUT',
         headers: {
-          'Content-Length': String(chunkSize),
-          'Content-Range':  `bytes ${offset}-${offset + chunkSize - 1}/${size}`,
+          'Content-Length': String(attemptChunkSize),
+          'Content-Range':  `bytes ${offset}-${offset + attemptChunkSize - 1}/${size}`,
         },
         body: chunk,
       })
@@ -119,7 +135,7 @@ export async function uploadFile(token: string, filePath: string, folderId?: str
       },
     })
 
-    if (isLast) {
+    if (attemptIsLast) {
       const j = await res.json() as { id: string; md5Checksum?: string }
       fileId = j.id
 
@@ -133,7 +149,7 @@ export async function uploadFile(token: string, filePath: string, folderId?: str
       }
     }
 
-    offset += chunkSize
+    offset += attemptChunkSize
   }
 
   if (!fileId) throw new Error('Drive upload completed without file id')

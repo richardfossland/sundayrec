@@ -63,22 +63,37 @@ export async function uploadFile(token: string, filePath: string, folderId?: str
   const session = await sessionRes.json() as { uploadUrl: string }
   if (!session.uploadUrl) throw new Error('OneDrive: no uploadUrl in session response')
 
-  // Step 2 — upload chunks
+  // Step 2 — upload chunks.
+  //
+  // The chunk read + Content-Range computation MUST happen inside the retry
+  // `op` closure. `beforeRetry` queries the server's nextExpectedRanges and
+  // mutates `offset` — a retry attempt needs to re-read the file from the
+  // new offset rather than re-sending the original (now-wrong) chunk buffer.
+  // `attemptChunkSize` / `attemptIsLast` are written by `op` and read after
+  // `withRetry` resolves so the outer loop knows how far to advance.
   let offset = 0
   let fileId: string | null = null
 
   while (offset < size) {
-    const remaining = size - offset
-    const chunkSize = Math.min(ONEDRIVE_CHUNK, remaining)
-    const chunk     = await readChunk(filePath, offset, chunkSize)
-    const isLast    = offset + chunkSize >= size
+    let attemptChunkSize = 0
+    let attemptIsLast    = false
 
     const res = await withRetry(async () => {
+      const remaining = size - offset
+      if (remaining <= 0) {
+        // beforeRetry advanced offset past EOF — server has all bytes but
+        // we never saw the 200/201 final response.
+        throw new Error('OneDrive resume: server reported complete but no final response observed')
+      }
+      attemptChunkSize = Math.min(ONEDRIVE_CHUNK, remaining)
+      attemptIsLast    = offset + attemptChunkSize >= size
+      const chunk      = await readChunk(filePath, offset, attemptChunkSize)
+
       const r = await fetch(session.uploadUrl, {
         method: 'PUT',
         headers: {
-          'Content-Length': String(chunkSize),
-          'Content-Range':  `bytes ${offset}-${offset + chunkSize - 1}/${size}`,
+          'Content-Length': String(attemptChunkSize),
+          'Content-Range':  `bytes ${offset}-${offset + attemptChunkSize - 1}/${size}`,
         },
         body: chunk,
       })
@@ -103,12 +118,12 @@ export async function uploadFile(token: string, filePath: string, folderId?: str
       },
     })
 
-    if (isLast) {
+    if (attemptIsLast) {
       const j = await res.json() as { id: string }
       fileId = j.id
     }
 
-    offset += chunkSize
+    offset += attemptChunkSize
   }
 
   if (!fileId) throw new Error('OneDrive upload completed without file id')
