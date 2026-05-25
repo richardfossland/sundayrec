@@ -181,6 +181,8 @@
     "wakeSectionTitle": "Vekk maskin fra dvale",
     "wakeCapTitle": "Maskinen din",
     "wakeStatusTitle": "Status akkurat nå",
+    "wakeCanSleep": "Kan vekkes fra dvale",
+    "wakeCannotOff": "Kan ikke starte fra fullstendig avslått",
     "wakeTipNote": "Tips: La maskinen stå i dvale (ikke slå den av) når du går hjem på lørdag kveld. Mac vekker ikke på batteri — tilkoblet strøm må være på.",
     "silenceTitle": "Stopp ved vedvarende stillhet",
     "silenceDesc": "Avslutter opptaket hvis lyden er stille i mer enn 5 minutter",

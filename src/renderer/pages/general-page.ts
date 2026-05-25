@@ -98,33 +98,11 @@ export function setupGeneralPage(): void {
   document.getElementById('btn-general-save')?.addEventListener('click', saveGeneralSettings)
   document.getElementById('btn-general-cancel')?.addEventListener('click', () => applyGeneralSettingsToUI())
 
-  // Editor intro path picker
-  document.getElementById('btn-pick-editor-intro')?.addEventListener('click', async () => {
-    const fp = await window.api.pickAudioFile()
-    if (!fp) return
-    patchSettings({ editorIntroPath: fp })
-    await window.api.saveSettings(settings)
-    updateEditorClipUI()
-  })
-  document.getElementById('btn-clear-editor-intro')?.addEventListener('click', async () => {
-    patchSettings({ editorIntroPath: undefined })
-    await window.api.saveSettings(settings)
-    updateEditorClipUI()
-  })
+  // "Rediger — standardklipp"-kortet er fjernet i v4.31 — intro/outro settes
+  // i editor-fanen og lagres direkte til Settings.editorIntroPath/OutroPath
+  // derfra. updateEditorClipUI()-kallet under er en no-op nå men beholdes
+  // som safe-shim for tilfelle ekstern kode trigger applyGeneralSettingsToUI.
 
-  // Editor outro path picker
-  document.getElementById('btn-pick-editor-outro')?.addEventListener('click', async () => {
-    const fp = await window.api.pickAudioFile()
-    if (!fp) return
-    patchSettings({ editorOutroPath: fp })
-    await window.api.saveSettings(settings)
-    updateEditorClipUI()
-  })
-  document.getElementById('btn-clear-editor-outro')?.addEventListener('click', async () => {
-    patchSettings({ editorOutroPath: undefined })
-    await window.api.saveSettings(settings)
-    updateEditorClipUI()
-  })
   document.getElementById('btn-varsler-save')?.addEventListener('click', saveGeneralSettings)
   document.getElementById('btn-varsler-cancel')?.addEventListener('click', () => applyGeneralSettingsToUI())
 
@@ -216,16 +194,23 @@ export function applyGeneralSettingsToUI(): void {
   if (clearBtn) clearBtn.style.display = settings.emailSmtpPassSet ? 'inline' : 'none'
   toggleEmailSection()
 
-  // Version display
+  // Version display — show full semver (vX.Y.Z) so brukere ser også patch-
+  // releases (hotfixes). Tidligere truncated til major.minor noe som skjulte
+  // hotfix-info som "v4.30.1 fixet OAuth-secrets-i-CI".
   const raw = (window as unknown as { appVersion?: string }).appVersion ?? ''
   const displayVersion = (() => {
-    const m = raw.match(/^0\.(\d+)\.(\d+)/)
-    if (m) {
-      const major = parseInt(m[1]), minor = parseInt(m[2])
+    // 0.x.y → "Beta" prefix (legacy pre-release labeling)
+    const beta = raw.match(/^0\.(\d+)\.(\d+)/)
+    if (beta) {
+      const major = parseInt(beta[1]), minor = parseInt(beta[2])
       return minor === 0 ? `Beta ${major}` : `Beta ${major}.${minor}`
     }
-    const rel = raw.match(/^(\d+)\.(\d+)/)
-    if (rel) return `v${rel[1]}.${rel[2]}`
+    // Modern releases: show full vMAJOR.MINOR.PATCH (full semver)
+    const rel = raw.match(/^(\d+)\.(\d+)\.(\d+)/)
+    if (rel) return `v${rel[1]}.${rel[2]}.${rel[3]}`
+    // Fallback: anything else with at least two parts
+    const fallback = raw.match(/^(\d+)\.(\d+)/)
+    if (fallback) return `v${fallback[1]}.${fallback[2]}`
     return raw || '—'
   })()
   ;['app-version', 'sidebar-version', 'hero-app-version'].forEach(id => {

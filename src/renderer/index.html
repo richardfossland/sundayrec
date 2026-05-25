@@ -477,7 +477,14 @@
               <span id="wake-capability-text" class="wake-status-text" style="flex:1" data-i18n="wake.capability.loading">Sjekker maskinens vekkeegenskaper…</span>
             </div>
             <ul id="wake-capability-issues" class="sleep-config-detail" style="display:none;margin-top:6px;padding-left:18px"></ul>
-            <div id="wake-platform-note" class="sleep-config-detail wake-tip" style="margin-top:10px;display:none"></div>
+            <ul id="wake-capability-static" class="sleep-config-detail" style="margin-top:6px;padding-left:0;list-style:none">
+              <li><span style="color:#4ade80">✓</span> <span data-i18n="schedule.wakeCanSleep">Kan vekkes fra dvale</span></li>
+              <li><span style="color:#f87171">✗</span> <span data-i18n="schedule.wakeCannotOff">Kan ikke starte fra fullstendig avslått</span></li>
+            </ul>
+            <div class="sleep-config-detail wake-tip" data-i18n="schedule.wakeTipNote">
+              Tips: La maskinen stå i dvale (ikke slå den av) når du går hjem på lørdag kveld. Mac vekker ikke på batteri — tilkoblet strøm må være på.
+            </div>
+            <div id="wake-platform-note" class="sleep-config-detail" style="margin-top:8px;display:none;color:var(--text3)"></div>
           </div>
 
           <!-- Sub-card: "Status akkurat nå" (dynamic state) ─────────── -->
@@ -1421,24 +1428,10 @@
           <button class="btn-primary" id="btn-restart-install" style="display:none">↺ Start på nytt og installer</button>
         </div>
       </div>
-      <div class="card">
-        <div class="card-title" data-i18n="general.editorDefaults">Rediger — standardklipp</div>
-        <p class="card-desc" data-i18n="general.editorDefaultsDesc">Intro- og outro-filer som brukes som standard når du redigerer nye opptak i Rediger-siden. La feltene være tomme hvis dere ikke har faste intro/outro.</p>
-
-        <label class="form-label" data-i18n="general.defaultIntro">STANDARD INTRO-KLIPP</label>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-          <span id="general-editor-intro-display" style="flex:1;font-size:13px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Ingen fil valgt</span>
-          <button class="btn-secondary btn-sm" id="btn-pick-editor-intro" data-i18n="general.pickFile">Velg fil</button>
-          <button class="btn-ghost btn-sm" id="btn-clear-editor-intro" style="display:none">✕</button>
-        </div>
-
-        <label class="form-label mt" data-i18n="general.defaultOutro">STANDARD OUTRO-KLIPP</label>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-          <span id="general-editor-outro-display" style="flex:1;font-size:13px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Ingen fil valgt</span>
-          <button class="btn-secondary btn-sm" id="btn-pick-editor-outro" data-i18n="general.pickFile">Velg fil</button>
-          <button class="btn-ghost btn-sm" id="btn-clear-editor-outro" style="display:none">✕</button>
-        </div>
-      </div>
+      <!-- "Rediger — standardklipp"-kortet er fjernet i v4.31. Brukeren setter
+           intro/outro direkte fra editor-fanen — det vil samtidig oppdatere
+           Settings.editorIntroPath/OutroPath og bruke den som default neste
+           gang en fil åpnes. Trenger ikke duplisert UI her. -->
 
       <div class="card">
         <div class="card-title" data-i18n="general.helpTitle">Hjelp og opplæring</div>
