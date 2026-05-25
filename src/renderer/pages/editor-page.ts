@@ -1,7 +1,7 @@
 import { t } from '../i18n'
 import { settings, patchSettings } from '../state'
 import { escHtml as escapeHtml } from '../helpers'
-import type { ChapterMarker, RecordingMetadata } from '../../types'
+import type { RecordingMetadata } from '../../types'
 
 interface Cut { start: number; end: number }
 interface Suggestion { start: number; end: number; duration: number; label: string; type: string }
@@ -21,6 +21,30 @@ let outroBuffer: AudioBuffer | null = null
 let introDuration = 0
 let outroDuration = 0
 let includeIntroOutro = false
+// Cached peak arrays for intro/outro (rendered as dimmed waveform on timeline)
+let introPeaks: Float32Array | null = null
+let outroPeaks: Float32Array | null = null
+
+// Analyze panel display toggles
+let showSpeechSegments  = true
+let showMusicSegments   = true
+let showSilenceSegments = false
+let lastAnalyzedAt = 0  // epoch ms; 0 = never analyzed for current file
+
+// Dirty state — tracks whether the editor has unsaved changes (cuts,
+// normalize, intro/outro swap, mastering preset, metadata edits, …).
+// Cleared on file load and on export complete. Surfaced in the header
+// as a small bullet next to the filename.
+let editorDirty = false
+function markDirty(): void {
+  if (editorDirty) return
+  editorDirty = true
+  updateHeaderSummary()
+}
+function clearDirty(): void {
+  editorDirty = false
+  updateHeaderSummary()
+}
 
 // Formats always routed to the video editor path (HTML video element + ffmpeg peaks)
 const VIDEO_EXTS = new Set(['.mp4', '.mov', '.m4v', '.avi', '.wmv', '.ts', '.mts', '.m2ts', '.flv', '.3gp', '.asf', '.f4v'])
@@ -61,6 +85,7 @@ let minimapDragging  = false
 
 // Export state
 let exportOutputFolder = ''
+let publishAfterExport = false  // set by "Eksporter og publiser" button — runs publishing after export completes
 
 // Clipping detection
 let clipTimes: number[] = []
@@ -101,7 +126,32 @@ export function setupEditorPage(): void {
   videoEl   = $('editor-video') as HTMLVideoElement | null
 
   $('btn-editor-open')?.addEventListener('click',    () => pickAndLoad())
-  $('btn-editor-change')?.addEventListener('click',  () => pickAndLoad())
+  $('btn-editor-change')?.addEventListener('click',  () => {
+    if (!confirmDiscardIfDirty('open')) return
+    pickAndLoad()
+  })
+  $('btn-editor-close')?.addEventListener('click', () => {
+    if (!confirmDiscardIfDirty('close')) return
+    closeCurrentFile()
+  })
+
+  // Empty-state click anywhere on the dropzone opens picker
+  $('editor-empty-dropzone')?.addEventListener('click', (e) => {
+    // Don't double-fire when the inner button is clicked
+    if ((e.target as HTMLElement).closest('button')) return
+    pickAndLoad()
+  })
+
+  // Empty-state review queue link
+  $('editor-empty-review-link')?.addEventListener('click', (e) => {
+    e.preventDefault()
+    window.showPage('home')
+  })
+
+  // Intro/Outro panel header collapses on click of chevron
+  $('editor-io-chevron')?.addEventListener('click', () => {
+    document.getElementById('editor-io-panel')?.classList.toggle('editor-io-panel--collapsed')
+  })
   $('btn-editor-play')?.addEventListener('click',    () => togglePlay(false))
   $('btn-editor-preview')?.addEventListener('click', () => togglePlay(true))
   $('btn-zoom-in')?.addEventListener('click',   () => zoomBy(0.5))
@@ -119,7 +169,16 @@ export function setupEditorPage(): void {
 
   $('btn-editor-save')?.addEventListener('click',    () => openExportModal())
   $('btn-export-cancel')?.addEventListener('click',  () => closeExportModal())
-  $('btn-export-confirm')?.addEventListener('click', () => runExport())
+  $('btn-export-confirm')?.addEventListener('click', () => { publishAfterExport = false; runExport() })
+  $('btn-export-and-publish')?.addEventListener('click', () => { publishAfterExport = true; runExport() })
+  $('export-publish-configure')?.addEventListener('click', (e) => {
+    e.preventDefault()
+    closeExportModal()
+    // Publish is a tab inside Settings ("settings-publish") — navigate to
+    // Settings and let the tab handler land on the right inner page.
+    window.showPage('settings')
+    document.querySelector<HTMLElement>('.inner-tab[data-tab="settings-publish"]')?.click()
+  })
 
   // Format picker pills
   document.querySelectorAll<HTMLElement>('.export-fmt-btn').forEach(btn => {
@@ -165,6 +224,8 @@ export function setupEditorPage(): void {
     }
     audioGainDb = gain
     setNormalizeUI(gain, false)
+    markDirty()
+    updateHeaderSummary()
     drawWaveform()
     drawMinimap()
   })
@@ -173,6 +234,8 @@ export function setupEditorPage(): void {
     if (audioGainDb === 0) return
     audioGainDb = 0
     setNormalizeUI(0, false)
+    markDirty()
+    updateHeaderSummary()
     drawWaveform()
     drawMinimap()
   })
@@ -189,6 +252,7 @@ export function setupEditorPage(): void {
   if (ioChk) {
     ioChk.addEventListener('change', () => {
       includeIntroOutro = ioChk.checked
+      markDirty()
       drawWaveform()
     })
   }
@@ -199,11 +263,13 @@ export function setupEditorPage(): void {
     patchSettings({ editorIntroPath: fp })
     await window.api.saveSettings(settings)
     await reloadIntroOutro()
+    markDirty()
   })
   $('btn-editor-clear-intro')?.addEventListener('click', async () => {
     patchSettings({ editorIntroPath: undefined })
     await window.api.saveSettings(settings)
     await reloadIntroOutro()
+    markDirty()
   })
   $('btn-editor-pick-outro')?.addEventListener('click', async () => {
     const fp = await window.api.pickAudioFile()
@@ -211,11 +277,13 @@ export function setupEditorPage(): void {
     patchSettings({ editorOutroPath: fp })
     await window.api.saveSettings(settings)
     await reloadIntroOutro()
+    markDirty()
   })
   $('btn-editor-clear-outro')?.addEventListener('click', async () => {
     patchSettings({ editorOutroPath: undefined })
     await window.api.saveSettings(settings)
     await reloadIntroOutro()
+    markDirty()
   })
 
   // Video intro/outro buttons
@@ -258,22 +326,29 @@ export function setupEditorPage(): void {
       const el = $(id) as HTMLInputElement | HTMLTextAreaElement | null
       if (el) (meta as unknown as Record<string, unknown>)[field] = el.value
       metaDirty = true
+      markDirty()
     })
   }
 
-  // Segment detection
+  // Analyse panel: run detection
   $('btn-detect-segments')?.addEventListener('click', () => runDetection())
 
-  // Add chapter at current playhead
-  $('btn-add-chapter')?.addEventListener('click', () => {
-    const time = Math.max(0, Math.min(duration, playStartSec))
-    const title = `Kapittel ${meta.chapters.length + 1}`
-    meta.chapters.push({ time, title })
-    meta.chapters.sort((a, b) => a.time - b.time)
-    metaDirty = true
-    renderChapterList()
+  // Analyse panel: segment-type toggles
+  $('editor-show-speech')?.addEventListener('change', () => {
+    showSpeechSegments = ($('editor-show-speech') as HTMLInputElement).checked
     drawWaveform()
   })
+  $('editor-show-music')?.addEventListener('change', () => {
+    showMusicSegments = ($('editor-show-music') as HTMLInputElement).checked
+    drawWaveform()
+  })
+  $('editor-show-silence')?.addEventListener('change', () => {
+    showSilenceSegments = ($('editor-show-silence') as HTMLInputElement).checked
+    drawWaveform()
+  })
+
+  // Analyse panel: "Marker preken automatisk"
+  $('btn-mark-sermon')?.addEventListener('click', () => markSermonAsTrim())
 
   // Meta save button
   $('btn-meta-save')?.addEventListener('click', saveMetadata)
@@ -315,6 +390,16 @@ export function setupEditorPage(): void {
   canvas?.addEventListener('mouseleave',  onCanvasLeave)
   canvas?.addEventListener('contextmenu', onCanvasContextMenu)
   canvas?.addEventListener('wheel',       onCanvasWheel, { passive: false })
+  // Double-click on a sermon segment → trim everything outside it.
+  // Single-click stays as tap-to-seek so this is non-destructive UX:
+  // the user has to deliberately double-tap to commit the trim.
+  canvas?.addEventListener('dblclick', (e: MouseEvent) => {
+    if (!peaks) return
+    const rect = canvas.getBoundingClientRect()
+    const sec = xToSec(e.clientX - rect.left, rect.width)
+    const sermon = suggestions.find(s => s.type === 'sermon' && sec >= s.start && sec <= s.end)
+    if (sermon) markSermonAsTrim()
+  })
 
   setupMinimapInteraction()
   setupKeyboardShortcuts()
@@ -535,6 +620,8 @@ export function deactivateEditor(): void {
   audioBuffer = null
   introBuffer = null
   outroBuffer = null
+  introPeaks = null
+  outroPeaks = null
   // Release peaks/cuts/etc so we don't hold MB+ of arrays in memory between
   // recording sessions. New loadFile() will populate them fresh.
   peaks = null
@@ -543,7 +630,9 @@ export function deactivateEditor(): void {
   cutHistoryIdx = -1
   suggestions = []
   clipTimes = []
+  lastAnalyzedAt = 0
   meta = { title: '', speaker: '', description: '', chapters: [] }
+  clearDirty()
   // Cleanup video element
   if (videoEl) {
     videoEl.pause()
@@ -615,7 +704,10 @@ async function loadFile(fp: string): Promise<void> {
   // Fresh file → drop any previous peak-normalize gain and reset the UI.
   audioGainDb = 0
   setNormalizeUI(0, false)
-  renderSuggestions()
+  lastAnalyzedAt = 0
+  renderAnalyzePanel()
+  // Fresh file → not dirty
+  clearDirty()
 
   showState('loading')
 
@@ -763,6 +855,8 @@ async function loadFile(fp: string): Promise<void> {
   const fname = fp.split(/[/\\]/).pop() ?? fp
   const el = $('editor-filename')
   if (el) el.textContent = fname
+  // Refresh header summary now that duration/cut state is known
+  updateHeaderSummary()
 
   // Load intro/outro buffers from settings (non-blocking, audio only)
   if (!isVideoFile) loadIntroOutroBuffers(seq)
@@ -793,6 +887,16 @@ async function loadFile(fp: string): Promise<void> {
   updateTimecode(0)
   updateTotalTime()
 
+  // Default `Inkluder ved eksport` to ON when the user has at least one
+  // intro/outro path configured — they almost always want their jingles
+  // included, and showing the dimmed waveform on the timeline is the
+  // whole point of the new layout.
+  if (settings.editorIntroPath || settings.editorOutroPath) {
+    includeIntroOutro = true
+    const chk = $('editor-include-io') as HTMLInputElement | null
+    if (chk) chk.checked = true
+  }
+
   // Clipping badge (shown after computePeaks)
   const clipBadge = $('editor-clip-badge')
   if (clipBadge) {
@@ -822,8 +926,8 @@ async function reloadIntroOutro(): Promise<void> {
 async function loadIntroOutroBuffers(seq: number): Promise<void> {
   const introPath = settings.editorIntroPath
   const outroPath = settings.editorOutroPath
-  introBuffer = null; introDuration = 0
-  outroBuffer = null; outroDuration = 0
+  introBuffer = null; introDuration = 0; introPeaks = null
+  outroBuffer = null; outroDuration = 0; outroPeaks = null
 
   updateEditorIntroOutroDisplay()
 
@@ -841,13 +945,50 @@ async function loadIntroOutroBuffers(seq: number): Promise<void> {
 
   if (introPath) {
     const buf = await decodeAudio(introPath)
-    if (seq === loadSeq && buf) { introBuffer = buf; introDuration = buf.duration }
+    if (seq === loadSeq && buf) {
+      introBuffer = buf
+      introDuration = buf.duration
+      // Compute peaks via the same routine used for the main file — gives
+      // a dimmed waveform on the left slot of the timeline.
+      introPeaks = computeJinglePeaks(buf)
+    }
   }
   if (outroPath) {
     const buf = await decodeAudio(outroPath)
-    if (seq === loadSeq && buf) { outroBuffer = buf; outroDuration = buf.duration }
+    if (seq === loadSeq && buf) {
+      outroBuffer = buf
+      outroDuration = buf.duration
+      outroPeaks = computeJinglePeaks(buf)
+    }
   }
   if (seq === loadSeq) drawWaveform()
+}
+
+/**
+ * Compute peaks for an intro/outro AudioBuffer at 100 Hz (matching the
+ * main-file peak rate). We can't reuse computePeaks() directly because
+ * that also resets the clip-time array — which we want to keep tied to
+ * the main recording only. So this is a slimmed copy: same algorithm,
+ * no clip tracking, no side effects.
+ */
+function computeJinglePeaks(buf: AudioBuffer): Float32Array {
+  const RATE = 100
+  const total = Math.ceil(buf.duration * RATE)
+  const out   = new Float32Array(total)
+  const ch0   = buf.getChannelData(0)
+  const ch1   = buf.numberOfChannels > 1 ? buf.getChannelData(1) : ch0
+  const spp   = Math.max(1, Math.floor(buf.sampleRate / RATE))
+  for (let i = 0; i < total; i++) {
+    const s = i * spp
+    const e = Math.min(s + spp, ch0.length)
+    let pk = 0
+    for (let j = s; j < e; j++) {
+      const v = Math.max(Math.abs(ch0[j]), Math.abs(ch1[j]))
+      if (v > pk) pk = v
+    }
+    out[i] = pk
+  }
+  return out
 }
 
 function updateVideoIntroOutroDisplay(): void {
@@ -976,103 +1117,103 @@ function renderChapterList(): void {
 
 // ── Segment detection ─────────────────────────────────────────────────────
 
+/** Per-type visibility filter for segments. Sermon (the highlighted
+ *  suggested-keep range) is always visible — it's the most actionable
+ *  outcome of analysis. Speech / music / silence honour the user's
+ *  toggles in the analyze panel. */
+function shouldShowSegment(type: string): boolean {
+  if (type === 'sermon') return true
+  if (type === 'speech') return showSpeechSegments
+  if (type === 'music')  return showMusicSegments
+  if (type === 'silence') return showSilenceSegments
+  // mixed / unknown → render only if speech is on (closest match)
+  return showSpeechSegments
+}
+
 async function runDetection(): Promise<void> {
   if (!filePath) return
   const btn       = $('btn-detect-segments') as HTMLButtonElement | null
   const analyzing = $('editor-segments-analyzing')
-  if (btn)       { btn.disabled = true; btn.textContent = 'Analyserer…' }
+  if (btn)       { btn.disabled = true; btn.textContent = t('editor.analyzing', 'Analyserer…') }
   if (analyzing)   analyzing.style.display = ''
 
   suggestions = []
-  renderSuggestions()
+  renderAnalyzePanel()
 
   const raw = await window.api.editorDetectSegments(filePath)
   suggestions = raw as Suggestion[]
+  lastAnalyzedAt = Date.now()
 
-  if (btn)       { btn.disabled = false; btn.textContent = 'Finn segmenter' }
+  if (btn)       { btn.disabled = false; btn.textContent = t('editor.analyzeRun', '▶ Analyser opptak') }
   if (analyzing)   analyzing.style.display = 'none'
-  renderSuggestions()
+  renderAnalyzePanel()
   drawWaveform()
 }
 
-function renderSuggestions(): void {
-  const list = $('editor-segments-list')
-  if (!list) return
-  list.innerHTML = ''
+/**
+ * Render the merged "Analyser opptak" panel — replaces the old
+ * separate Kapittelmarkører + Analyser opptak sections. Shows a summary
+ * line ("Sist analysert: 31.5 14:23 · 3 tale-segmenter funnet"), the
+ * three on-timeline toggles (speech/music/silence), and the
+ * "Marker preken automatisk" button.
+ *
+ * Backwards-compat note: `meta.chapters` is still maintained as the
+ * underlying data model but no longer surfaced as its own card — chapter
+ * dots still render on the canvas if present, and any history sidecar
+ * with existing chapter metadata is preserved on save.
+ */
+function renderAnalyzePanel(): void {
+  const summary  = $('editor-analyze-summary')
+  const controls = $('editor-analyze-controls')
+  const markBtn  = $('btn-mark-sermon')
+  const markHint = $('editor-mark-sermon-hint')
 
-  if (suggestions.length === 0) {
-    list.innerHTML = '<div class="editor-chapters-empty">Ingen segmenter funnet — trykk «Finn segmenter» for å analysere opptaket.</div>'
-    return
+  // Render summary line if we've ever analyzed this file.
+  if (summary) {
+    if (lastAnalyzedAt > 0) {
+      const speechCount = suggestions.filter(s => s.type === 'speech' || s.type === 'sermon').length
+      const d = new Date(lastAnalyzedAt)
+      const date = `${d.getDate()}.${d.getMonth() + 1}`
+      const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+      summary.textContent = `${t('editor.analyzedAt', 'Sist analysert')}: ${date} ${time} · ${speechCount} ${t('editor.speechSegments', 'tale-segmenter funnet')}`
+      summary.style.display = ''
+    } else {
+      summary.style.display = 'none'
+    }
   }
 
-  for (let i = 0; i < suggestions.length; i++) {
-    const seg = suggestions[i]
-    const row = document.createElement('div')
-    row.className = 'editor-segment-row'
+  if (controls) controls.style.display = lastAnalyzedAt > 0 ? '' : 'none'
 
-    const isSermon = seg.type === 'sermon'
+  // Show "Marker preken" button only if we have a sermon suggestion
+  const hasSermon = suggestions.some(s => s.type === 'sermon')
+  if (markBtn)  (markBtn as HTMLElement).style.display  = hasSermon ? '' : 'none'
+  if (markHint) (markHint as HTMLElement).style.display = hasSermon ? '' : 'none'
+}
 
-    const badge = document.createElement('span')
-    badge.className = 'editor-segment-badge' + (isSermon ? ' editor-segment-badge--sermon' : '')
-    badge.textContent = isSermon ? '★' : '◆'
+/**
+ * Mark the suggested sermon as a "keep" range — drops everything before
+ * sermon.start and after sermon.end as cut regions. Idempotent: removes
+ * existing trim-style cuts at the boundaries before adding the new ones.
+ */
+function markSermonAsTrim(): void {
+  const sermon = suggestions.find(s => s.type === 'sermon')
+  if (!sermon || !duration) return
 
-    const info = document.createElement('div')
-    info.className = 'editor-segment-info'
-
-    const timeEl = document.createElement('div')
-    timeEl.className = 'editor-segment-time'
-    timeEl.textContent = `${formatTime(seg.start)} – ${formatTime(seg.end)}`
-    timeEl.title = 'Klikk for å gå til segmentet'
-    timeEl.style.cursor = 'pointer'
-    timeEl.addEventListener('click', () => {
-      playStartSec = seg.start
-      updateTimecode(seg.start)
-      const half = Math.min((vpEnd - vpStart) / 2, seg.duration / 2)
-      vpStart = Math.max(0, seg.start - half * 0.2)
-      vpEnd   = Math.min(duration, vpStart + (seg.end - seg.start) * 1.15)
-      updateMinimapViewport()
-      drawWaveform()
-    })
-
-    const nameInput = document.createElement('input')
-    nameInput.className = 'editor-segment-name'
-    nameInput.value = seg.label
-    nameInput.addEventListener('input', () => { suggestions[i].label = nameInput.value })
-
-    info.appendChild(timeEl)
-    info.appendChild(nameInput)
-
-    const approveBtn = document.createElement('button')
-    approveBtn.className = 'editor-segment-approve'
-    approveBtn.title = 'Legg til som kapittelmarkør'
-    approveBtn.textContent = '✓ Godkjenn'
-    approveBtn.addEventListener('click', () => {
-      const label = nameInput.value.trim() || seg.label
-      meta.chapters.push({ time: seg.start, title: label })
-      meta.chapters.sort((a, b) => a.time - b.time)
-      metaDirty = true
-      suggestions.splice(i, 1)
-      renderSuggestions()
-      renderChapterList()
-      drawWaveform()
-    })
-
-    const dismissBtn = document.createElement('button')
-    dismissBtn.className = 'editor-segment-dismiss'
-    dismissBtn.title = 'Avvis forslag'
-    dismissBtn.textContent = '✕'
-    dismissBtn.addEventListener('click', () => {
-      suggestions.splice(i, 1)
-      renderSuggestions()
-      drawWaveform()
-    })
-
-    row.appendChild(badge)
-    row.appendChild(info)
-    row.appendChild(approveBtn)
-    row.appendChild(dismissBtn)
-    list.appendChild(row)
+  // Replace cuts entirely with the trim-around-sermon pair. This matches
+  // the prep-and-review behaviour (applyReviewModeDefaults).
+  cuts = []
+  if (sermon.start > 0.5) {
+    cuts.push({ start: 0, end: Math.min(sermon.start, duration) })
   }
+  if (sermon.end < duration - 0.5) {
+    cuts.push({ start: Math.max(0, sermon.end), end: duration })
+  }
+  pushCutHistory()
+  markDirty()
+  renderCutList()
+  updateRemainingDisplay()
+  drawWaveform()
+  drawMinimap()
 }
 
 function computePeaks(buf: AudioBuffer): Float32Array {
@@ -1271,17 +1412,32 @@ function drawWaveform(): void {
     ? playStartSec + (audioCtx.currentTime - playStartCtxTime)
     : playStartSec
 
-  // ── Suggested segment backgrounds ─────────────────────────────────
+  // ── Layout: intro / main / outro regions ─────────────────────────
+  const geom = getLayoutGeom(W)
+
+  // ── Suggested segment backgrounds (only in main region) ───────────
   for (const seg of suggestions) {
+    if (!shouldShowSegment(seg.type)) continue
     const x1 = secToX(seg.start, W), x2 = secToX(seg.end, W)
-    if (x2 < 0 || x1 > W) continue
-    const clampX1 = Math.max(0, x1), clampX2 = Math.min(x2, W)
-    ctx.fillStyle = seg.type === 'sermon' ? 'rgba(34,197,94,0.10)' : 'rgba(34,197,94,0.06)'
+    if (x2 < geom.mainPxStart || x1 > geom.mainPxEnd) continue
+    const clampX1 = Math.max(geom.mainPxStart, x1), clampX2 = Math.min(x2, geom.mainPxEnd)
+    // Color by segment type:
+    //   sermon  → gold (suggested keep range)
+    //   speech  → light green
+    //   music   → blue
+    //   silence → grey
+    let fillCol = 'rgba(120,120,140,0.10)'
+    let strokeCol = 'rgba(120,120,140,0.4)'
+    if (seg.type === 'sermon')        { fillCol = 'rgba(240,187,71,0.22)'; strokeCol = '#f0bb47' }
+    else if (seg.type === 'speech')   { fillCol = 'rgba(72,187,120,0.15)'; strokeCol = '#48bb78' }
+    else if (seg.type === 'music')    { fillCol = 'rgba(99,179,237,0.15)'; strokeCol = '#63b3ed' }
+    else if (seg.type === 'silence')  { fillCol = 'rgba(150,150,160,0.10)'; strokeCol = 'rgba(150,150,160,0.45)' }
+    ctx.fillStyle = fillCol
     ctx.fillRect(clampX1, RULER, clampX2 - clampX1, H - RULER)
     // Boundary lines
     for (const bx of [x1, x2]) {
-      if (bx < -2 || bx > W + 2) continue
-      ctx.strokeStyle = '#22c55e'
+      if (bx < geom.mainPxStart - 2 || bx > geom.mainPxEnd + 2) continue
+      ctx.strokeStyle = strokeCol
       ctx.lineWidth   = 1.5
       ctx.globalAlpha = 0.55
       ctx.setLineDash([5, 4])
@@ -1289,24 +1445,33 @@ function drawWaveform(): void {
       ctx.setLineDash([])
       ctx.globalAlpha = 1
     }
-    // Label inside region
+    // Label inside region — show "Antatt preken — Nmin" for sermon, type label otherwise
     if (clampX2 - clampX1 > 40) {
       ctx.font = '600 9px system-ui, -apple-system, sans-serif'
       ctx.textBaseline = 'top'
-      ctx.fillStyle = '#22c55e'
-      ctx.globalAlpha = 0.85
-      const lbl = seg.label.length > 18 ? seg.label.slice(0, 17) + '…' : seg.label
-      ctx.fillText(lbl, Math.max(clampX1 + 4, 2), RULER + 24)
+      ctx.fillStyle = strokeCol
+      ctx.globalAlpha = 0.95
+      let lbl = seg.label
+      if (seg.type === 'sermon') {
+        const mins = Math.round((seg.end - seg.start) / 60)
+        lbl = `★ ${t('editor.sermonLabel', 'Antatt preken')} — ${mins} min`
+      } else if (lbl.length > 18) lbl = lbl.slice(0, 17) + '…'
+      ctx.fillText(lbl, Math.max(clampX1 + 4, geom.mainPxStart + 2), RULER + 24)
       ctx.globalAlpha = 1
     }
   }
 
-  // ── Cut region backgrounds ─────────────────────────────────────────
+  // ── Cut region backgrounds (clipped to main region) ───────────────
   for (const c of cuts) {
     const x1 = secToX(c.start, W), x2 = secToX(c.end, W)
-    if (x2 < 0 || x1 > W) continue
+    if (x2 < geom.mainPxStart || x1 > geom.mainPxEnd) continue
     ctx.fillStyle = 'rgba(239,68,68,0.13)'
-    ctx.fillRect(Math.max(0, x1), RULER, Math.min(x2, W) - Math.max(0, x1), H - RULER)
+    ctx.fillRect(
+      Math.max(geom.mainPxStart, x1),
+      RULER,
+      Math.min(x2, geom.mainPxEnd) - Math.max(geom.mainPxStart, x1),
+      H - RULER,
+    )
   }
 
   // ── Active drag region ─────────────────────────────────────────────
@@ -1320,13 +1485,54 @@ function drawWaveform(): void {
     ctx.strokeRect(x1 + 0.5, RULER + 0.5, x2 - x1 - 1, H - RULER - 1)
   }
 
+  // ── Intro waveform (dimmed, in left slot) ─────────────────────────
+  if (geom.introPx > 0 && introPeaks && introDuration > 0) {
+    const introBarMax = maxBar
+    ctx.fillStyle = '#7AAAFF'
+    for (let px = 0; px < geom.introPx; px++) {
+      const sec = (px / geom.introPx) * introDuration
+      const pi  = Math.floor(sec * 100)
+      if (pi < 0 || pi >= introPeaks.length) continue
+      const barH = Math.min(introBarMax, introPeaks[pi] * introBarMax)
+      ctx.globalAlpha = 0.55
+      ctx.fillRect(px, midY - barH, 1, barH * 2)
+    }
+    ctx.globalAlpha = 1
+    // Section separator
+    ctx.strokeStyle = 'rgba(122,170,255,0.55)'
+    ctx.lineWidth = 1
+    ctx.beginPath(); ctx.moveTo(geom.introPx, RULER); ctx.lineTo(geom.introPx, H); ctx.stroke()
+  }
+
+  // ── Outro waveform (dimmed, in right slot) ────────────────────────
+  if (geom.outroPx > 0 && outroPeaks && outroDuration > 0) {
+    const outroBarMax = maxBar
+    ctx.fillStyle = '#7AAAFF'
+    for (let px = 0; px < geom.outroPx; px++) {
+      const sec = (px / geom.outroPx) * outroDuration
+      const pi  = Math.floor(sec * 100)
+      if (pi < 0 || pi >= outroPeaks.length) continue
+      const barH = Math.min(outroBarMax, outroPeaks[pi] * outroBarMax)
+      ctx.globalAlpha = 0.55
+      ctx.fillRect(geom.mainPxEnd + px, midY - barH, 1, barH * 2)
+    }
+    ctx.globalAlpha = 1
+    // Section separator
+    ctx.strokeStyle = 'rgba(122,170,255,0.55)'
+    ctx.lineWidth = 1
+    ctx.beginPath(); ctx.moveTo(geom.mainPxEnd, RULER); ctx.lineTo(geom.mainPxEnd, H); ctx.stroke()
+  }
+
   // ── Waveform bars (symmetric, mirrored above + below centre) ──────
   // Bars are scaled by the current `audioGainDb` so any peak-normalization
   // is immediately visible — same gain factor we'll apply in ffmpeg at
-  // export time.
+  // export time. Clipped to the main region (introPx <= x < mainPxEnd).
   const gFac = gainFactor()
-  for (let px = 0; px < W; px++) {
-    const sec = vpStart + (px / W) * (vpEnd - vpStart)
+  const mainPxStart = Math.floor(geom.mainPxStart)
+  const mainPxEnd   = Math.floor(geom.mainPxEnd)
+  const mainPxWidth = Math.max(1, mainPxEnd - mainPxStart)
+  for (let px = mainPxStart; px < mainPxEnd; px++) {
+    const sec = vpStart + ((px - mainPxStart) / mainPxWidth) * (vpEnd - vpStart)
     const pi  = Math.floor(sec * 100)
     if (pi < 0 || pi >= peaks.length) continue
 
@@ -1448,32 +1654,31 @@ function drawWaveform(): void {
     ctx.textBaseline = 'middle'
   }
 
-  // ── Intro/Outro banners ────────────────────────────────────────────
-  if (includeIntroOutro && (introDuration > 0 || outroDuration > 0)) {
+  // ── Section labels ("Intro" / "Hovedopptak" / "Outro") in the ruler ──
+  if (geom.introPx > 0 || geom.outroPx > 0) {
     ctx.font = '600 10px system-ui, -apple-system, sans-serif'
     ctx.textBaseline = 'middle'
-    if (introDuration > 0) {
-      ctx.fillStyle = 'rgba(99,102,241,0.18)'
-      ctx.fillRect(0, RULER, 70, H - RULER)
-      ctx.strokeStyle = 'rgba(99,102,241,0.5)'
-      ctx.lineWidth = 1
-      ctx.beginPath(); ctx.moveTo(70, RULER); ctx.lineTo(70, H); ctx.stroke()
-      ctx.fillStyle = '#818cf8'
-      ctx.textAlign = 'center'
-      ctx.fillText(`◀ INTRO ${formatDuration(introDuration)}`, 35, midY)
-      ctx.textAlign = 'left'
+    ctx.textAlign = 'center'
+    if (geom.introPx > 36) {
+      ctx.fillStyle = '#7AAAFF'
+      ctx.globalAlpha = 0.9
+      const lbl = `${t('editor.tlIntro', 'Intro')} · ${formatDuration(introDuration)}`
+      ctx.fillText(lbl, geom.introPx / 2, RULER / 2)
     }
-    if (outroDuration > 0) {
-      ctx.fillStyle = 'rgba(99,102,241,0.18)'
-      ctx.fillRect(W - 70, RULER, 70, H - RULER)
-      ctx.strokeStyle = 'rgba(99,102,241,0.5)'
-      ctx.lineWidth = 1
-      ctx.beginPath(); ctx.moveTo(W - 70, RULER); ctx.lineTo(W - 70, H); ctx.stroke()
-      ctx.fillStyle = '#818cf8'
-      ctx.textAlign = 'center'
-      ctx.fillText(`OUTRO ${formatDuration(outroDuration)} ▶`, W - 35, midY)
-      ctx.textAlign = 'left'
+    if (geom.outroPx > 36) {
+      ctx.fillStyle = '#7AAAFF'
+      ctx.globalAlpha = 0.9
+      const lbl = `${t('editor.tlOutro', 'Outro')} · ${formatDuration(outroDuration)}`
+      ctx.fillText(lbl, geom.mainPxEnd + geom.outroPx / 2, RULER / 2)
     }
+    if ((geom.introPx > 36 || geom.outroPx > 36) && geom.mainPxEnd - geom.mainPxStart > 80) {
+      ctx.fillStyle = ACCENT
+      ctx.globalAlpha = 0.85
+      const lbl = t('editor.tlMain', 'Hovedopptak')
+      ctx.fillText(lbl, (geom.mainPxStart + geom.mainPxEnd) / 2, RULER / 2)
+    }
+    ctx.globalAlpha = 1
+    ctx.textAlign = 'left'
   }
 
   // ── Ghost cursor ───────────────────────────────────────────────────
@@ -1485,8 +1690,20 @@ function drawWaveform(): void {
     ctx.beginPath(); ctx.moveTo(x, RULER); ctx.lineTo(x, H); ctx.stroke()
     ctx.setLineDash([])
 
-    // Timestamp tooltip at bottom
-    const label = formatTime(hoverSec)
+    // Timestamp tooltip at bottom. If we're hovering over an analysed
+    // segment, show the segment type + duration alongside the timecode —
+    // "Tale · 23 min 42 sek" — so the user can immediately see what kind
+    // of audio is under their cursor.
+    let label = formatTime(hoverSec)
+    const hoveredSeg = suggestions.find(s => hoverSec >= s.start && hoverSec <= s.end && shouldShowSegment(s.type))
+    if (hoveredSeg) {
+      const typeLbl = hoveredSeg.type === 'sermon' ? t('editor.tooltipSermon', 'Antatt preken')
+        : hoveredSeg.type === 'speech' ? t('editor.tooltipSpeech', 'Tale')
+        : hoveredSeg.type === 'music'  ? t('editor.tooltipMusic',  'Musikk')
+        : hoveredSeg.type === 'silence'? t('editor.tooltipSilence','Stillhet')
+        : t('editor.tooltipMixed', 'Blandet')
+      label = `${typeLbl} · ${formatDuration(hoveredSeg.duration)}  (${label})`
+    }
     ctx.font = '600 10px system-ui, -apple-system, sans-serif'
     ctx.textBaseline = 'middle'
     const tw = ctx.measureText(label).width
@@ -1571,7 +1788,12 @@ function drawRuler(ctx: CanvasRenderingContext2D, W: number, H: number, RULER: n
   ctx.lineWidth = 1
   ctx.beginPath(); ctx.moveTo(0, RULER); ctx.lineTo(W, RULER); ctx.stroke()
 
-  const rawInterval  = (vpEnd - vpStart) * 80 / W
+  const geom = getLayoutGeom(W)
+  const mainW = Math.max(1, geom.mainPxEnd - geom.mainPxStart)
+  // Use main viewport span for tick density (not the smaller pixel-per-second
+  // we'd get if we used W, which would over-tick the main region when intro/outro
+  // are eating display space).
+  const rawInterval  = (vpEnd - vpStart) * 80 / mainW
   const intervals    = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600]
   const tickInterval = intervals.find(v => v >= rawInterval) ?? 600
   const firstTick    = Math.ceil(vpStart / tickInterval) * tickInterval
@@ -1582,12 +1804,17 @@ function drawRuler(ctx: CanvasRenderingContext2D, W: number, H: number, RULER: n
 
   for (let s = firstTick; s <= vpEnd; s += tickInterval) {
     const x = secToX(s, W)
-    if (x < 0 || x > W) continue
+    // Skip ticks that land inside the intro/outro slots — they'd be misleading
+    // there (the wall-clock time in those slots is local to the jingle file).
+    if (x < geom.mainPxStart - 1 || x > geom.mainPxEnd + 1) continue
     ctx.strokeStyle = 'rgba(255,255,255,0.12)'
     ctx.lineWidth   = 1
     ctx.beginPath(); ctx.moveTo(x, RULER - 5); ctx.lineTo(x, RULER); ctx.stroke()
     ctx.fillStyle = 'rgba(255,255,255,0.32)'
-    ctx.fillText(formatTime(s), x + 3, RULER / 2)
+    // Account for intro: show GLOBAL timeline time when intro is present
+    // (so a 10s intro means main t=0 is labelled "0:10" globally).
+    const globalSec = s + (geom.effIntroDur > 0 ? geom.effIntroDur : 0)
+    ctx.fillText(formatTime(globalSec), x + 3, RULER / 2)
   }
 }
 
@@ -1674,12 +1901,41 @@ function jumpViewportToMouse(e: MouseEvent): void {
 }
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────
+//
+// Shortcuts are only active while the editor tab is the visible page and
+// the user isn't typing in an input/textarea. The mod key is Cmd on Mac
+// and Ctrl elsewhere — we treat the two interchangeably (metaKey || ctrlKey).
 function setupKeyboardShortcuts(): void {
   window.addEventListener('keydown', (e: KeyboardEvent) => {
     if (!document.getElementById('page-editor')?.classList.contains('active')) return
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+    const mod = e.metaKey || e.ctrlKey
+
+    // App-level shortcuts: Cmd+O / Cmd+W / Cmd+S / Cmd+E — these work even
+    // when no file is open (e.g. Cmd+O on empty state). Also intentionally
+    // skip the `peaks` guard so Cmd+O still works.
+    if (mod && e.code === 'KeyO') {
+      e.preventDefault()
+      if (!confirmDiscardIfDirty('open')) return
+      pickAndLoad()
+      return
+    }
+    if (mod && e.code === 'KeyW') {
+      e.preventDefault()
+      if (!filePath) return
+      if (!confirmDiscardIfDirty('close')) return
+      closeCurrentFile()
+      return
+    }
+    if (mod && (e.code === 'KeyS' || e.code === 'KeyE')) {
+      e.preventDefault()
+      if (filePath) openExportModal()
+      return
+    }
+
+    // Per-file shortcuts (need an open file)
     if (!peaks) return
-    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement ||
-        e.target instanceof HTMLButtonElement) return
+    if (e.target instanceof HTMLButtonElement) return
 
     switch (e.code) {
       case 'Space':
@@ -1724,20 +1980,52 @@ function setupKeyboardShortcuts(): void {
         isLooping = !isLooping
         $('btn-editor-loop')?.classList.toggle('active', isLooping)
         break
+      case 'Delete':
+      case 'Backspace': {
+        // Delete the cut under the playhead — the closest cut whose range
+        // contains playStartSec, falling back to the most recently added.
+        if (cuts.length === 0) break
+        e.preventDefault()
+        const idx = cuts.findIndex(c => playStartSec >= c.start && playStartSec <= c.end)
+        if (idx >= 0) deleteCut(idx)
+        else deleteCut(cuts.length - 1)
+        break
+      }
     }
   })
 }
 
 // ── Drag and drop ─────────────────────────────────────────────────────────
+//
+// Two drop targets:
+//   1. The whole editor page (when no file is open, OR when a video/audio
+//      media file is dragged anywhere outside the timeline canvas) → loads
+//      as main file.
+//   2. The timeline canvas: drops on the LEFT third route to INTRO,
+//      drops on the RIGHT third route to OUTRO. Middle third is ignored
+//      (reserved for future cut/note drops).
+const AUDIO_EXTS = new Set([
+  'mp3', 'mp1', 'mp2', 'wav', 'flac', 'aac', 'm4a', 'm4b', 'm4r',
+  'ogg', 'oga', 'opus', 'webm', 'aiff', 'aif', 'wma', 'mka',
+  'ac3', 'eac3', 'dts', 'amr', '3ga', 'caf', 'ape', 'wv', 'tta',
+  'mpc', 'au', 'snd', 'ra', 'ram', 'spx', 'gsm',
+])
+const VIDEO_DROP_EXTS = new Set([
+  'mp4', 'mov', 'mkv', 'm4v', 'avi', 'wmv', 'ts', 'mts', 'm2ts', 'flv', '3gp', 'asf', 'f4v',
+])
+
 function setupDragDrop(): void {
   const page    = $('page-editor')
   const overlay = $('editor-drop-overlay')
+  const canvasWrap = $('editor-canvas-wrap')
   if (!page) return
 
+  // Page-wide drag (sets the main-file load overlay). Skip when the drag
+  // hovers the canvas (which has its own zoned drop targets).
   page.addEventListener('dragover', (e: DragEvent) => {
     e.preventDefault()
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
-    overlay?.classList.add('active')
+    if (!canvasWrap?.contains(e.target as Node)) overlay?.classList.add('active')
   })
 
   page.addEventListener('dragleave', (e: DragEvent) => {
@@ -1747,30 +2035,156 @@ function setupDragDrop(): void {
   })
 
   page.addEventListener('drop', async (e: DragEvent) => {
+    // The canvas handler below claims its own drops via stopPropagation.
     e.preventDefault()
     overlay?.classList.remove('active')
     const file = e.dataTransfer?.files[0]
     if (!file) return
     const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
-    if (![
-      'mp3', 'mp1', 'mp2', 'wav', 'flac', 'aac', 'm4a', 'm4b', 'm4r',
-      'ogg', 'oga', 'opus', 'webm', 'aiff', 'aif', 'wma', 'mka',
-      'ac3', 'eac3', 'dts', 'amr', '3ga', 'caf', 'ape', 'wv', 'tta',
-      'mpc', 'au', 'snd', 'ra', 'ram', 'spx', 'gsm',
-      'mp4', 'mov', 'mkv', 'm4v', 'avi', 'wmv', 'ts', 'mts', 'm2ts', 'flv', '3gp', 'asf', 'f4v',
-    ].includes(ext)) return
+    if (!AUDIO_EXTS.has(ext) && !VIDEO_DROP_EXTS.has(ext)) return
     const fp = (file as File & { path?: string }).path
-    if (fp) loadFile(fp)
+    if (!fp) return
+    if (!confirmDiscardIfDirty('open')) return
+    loadFile(fp)
   })
+
+  // Canvas-specific drop zones for intro/outro. The dragover handler
+  // highlights the left or right third using CSS pseudo-elements; the
+  // drop handler routes the file to the right intro/outro slot.
+  if (canvasWrap) {
+    canvasWrap.addEventListener('dragover', (e: DragEvent) => {
+      e.preventDefault()
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+      const rect = canvasWrap.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const region = getRegionAtX(x, rect.width)
+      canvasWrap.classList.toggle('is-dropzone-intro', region === 'intro')
+      canvasWrap.classList.toggle('is-dropzone-outro', region === 'outro')
+      // When we're highlighting an intro/outro zone, take precedence over
+      // the page-wide overlay (which would otherwise show "load main file").
+      if (region !== 'main') {
+        overlay?.classList.remove('active')
+        e.stopPropagation()
+      }
+    })
+
+    canvasWrap.addEventListener('dragleave', () => {
+      canvasWrap.classList.remove('is-dropzone-intro', 'is-dropzone-outro')
+    })
+
+    canvasWrap.addEventListener('drop', async (e: DragEvent) => {
+      canvasWrap.classList.remove('is-dropzone-intro', 'is-dropzone-outro')
+      const file = e.dataTransfer?.files[0]
+      if (!file) return
+      const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+      if (!AUDIO_EXTS.has(ext)) return  // intro/outro must be audio (no video jingles yet)
+      const fp = (file as File & { path?: string }).path
+      if (!fp) return
+      const rect = canvasWrap.getBoundingClientRect()
+      const region = getRegionAtX(e.clientX - rect.left, rect.width)
+      if (region === 'main') return  // ignore — reserved for cuts/notes
+      // Claim this drop so the page-wide handler doesn't reload the main file
+      e.preventDefault()
+      e.stopPropagation()
+      if (region === 'intro') {
+        patchSettings({ editorIntroPath: fp })
+      } else {
+        patchSettings({ editorOutroPath: fp })
+      }
+      await window.api.saveSettings(settings)
+      // Also turn on includeIntroOutro so the user immediately sees the result.
+      if (!includeIntroOutro) {
+        includeIntroOutro = true
+        const chk = $('editor-include-io') as HTMLInputElement | null
+        if (chk) chk.checked = true
+      }
+      await reloadIntroOutro()
+      markDirty()
+    })
+  }
 }
 
 // ── Viewport helpers ──────────────────────────────────────────────────────
+//
+// Coordinate model
+// ----------------
+// `vpStart` / `vpEnd` are in MAIN-FILE seconds — the same coordinate system
+// that `cuts`, `chapters`, `peaks`, and playback seek use.
+//
+// When `includeIntroOutro` is enabled and the viewport reaches the file edges
+// (vpStart=0 or vpEnd=duration), the canvas is split into three regions:
+//
+//   ┌──────────┬────────────────────────────────┬──────────┐
+//   │  INTRO   │         HOVEDOPPTAK            │   OUTRO  │
+//   │ (dim)    │   (main waveform — full color) │  (dim)   │
+//   └──────────┴────────────────────────────────┴──────────┘
+//
+// Pixel widths are proportional to durations so transitions look natural.
+// Intro/Outro slots disappear when the user zooms into the middle (vpStart>0
+// or vpEnd<duration) — they're only meaningful at the edges of the file.
+//
+// `secToX(mainFileSec, W)` maps main-file seconds to a pixel x. Cuts/playhead/
+// handles all go through this so they stay properly aligned even when the
+// pixel-to-second ratio changes due to intro/outro insertion.
+
+interface LayoutGeom {
+  introPx: number   // width of intro region in pixels
+  outroPx: number   // width of outro region in pixels
+  mainPxStart: number  // x where main waveform begins
+  mainPxEnd: number    // x where main waveform ends
+  effIntroDur: number  // intro duration in seconds, or 0 if not displayed
+  effOutroDur: number  // outro duration in seconds, or 0 if not displayed
+}
+
+function getLayoutGeom(W: number): LayoutGeom {
+  // Only show intro/outro slots when the corresponding edge of the file is
+  // visible. If the user has zoomed past the start, hide the intro slot.
+  const showIntro = includeIntroOutro && !!introBuffer && vpStart <= 0.001
+  const showOutro = includeIntroOutro && !!outroBuffer && vpEnd >= duration - 0.001
+  const effIntroDur = showIntro ? introDuration : 0
+  const effOutroDur = showOutro ? outroDuration : 0
+  const mainVpDur = Math.max(0.001, vpEnd - vpStart)
+  const total = effIntroDur + mainVpDur + effOutroDur
+  const introPx = (effIntroDur / total) * W
+  const outroPx = (effOutroDur / total) * W
+  return {
+    introPx,
+    outroPx,
+    mainPxStart: introPx,
+    mainPxEnd: W - outroPx,
+    effIntroDur,
+    effOutroDur,
+  }
+}
+
 function secToX(sec: number, W: number): number {
-  return ((sec - vpStart) / (vpEnd - vpStart)) * W
+  const g = getLayoutGeom(W)
+  const mainW = g.mainPxEnd - g.mainPxStart
+  if (mainW <= 0) return g.mainPxStart
+  return g.mainPxStart + ((sec - vpStart) / (vpEnd - vpStart)) * mainW
 }
 
 function xToSec(x: number, W: number): number {
-  return vpStart + (x / W) * (vpEnd - vpStart)
+  const g = getLayoutGeom(W)
+  const mainW = g.mainPxEnd - g.mainPxStart
+  if (mainW <= 0) return vpStart
+  // Clamp clicks in intro/outro regions to the nearest main-file second
+  if (x <= g.mainPxStart) return vpStart
+  if (x >= g.mainPxEnd)   return vpEnd
+  return vpStart + ((x - g.mainPxStart) / mainW) * (vpEnd - vpStart)
+}
+
+/** Returns 'intro' | 'main' | 'outro' for a given pixel x. Used by drag-and-drop
+ *  to route a dropped file to the right intro/outro slot. */
+function getRegionAtX(x: number, W: number): 'intro' | 'main' | 'outro' {
+  const g = getLayoutGeom(W)
+  // The user's UX expectation is: drop on LEFT third = intro, RIGHT third = outro.
+  // We honour that geometrically even when the actual intro slot is narrow
+  // (or absent), so users can SET an intro by dragging onto the left third
+  // even before any intro file is configured.
+  if (x < W / 3)    return 'intro'
+  if (x > W * 2/3)  return 'outro'
+  return 'main'
 }
 
 function fitAll(): void {
@@ -1886,12 +2300,14 @@ function addCut(s: number, e: number): void {
   }
   cuts = merged
   pushCutHistory()
+  markDirty()
   updateRemainingDisplay()
 }
 
 function deleteCut(i: number): void {
   cuts.splice(i, 1)
   pushCutHistory()
+  markDirty()
   renderCutList()
   updateRemainingDisplay()
   drawWaveform()
@@ -1945,6 +2361,9 @@ function getRemainingDuration(): number {
 function updateRemainingDisplay(): void {
   const el  = $('editor-remaining')
   const dur = $('editor-remaining-dur')
+  // Update header summary regardless — duration / normalize state may have
+  // changed even if no cuts exist yet.
+  updateHeaderSummary()
   if (!el || !duration) return
 
   if (cuts.length === 0) {
@@ -2508,8 +2927,160 @@ function openExportModal(): void {
     ioSummary.textContent = parts.length ? parts.join(' · ') : ''
     ioRow.style.display   = parts.length ? '' : 'none'
   }
+  // Render publishing section
+  void renderPublishOptions()
+
   const exportModal = $('editor-export-modal')
   if (exportModal) exportModal.style.display = 'flex'
+}
+
+// Publishing options state (mirrored from DOM into module on toggle)
+interface PublishState {
+  gdrive:   boolean
+  dropbox:  boolean
+  onedrive: boolean
+  podcast:  boolean
+}
+const publishSelections: PublishState = { gdrive: false, dropbox: false, onedrive: false, podcast: false }
+let configuredCache: { gdrive: boolean; dropbox: boolean; onedrive: boolean } = { gdrive: false, dropbox: false, onedrive: false }
+
+/**
+ * Build the publishing checkbox list in the export modal. Each service is
+ * shown ONLY if `cloudIsConfigured(...)` returns true (user has connected it).
+ * Podcast appears when settings.podcast.enabled is true. If nothing is
+ * configured, we show a single "Konfigurer publisering →" link to the
+ * publish settings page.
+ *
+ * For video files we also append disabled placeholder rows for YouTube +
+ * Vimeo so the user can see the roadmap.
+ */
+async function renderPublishOptions(): Promise<void> {
+  const wrap     = $('export-publish-options')
+  const configL  = $('export-publish-configure')
+  const andBtn   = $('btn-export-and-publish')
+  const progress = $('export-publish-progress')
+  if (!wrap || !configL || !andBtn) return
+
+  wrap.innerHTML = ''
+  if (progress) { progress.style.display = 'none'; progress.textContent = '' }
+
+  // Refresh service configuration (cheap IPC) — these aren't expected to
+  // change mid-session but the user could have configured one in another
+  // window so we read fresh each open.
+  try {
+    configuredCache.gdrive   = await window.api.cloudIsConfigured('google-drive') as boolean
+    configuredCache.dropbox  = await window.api.cloudIsConfigured('dropbox') as boolean
+    configuredCache.onedrive = await window.api.cloudIsConfigured('onedrive') as boolean
+  } catch { /* leave defaults — falsy */ }
+
+  const podcastEnabled = settings.podcast?.enabled === true
+
+  const haveAny = configuredCache.gdrive || configuredCache.dropbox || configuredCache.onedrive || podcastEnabled
+  configL.style.display = haveAny ? 'none' : ''
+  // The "Eksporter og publiser" button is only meaningful if at least one
+  // service is configured.
+  ;(andBtn as HTMLElement).style.display = haveAny ? '' : 'none'
+
+  function addRow(key: keyof PublishState, label: string, enabled: boolean, disabled = false, tooltip = ''): void {
+    const row = document.createElement('label')
+    row.className = 'export-publish-option' + (disabled ? ' is-disabled' : '')
+    if (tooltip) row.title = tooltip
+    const chk = document.createElement('input')
+    chk.type = 'checkbox'
+    chk.disabled = disabled || !enabled
+    chk.checked = false
+    chk.addEventListener('change', () => { publishSelections[key] = chk.checked })
+    const span = document.createElement('span')
+    span.textContent = label
+    row.appendChild(chk)
+    row.appendChild(span)
+    wrap!.appendChild(row)
+  }
+
+  // Reset selections each time we open
+  publishSelections.gdrive = false
+  publishSelections.dropbox = false
+  publishSelections.onedrive = false
+  publishSelections.podcast = false
+
+  if (configuredCache.gdrive)   addRow('gdrive',   t('editor.exportPublishGdrive',   'Last opp til Google Drive'), true)
+  if (configuredCache.dropbox)  addRow('dropbox',  t('editor.exportPublishDropbox',  'Last opp til Dropbox'),       true)
+  if (configuredCache.onedrive) addRow('onedrive', t('editor.exportPublishOnedrive', 'Last opp til OneDrive'),      true)
+  if (podcastEnabled)           addRow('podcast',  t('editor.exportPublishPodcast',  'Oppdater podcast RSS-feed'),  true)
+
+  // Video file: also append disabled YouTube/Vimeo placeholder rows.
+  if (isVideoFile) {
+    const ytLabel = t('editor.exportPublishYoutube', 'Last opp video til YouTube')
+    const vmLabel = t('editor.exportPublishVimeo',   'Last opp video til Vimeo')
+    const phase2  = t('editor.exportPublishPhase2',  'Kommer i en senere versjon — krever separat OAuth-oppsett')
+    addRow('gdrive', ytLabel, false, /*disabled*/ true, phase2)
+    addRow('gdrive', vmLabel, false, /*disabled*/ true, phase2)
+  }
+}
+
+/**
+ * Run the selected publishing actions for a freshly-exported file. Surfaces
+ * progress in the export modal (which is still up — we don't close it
+ * until publishing completes). Idempotent on its own — the underlying
+ * cloud queue dedupes by file path + service.
+ */
+async function runPublishingForExport(outputPath: string): Promise<void> {
+  const progress = $('export-publish-progress')
+  if (progress) { progress.style.display = ''; progress.classList.remove('is-error', 'is-success'); progress.textContent = '' }
+
+  const tasks: { label: string; run: () => Promise<{ ok: boolean; error?: string }> }[] = []
+  if (publishSelections.gdrive) {
+    tasks.push({ label: 'Google Drive', run: () => window.api.cloudUploadFile('google-drive', outputPath) as Promise<{ ok: boolean; error?: string }> })
+  }
+  if (publishSelections.dropbox) {
+    tasks.push({ label: 'Dropbox', run: () => window.api.cloudUploadFile('dropbox', outputPath) as Promise<{ ok: boolean; error?: string }> })
+  }
+  if (publishSelections.onedrive) {
+    tasks.push({ label: 'OneDrive', run: () => window.api.cloudUploadFile('onedrive', outputPath) as Promise<{ ok: boolean; error?: string }> })
+  }
+
+  let allOk = true
+  const messages: string[] = []
+  for (const task of tasks) {
+    if (progress) progress.textContent = `${t('editor.publishUploading', 'Laster opp til')} ${task.label}…`
+    try {
+      const r = await task.run()
+      if (r && r.ok === false) {
+        allOk = false
+        messages.push(`${task.label}: ${r.error ?? 'feil'}`)
+      } else {
+        messages.push(`${task.label}: ✓`)
+      }
+    } catch (err) {
+      allOk = false
+      messages.push(`${task.label}: ${(err as Error).message}`)
+    }
+  }
+
+  // Podcast RSS regen runs last (after any uploads complete, since RSS may
+  // reference the just-uploaded cloud URLs).
+  if (publishSelections.podcast) {
+    if (progress) progress.textContent = t('editor.publishRssUpdating', 'Oppdaterer RSS-feed…')
+    const service = settings.podcast?.service ?? 'google-drive'
+    try {
+      const r = await window.api.podcastRegenerate(service) as { ok: boolean; error?: string }
+      if (r && r.ok === false) {
+        allOk = false
+        messages.push(`RSS: ${r.error ?? 'feil'}`)
+      } else {
+        messages.push(`RSS: ✓`)
+      }
+    } catch (err) {
+      allOk = false
+      messages.push(`RSS: ${(err as Error).message}`)
+    }
+  }
+
+  if (progress) {
+    progress.classList.toggle('is-success', allOk)
+    progress.classList.toggle('is-error', !allOk)
+    progress.textContent = (allOk ? `${t('editor.publishDone', '✓ Publisering ferdig')} — ` : `${t('editor.publishFailed', '✕ Publisering feilet')} — `) + messages.join(' · ')
+  }
 }
 
 function closeExportModal(): void {
@@ -2586,6 +3157,12 @@ async function runExport(): Promise<void> {
     if (text) text.textContent = (t('editor.saveOk') || '✓ Eksportert') + (fname ? ' — ' + fname : '')
     if (row) row.setAttribute('data-ok', 'true')
     clearEditorDraft()  // export succeeded — drop the autosave sidecar
+    clearDirty()
+    // Run publishing if user picked "Eksporter og publiser"
+    if (publishAfterExport && result.outputPath) {
+      await runPublishingForExport(result.outputPath)
+    }
+    publishAfterExport = false
   } else {
     if (text) text.textContent = describeExportError(result.error)
     if (row) row.removeAttribute('data-ok')
@@ -2656,6 +3233,97 @@ function showState(state: 'empty' | 'loading' | 'workspace'): void {
   if (emptyEl)     emptyEl.style.display     = state === 'empty'     ? '' : 'none'
   if (loadingEl)   loadingEl.style.display   = state === 'loading'   ? '' : 'none'
   if (workspaceEl) workspaceEl.style.display = state === 'workspace' ? '' : 'none'
+  if (state === 'empty') renderRecentFiles()
+}
+
+/**
+ * Render the "Nylig brukte filer" list in the empty state. Pulls the last
+ * 5 entries from settings.recordingHistory that have a valid `path`, and
+ * makes each item clickable to load via openEditorWithFile.
+ *
+ * Also shows the "Gjennomgangs-kø" link when there are pending review-queue
+ * entries. The link navigates to home (where the prep queue lives).
+ */
+function renderRecentFiles(): void {
+  const wrap = $('editor-empty-recents')
+  const list = $('editor-empty-recents-list')
+  if (!wrap || !list) return
+  const hist = settings.recordingHistory ?? []
+  const recent = hist
+    .filter(e => e.path && e.status === 'ok')
+    .slice(0, 5)
+  if (recent.length === 0) { wrap.style.display = 'none'; return }
+  wrap.style.display = ''
+  list.innerHTML = ''
+  for (const e of recent) {
+    const item = document.createElement('div')
+    item.className = 'editor-recent-item'
+    const fname = (e.filename || (e.path?.split(/[/\\]/).pop() ?? '')).replace(/_redigert(_\d+)?/, '')
+    item.innerHTML = `
+      <svg viewBox="0 0 20 20" width="14" height="14" fill="currentColor"><path d="M4 4a2 2 0 012-2h4l2 2h4a2 2 0 012 2v9a2 2 0 01-2 2H6a2 2 0 01-2-2z"/></svg>
+      <span class="editor-recent-name">${escapeHtml(fname)}</span>
+      <span class="editor-recent-meta">${escapeHtml(e.date || '')} · ${escapeHtml(e.duration || '')}</span>
+    `
+    item.addEventListener('click', () => {
+      if (e.path) openEditorWithFile(e.path)
+    })
+    list.appendChild(item)
+  }
+
+  // Review-queue link: best-effort — we just always offer it if there's
+  // a non-empty history. The review queue itself lives on home page.
+  const reviewWrap = $('editor-empty-review')
+  if (reviewWrap) reviewWrap.style.display = ''
+}
+
+/**
+ * Build a compact one-line summary for the header: duration · cut count ·
+ * normalize state. Lives in the sticky editor header right next to the
+ * filename so the user always knows what state the file is in without
+ * scrolling. Updates lazily — only when something changes (dirty marker
+ * flip, cut add/remove, normalize toggle).
+ */
+function updateHeaderSummary(): void {
+  const summaryEl = $('editor-header-summary')
+  const dirtyEl   = $('editor-dirty-dot')
+  if (dirtyEl) dirtyEl.style.display = editorDirty ? '' : 'none'
+  if (!summaryEl) return
+  if (!filePath || !duration) { summaryEl.textContent = ''; return }
+  const remaining = getRemainingDuration()
+  const parts = [formatDuration(remaining)]
+  if (cuts.length > 0) parts.push(`${cuts.length} kutt`)
+  if (audioGainDb !== 0) {
+    const sign = audioGainDb >= 0 ? '+' : ''
+    parts.push(`normalisert (${sign}${audioGainDb.toFixed(1)} dB)`)
+  }
+  summaryEl.textContent = parts.join(' · ')
+}
+
+/**
+ * Prompt the user before discarding unsaved edits. Returns true if the
+ * user wants to proceed (no dirty state, or they confirmed); false if
+ * they cancelled.
+ *
+ * Uses native confirm() — same idiom as the existing review-discard
+ * button on line ~487. A custom modal would be nicer but lower priority.
+ */
+function confirmDiscardIfDirty(intent: 'open' | 'close'): boolean {
+  if (!editorDirty) return true
+  const msg = intent === 'close'
+    ? t('editor.confirmClose', 'Du har ulagrede endringer. Lukk likevel?')
+    : t('editor.confirmOpenOther', 'Du har ulagrede endringer. Åpne ny fil likevel?')
+  return confirm(msg)
+}
+
+/**
+ * Tear down the current file and return to the empty state. The user
+ * confirmed any dirty-state warning already (caller's responsibility).
+ */
+function closeCurrentFile(): void {
+  deactivateEditor()
+  filePath = ''
+  duration = 0
+  showState('empty')
 }
 
 function showEditorError(msg: string): void {

@@ -3007,3 +3007,157 @@ button > svg:first-child { flex-shrink: 0; }
 .diagnose-hint {
   font-size: 11px; color: var(--text3); margin-top: 8px;
 }
+
+/* ── Editor v6: header, empty state, analyze panel, publishing ─────────── */
+
+/* Sticky header with summary + close button */
+.editor-header-sticky {
+  position: sticky; top: 0; z-index: 12;
+  background: var(--surface, #13131c);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  margin: -8px 0 8px 0;
+}
+.editor-dirty-dot {
+  color: var(--accent); font-size: 14px; line-height: 1;
+  margin-left: 2px; flex-shrink: 0;
+  animation: editorDirtyPulse 1.6s ease-in-out infinite;
+}
+@keyframes editorDirtyPulse {
+  0%, 100% { opacity: 1 }
+  50% { opacity: 0.35 }
+}
+.editor-header-summary {
+  font-size: 12px; color: var(--text3);
+  margin-left: 8px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+
+/* Empty state revamp */
+.editor-empty-dropzone {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 12px; padding: 36px 24px;
+  border: 2px dashed var(--border); border-radius: 12px;
+  background: var(--surface1);
+  cursor: pointer; transition: border-color .15s, background .15s;
+  max-width: 520px; margin: 0 auto;
+}
+.editor-empty-dropzone:hover {
+  border-color: var(--accent); background: var(--surface2);
+}
+.editor-empty-recents {
+  margin: 24px auto 0; max-width: 520px;
+}
+.editor-empty-recents-title {
+  font-size: 12px; color: var(--text3); text-transform: uppercase;
+  letter-spacing: .05em; margin-bottom: 8px; padding: 0 4px;
+}
+.editor-recent-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; background: var(--surface1);
+  border: 1px solid var(--border); border-radius: 8px;
+  margin-bottom: 6px; cursor: pointer;
+  font-size: 13px; color: var(--text1);
+  transition: border-color .15s, background .15s;
+}
+.editor-recent-item:hover {
+  background: var(--surface2); border-color: var(--accent);
+}
+.editor-recent-item svg { opacity: .55; flex-shrink: 0; }
+.editor-recent-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editor-recent-meta { color: var(--text3); font-size: 11px; flex-shrink: 0; }
+.editor-empty-review {
+  margin: 18px auto 0; text-align: center; max-width: 520px;
+}
+.editor-empty-review-link {
+  color: var(--accent); text-decoration: none; font-size: 13px; font-weight: 600;
+}
+.editor-empty-review-link:hover { text-decoration: underline; }
+
+/* Analyze (merged) panel */
+.editor-analyze-body {
+  padding: 10px 12px; background: var(--surface1);
+}
+.editor-analyze-summary {
+  font-size: 12px; color: var(--text2); margin-bottom: 10px;
+}
+.editor-analyze-controls {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px 0; border-top: 1px dashed var(--border);
+  margin-top: 4px;
+}
+.editor-analyze-controls-title {
+  font-size: 11px; color: var(--text3); text-transform: uppercase;
+  letter-spacing: .05em; margin-bottom: 2px;
+}
+.editor-analyze-toggle {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--text2); cursor: pointer;
+  user-select: none;
+}
+.editor-analyze-toggle input { margin: 0; cursor: pointer; }
+.editor-analyze-swatch {
+  width: 14px; height: 10px; border-radius: 2px; flex-shrink: 0;
+}
+.editor-analyze-hint {
+  font-size: 11px; color: var(--text3); margin-top: 4px;
+  font-style: italic;
+}
+
+/* Compact intro/outro panel */
+.editor-io-panel--compact .editor-chapters-header { padding: 6px 12px; }
+.editor-io-panel--compact .editor-io-file-row { padding: 4px 0; }
+.editor-io-hint {
+  font-size: 11px; font-weight: 400; color: var(--text3); margin-left: 4px;
+}
+.editor-io-chevron { transition: transform .15s; cursor: pointer; }
+.editor-io-panel--collapsed .editor-io-chevron { transform: rotate(-90deg); }
+.editor-io-panel--collapsed > div + div { display: none !important; }
+
+/* Drop zones (intro/outro) on timeline */
+.editor-canvas-wrap.is-dropzone-intro::before,
+.editor-canvas-wrap.is-dropzone-outro::after {
+  content: ''; position: absolute; top: 0; bottom: 0;
+  width: 33%; pointer-events: none; z-index: 6;
+  background: rgba(122,170,255,0.15);
+  border: 2px dashed rgba(122,170,255,0.6);
+  box-sizing: border-box;
+}
+.editor-canvas-wrap.is-dropzone-intro::before { left: 0; }
+.editor-canvas-wrap.is-dropzone-outro::after { right: 0; }
+.editor-canvas-wrap { position: relative; }
+
+/* Publishing options in export modal */
+.export-publish-section {
+  margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.export-publish-options {
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 13px; color: var(--text1);
+}
+.export-publish-option {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 0; user-select: none;
+}
+.export-publish-option input { margin: 0; }
+.export-publish-option.is-disabled {
+  opacity: .5; cursor: not-allowed;
+}
+.export-publish-option.is-disabled input { cursor: not-allowed; }
+.export-publish-configure {
+  display: inline-block; color: var(--accent); font-size: 12px;
+  text-decoration: none; margin-top: 4px;
+}
+.export-publish-configure:hover { text-decoration: underline; }
+.export-publish-progress {
+  margin-top: 8px; padding: 8px 10px; border-radius: 6px;
+  background: var(--surface2); font-size: 12px; color: var(--text2);
+}
+.export-publish-progress.is-error {
+  background: rgba(239,68,68,.1); color: #fca5a5;
+}
+.export-publish-progress.is-success {
+  background: rgba(34,197,94,.1); color: #86efac;
+}
+
