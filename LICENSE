@@ -1,0 +1,87 @@
+SundayRec License
+=================
+
+Copyright (c) 2026 Richard Fossland. All rights reserved.
+
+SundayRec is source-available software. The full source code is published
+on GitHub for transparency, security review, and community collaboration —
+but it is not open-source under any OSI-approved definition.
+
+
+PERMITTED USE
+-------------
+
+The following uses are permitted free of charge, provided that this
+license and all copyright notices remain intact in every copy of the
+source code:
+
+  1. Reading and inspecting the source code for the purpose of
+     understanding how SundayRec works, evaluating it before purchase,
+     or learning from its implementation.
+
+  2. Reporting bugs, suggesting improvements, and contributing patches
+     through the project's GitHub issue tracker and pull request system.
+     By submitting a contribution you grant the copyright holder a
+     perpetual, royalty-free license to incorporate it into SundayRec
+     under this license.
+
+  3. Building and running SundayRec from source on your own computer
+     for personal, private use.
+
+  4. Use of the compiled official binaries by individuals and by
+     non-profit religious organisations (congregations, parishes,
+     dioceses, missions and similar) on their own infrastructure for
+     the purpose of recording, editing and publishing their own
+     services.
+
+
+PROHIBITED USE
+--------------
+
+Without prior written permission from the copyright holder, you may NOT:
+
+  1. Redistribute the source code or compiled binaries, in original or
+     modified form, whether for free or for a fee.
+
+  2. Use SundayRec, in source or binary form, for any commercial
+     purpose. "Commercial purpose" includes — but is not limited to —
+     selling the software, charging for access to it, offering it as a
+     hosted or managed service, bundling it with a paid product, or
+     using it as part of a for-profit service offering.
+
+  3. Create and distribute modified versions or derivative works.
+
+  4. Remove or alter copyright notices, license terms, trademarks, or
+     branding (including the SundayRec name and logo).
+
+  5. Use the SundayRec name, logo, or trademarks to endorse or promote
+     any product or service derived from this software.
+
+
+COMMERCIAL LICENSING
+--------------------
+
+For commercial licensing, white-label arrangements, partnership
+requests, or any use not covered by the "Permitted Use" section
+above, please contact:
+
+    hello@sundayrec.com
+    https://sundayrec.com
+
+
+NO WARRANTY
+-----------
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY
+CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+The author is not liable for any failure of SundayRec to record a
+service, for the integrity of any recording it produces, or for any
+loss of data, regardless of cause. Users are strongly advised to test
+their setup with a non-critical recording before relying on SundayRec
+for a live service.

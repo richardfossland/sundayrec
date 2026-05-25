@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Email support
+    url: mailto:hello@sundayrec.com
+    about: For commercial enquiries, licensing questions, or private matters that don't belong in a public issue.
+  - name: Privacy & data handling
+    url: https://github.com/richardfossland/sundayrec/blob/main/PRIVACY.md
+    about: What SundayRec stores, what it sends out, and what it never collects.
+  - name: Quick start guide (Norwegian)
+    url: https://github.com/richardfossland/sundayrec/blob/main/docs/QUICK-START.md
+    about: First-time setup walkthrough for volunteers.

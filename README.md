@@ -1,63 +1,129 @@
-# SundayRec
+<div align="center">
+  <img src="assets/icon.png" alt="SundayRec" width="128" height="128">
 
-Automatisk opptaker for gudstjenester og kirkelige arrangementer. Koble til en USB-mikser, sett opp en tidsplan, og programmet tar opp lyden automatisk — uten at noen trenger å gjøre noe.
+  # SundayRec
+
+  **Automated church-service recorder for macOS and Windows.**
+  Records, prepares, and publishes Sunday services as podcasts — set it once, forget it.
+
+  [![Latest release](https://img.shields.io/github/v/release/richardfossland/sundayrec)](https://github.com/richardfossland/sundayrec/releases/latest)
+  [![Tests](https://img.shields.io/badge/tests-1040%20passing-brightgreen)](#tests)
+  [![License](https://img.shields.io/badge/license-source--available-blue)](LICENSE)
+  [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows-lightgrey)](#system-requirements)
+
+  [Download](https://github.com/richardfossland/sundayrec/releases/latest) ·
+  [Quick start](docs/QUICK-START.md) ·
+  [Website](https://sundayrec.com) ·
+  [Report an issue](https://github.com/richardfossland/sundayrec/issues/new/choose)
+</div>
 
 ---
 
-## Last ned og installer
+> **Norsk:** Norsk hurtigstart-guide finnes på [docs/QUICK-START.md](docs/QUICK-START.md).
+> Resten av dokumentasjonen på GitHub er på engelsk slik at den er tilgjengelig for et internasjonalt publikum.
 
-### Mac
+## What it does
 
-1. Last ned siste versjon fra [siste versjon](https://github.com/richardfossland/sundayrec/releases/latest) (Apple Silicon / M1–M4 eller Intel)
-2. Åpne `.dmg`-filen
-3. Dra **SundayRec** til **Applications**-mappen
-4. Åpne appen normalt
+SundayRec is a desktop app for churches that need to record, edit, and share their services without an audio engineer on site. You connect a USB mixer (or use a built-in microphone), set a weekly schedule — for example "Sunday 11:00–12:00" — and the app handles the rest: it wakes the machine before the service, records the audio, masters it to broadcast-quality loudness, suggests chapter markers, and (optionally) publishes it as a podcast that appears on Spotify, Apple Podcasts and every other major directory.
 
-> **SundayRec er signert med et Apple Developer ID-sertifikat og notarisert av Apple.** Appen åpnes uten advarsler på macOS.
+There is no cloud service. SundayRec runs entirely on your own computer; recordings are stored locally, and any cloud backup goes to *your* Google Drive or Dropbox account — never to SundayRec servers.
+
+## Key features
+
+- **Automatic scheduled recording** — weekly slots plus one-off specials (e.g. Christmas Eve)
+- **Norwegian church calendar built in** — Easter, Christmas, Allehelgensdag and other dates highlighted automatically; add your own
+- **Professional mastering** — four ffmpeg-based EBU R128 LUFS-normalised presets (speech-natural, speech-clear, speech-punchy, music+speech)
+- **Voice-activity detection (VAD)** — automatic chapter markers around sermon and hymn boundaries
+- **Cloud backup** — Google Drive and Dropbox (OneDrive support is in the codebase but hidden in the UI until Microsoft app verification is complete)
+- **Podcast RSS feed** — a single feed URL you submit once to Spotify for Podcasters and Apple Podcasts Connect; new episodes appear automatically
+- **Built-in editor** — waveform view, cuts, intro/outro, parametric EQ, format export
+- **Wake-from-sleep scheduling** — uses `pmset` on macOS and Task Scheduler on Windows so the machine can stay in low-power mode between services
+- **7 languages** — Norwegian, English, German, Swedish, Danish, Polish, French
+- **Signed and notarised** — Apple Developer ID notarised builds for macOS; signed installer for Windows
+
+## Install
+
+### macOS
+
+1. Download the latest `.dmg` from [the releases page](https://github.com/richardfossland/sundayrec/releases/latest) (Apple Silicon or Intel)
+2. Open the `.dmg`
+3. Drag **SundayRec** into the **Applications** folder
+4. Open the app normally — no Gatekeeper warning, since the build is notarised by Apple
 
 ### Windows
 
-1. Last ned siste versjon fra [siste versjon](https://github.com/richardfossland/sundayrec/releases/latest)
-2. Kjør installasjonsfilen
-3. Følg veiviseren — velg installasjonsmappe om ønskelig
-4. SundayRec legges til i Start-menyen og skrivebordet
+1. Download `SundayRec-Setup-x.y.z.exe` from [the releases page](https://github.com/richardfossland/sundayrec/releases/latest)
+2. Run the installer
+3. Follow the wizard — choose an install directory if you like
+4. SundayRec is added to the Start menu and (optionally) the desktop
 
----
+Updates are delivered automatically in the background through [electron-updater](https://www.electron.build/auto-update); there is nothing to do manually.
 
-## Første gangs oppsett
+## First-time setup
 
-Første gang du åpner programmet vises en kort veiviser:
+The first launch opens a short onboarding wizard:
 
-1. **Lydkilde** — velg USB-mikseren din fra listen
-2. **Tidsplan** — velg dag og klokkeslett for ukentlig opptak
-3. **Lagringsplass** — velg en mappe der opptakene skal lagres
+1. **Audio source** — pick your USB mixer or built-in microphone
+2. **Schedule** — pick a day and time for the weekly service
+3. **Storage location** — where recordings should be saved on disk
 
-Etter det kjører alt automatisk. Programmet starter i systemfeltet og trenger ikke åpnes manuelt.
+Detailed walkthrough for non-technical volunteers (in Norwegian): **[docs/QUICK-START.md](docs/QUICK-START.md)**.
 
----
+## How it works
 
-## Krav
+1. **Schedule** — you define one or more recurring slots (e.g. Sunday 11:00–12:00) and any one-off special services
+2. **Wake** — the OS scheduler (`pmset` / Task Scheduler) wakes the machine ~10 minutes before each slot
+3. **Record** — a native recorder process captures audio (and optionally video) directly from the selected device
+4. **Prep** — when recording ends, the audio is mastered, analysed for voice activity, and chapter markers are generated
+5. **Review** — on Monday morning the episode appears in the review queue with a notification by tray, email and/or webhook
+6. **Publish** — one click adds it to your RSS feed, where Spotify and Apple Podcasts pick it up automatically
 
-| | Mac | Windows |
-|---|---|---|
-| OS | macOS 12 eller nyere | Windows 10 / 11 |
-| Lydkilde | USB-mikser eller innebygd mikrofon | USB-mikser eller innebygd mikrofon |
-| Lagring | ~100 MB per time (MP3 192 kbps) | ~100 MB per time (MP3 192 kbps) |
+## System requirements
 
----
+|              | macOS                          | Windows                  |
+| ------------ | ------------------------------ | ------------------------ |
+| OS           | macOS 12 Monterey or newer     | Windows 10 / 11          |
+| Architecture | Apple Silicon (M1–M4) or Intel | x64                      |
+| Audio input  | USB mixer or built-in mic      | USB mixer or built-in mic |
+| Storage      | ~100 MB / hour (MP3 192 kbps)  | ~100 MB / hour (MP3 192 kbps) |
+| Network      | Only needed for cloud / podcast | Only needed for cloud / podcast |
 
-## Oppdateringer
+## Supported audio formats
 
-Programmet oppdaterer seg selv automatisk i bakgrunnen. Du trenger ikke gjøre noe.
+The editor can import and export MP3, WAV, FLAC, AAC, WMA, OGG, OGA, OPUS, AIFF, AIF, AC3, EAC3, DTS, AMR, CAF, WV, TTA, AU, APE, MPC and around 10 more (30+ formats in total) via the bundled `ffmpeg`.
 
----
+## Documentation
 
-## Støttede lydformater
+- [Quick Start Guide](docs/QUICK-START.md) — set up SundayRec in 10 minutes (Norwegian)
+- [Cloud + Podcast Setup](docs/SETUP-CLOUD.md) — register your own OAuth apps for Google Drive and Dropbox
+- [Privacy & Data Handling](PRIVACY.md) — what data is stored where, and what never leaves your machine
+- [Changelog](CHANGELOG.md) — release notes for every version
+- [Report an issue](https://github.com/richardfossland/sundayrec/issues/new/choose) — bug report or feature request
 
-MP3, WAV, FLAC, AAC, WMA, OGG, OGA, OPUS, AIFF, AIF, AC3, EAC3, DTS, AMR, CAF, WV, TTA, AU, APE, MPC og flere (30+ formater totalt)
+## Tests
 
----
+```bash
+npm install
+npm test
+```
 
-## Språk
+The current suite is 1040 tests across 32 suites, pinned to the `Europe/Oslo` timezone so DST handling is deterministic. CI runs the suite on every push.
 
-Norsk, English, Svenska, Dansk, Deutsch, Français, Polski
+## License
+
+SundayRec is **source-available** under a custom license — see [LICENSE](LICENSE).
+
+In short:
+
+- You may **read** the source, **inspect** it, run it on your own machine for personal or non-profit religious use, and contribute patches via GitHub
+- You **may not** redistribute it, sell it, repackage it, or use it commercially without a written agreement
+
+For commercial licensing or partnerships, contact **hello@sundayrec.com**.
+
+## Contact
+
+- Email: **hello@sundayrec.com**
+- Website: **https://sundayrec.com**
+- Issues: **https://github.com/richardfossland/sundayrec/issues**
+
+Built and maintained by [Richard Fossland](https://github.com/richardfossland) in Norway.
