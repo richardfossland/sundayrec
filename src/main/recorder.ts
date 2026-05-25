@@ -197,6 +197,33 @@ let _phase: RecordingPhase = 'idle'
 
 export function getPhase(): RecordingPhase { return _phase }
 
+/**
+ * Test-only escape hatch: forcefully tears down any in-flight session and
+ * resets the phase machine to 'idle'. Used by the orchestration test suite
+ * to recover between tests that intentionally leave the watchdog ticking.
+ *
+ * Do NOT call this from production code — it does not flush ffmpeg's audio
+ * buffer or finalize the output file, so it WILL lose data if a real
+ * recording is active.
+ */
+export function _resetForTest(): void {
+  if (activeSession) {
+    try {
+      const proc = activeSession.handle.proc
+      if (proc && proc.exitCode === null && !proc.killed) proc.kill('SIGKILL')
+    } catch {}
+    if (activeSession.maxTimer)   clearTimeout(activeSession.maxTimer)
+    if (activeSession.splitTimer) clearTimeout(activeSession.splitTimer)
+    if (activeSession.stuckTimer) clearInterval(activeSession.stuckTimer)
+  }
+  activeSession = null
+  stopBlockers()
+  clearRecoveryInterval()
+  idleCallback       = null
+  sessionEndCallback = null
+  _phase             = 'idle'
+}
+
 // ── Periodic recovery persistence ───────────────────────────────────────────
 
 let _recoveryInterval: ReturnType<typeof setInterval> | null = null
@@ -1034,15 +1061,18 @@ function installStuckTimer(session: Session, sessionId: string): void {
 // to find and reconnect the cable, short enough to give up on a truly-dead
 // device before the whole service is wasted. The cap stops the watchdog from
 // snowballing into multi-minute delays between attempts.
-const MAX_RECONNECT_ATTEMPTS = 20
+// Exported for tests so the invariant (20 attempts, 10s cap) can be verified.
+export const MAX_RECONNECT_ATTEMPTS = 20
 
-function reconnectDelay(attempt: number): number {
+// Exported for tests. Pure function — output depends only on `attempt`.
+export function reconnectDelay(attempt: number): number {
   return Math.min(2000 + attempt * 1500, 10000)
 }
 
 // Errors that won't be fixed by retrying — bail out immediately rather than
 // burn 10 reconnect attempts. The user needs to see the real reason now.
-const FATAL_RECONNECT_ERRORS = new Set([
+// Exported for tests so the fatal-error allowlist can be asserted directly.
+export const FATAL_RECONNECT_ERRORS = new Set([
   'disk_full',
   'device_permission_denied',
   'ffmpeg_missing',
