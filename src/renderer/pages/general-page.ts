@@ -194,6 +194,8 @@ export function applyGeneralSettingsToUI(): void {
   setVal('responsible-person', settings.responsiblePerson ?? '')
   setCheckbox('opt-notify-start',  settings.notifyStart !== false)
   setCheckbox('opt-notify-stop',   settings.notifyStop  !== false)
+  const reminderSel = document.getElementById('opt-reminder-minutes') as HTMLSelectElement | null
+  if (reminderSel) reminderSel.value = String(settings.reminderMinutes ?? 0)
   setCheckbox('opt-email-error',   !!settings.emailOnError)
   setCheckbox('opt-autostart',        !!settings.launchAtLogin)
   setCheckbox('opt-show-on-startup',  !!settings.showOnStartup)
@@ -243,6 +245,7 @@ async function saveGeneralSettings(): Promise<void> {
     responsiblePerson: (document.getElementById('responsible-person') as HTMLInputElement | null)?.value ?? '',
     notifyStart:       !!(document.getElementById('opt-notify-start') as HTMLInputElement | null)?.checked,
     notifyStop:        !!(document.getElementById('opt-notify-stop')  as HTMLInputElement | null)?.checked,
+    reminderMinutes:   parseInt((document.getElementById('opt-reminder-minutes') as HTMLSelectElement | null)?.value ?? '0') || 0,
     emailOnError:      !!(document.getElementById('opt-email-error')  as HTMLInputElement | null)?.checked,
     emailAddress:      (document.getElementById('email-address')     as HTMLInputElement | null)?.value ?? '',
     emailSmtp:         (document.getElementById('email-smtp')        as HTMLInputElement | null)?.value ?? '',

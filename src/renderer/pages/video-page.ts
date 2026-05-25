@@ -213,4 +213,10 @@ async function saveVideoSettings(): Promise<void> {
 
   patchSettings(updated)
   await window.api.saveSettings(updated as Settings)
+  // Mirror to Hjem-skjermens "Separat lydfil"-badge så den reflekterer
+  // toggle-en uten at brukeren må navigere bort og tilbake.
+  try {
+    const { updateAudioSeparateButton } = await import('./home')
+    updateAudioSeparateButton()
+  } catch { /* home not ready — fine, will refresh on next visit */ }
 }

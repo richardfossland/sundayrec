@@ -90,10 +90,6 @@ export function setupSchedulePage(): void {
     if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)'
   })
 
-  document.getElementById('opt-silence')?.addEventListener('change', function (this: HTMLInputElement) {
-    const silCfg = document.getElementById('silence-config')
-    if (silCfg) silCfg.style.display = this.checked ? 'block' : 'none'
-  })
   document.getElementById('opt-wake')?.addEventListener('change', function (this: HTMLInputElement) {
     setWakeDetailsVisible(this.checked)
     if (this.checked) {
@@ -339,13 +335,7 @@ async function refreshWakeReliability(): Promise<void> {
 
 export function applyScheduleSettingsToUI(): void {
   // OPPGAVE 5 preview is updated inside renderSlotsList which is called at the end
-  const wakeEl       = document.getElementById('opt-wake')             as HTMLInputElement  | null
-  const protectEl    = document.getElementById('opt-protect')          as HTMLInputElement  | null
-  const silenceEl    = document.getElementById('opt-silence')          as HTMLInputElement  | null
-  const splitMinSel  = document.getElementById('opt-split-minutes')    as HTMLSelectElement | null
-  const reminderSel  = document.getElementById('opt-reminder-minutes') as HTMLSelectElement | null
-  const manualMaxSel  = document.getElementById('opt-manual-max')        as HTMLSelectElement | null
-  const prerollSel    = document.getElementById('opt-preroll-seconds')   as HTMLSelectElement | null
+  const wakeEl = document.getElementById('opt-wake') as HTMLInputElement | null
   if (wakeEl) {
     wakeEl.checked = !!settings.wakeFromSleep
     setWakeDetailsVisible(!!settings.wakeFromSleep)
@@ -354,43 +344,13 @@ export function applyScheduleSettingsToUI(): void {
       void refreshWakeReliability()
     }
   }
-  if (protectEl)    protectEl.checked   = settings.protectRecording !== false
-  if (silenceEl) {
-    silenceEl.checked = !!settings.stopOnSilence
-    const silCfg = document.getElementById('silence-config')
-    if (silCfg) silCfg.style.display = settings.stopOnSilence ? 'block' : 'none'
-  }
-  const silThreshSel = document.getElementById('opt-silence-threshold') as HTMLSelectElement | null
-  const silTimeoutSel = document.getElementById('opt-silence-timeout') as HTMLSelectElement | null
-  if (silThreshSel)  silThreshSel.value  = String(settings.silenceThreshold   ?? -50)
-  if (silTimeoutSel) silTimeoutSel.value = String(settings.silenceTimeoutMinutes ?? 5)
-  if (splitMinSel)  splitMinSel.value   = String(settings.splitMinutes   ?? 0)
-  if (reminderSel)  reminderSel.value   = String(settings.reminderMinutes  ?? 0)
-  if (manualMaxSel) manualMaxSel.value  = String(settings.manualMaxMinutes ?? 0)
-  if (prerollSel)   prerollSel.value    = String(settings.preRollSeconds   ?? 0)
   renderSlotsList()
 }
 
 async function saveScheduleSettings(): Promise<void> {
-  const wakeEl        = document.getElementById('opt-wake')              as HTMLInputElement  | null
-  const protectEl     = document.getElementById('opt-protect')           as HTMLInputElement  | null
-  const silenceEl     = document.getElementById('opt-silence')           as HTMLInputElement  | null
-  const silThreshSel  = document.getElementById('opt-silence-threshold') as HTMLSelectElement | null
-  const silTimeoutSel = document.getElementById('opt-silence-timeout')   as HTMLSelectElement | null
-  const splitMinSel   = document.getElementById('opt-split-minutes')     as HTMLSelectElement | null
-  const reminderSel   = document.getElementById('opt-reminder-minutes')  as HTMLSelectElement | null
-  const manualMaxSel  = document.getElementById('opt-manual-max')        as HTMLSelectElement | null
-  const prerollSel    = document.getElementById('opt-preroll-seconds')   as HTMLSelectElement | null
+  const wakeEl = document.getElementById('opt-wake') as HTMLInputElement | null
   patchSettings({
-    wakeFromSleep:           wakeEl?.checked ?? false,
-    protectRecording:        protectEl?.checked ?? true,
-    stopOnSilence:           silenceEl?.checked ?? false,
-    silenceThreshold:        parseInt(silThreshSel?.value  ?? '-50') || -50,
-    silenceTimeoutMinutes:   parseInt(silTimeoutSel?.value ?? '5')   || 5,
-    splitMinutes:            parseInt(splitMinSel?.value   ?? '0')   || 0,
-    reminderMinutes:         parseInt(reminderSel?.value   ?? '0')   || 0,
-    manualMaxMinutes:        parseInt(manualMaxSel?.value  ?? '0')   || 0,
-    preRollSeconds:          parseInt(prerollSel?.value    ?? '0')   || 0,
+    wakeFromSleep: wakeEl?.checked ?? false,
   })
   await window.api.saveSettings(settings)
   flashSaved(document.getElementById('btn-schedule-save'))

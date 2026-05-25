@@ -36,6 +36,21 @@ export function setupFilesPage(): void {
     if (row) row.style.display = this.checked ? 'block' : 'none'
   })
   document.getElementById('opt-trim-silence')?.addEventListener('change', () => {/* live preview not needed */})
+
+  // Opptaksoppførsel — silence-toggle reveals threshold/timeout config inline
+  document.getElementById('opt-silence')?.addEventListener('change', function (this: HTMLInputElement) {
+    const silCfg = document.getElementById('silence-config')
+    if (silCfg) silCfg.style.display = this.checked ? 'block' : 'none'
+    _markFilesDirty()
+  })
+  // Mark dirty when any of the moved recording-behaviour controls change
+  ;[
+    'opt-protect','opt-silence-threshold','opt-silence-timeout',
+    'opt-split-minutes','opt-manual-max','opt-preroll-seconds',
+  ].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', () => _markFilesDirty())
+  })
+
   document.getElementById('btn-files-save')?.addEventListener('click', saveFilesSettings)
   document.getElementById('btn-files-cancel')?.addEventListener('click', () => applyFilesSettingsToUI())
 
@@ -157,6 +172,26 @@ export function applyFilesSettingsToUI(): void {
   const trimEl = document.getElementById('opt-trim-silence') as HTMLInputElement | null
   if (trimEl) trimEl.checked = !!settings.trimSilence
 
+  // Opptaksoppførsel (moved here from Schedule → Avanserte valg)
+  const protectEl     = document.getElementById('opt-protect')           as HTMLInputElement  | null
+  const silenceEl     = document.getElementById('opt-silence')           as HTMLInputElement  | null
+  const silThreshSel  = document.getElementById('opt-silence-threshold') as HTMLSelectElement | null
+  const silTimeoutSel = document.getElementById('opt-silence-timeout')   as HTMLSelectElement | null
+  const splitMinSel   = document.getElementById('opt-split-minutes')     as HTMLSelectElement | null
+  const manualMaxSel  = document.getElementById('opt-manual-max')        as HTMLSelectElement | null
+  const prerollSel    = document.getElementById('opt-preroll-seconds')   as HTMLSelectElement | null
+  if (protectEl)     protectEl.checked   = settings.protectRecording !== false
+  if (silenceEl) {
+    silenceEl.checked = !!settings.stopOnSilence
+    const silCfg = document.getElementById('silence-config')
+    if (silCfg) silCfg.style.display = settings.stopOnSilence ? 'block' : 'none'
+  }
+  if (silThreshSel)  silThreshSel.value  = String(settings.silenceThreshold      ?? -50)
+  if (silTimeoutSel) silTimeoutSel.value = String(settings.silenceTimeoutMinutes ?? 5)
+  if (splitMinSel)   splitMinSel.value   = String(settings.splitMinutes          ?? 0)
+  if (manualMaxSel)  manualMaxSel.value  = String(settings.manualMaxMinutes      ?? 0)
+  if (prerollSel)    prerollSel.value    = String(settings.preRollSeconds        ?? 0)
+
   // Podcast
   const p = settings.podcast
   const enabledEl = document.getElementById('opt-podcast-enabled') as HTMLInputElement | null
@@ -250,6 +285,14 @@ async function saveFilesSettings(): Promise<void> {
     defaultOutroPath:    (document.getElementById('podcast-default-outro') as HTMLInputElement | null)?.value.trim() || undefined,
   }
 
+  const protectEl     = document.getElementById('opt-protect')           as HTMLInputElement  | null
+  const silenceEl     = document.getElementById('opt-silence')           as HTMLInputElement  | null
+  const silThreshSel  = document.getElementById('opt-silence-threshold') as HTMLSelectElement | null
+  const silTimeoutSel = document.getElementById('opt-silence-timeout')   as HTMLSelectElement | null
+  const splitMinSel   = document.getElementById('opt-split-minutes')     as HTMLSelectElement | null
+  const manualMaxSel  = document.getElementById('opt-manual-max')        as HTMLSelectElement | null
+  const prerollSel    = document.getElementById('opt-preroll-seconds')   as HTMLSelectElement | null
+
   patchSettings({
     saveFolder:      (document.getElementById('save-folder') as HTMLInputElement | null)?.value ?? '',
     filenamePattern: ((document.getElementById('pattern-select') as HTMLSelectElement | null)?.value ?? 'date') as FilenamePattern,
@@ -257,6 +300,13 @@ async function saveFilesSettings(): Promise<void> {
     bitrate:         (document.querySelector('input[name="bitrate"]:checked') as HTMLInputElement | null)?.value ?? '192',
     autoDeleteDays:  days,
     trimSilence:     !!(document.getElementById('opt-trim-silence') as HTMLInputElement | null)?.checked,
+    protectRecording:      protectEl?.checked ?? true,
+    stopOnSilence:         silenceEl?.checked ?? false,
+    silenceThreshold:      parseInt(silThreshSel?.value  ?? '-50') || -50,
+    silenceTimeoutMinutes: parseInt(silTimeoutSel?.value ?? '5')   || 5,
+    splitMinutes:          parseInt(splitMinSel?.value   ?? '0')   || 0,
+    manualMaxMinutes:      parseInt(manualMaxSel?.value  ?? '0')   || 0,
+    preRollSeconds:        parseInt(prerollSel?.value    ?? '0')   || 0,
     podcast,
   })
   await window.api.saveSettings(settings)

@@ -66,7 +66,7 @@ function updateVideoToggleButton(): void {
   updateAudioSeparateButton()
 }
 
-function updateAudioSeparateButton(): void {
+export function updateAudioSeparateButton(): void {
   const btn   = document.getElementById('btn-audio-separate') as HTMLButtonElement | null
   const label = document.getElementById('audio-separate-label')
   const card  = document.getElementById('home-format-card')
@@ -534,12 +534,18 @@ export function setupHome(): void {
     }
   })
 
-  // Separate audio toggle — keep high-quality audio file alongside combined MP4
+  // Separate audio toggle — keep high-quality audio file alongside combined MP4.
+  // Mirrors Innstillinger → Video → "Behold separat lydfil". When the user
+  // toggles here, propagate the change to the Video-tab toggle if it's already
+  // mounted in the DOM so both stay in sync without requiring a page navigation.
   document.getElementById('btn-audio-separate')?.addEventListener('click', async () => {
     const nowKeep = !(settings.videoKeepAudio ?? true)
     patchSettings({ videoKeepAudio: nowKeep })
     await window.api.saveSettings({ ...settings })
     updateAudioSeparateButton()
+    // Sync the Video-tab toggle (no-op if the tab hasn't been opened yet)
+    const videoToggle = document.getElementById('opt-video-keep-audio') as HTMLInputElement | null
+    if (videoToggle && videoToggle.checked !== nowKeep) videoToggle.checked = nowKeep
   })
 
   // Inline camera refresh button
