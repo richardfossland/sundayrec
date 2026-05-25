@@ -1,4 +1,4 @@
-import { Tray, Menu, nativeImage, app, nativeTheme } from 'electron'
+import { Tray, Menu, nativeImage, app, nativeTheme, shell } from 'electron'
 import type { BrowserWindow } from 'electron'
 import path from 'path'
 import * as store from './store'
@@ -10,6 +10,7 @@ let hasError    = false
 let themeDebounce: ReturnType<typeof setTimeout> | null = null
 let nextRecording: Date | null = null
 let diagnoseHandler: (() => void) | null = null
+let reviewQueueCount = 0
 
 const TRAY_LABELS: Record<string, [string, string, string, string, string, string, string]> = {
   //                  recording          error                    ready       open          stop          start         quit
@@ -30,6 +31,36 @@ const DIAGNOSE_LABEL: Record<string, string> = {
   da: 'Kør diagnostik…',
   pl: 'Uruchom diagnostykę…',
   fr: 'Lancer le diagnostic…',
+}
+
+const OPEN_FOLDER_LABEL: Record<string, string> = {
+  no: 'Åpne lagringsmappe',
+  en: 'Open recordings folder',
+  de: 'Aufnahmeordner öffnen',
+  sv: 'Öppna inspelningsmapp',
+  da: 'Åbn optagelsesmappe',
+  pl: 'Otwórz folder nagrań',
+  fr: 'Ouvrir le dossier des enregistrements',
+}
+
+const CHECK_SYSTEM_LABEL: Record<string, string> = {
+  no: 'Sjekk system nå',
+  en: 'Check system now',
+  de: 'System jetzt prüfen',
+  sv: 'Kontrollera systemet nu',
+  da: 'Tjek systemet nu',
+  pl: 'Sprawdź system teraz',
+  fr: 'Vérifier le système',
+}
+
+const REVIEW_QUEUE_LABEL: Record<string, (n: number) => string> = {
+  no: n => `📬 ${n} ${n === 1 ? 'episode klar' : 'episoder klare'} for gjennomgang`,
+  en: n => `📬 ${n} ${n === 1 ? 'episode' : 'episodes'} ready for review`,
+  de: n => `📬 ${n} ${n === 1 ? 'Episode bereit' : 'Episoden bereit'} zur Überprüfung`,
+  sv: n => `📬 ${n} ${n === 1 ? 'avsnitt' : 'avsnitt'} klart för granskning`,
+  da: n => `📬 ${n} ${n === 1 ? 'episode' : 'episoder'} klar til gennemgang`,
+  pl: n => `📬 ${n} ${n === 1 ? 'odcinek gotowy' : 'odcinki gotowe'} do przeglądu`,
+  fr: n => `📬 ${n} ${n === 1 ? 'épisode prêt' : 'épisodes prêts'} à examiner`,
 }
 
 const TOOLTIP: Record<string, string> = {
@@ -63,10 +94,15 @@ export function create(mainWindow: BrowserWindow): void {
 
   updateTooltip()
 
-  // Left click always opens the window.
-  // On macOS: setContextMenu intercepts left click and click event never fires.
-  // Fix: skip setContextMenu on macOS; pop up the menu explicitly on right-click.
-  tray.on('click', () => {
+  // Left click shows the menu (macOS convention — most menubar apps work this way).
+  // The menu's top item is "Open SundayRec" so opening the window is still one click away.
+  // Double-click goes straight to the window for users who want that shortcut.
+  // On macOS: setContextMenu intercepts left click — so we manually pop up on click events
+  //           and skip setContextMenu entirely.
+  // On Windows/Linux: setContextMenu handles right-click natively; we also bind 'click'
+  //                   to pop up the menu so left-click works consistently across platforms.
+  tray.on('click', () => updateMenu(true))
+  tray.on('double-click', () => {
     if (!win) return
     if (win.isVisible()) win.focus()
     else { win.show(); win.focus() }
@@ -123,10 +159,29 @@ function updateMenu(popup = false): void {
   if (nextLabel && !isRecording) {
     menuItems.push({ label: `${NEXT_LABEL[lang] ?? NEXT_LABEL.en}: ${nextLabel}`, enabled: false })
   }
+
+  // High-priority callout: episodes waiting for human review. The whole prep-and-
+  // review flow hinges on the user seeing this — surface it at the top of the menu
+  // when there's anything queued.
+  if (reviewQueueCount > 0) {
+    const labelFn = REVIEW_QUEUE_LABEL[lang] ?? REVIEW_QUEUE_LABEL.en
+    menuItems.push(
+      { type: 'separator' },
+      {
+        label: labelFn(reviewQueueCount),
+        click: () => {
+          if (!win) return
+          win.show(); win.focus()
+          // Renderer listens for this and navigates to the first queue entry.
+          win.webContents.send('tray-open-review-queue')
+        },
+      },
+    )
+  }
+
   menuItems.push(
     { type: 'separator' },
     { label: openLbl, click: () => { win?.show(); win?.focus() } },
-    { type: 'separator' },
     {
       label: isRecording ? stopLbl : startLbl,
       click: () => {
@@ -138,6 +193,22 @@ function updateMenu(popup = false): void {
           win.webContents.send('tray-start-recording')
         }
       }
+    },
+    { type: 'separator' },
+    {
+      label: OPEN_FOLDER_LABEL[lang] ?? OPEN_FOLDER_LABEL.en,
+      click: () => {
+        const folder = store.get('saveFolder')
+        if (folder) shell.openPath(folder).catch(() => {})
+      },
+    },
+    {
+      label: CHECK_SYSTEM_LABEL[lang] ?? CHECK_SYSTEM_LABEL.en,
+      click: () => {
+        if (!win) return
+        win.show(); win.focus()
+        win.webContents.send('tray-run-preflight')
+      },
     },
     { type: 'separator' },
     { label: DIAGNOSE_LABEL[lang] ?? DIAGNOSE_LABEL.en, click: () => diagnoseHandler?.() },
@@ -194,4 +265,11 @@ export function setNextRecording(date: Date | null): void {
 
 export function setDiagnoseHandler(fn: () => void): void {
   diagnoseHandler = fn
+}
+
+/** Update the count of episodes awaiting human review. Shown prominently in the tray menu. */
+export function setReviewQueueCount(count: number): void {
+  if (reviewQueueCount === count) return
+  reviewQueueCount = count
+  updateMenu()
 }
