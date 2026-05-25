@@ -900,7 +900,7 @@
           <div class="card-title" data-i18n="publish.title" style="margin:0">Sky-backup</div>
           <button class="btn" id="btn-cloud-refresh" data-i18n="publish.refresh">Oppdater</button>
         </div>
-        <p class="card-desc" data-i18n="publish.desc">Last opp opptakene automatisk til Google Drive, Dropbox eller OneDrive — som ekstra sikkerhet og for enkel deling. Du kan koble til flere tjenester samtidig.</p>
+        <p class="card-desc" data-i18n="publish.desc">Last opp opptakene automatisk til Google Drive eller Dropbox — som ekstra sikkerhet og for enkel deling. Du kan koble til flere tjenester samtidig.</p>
 
         <div class="cloud-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:12px">
 
@@ -964,8 +964,10 @@
             </div>
           </div>
 
-          <!-- OneDrive -->
-          <div class="cloud-card" id="cloud-card-onedrive" style="background:var(--bg2,#252b34);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px">
+          <!-- OneDrive — skjult inntil videre. Backend-koden + tester er bevart;
+               re-aktivér ved å fjerne style="display:none" når Azure-app er klar
+               og ONEDRIVE_CLIENT_ID er satt i GitHub Secrets. -->
+          <div class="cloud-card" id="cloud-card-onedrive" style="display:none;background:var(--bg2,#252b34);border-radius:8px;padding:14px;flex-direction:column;gap:10px">
             <div style="display:flex;align-items:center;gap:10px">
               <svg viewBox="0 0 256 167" width="24" height="24"><path fill="#0364b8" d="M165.7 87.8L154 36.5l-12.4 31.6 13.7 19.6z"/><path fill="#0078d4" d="M154 36.5c-12.6-21.7-40.4-29-62.1-16.4-9.3 5.4-16.4 13.9-20 24l8.1 32.4 38.4-13.1z"/><path fill="#1490df" d="M80 76.5c-6-1-12-1-18 .4-12.6 3-23 12-27.8 24.2L155 122.5z"/><path fill="#28a8ea" d="M34.2 101.1C13.8 107 1.5 127.5 7.4 147.9c4.7 16.4 19.7 27.7 36.7 27.7H210l-55-53.1z"/></svg>
               <div style="font-weight:600;font-size:14px">OneDrive</div>
@@ -1015,7 +1017,7 @@
             <select class="form-input" id="podcast-service" style="max-width:280px">
               <option value="google-drive">Google Drive</option>
               <option value="dropbox" disabled>Dropbox (kommer senere)</option>
-              <option value="onedrive" disabled>OneDrive (kommer senere)</option>
+              <!-- OneDrive skjult inntil videre — re-aktivér når Azure-app er klar -->
             </select>
           </div>
 
