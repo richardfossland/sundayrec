@@ -2,6 +2,7 @@ import { t } from '../i18n'
 import { settings, patchSettings } from '../state'
 import { escHtml as escapeHtml } from '../helpers'
 import type { RecordingMetadata } from '../../types'
+import { setupTranscriptPanel, loadTranscriptForFile, clearTranscript, setCurrentTranscriptTime } from './editor-transcript'
 
 interface Cut { start: number; end: number }
 interface Suggestion { start: number; end: number; duration: number; label: string; type: string }
@@ -411,6 +412,12 @@ export function setupEditorPage(): void {
 
   setupMinimapInteraction()
   setupKeyboardShortcuts()
+  setupTranscriptPanel((sec: number) => {
+    playStartSec = clampPlayable(snapOutOfCut(sec))
+    updateTimecode(playStartSec)
+    if (isVideoFile && videoEl) videoEl.currentTime = clampMain(playStartSec)
+    drawWaveform()
+  })
   setupDragDrop()
   setupReviewBanner()
 
@@ -884,6 +891,7 @@ async function loadFile(fp: string): Promise<void> {
 
   // Load metadata sidecar
   loadMetadataSidecar(fp, fname)
+  void loadTranscriptForFile(fp)
 
   // Restore unsaved cuts from a previous editing session that ended abruptly.
   // The sidecar is written every 2 s during editing and cleared on successful
@@ -3227,6 +3235,7 @@ function animate(): void {
 
     updateTimecode(curSec)
     autoScrollToPlayhead(curSec)
+    setCurrentTranscriptTime(curSec)
     drawWaveform()
     rafId = requestAnimationFrame(animate)
     return
@@ -3236,6 +3245,7 @@ function animate(): void {
   const curSec = playStartSec + (audioCtx.currentTime - playStartCtxTime)
   updateTimecode(curSec)
   autoScrollToPlayhead(curSec)
+  setCurrentTranscriptTime(curSec)
   drawWaveform()
   rafId = requestAnimationFrame(animate)
 }
@@ -3767,6 +3777,7 @@ function confirmDiscardIfDirty(intent: 'open' | 'close'): boolean {
  */
 function closeCurrentFile(): void {
   stopPlay()
+  clearTranscript()
   audioCtx?.close().catch(() => {})
   audioCtx = null
   audioBuffer = null

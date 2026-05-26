@@ -34,6 +34,8 @@ const ALLOWED_CHANNELS = [
   'test-wake-progress',
   'review-queue-update',
   'youtube-upload-progress',
+  'whisper-progress',
+  'whisper-model-progress',
 ] as const
 
 type AllowedChannel = typeof ALLOWED_CHANNELS[number]
@@ -119,6 +121,17 @@ contextBridge.exposeInMainWorld('api', {
   podcastRegenerate:   (service: string) => ipcRenderer.invoke('podcast-regenerate', service),
 
   registerTrustedPath: (filePath: string) => ipcRenderer.invoke('register-trusted-path', filePath),
+
+  editorReadTranscript:    (filePath: string)       => ipcRenderer.invoke('editor-read-transcript', filePath),
+  editorWriteTranscript:   (filePath: string, t: unknown) => ipcRenderer.invoke('editor-write-transcript', filePath, t),
+  editorDeleteTranscript:  (filePath: string)       => ipcRenderer.invoke('editor-delete-transcript', filePath),
+
+  whisperStatus:           ()                       => ipcRenderer.invoke('whisper-status'),
+  whisperDownloadModel:    (modelId: string)        => ipcRenderer.invoke('whisper-download-model', modelId),
+  whisperCancelDownload:   (modelId: string)        => ipcRenderer.invoke('whisper-cancel-download', modelId),
+  whisperDeleteModel:      (modelId: string)        => ipcRenderer.invoke('whisper-delete-model', modelId),
+  whisperTranscribe:       (params: unknown)        => ipcRenderer.invoke('whisper-transcribe', params),
+  whisperCancelTranscribe: (jobId: string)          => ipcRenderer.invoke('whisper-cancel-transcribe', jobId),
 
   youtubeConnect:      ()                  => ipcRenderer.invoke('youtube-connect'),
   youtubeDisconnect:   ()                  => ipcRenderer.invoke('youtube-disconnect'),

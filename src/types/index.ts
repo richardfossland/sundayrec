@@ -362,6 +362,32 @@ export interface RecordingMetadata {
   chapters: ChapterMarker[]
 }
 
+/** A single transcript segment from whisper.cpp output. `start`/`end` are
+ *  seconds into the recording. */
+export interface TranscriptSegment {
+  start: number
+  end:   number
+  text:  string
+}
+
+/** Sidecar file written alongside the recording at <name>.transcript.json.
+ *  Schema-versioned so we can evolve format without breaking older files. */
+export interface TranscriptData {
+  /** Schema version. Bump when format changes incompatibly. */
+  version:   1
+  /** Whisper model id used (e.g. "ggml-base", "ggml-medium"). */
+  model:     string
+  /** BCP-47-ish language code Whisper detected/was told (e.g. "no", "en", "auto"). */
+  language:  string
+  /** Total media duration in seconds — for sanity-checking and percentage display. */
+  duration:  number
+  /** Epoch-ms when this transcript was generated. */
+  createdAt: number
+  /** True if user asked Whisper to translate output to English. */
+  translated?: boolean
+  segments:  TranscriptSegment[]
+}
+
 export type CloudServiceId = 'google-drive' | 'dropbox' | 'onedrive'
 
 export interface CloudServiceSettings {

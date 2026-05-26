@@ -1777,6 +1777,69 @@
         <span class="editor-remaining-dur" id="editor-remaining-dur">—</span>
       </div>
 
+      <!-- Transcription panel -->
+      <div id="editor-transcript-section" class="editor-transcript-section">
+        <div class="editor-transcript-header">
+          <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="opacity:.7"><path d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h8a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"/></svg>
+          <span class="editor-transcript-title" data-i18n="transcript.title">Transkribering</span>
+          <span style="flex:1"></span>
+          <button class="btn-primary btn-sm" id="btn-transcribe" data-i18n="transcript.start">▶ Transkriber</button>
+          <button class="btn-ghost btn-sm" id="btn-transcript-export" style="display:none" data-i18n="transcript.export">↧ Eksporter SRT</button>
+          <button class="btn-ghost btn-sm" id="btn-transcript-delete" style="display:none" data-i18n="transcript.delete">Slett</button>
+        </div>
+        <div id="editor-transcript-body" class="editor-transcript-body">
+          <div class="editor-transcript-empty" data-i18n="transcript.empty">Ingen transkripsjon ennå. Klikk «Transkriber» for å lage søkbar tekst av talen — tar 5-15 minutter avhengig av lengde og valgt modell.</div>
+        </div>
+      </div>
+
+      <!-- Transcribe modal: choose model + language -->
+      <div id="transcribe-modal" class="modal-backdrop" style="display:none">
+        <div class="modal modal-sm transcribe-modal">
+          <h2 data-i18n="transcript.modalTitle">Transkriber tale til tekst</h2>
+          <p class="modal-desc" data-i18n="transcript.modalDesc">Bruker lokal AI (whisper.cpp) — ingen data sendes til skyen. Velg modell og språk.</p>
+
+          <label class="form-label" data-i18n="transcript.modelLabel">MODELL</label>
+          <div id="transcribe-model-list" class="transcribe-model-list"></div>
+
+          <label class="form-label mt" data-i18n="transcript.langLabel">SPRÅK</label>
+          <select id="transcribe-language" class="form-input">
+            <option value="auto" data-i18n="transcript.langAuto">Auto-detekter</option>
+            <option value="no" selected>Norsk</option>
+            <option value="en">English</option>
+            <option value="sv">Svenska</option>
+            <option value="da">Dansk</option>
+            <option value="de">Deutsch</option>
+            <option value="fr">Français</option>
+            <option value="pl">Polski</option>
+            <option value="es">Español</option>
+          </select>
+
+          <label class="transcribe-translate-row mt">
+            <input type="checkbox" id="transcribe-translate" />
+            <span data-i18n="transcript.translateToEn">Oversett til engelsk samtidig</span>
+          </label>
+
+          <div class="modal-actions">
+            <button class="btn-ghost" id="btn-transcribe-cancel" data-i18n="transcript.cancel">Avbryt</button>
+            <button class="btn-primary" id="btn-transcribe-start" data-i18n="transcript.run">Start</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transcribe progress modal -->
+      <div id="transcribe-progress-modal" class="modal-backdrop" style="display:none">
+        <div class="modal modal-sm transcribe-progress-modal">
+          <h2 id="transcribe-progress-title" data-i18n="transcript.progressTitle">Transkriberer…</h2>
+          <div class="transcribe-progress-bar-wrap">
+            <div id="transcribe-progress-bar" class="transcribe-progress-bar"></div>
+          </div>
+          <div id="transcribe-progress-text" class="transcribe-progress-text"></div>
+          <div class="modal-actions">
+            <button class="btn-ghost" id="btn-transcribe-progress-cancel" data-i18n="transcript.cancel">Avbryt</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Mastering (publishable-ready audio) -->
       <div id="editor-master-section" class="editor-master-section" style="display:none">
         <div class="editor-master-header">

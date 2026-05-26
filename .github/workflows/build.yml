@@ -46,6 +46,32 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build whisper-cli (arm64 + x86_64)
+        run: |
+          # macos-latest runners are Apple Silicon; we cross-compile both
+          # architectures so the .app bundles ship a usable binary for any Mac.
+          git clone --depth 1 --branch v1.8.4 https://github.com/ggml-org/whisper.cpp /tmp/whisper.cpp
+          cd /tmp/whisper.cpp
+
+          mkdir -p $GITHUB_WORKSPACE/resources/whisper/darwin-arm64
+          mkdir -p $GITHUB_WORKSPACE/resources/whisper/darwin-x64
+
+          # arm64 — native build with Metal
+          cmake -B build-arm64 -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF -DCMAKE_OSX_ARCHITECTURES=arm64
+          cmake --build build-arm64 --config Release --target whisper-cli -j 4
+          cp build-arm64/bin/whisper-cli $GITHUB_WORKSPACE/resources/whisper/darwin-arm64/whisper-cli
+          chmod +x $GITHUB_WORKSPACE/resources/whisper/darwin-arm64/whisper-cli
+
+          # x86_64 — cross-compile from arm64 runner; disable native CPU
+          # detection and Metal (Intel Macs use Accelerate via BLAS instead).
+          cmake -B build-x64 -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF -DCMAKE_OSX_ARCHITECTURES=x86_64 -DGGML_NATIVE=OFF -DGGML_METAL=OFF
+          cmake --build build-x64 --config Release --target whisper-cli -j 4
+          cp build-x64/bin/whisper-cli $GITHUB_WORKSPACE/resources/whisper/darwin-x64/whisper-cli
+          chmod +x $GITHUB_WORKSPACE/resources/whisper/darwin-x64/whisper-cli
+
+          file $GITHUB_WORKSPACE/resources/whisper/darwin-arm64/whisper-cli
+          file $GITHUB_WORKSPACE/resources/whisper/darwin-x64/whisper-cli
+
       - name: Build, sign and notarize
         run: npx electron-vite build && npx electron-builder --mac --publish always
         env:
@@ -87,6 +113,24 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Download whisper-cli binary (Windows x64)
+        shell: pwsh
+        run: |
+          # Upstream ships a prebuilt CPU-only whisper-cli zip with all required DLLs
+          $url = "https://github.com/ggml-org/whisper.cpp/releases/download/v1.8.4/whisper-bin-x64.zip"
+          $dest = "$env:RUNNER_TEMP/whisper-bin-x64.zip"
+          $out  = "$env:GITHUB_WORKSPACE/resources/whisper/win32-x64"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Invoke-WebRequest -Uri $url -OutFile $dest
+          Expand-Archive -Path $dest -DestinationPath $out -Force
+          # The zip extracts a "Release" subfolder with whisper-cli.exe + dlls;
+          # flatten it so resolveWhisperBin() finds whisper-cli.exe at the root.
+          if (Test-Path "$out/Release/whisper-cli.exe") {
+            Move-Item -Path "$out/Release/*" -Destination $out -Force
+            Remove-Item -Recurse "$out/Release"
+          }
+          Get-ChildItem $out
 
       - name: Build and publish
         run: npx electron-vite build && npx electron-builder --win --publish always

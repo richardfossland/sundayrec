@@ -1790,6 +1790,127 @@ body.platform-win32  #wake-instructions-win { display: block; }
 /* Podcast feed-URL "send to Spotify" label */
 .feed-url-label { font-size: 12px; color: #7fc488; margin-bottom: 4px; font-weight: 600; }
 
+/* ── Transcript section ────────────────────────────────────────────── */
+.editor-transcript-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--rsm);
+  padding: 12px 14px;
+  margin: 8px 0;
+}
+.editor-transcript-header {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 8px;
+}
+.editor-transcript-title { font-weight: 700; font-size: 13px; }
+.editor-transcript-body { font-size: 13px; color: var(--text2); line-height: 1.5; }
+.editor-transcript-empty {
+  padding: 12px;
+  background: var(--surface2);
+  border-radius: var(--rsm);
+  color: var(--text3);
+  text-align: center;
+  font-size: 12px;
+}
+.editor-transcript-meta {
+  font-size: 11px; color: var(--text3);
+  margin-bottom: 8px;
+}
+.editor-transcript-segments {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 8px;
+  background: var(--surface2);
+  border-radius: var(--rsm);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.editor-transcript-segment {
+  display: flex; gap: 10px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background .12s;
+}
+.editor-transcript-segment:hover { background: rgba(255,255,255,.04); }
+.editor-transcript-segment.is-current {
+  background: rgba(240,187,71,.12);
+  border-left: 2px solid var(--accent);
+}
+.editor-transcript-segment-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--text3);
+  flex-shrink: 0;
+  min-width: 50px;
+}
+.editor-transcript-segment-text { flex: 1; color: var(--text); }
+
+/* Transcribe modal */
+.transcribe-modal h2 { margin: 0 0 6px; }
+.modal-desc { font-size: 13px; color: var(--text2); margin-bottom: 16px; line-height: 1.5; }
+.transcribe-model-list { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.transcribe-model-card {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--rsm);
+  cursor: pointer;
+}
+.transcribe-model-card.is-selected {
+  border-color: var(--accent);
+  background: rgba(240,187,71,.07);
+}
+.transcribe-model-card-radio { flex-shrink: 0; margin-top: 2px; }
+.transcribe-model-card-body { flex: 1; }
+.transcribe-model-card-title {
+  font-weight: 600; font-size: 13px;
+  display: flex; align-items: center; gap: 8px;
+}
+.transcribe-model-card-badge {
+  background: var(--accent); color: #000;
+  padding: 1px 6px; border-radius: 8px;
+  font-size: 10px; font-weight: 700;
+}
+.transcribe-model-card-desc { font-size: 12px; color: var(--text2); margin-top: 2px; line-height: 1.4; }
+.transcribe-model-card-meta {
+  font-size: 11px; color: var(--text3);
+  margin-top: 4px;
+  display: flex; gap: 12px;
+}
+.transcribe-model-card-status {
+  font-size: 11px; font-weight: 600;
+  padding: 1px 6px; border-radius: 4px;
+}
+.transcribe-model-card-status-installed { background: rgba(52,211,153,.15); color: #34d399; }
+.transcribe-model-card-status-missing { background: rgba(255,255,255,.05); color: var(--text3); }
+.transcribe-translate-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; cursor: pointer;
+}
+.modal-actions {
+  display: flex; gap: 8px; justify-content: flex-end;
+  margin-top: 18px;
+}
+
+/* Transcribe progress modal */
+.transcribe-progress-modal h2 { margin: 0 0 14px; font-size: 16px; }
+.transcribe-progress-bar-wrap {
+  height: 8px; background: var(--surface2);
+  border-radius: 4px; overflow: hidden;
+  margin-bottom: 10px;
+}
+.transcribe-progress-bar {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  transition: width .25s ease-out;
+}
+.transcribe-progress-text {
+  font-size: 12px; color: var(--text2);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Cloud-upload-queue panel — pending uploads list under Settings → Filer */
 .cloud-queue-panel {
   margin-top: 16px;

@@ -126,6 +126,16 @@ declare global {
       cloudQueueFlush:     () => Promise<boolean>
       podcastRegenerate:   (service: string) => Promise<{ ok: boolean; feedUrl?: string; episodeCount: number; error?: string }>
       registerTrustedPath: (filePath: string) => Promise<boolean>
+      editorReadTranscript:    (filePath: string) => Promise<import('../types').TranscriptData | null>
+      editorWriteTranscript:   (filePath: string, t: unknown) => Promise<boolean>
+      editorDeleteTranscript:  (filePath: string) => Promise<boolean>
+      whisperStatus:        () => Promise<{ binaryAvailable: boolean; models: Array<{ id: string; label: string; description: string; sizeBytes: number; quality: string; realtimeFactor: number; installed: boolean; sizeOk: boolean }> }>
+      whisperDownloadModel: (modelId: string) => Promise<{ ok: boolean; error?: string }>
+      whisperCancelDownload:(modelId: string) => Promise<boolean>
+      whisperDeleteModel:   (modelId: string) => Promise<boolean>
+      whisperTranscribe:    (params: { filePath: string; modelId: string; language?: string; translate?: boolean; jobId?: string }) => Promise<{ ok: boolean; transcript?: import('../types').TranscriptData; error?: string }>
+      whisperCancelTranscribe: (jobId: string) => Promise<boolean>
+
       youtubeConnect:      () => Promise<{ ok: boolean; error?: string }>
       youtubeDisconnect:   () => Promise<{ ok: boolean }>
       youtubeStatus:       () => Promise<{ connected: boolean }>

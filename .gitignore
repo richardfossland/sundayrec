@@ -8,3 +8,6 @@ release/
 .env
 index.html
 SundayRec_Strategi_2026.docx
+# Whisper binaries — built fresh by CI for each release.
+# Local dev: place a binary at resources/whisper/<platform>/whisper-cli for testing.
+resources/whisper/
