@@ -45,7 +45,7 @@ export function setupGeneralPage(): void {
     // Force-save the webhook URL first so the user doesn't have to click Save
     // before testing a freshly-pasted URL.
     const url = (document.getElementById('webhook-url') as HTMLInputElement | null)?.value.trim() ?? ''
-    if (!url) { flashMsg(btn, '✕ Lim inn URL først', false); return }
+    if (!url) { flashMsg(btn, '✕ ' + t('general.pasteUrlFirst', 'Lim inn URL først'), false); return }
     btn.disabled = true
     patchSettings({ webhookUrl: url })
     await window.api.saveSettings(settings)

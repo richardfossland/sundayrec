@@ -60,7 +60,14 @@
     "testSignalLow": "⚠️ Svak lyd — sjekk gain på mikser",
     "testSignalSilent": "⚠️ Stillhet — mikser av?",
     "testUnknownError": "Ukjent feil",
-    "videoPreviewPrompt": "Velg kamera og trykk oppdater"
+    "videoPreviewPrompt": "Velg kamera og trykk oppdater",
+    "videoOn": "Video på",
+    "videoOff": "Video av",
+    "cameraNoResponse": "Kamera svarte ikke — prøv å oppdatere",
+    "signalClipping": "Klipper!",
+    "signalLoud": "Høyt",
+    "signalGood": "Bra",
+    "signalWeak": "Svakt"
   },
   "update": {
     "available": "Ny versjon {v} er tilgjengelig — laster ned…",
@@ -128,7 +135,9 @@
     "outroLabel": "Outro:",
     "jingleDefault": "Standard fra innstillinger",
     "jingleNone": "Ingen",
-    "jingleCustom": "Velg annen…"
+    "jingleCustom": "Velg annen…",
+    "detectedSermon": "Vi har detektert {min} min preken og foreslått trim. Gå over og trykk publiser.",
+    "noSermonFound": "Vi fant ingen klar preken-blokk. Sjekk filen før publisering."
   },
   "schedule": {
     "title": "Ukentlig tidsplan",
@@ -488,7 +497,8 @@
     "askOpenEditorDesc": "Vis varsel om å åpne filen i Rediger etter at opptaket er fullført",
     "noClipSelected": "Ingen fil valgt",
     "pickFile": "Velg fil…",
-    "diagnoseHint": "Kopier dette og send til support hvis opptak ikke fungerer."
+    "diagnoseHint": "Kopier dette og send til support hvis opptak ikke fungerer.",
+    "pasteUrlFirst": "Lim inn URL først"
   },
   "editor": {
     "title": "Rediger lydfil",
@@ -589,7 +599,15 @@
     "tooltipSermon": "Antatt preken",
     "export320kbps": "320 kbps (høy kvalitet)",
     "kbdJumpToSermon": "Hopp til preken",
-    "videoFileNotice": "Videofil — eksporteres som MP4 (H.264 + AAC)"
+    "videoFileNotice": "Videofil — eksporteres som MP4 (H.264 + AAC)",
+    "errReplaceUnsafe": "Kan ikke overskrive originalfilen i dette formatet. Bruk \"Lagre som ny fil\" i stedet.",
+    "errNoAudioRemaining": "Ingen lyd igjen — kuttene dekker hele opptaket. Fjern minst ett kutt før du eksporterer.",
+    "errCancelled": "Eksport avbrutt.",
+    "errTimeout": "Eksporten tok for lang tid og ble stoppet. Prøv igjen, eller del filen i flere mindre opptak.",
+    "errFileNotFound": "Originalfilen er ikke tilgjengelig — er disken frakoblet?",
+    "errCutData": "Intern feil i kuttdataene. Prøv å laste filen på nytt.",
+    "chaptersEmpty": "Ingen kapitler ennå. Klikk «+ Legg til ved playhead» for å starte.",
+    "chapterClickSeek": "Klikk for å søke"
   },
   "master": {
     "title": "Mastering (klargjør for publisering)",
@@ -783,6 +801,11 @@
     "errConnectFirst": "koble til skytjenesten først",
     "errPickFolderFirst": "velg lagringsmappe først",
     "errEnablePodcast": "aktiver podcast først",
-    "errUnknown": "ukjent feil"
+    "errUnknown": "ukjent feil",
+    "errNotConfigured": "er ikke konfigurert i denne byggingen. Be utvikleren om en build med OAuth-nøkkel.",
+    "connecting": "Kobler til…",
+    "needsReauth": "trenger pålogging på nytt. Klikk for å koble til.",
+    "reauth": "Koble til på nytt",
+    "oauthKeyMissing": "-OAuth-nøkkel er ikke satt i denne byggingen."
   }
 }

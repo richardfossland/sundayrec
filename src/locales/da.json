@@ -60,7 +60,14 @@
     "testSignalLow": "⚠️ Svagt signal — tjek gain på mixeren",
     "testSignalSilent": "⚠️ Stilhed — er mixeren slukket?",
     "testUnknownError": "Ukendt fejl",
-    "videoPreviewPrompt": "Vælg kamera og klik Opdater"
+    "videoPreviewPrompt": "Vælg kamera og klik Opdater",
+    "videoOn": "Video til",
+    "videoOff": "Video fra",
+    "cameraNoResponse": "Kameraet svarede ikke — prøv at opdatere",
+    "signalClipping": "Klipper!",
+    "signalLoud": "Højt",
+    "signalGood": "Godt",
+    "signalWeak": "Svagt"
   },
   "update": {
     "available": "Ny version {v} tilgængelig — henter…",
@@ -128,7 +135,9 @@
     "outroLabel": "Outro:",
     "jingleDefault": "Standard fra indstillinger",
     "jingleNone": "Ingen",
-    "jingleCustom": "Vælg en anden…"
+    "jingleCustom": "Vælg en anden…",
+    "detectedSermon": "Vi har detekteret {min} min prædiken og foreslået trim. Gennemgå og klik publicer.",
+    "noSermonFound": "Fandt ingen tydelig prædikenblok. Gennemgå filen før publicering."
   },
   "schedule": {
     "title": "Ugentlig tidsplan",
@@ -488,7 +497,8 @@
     "notifyStopDesc": "Klik på notifikationen for at gå direkte til filen.",
     "close": "Luk",
     "pickFile": "Vælg fil…",
-    "diagnoseHint": "Kopiér dette og send til support hvis optagelse ikke virker."
+    "diagnoseHint": "Kopiér dette og send til support hvis optagelse ikke virker.",
+    "pasteUrlFirst": "Indsæt URL først"
   },
   "editor": {
     "title": "Rediger lydfil",
@@ -589,7 +599,15 @@
     "willRemain": "prædiken tilbage",
     "export320kbps": "320 kbps (høj kvalitet)",
     "kbdJumpToSermon": "Hop til prædiken",
-    "videoFileNotice": "Videofil — eksporteres som MP4 (H.264 + AAC)"
+    "videoFileNotice": "Videofil — eksporteres som MP4 (H.264 + AAC)",
+    "errReplaceUnsafe": "Kan ikke overskrive originalfilen i dette format. Brug \"Gem som ny fil\" i stedet.",
+    "errNoAudioRemaining": "Ingen lyd tilbage — klippene dækker hele optagelsen. Fjern mindst ét klip før eksport.",
+    "errCancelled": "Eksport annulleret.",
+    "errTimeout": "Eksporten tog for lang tid og blev stoppet. Prøv igen, eller del filen i mindre optagelser.",
+    "errFileNotFound": "Originalfilen er ikke tilgængelig — er disken afbrudt?",
+    "errCutData": "Intern fejl i klippedata. Prøv at genindlæse filen.",
+    "chaptersEmpty": "Ingen kapitler endnu. Klik på \"+ Tilføj ved afspilningsmarkør\" for at starte.",
+    "chapterClickSeek": "Klik for at søge"
   },
   "master": {
     "title": "Mastering (klargør til udgivelse)",
@@ -783,6 +801,11 @@
     "errConnectFirst": "forbind til skytjenesten først",
     "errPickFolderFirst": "vælg lagringsmappe først",
     "errEnablePodcast": "aktivér podcast først",
-    "errUnknown": "ukendt fejl"
+    "errUnknown": "ukendt fejl",
+    "errNotConfigured": "er ikke konfigureret i denne build. Bed udvikleren om en build med OAuth-nøgle.",
+    "connecting": "Forbinder…",
+    "needsReauth": "kræver login igen. Klik for at oprette forbindelse.",
+    "reauth": "Forbind igen",
+    "oauthKeyMissing": " OAuth-nøgle er ikke sat i denne build."
   }
 }

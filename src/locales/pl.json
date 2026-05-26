@@ -60,7 +60,14 @@
     "testSignalLow": "⚠️ Słaby sygnał — sprawdź wzmocnienie na mikserze",
     "testSignalSilent": "⚠️ Cisza — czy mikser jest wyłączony?",
     "testUnknownError": "Nieznany błąd",
-    "videoPreviewPrompt": "Wybierz kamerę i kliknij Odśwież"
+    "videoPreviewPrompt": "Wybierz kamerę i kliknij Odśwież",
+    "videoOn": "Wideo wł.",
+    "videoOff": "Wideo wył.",
+    "cameraNoResponse": "Kamera nie odpowiada — spróbuj odświeżyć",
+    "signalClipping": "Przesterowanie!",
+    "signalLoud": "Głośno",
+    "signalGood": "Dobrze",
+    "signalWeak": "Słabo"
   },
   "update": {
     "available": "Dostępna nowa wersja {v} — pobieranie…",
@@ -128,7 +135,9 @@
     "outroLabel": "Outro:",
     "jingleDefault": "Domyślne z ustawień",
     "jingleNone": "Brak",
-    "jingleCustom": "Wybierz inne…"
+    "jingleCustom": "Wybierz inne…",
+    "detectedSermon": "Wykryliśmy {min}-min kazanie i zaproponowaliśmy przycięcie. Przejrzyj i kliknij publikuj.",
+    "noSermonFound": "Nie znaleziono wyraźnego bloku kazania. Sprawdź plik przed publikacją."
   },
   "schedule": {
     "title": "Harmonogram tygodniowy",
@@ -488,7 +497,8 @@
     "notifyStopDesc": "Kliknij powiadomienie, aby przejść bezpośrednio do pliku.",
     "close": "Zamknij",
     "pickFile": "Wybierz plik…",
-    "diagnoseHint": "Skopiuj to i wyślij do supportu, jeśli nagrywanie nie działa."
+    "diagnoseHint": "Skopiuj to i wyślij do supportu, jeśli nagrywanie nie działa.",
+    "pasteUrlFirst": "Najpierw wklej URL"
   },
   "editor": {
     "title": "Edytuj plik audio",
@@ -589,7 +599,15 @@
     "willRemain": "kazania pozostaje",
     "export320kbps": "320 kbps (wysoka jakość)",
     "kbdJumpToSermon": "Przejdź do kazania",
-    "videoFileNotice": "Plik wideo — eksportowany jako MP4 (H.264 + AAC)"
+    "videoFileNotice": "Plik wideo — eksportowany jako MP4 (H.264 + AAC)",
+    "errReplaceUnsafe": "Nie można nadpisać oryginalnego pliku w tym formacie. Użyj \"Zapisz jako nowy plik\".",
+    "errNoAudioRemaining": "Brak audio — wycięcia obejmują całe nagranie. Usuń co najmniej jedno wycięcie przed eksportem.",
+    "errCancelled": "Eksport anulowany.",
+    "errTimeout": "Eksport trwał zbyt długo i został zatrzymany. Spróbuj ponownie lub podziel plik na mniejsze nagrania.",
+    "errFileNotFound": "Plik oryginalny nie jest dostępny — czy dysk jest odłączony?",
+    "errCutData": "Wewnętrzny błąd danych wycięć. Spróbuj ponownie wczytać plik.",
+    "chaptersEmpty": "Brak rozdziałów. Kliknij \"+ Dodaj w pozycji odtwarzania\", aby zacząć.",
+    "chapterClickSeek": "Kliknij, aby przejść"
   },
   "master": {
     "title": "Mastering (przygotuj do publikacji)",
@@ -783,6 +801,11 @@
     "errConnectFirst": "najpierw połącz z usługą chmurową",
     "errPickFolderFirst": "najpierw wybierz folder zapisu",
     "errEnablePodcast": "najpierw włącz podcast",
-    "errUnknown": "nieznany błąd"
+    "errUnknown": "nieznany błąd",
+    "errNotConfigured": "nie jest skonfigurowany w tej kompilacji. Poproś dewelopera o kompilację z kluczem OAuth.",
+    "connecting": "Łączenie…",
+    "needsReauth": "wymaga ponownego logowania. Kliknij, aby połączyć.",
+    "reauth": "Połącz ponownie",
+    "oauthKeyMissing": " klucz OAuth nie jest ustawiony w tej kompilacji."
   }
 }

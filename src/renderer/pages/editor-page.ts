@@ -515,9 +515,9 @@ function loadAndUpdateReviewBanner(): void {
   if (detail) {
     if (reviewPrep.suggestedTrim) {
       const lenMin = Math.round((reviewPrep.suggestedTrim.endSec - reviewPrep.suggestedTrim.startSec) / 60)
-      detail.textContent = `Vi har detektert ${lenMin} min preken og foreslått trim. Gå over og trykk publiser.`
+      detail.textContent = t('review.detectedSermon', 'Vi har detektert {min} min preken og foreslått trim. Gå over og trykk publiser.').replace('{min}', String(lenMin))
     } else {
-      detail.textContent = 'Vi fant ingen klar preken-blokk. Sjekk filen før publisering.'
+      detail.textContent = t('review.noSermonFound', 'Vi fant ingen klar preken-blokk. Sjekk filen før publisering.')
     }
   }
 
@@ -1101,7 +1101,7 @@ function renderChapterList(): void {
     countEl.style.display = meta.chapters.length ? '' : 'none'
   }
   if (meta.chapters.length === 0) {
-    list.innerHTML = '<div class="editor-chapters-empty">Ingen kapitler ennå. Klikk «+ Legg til ved playhead» for å starte.</div>'
+    list.innerHTML = `<div class="editor-chapters-empty">${t('editor.chaptersEmpty', 'Ingen kapitler ennå. Klikk «+ Legg til ved playhead» for å starte.')}</div>`
     return
   }
   for (let i = 0; i < meta.chapters.length; i++) {
@@ -1112,7 +1112,7 @@ function renderChapterList(): void {
     const timeLbl = document.createElement('span')
     timeLbl.className = 'editor-chapter-time'
     timeLbl.textContent = formatTime(ch.time)
-    timeLbl.title = 'Klikk for å søke'
+    timeLbl.title = t('editor.chapterClickSeek', 'Klikk for å søke')
     timeLbl.addEventListener('click', () => { playStartSec = ch.time; updateTimecode(ch.time); drawWaveform() })
 
     const nameInput = document.createElement('input')
@@ -3613,19 +3613,19 @@ async function runExport(): Promise<void> {
 function describeExportError(err: string | undefined): string {
   switch (err) {
     case 'force_wav_replace_unsafe':
-      return '✕ Kan ikke overskrive originalfilen i dette formatet. Bruk "Lagre som ny fil" i stedet.'
+      return '✕ ' + t('editor.errReplaceUnsafe', 'Kan ikke overskrive originalfilen i dette formatet. Bruk "Lagre som ny fil" i stedet.')
     case 'no_audio_remaining':
-      return '✕ Ingen lyd igjen — kuttene dekker hele opptaket. Fjern minst ett kutt før du eksporterer.'
+      return '✕ ' + t('editor.errNoAudioRemaining', 'Ingen lyd igjen — kuttene dekker hele opptaket. Fjern minst ett kutt før du eksporterer.')
     case 'cancelled':
-      return '✕ Eksport avbrutt.'
+      return '✕ ' + t('editor.errCancelled', 'Eksport avbrutt.')
     case 'timeout':
-      return '✕ Eksporten tok for lang tid og ble stoppet. Prøv igjen, eller del filen i flere mindre opptak.'
+      return '✕ ' + t('editor.errTimeout', 'Eksporten tok for lang tid og ble stoppet. Prøv igjen, eller del filen i flere mindre opptak.')
     case 'invalid_path':
     case 'file_not_found':
-      return '✕ Originalfilen er ikke tilgjengelig — er disken frakoblet?'
+      return '✕ ' + t('editor.errFileNotFound', 'Originalfilen er ikke tilgjengelig — er disken frakoblet?')
     case 'invalid_duration':
     case 'invalid_cut_regions':
-      return '✕ Intern feil i kuttdataene. Prøv å laste filen på nytt.'
+      return '✕ ' + t('editor.errCutData', 'Intern feil i kuttdataene. Prøv å laste filen på nytt.')
     default:
       return (t('editor.saveError') || '✕ Feil') + (err ? ': ' + err : '')
   }

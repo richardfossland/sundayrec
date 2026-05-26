@@ -1821,6 +1821,24 @@ body.platform-win32  #wake-instructions-win { display: block; }
 .cloud-queue-line2 { color: var(--text3); font-size: 11px; }
 .cloud-folder-loading { padding: 16px; color: var(--text3); }
 
+/* Cloud reauth-banner — shown when OAuth refresh-token expired */
+.cloud-reauth-banner {
+  background: #5b1f1f; color: #ffd0d0;
+  padding: 10px 12px; border-radius: 8px; margin: 8px 0;
+  display: flex; gap: 8px; align-items: center; justify-content: space-between;
+}
+.cloud-reauth-btn {
+  background: #fff; color: #1a1a1a; border: none;
+  padding: 6px 12px; border-radius: 6px;
+  cursor: pointer; font-weight: 600;
+}
+.cloud-reauth-btn:disabled { opacity: .6; cursor: not-allowed; }
+.cloud-not-configured-notice {
+  background: #4a3a1f; color: #ffe6a8;
+  padding: 8px 12px; border-radius: 8px; margin: 8px 0;
+  font-size: 12px;
+}
+
 /* Review-queue card on Home — items awaiting publish review */
 .review-queue-card {
   background: linear-gradient(135deg, rgba(122,170,255,.08), rgba(127,196,136,.06));

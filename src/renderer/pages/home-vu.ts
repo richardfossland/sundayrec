@@ -2,6 +2,7 @@ import { settings } from '../state'
 import { buildInputRouter, getAudioDevices } from '../audio/capture'
 import { makeVuState, tickVU, stopVuState } from '../audio/vu'
 import type { VuState } from '../audio/vu'
+import { t } from '../i18n'
 
 const vu = makeVuState()
 let vuRetries = 0
@@ -96,10 +97,10 @@ function updateSignalStatus(dbL: number, dbR: number, state: VuState): void {
   if (!dot || !text) return
 
   let cls = '', label = '—'
-  if      (db >= -3)  { cls = 'klipping'; label = 'Klipper!' }
-  else if (db >= -12) { cls = 'hoyt';     label = 'Høyt'     }
-  else if (db >= -40) { cls = 'god';      label = 'Bra'      }
-  else if (db > -55)  { cls = 'svak';     label = 'Svakt'    }
+  if      (db >= -3)  { cls = 'klipping'; label = t('home.signalClipping', 'Klipper!') }
+  else if (db >= -12) { cls = 'hoyt';     label = t('home.signalLoud',     'Høyt')     }
+  else if (db >= -40) { cls = 'god';      label = t('home.signalGood',     'Bra')      }
+  else if (db > -55)  { cls = 'svak';     label = t('home.signalWeak',     'Svakt')    }
   dot.className  = 'signal-dot'  + (cls ? ' ' + cls : '')
   text.className = 'signal-text' + (cls ? ' ' + cls : '')
   text.textContent = label

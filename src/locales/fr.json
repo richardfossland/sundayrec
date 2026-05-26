@@ -60,7 +60,14 @@
     "testSignalLow": "⚠️ Signal faible — vérifiez le gain sur la table de mixage",
     "testSignalSilent": "⚠️ Silence — la table de mixage est-elle éteinte ?",
     "testUnknownError": "Erreur inconnue",
-    "videoPreviewPrompt": "Choisissez une caméra et cliquez sur Actualiser"
+    "videoPreviewPrompt": "Choisissez une caméra et cliquez sur Actualiser",
+    "videoOn": "Vidéo activée",
+    "videoOff": "Vidéo désactivée",
+    "cameraNoResponse": "La caméra ne répond pas — essayez d’actualiser",
+    "signalClipping": "Saturation !",
+    "signalLoud": "Fort",
+    "signalGood": "Bon",
+    "signalWeak": "Faible"
   },
   "update": {
     "available": "Nouvelle version {v} disponible — téléchargement en cours…",
@@ -128,7 +135,9 @@
     "outroLabel": "Outro :",
     "jingleDefault": "Par défaut depuis les réglages",
     "jingleNone": "Aucun",
-    "jingleCustom": "Choisir un autre…"
+    "jingleCustom": "Choisir un autre…",
+    "detectedSermon": "Nous avons détecté une prédication de {min} min et suggéré une coupe. Vérifiez et cliquez sur publier.",
+    "noSermonFound": "Aucun bloc de prédication clair trouvé. Vérifiez le fichier avant publication."
   },
   "schedule": {
     "title": "Planning hebdomadaire",
@@ -488,7 +497,8 @@
     "notifyStopDesc": "Cliquez sur la notification pour aller directement au fichier.",
     "close": "Fermer",
     "pickFile": "Choisir un fichier…",
-    "diagnoseHint": "Copiez ceci et envoyez-le au support si l’enregistrement ne fonctionne pas."
+    "diagnoseHint": "Copiez ceci et envoyez-le au support si l’enregistrement ne fonctionne pas.",
+    "pasteUrlFirst": "Collez d’abord l’URL"
   },
   "editor": {
     "title": "Éditer le fichier audio",
@@ -589,7 +599,15 @@
     "willRemain": "de prédication restant",
     "export320kbps": "320 kbps (haute qualité)",
     "kbdJumpToSermon": "Aller à la prédication",
-    "videoFileNotice": "Fichier vidéo — exporté en MP4 (H.264 + AAC)"
+    "videoFileNotice": "Fichier vidéo — exporté en MP4 (H.264 + AAC)",
+    "errReplaceUnsafe": "Impossible d’écraser le fichier original dans ce format. Utilisez « Enregistrer comme nouveau fichier ».",
+    "errNoAudioRemaining": "Plus d’audio — les coupes couvrent tout l’enregistrement. Retirez au moins une coupe avant d’exporter.",
+    "errCancelled": "Export annulé.",
+    "errTimeout": "L’export a pris trop de temps et a été arrêté. Réessayez ou divisez le fichier en plusieurs enregistrements.",
+    "errFileNotFound": "Le fichier original n’est pas disponible — le disque est-il déconnecté ?",
+    "errCutData": "Erreur interne dans les données de coupe. Essayez de recharger le fichier.",
+    "chaptersEmpty": "Pas encore de chapitres. Cliquez sur « + Ajouter à la tête de lecture » pour commencer.",
+    "chapterClickSeek": "Cliquer pour rechercher"
   },
   "master": {
     "title": "Mastering (préparation à la publication)",
@@ -783,6 +801,11 @@
     "errConnectFirst": "connectez d’abord le service cloud",
     "errPickFolderFirst": "choisissez d’abord un dossier d’enregistrement",
     "errEnablePodcast": "activez d’abord le podcast",
-    "errUnknown": "erreur inconnue"
+    "errUnknown": "erreur inconnue",
+    "errNotConfigured": "n’est pas configuré dans cette build. Demandez au développeur une build avec une clé OAuth.",
+    "connecting": "Connexion…",
+    "needsReauth": "nécessite une nouvelle connexion. Cliquez pour vous reconnecter.",
+    "reauth": "Reconnecter",
+    "oauthKeyMissing": " clé OAuth non définie dans cette build."
   }
 }

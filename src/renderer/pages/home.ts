@@ -61,7 +61,7 @@ function updateVideoToggleButton(): void {
   const label = document.getElementById('video-toggle-label')
   const on    = settings.videoEnabled ?? false
   if (!btn || !label) return
-  label.textContent = on ? 'Video på' : 'Video av'
+  label.textContent = on ? t('home.videoOn', 'Video på') : t('home.videoOff', 'Video av')
   btn.classList.toggle('video-toggle-on', on)
   updateAudioSeparateButton()
 }
@@ -206,7 +206,7 @@ export function startVideoPreview(): void {
     previewNoFrameTimer = null
     if (previewActive) {
       previewActive = false
-      if (phTxt) phTxt.textContent = 'Kamera svarte ikke — prøv å oppdatere'
+      if (phTxt) phTxt.textContent = t('home.cameraNoResponse', 'Kamera svarte ikke — prøv å oppdatere')
       if (phDiv) phDiv.style.display = ''
       if (img)   img.style.display   = 'none'
       window.api.videoPreviewStop?.()

@@ -60,7 +60,14 @@
     "testSignalLow": "⚠️ Schwaches Signal — Pegel am Mischpult prüfen",
     "testSignalSilent": "⚠️ Stille — ist das Mischpult aus?",
     "testUnknownError": "Unbekannter Fehler",
-    "videoPreviewPrompt": "Kamera wählen und „Aktualisieren\" klicken"
+    "videoPreviewPrompt": "Kamera wählen und „Aktualisieren\" klicken",
+    "videoOn": "Video an",
+    "videoOff": "Video aus",
+    "cameraNoResponse": "Kamera reagiert nicht — versuchen Sie zu aktualisieren",
+    "signalClipping": "Übersteuert!",
+    "signalLoud": "Laut",
+    "signalGood": "Gut",
+    "signalWeak": "Schwach"
   },
   "update": {
     "available": "Neue Version {v} verfügbar — wird heruntergeladen…",
@@ -128,7 +135,9 @@
     "outroLabel": "Outro:",
     "jingleDefault": "Standard aus den Einstellungen",
     "jingleNone": "Keine",
-    "jingleCustom": "Andere auswählen…"
+    "jingleCustom": "Andere auswählen…",
+    "detectedSermon": "Wir haben eine {min}-Minuten-Predigt erkannt und einen Schnitt vorgeschlagen. Überprüfen Sie und klicken Sie auf Veröffentlichen.",
+    "noSermonFound": "Kein eindeutiger Predigtblock gefunden. Überprüfen Sie die Datei vor der Veröffentlichung."
   },
   "schedule": {
     "title": "Wochenplan",
@@ -488,7 +497,8 @@
     "notifyStopDesc": "Klicken Sie auf die Benachrichtigung, um direkt zur Datei zu springen.",
     "close": "Schließen",
     "pickFile": "Datei wählen…",
-    "diagnoseHint": "Kopieren Sie dies und senden Sie es an den Support, wenn die Aufnahme nicht funktioniert."
+    "diagnoseHint": "Kopieren Sie dies und senden Sie es an den Support, wenn die Aufnahme nicht funktioniert.",
+    "pasteUrlFirst": "URL zuerst einfügen"
   },
   "editor": {
     "title": "Audiodatei bearbeiten",
@@ -589,7 +599,15 @@
     "willRemain": "Predigt verbleiben",
     "export320kbps": "320 kbps (Hohe Qualität)",
     "kbdJumpToSermon": "Zur Predigt springen",
-    "videoFileNotice": "Videodatei — wird als MP4 (H.264 + AAC) exportiert"
+    "videoFileNotice": "Videodatei — wird als MP4 (H.264 + AAC) exportiert",
+    "errReplaceUnsafe": "Kann die Originaldatei in diesem Format nicht überschreiben. Verwenden Sie stattdessen „Als neue Datei speichern\".",
+    "errNoAudioRemaining": "Kein Audio übrig — die Schnitte decken die gesamte Aufnahme ab. Entfernen Sie mindestens einen Schnitt vor dem Export.",
+    "errCancelled": "Export abgebrochen.",
+    "errTimeout": "Export dauerte zu lange und wurde gestoppt. Versuchen Sie es erneut oder teilen Sie die Datei in kleinere Aufnahmen.",
+    "errFileNotFound": "Originaldatei ist nicht verfügbar — ist der Datenträger getrennt?",
+    "errCutData": "Interner Fehler in Schnittdaten. Versuchen Sie, die Datei neu zu laden.",
+    "chaptersEmpty": "Noch keine Kapitel. Klicken Sie auf „+ An Wiedergabeposition hinzufügen\", um zu beginnen.",
+    "chapterClickSeek": "Zum Suchen klicken"
   },
   "master": {
     "title": "Mastering (Vorbereitung zur Veröffentlichung)",
@@ -783,6 +801,11 @@
     "errConnectFirst": "zuerst mit Cloud-Dienst verbinden",
     "errPickFolderFirst": "zuerst Speicherordner wählen",
     "errEnablePodcast": "zuerst Podcast aktivieren",
-    "errUnknown": "unbekannter Fehler"
+    "errUnknown": "unbekannter Fehler",
+    "errNotConfigured": "ist in diesem Build nicht konfiguriert. Bitten Sie den Entwickler um einen Build mit OAuth-Schlüssel.",
+    "connecting": "Verbinde…",
+    "needsReauth": "benötigt erneute Anmeldung. Klicken zum Verbinden.",
+    "reauth": "Erneut verbinden",
+    "oauthKeyMissing": " OAuth-Schlüssel ist in diesem Build nicht gesetzt."
   }
 }

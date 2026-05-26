@@ -60,7 +60,14 @@
     "testSignalLow": "⚠️ Svag signal — kontrollera gain på mixern",
     "testSignalSilent": "⚠️ Tystnad — är mixern avstängd?",
     "testUnknownError": "Okänt fel",
-    "videoPreviewPrompt": "Välj kamera och klicka Uppdatera"
+    "videoPreviewPrompt": "Välj kamera och klicka Uppdatera",
+    "videoOn": "Video på",
+    "videoOff": "Video av",
+    "cameraNoResponse": "Kameran svarade inte — försök uppdatera",
+    "signalClipping": "Klipper!",
+    "signalLoud": "Högt",
+    "signalGood": "Bra",
+    "signalWeak": "Svagt"
   },
   "update": {
     "available": "Ny version {v} tillgänglig — laddar ner…",
@@ -128,7 +135,9 @@
     "outroLabel": "Outro:",
     "jingleDefault": "Standard från inställningar",
     "jingleNone": "Ingen",
-    "jingleCustom": "Välj annan…"
+    "jingleCustom": "Välj annan…",
+    "detectedSermon": "Vi har detekterat {min} min predikan och föreslagit trim. Granska och klicka publicera.",
+    "noSermonFound": "Hittade inget tydligt predikoblock. Granska filen före publicering."
   },
   "schedule": {
     "title": "Veckoschema",
@@ -488,7 +497,8 @@
     "notifyStopDesc": "Klicka på aviseringen för att gå direkt till filen.",
     "close": "Stäng",
     "pickFile": "Välj fil…",
-    "diagnoseHint": "Kopiera detta och skicka till support om inspelning inte fungerar."
+    "diagnoseHint": "Kopiera detta och skicka till support om inspelning inte fungerar.",
+    "pasteUrlFirst": "Klistra in URL först"
   },
   "editor": {
     "title": "Redigera ljudfil",
@@ -589,7 +599,15 @@
     "willRemain": "predikan kvar",
     "export320kbps": "320 kbps (hög kvalitet)",
     "kbdJumpToSermon": "Hoppa till predikan",
-    "videoFileNotice": "Videofil — exporteras som MP4 (H.264 + AAC)"
+    "videoFileNotice": "Videofil — exporteras som MP4 (H.264 + AAC)",
+    "errReplaceUnsafe": "Kan inte skriva över originalfilen i detta format. Använd \"Spara som ny fil\" istället.",
+    "errNoAudioRemaining": "Inget ljud kvar — klippen täcker hela inspelningen. Ta bort minst ett klipp innan export.",
+    "errCancelled": "Export avbruten.",
+    "errTimeout": "Exporten tog för lång tid och stoppades. Försök igen, eller dela filen i mindre inspelningar.",
+    "errFileNotFound": "Originalfilen är inte tillgänglig — är disken frånkopplad?",
+    "errCutData": "Internt fel i klippdata. Försök ladda om filen.",
+    "chaptersEmpty": "Inga kapitel ännu. Klicka på \"+ Lägg till vid uppspelningsmarkör\" för att starta.",
+    "chapterClickSeek": "Klicka för att söka"
   },
   "master": {
     "title": "Mastring (förbered för publicering)",
@@ -783,6 +801,11 @@
     "errConnectFirst": "anslut till molntjänsten först",
     "errPickFolderFirst": "välj lagringsmapp först",
     "errEnablePodcast": "aktivera podd först",
-    "errUnknown": "okänt fel"
+    "errUnknown": "okänt fel",
+    "errNotConfigured": "är inte konfigurerad i denna build. Be utvecklaren om en build med OAuth-nyckel.",
+    "connecting": "Ansluter…",
+    "needsReauth": "behöver inloggning igen. Klicka för att ansluta.",
+    "reauth": "Återanslut",
+    "oauthKeyMissing": " OAuth-nyckel är inte inställd i denna build."
   }
 }

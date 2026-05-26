@@ -33,10 +33,10 @@ export function setupPublishPage(): void {
     btn.addEventListener('click', async () => {
       const service = btn.dataset.cloudConnect as CloudServiceId
       if (!configured[service]) {
-        showServiceError(service, `${SERVICE_NAMES[service]} er ikke konfigurert i denne byggingen. Be utvikleren om en build med OAuth-nøkkel.`)
+        showServiceError(service, `${SERVICE_NAMES[service]} ${t('publish.errNotConfigured', 'er ikke konfigurert i denne byggingen. Be utvikleren om en build med OAuth-nøkkel.')}`)
         return
       }
-      btn.textContent = 'Kobler til…'
+      btn.textContent = t('publish.connecting', 'Kobler til…')
       btn.setAttribute('disabled', '')
 
       // Allow the user to cancel a stuck OAuth flow
@@ -192,22 +192,21 @@ function renderReauthBanner(card: HTMLElement, service: CloudServiceId, needs: b
   if (!banner) {
     banner = document.createElement('div')
     banner.className = 'cloud-reauth-banner'
-    banner.style.cssText = 'background:#5b1f1f;color:#ffd0d0;padding:10px 12px;border-radius:8px;margin:8px 0;display:flex;gap:8px;align-items:center;justify-content:space-between'
     const text = document.createElement('div')
-    text.textContent = `${SERVICE_NAMES[service]} trenger pålogging på nytt. Klikk for å koble til.`
+    text.textContent = `${SERVICE_NAMES[service]} ${t('publish.needsReauth', 'trenger pålogging på nytt. Klikk for å koble til.')}`
     const btn = document.createElement('button')
-    btn.textContent = 'Koble til på nytt'
-    btn.className = 'btn'
-    btn.style.cssText = 'background:#fff;color:#1a1a1a;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-weight:600'
+    const reauthLabel = t('publish.reauth', 'Koble til på nytt')
+    btn.textContent = reauthLabel
+    btn.className = 'cloud-reauth-btn'
     btn.addEventListener('click', async () => {
       btn.disabled = true
-      btn.textContent = 'Kobler til…'
+      btn.textContent = t('publish.connecting', 'Kobler til…')
       try {
         const result = await window.api.cloudConnect(service)
         if (result.ok) refreshStatus()
-        else { btn.disabled = false; btn.textContent = 'Koble til på nytt'; showServiceError(service, result.error ?? 'Ukjent feil') }
+        else { btn.disabled = false; btn.textContent = reauthLabel; showServiceError(service, result.error ?? t('publish.errUnknown', 'Ukjent feil')) }
       } catch {
-        btn.disabled = false; btn.textContent = 'Koble til på nytt'
+        btn.disabled = false; btn.textContent = reauthLabel
       }
     })
     banner.append(text, btn)
@@ -220,9 +219,8 @@ function renderConfiguredNotice(card: HTMLElement, service: CloudServiceId, ok: 
   if (ok) { notice?.remove(); return }
   if (!notice) {
     notice = document.createElement('div')
-    notice.className = 'cloud-not-configured'
-    notice.style.cssText = 'background:#4a3a1f;color:#ffe6a8;padding:8px 12px;border-radius:8px;margin:8px 0;font-size:12px'
-    notice.textContent = `${SERVICE_NAMES[service]}-OAuth-nøkkel er ikke satt i denne byggingen.`
+    notice.className = 'cloud-not-configured cloud-not-configured-notice'
+    notice.textContent = `${SERVICE_NAMES[service]}${t('publish.oauthKeyMissing', '-OAuth-nøkkel er ikke satt i denne byggingen.')}`
     card.prepend(notice)
   }
 }

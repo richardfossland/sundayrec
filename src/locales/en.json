@@ -60,7 +60,14 @@
     "testSignalLow": "⚠️ Weak signal — check gain on the mixer",
     "testSignalSilent": "⚠️ Silence — is the mixer off?",
     "testUnknownError": "Unknown error",
-    "videoPreviewPrompt": "Choose a camera and click Refresh"
+    "videoPreviewPrompt": "Choose a camera and click Refresh",
+    "videoOn": "Video on",
+    "videoOff": "Video off",
+    "cameraNoResponse": "Camera not responding — try refreshing",
+    "signalClipping": "Clipping!",
+    "signalLoud": "Loud",
+    "signalGood": "Good",
+    "signalWeak": "Weak"
   },
   "update": {
     "available": "New version {v} available — downloading…",
@@ -128,7 +135,9 @@
     "outroLabel": "Outro:",
     "jingleDefault": "Default from settings",
     "jingleNone": "None",
-    "jingleCustom": "Choose another…"
+    "jingleCustom": "Choose another…",
+    "detectedSermon": "We detected a {min}-min sermon and suggested a trim. Review and click publish.",
+    "noSermonFound": "No clear sermon block found. Review the file before publishing."
   },
   "schedule": {
     "title": "Weekly schedule",
@@ -488,7 +497,8 @@
     "notifyStopDesc": "Click the notification to jump straight to the file.",
     "close": "Close",
     "pickFile": "Choose file…",
-    "diagnoseHint": "Copy this and send to support if recording is not working."
+    "diagnoseHint": "Copy this and send to support if recording is not working.",
+    "pasteUrlFirst": "Paste URL first"
   },
   "editor": {
     "title": "Edit audio file",
@@ -589,7 +599,15 @@
     "willRemain": "of sermon remaining",
     "export320kbps": "320 kbps (high quality)",
     "kbdJumpToSermon": "Jump to sermon",
-    "videoFileNotice": "Video file — exported as MP4 (H.264 + AAC)"
+    "videoFileNotice": "Video file — exported as MP4 (H.264 + AAC)",
+    "errReplaceUnsafe": "Cannot overwrite the original file in this format. Use \"Save as new file\" instead.",
+    "errNoAudioRemaining": "No audio left — the cuts cover the entire recording. Remove at least one cut before exporting.",
+    "errCancelled": "Export cancelled.",
+    "errTimeout": "Export took too long and was stopped. Try again, or split the file into smaller recordings.",
+    "errFileNotFound": "Original file is not available — is the disk disconnected?",
+    "errCutData": "Internal error in cut data. Try reloading the file.",
+    "chaptersEmpty": "No chapters yet. Click \"+ Add at playhead\" to start.",
+    "chapterClickSeek": "Click to seek"
   },
   "master": {
     "title": "Mastering (prepare for publishing)",
@@ -783,6 +801,11 @@
     "errConnectFirst": "connect to the cloud service first",
     "errPickFolderFirst": "choose a save folder first",
     "errEnablePodcast": "enable podcast first",
-    "errUnknown": "unknown error"
+    "errUnknown": "unknown error",
+    "errNotConfigured": "is not configured in this build. Ask the developer for a build with an OAuth key.",
+    "connecting": "Connecting…",
+    "needsReauth": "needs sign-in again. Click to reconnect.",
+    "reauth": "Reconnect",
+    "oauthKeyMissing": " OAuth key is not set in this build."
   }
 }
