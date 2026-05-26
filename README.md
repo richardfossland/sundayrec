@@ -7,7 +7,7 @@
   Records, prepares, and publishes Sunday services as podcasts — set it once, forget it.
 
   [![Latest release](https://img.shields.io/github/v/release/richardfossland/sundayrec)](https://github.com/richardfossland/sundayrec/releases/latest)
-  [![Tests](https://img.shields.io/badge/tests-1040%20passing-brightgreen)](#tests)
+  [![Tests](https://img.shields.io/badge/tests-1044%20passing-brightgreen)](#tests)
   [![License](https://img.shields.io/badge/license-source--available-blue)](LICENSE)
   [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows-lightgrey)](#system-requirements)
 
@@ -31,14 +31,19 @@ There is no cloud service. SundayRec runs entirely on your own computer; recordi
 ## Key features
 
 - **Automatic scheduled recording** — weekly slots plus one-off specials (e.g. Christmas Eve)
+- **Live RTMP streaming** *(new in v4.38)* — stream services live to YouTube, Facebook, or your own RTMP server, multi-destination from one ffmpeg process. No subscription, no cloud middleman, no scenes to learn.
+- **Local AI transcription** *(new in v4.37)* — transcribe sermons to searchable text on-device with `whisper.cpp`. Four model tiers from Base to Large Turbo Q5. Click any segment in the transcript to jump the playhead. SRT export for YouTube subtitles.
+- **YouTube upload** *(new in v4.34)* — publish video recordings directly to YouTube from the editor. Resumable upload protocol with live progress; defaults to private so you can review before going public.
+- **Automatic sermon detection** *(new in v4.33)* — analyses the recording on file load, finds the sermon block, and suggests one-click trim of the surrounding music and announcements. Sermon-only recordings (no full service) are detected and kept intact.
 - **Norwegian church calendar built in** — Easter, Christmas, Allehelgensdag and other dates highlighted automatically; add your own
 - **Professional mastering** — four ffmpeg-based EBU R128 LUFS-normalised presets (speech-natural, speech-clear, speech-punchy, music+speech)
 - **Voice-activity detection (VAD)** — automatic chapter markers around sermon and hymn boundaries
 - **Cloud backup** — Google Drive and Dropbox (OneDrive support is in the codebase but hidden in the UI until Microsoft app verification is complete)
 - **Podcast RSS feed** — a single feed URL you submit once to Spotify for Podcasters and Apple Podcasts Connect; new episodes appear automatically
-- **Built-in editor** — waveform view, cuts, intro/outro, parametric EQ, format export
+- **Built-in editor** — waveform view, intro/outro on timeline, playhead extends through intro/outro, snap-to-segment, parametric EQ, format export
 - **Wake-from-sleep scheduling** — uses `pmset` on macOS and Task Scheduler on Windows so the machine can stay in low-power mode between services
-- **7 languages** — Norwegian, English, German, Swedish, Danish, Polish, French
+- **7 languages** — Norwegian, English, German, Swedish, Danish, Polish, French — with 780+ translated strings each, including tooltips
+- **Privacy by design** — no telemetry, no cloud middleman. Transcription and streaming both run entirely on your machine; only RTMP handshakes leave the device.
 - **Signed and notarised** — Apple Developer ID notarised builds for macOS; signed installer for Windows
 
 ## Install
@@ -78,6 +83,20 @@ Detailed walkthrough for non-technical volunteers (in Norwegian): **[docs/QUICK-
 5. **Review** — on Monday morning the episode appears in the review queue with a notification by tray, email and/or webhook
 6. **Publish** — one click adds it to your RSS feed, where Spotify and Apple Podcasts pick it up automatically
 
+## Reliability — what happens when things go wrong?
+
+Recording a Sunday service is a real-world job, not a software demo. SundayRec is designed around the assumption that *something will fail eventually*. Here is what happens in the common failure modes:
+
+- **Power loss / sudden shutdown.** The recorder writes the audio file continuously while recording. If the machine loses power mid-sermon, the partial file is salvaged at next startup via ffmpeg remux (`recoverPartial` in `src/main/recorder.ts`) — you get *most* of the sermon, not nothing. The partial-file recovery is logged so the operator sees what happened.
+- **USB mixer disconnect.** A reconnect watchdog kicks in: SundayRec writes the recording so far to disk, then opens a new file when the mixer comes back. After the service, the new "Merge reconnect segments" step joins them losslessly.
+- **Disk fills up.** Pre-flight check on every startup warns if free space is below ~3× the expected recording length. A scheduled session refuses to start if the projected size won't fit, rather than recording 25 min and crashing.
+- **Mic not detected before service.** The Hjem page surfaces "device not connected" as a red banner; an email/webhook notification fires if configured. Use the "Test recording (30 sec)" button mid-week to verify everything works *before* Sunday.
+- **Wake-from-sleep fails.** Wake reliability varies by OS and hardware. Apple Silicon Macs *cannot* wake from full shutdown (only from sleep). Windows machines often miss wakes after a forced OS reboot for updates. SundayRec ships an honest capability detector (`Tidsplan → Vekk maskin fra dvale`) that tells you what *your specific machine* can and cannot do. The "Test wake" feature schedules a wake 60 seconds out and reports whether the OS actually fired it — run this Friday before a Sunday service.
+- **ffmpeg crashes mid-stream during live broadcast.** Streamer auto-restarts up to 3 times with 5 s delay between attempts. The UI shows "Recovering…" instead of going dark. After 3 failed restarts, it gives up and surfaces the error.
+- **Whisper transcription on a slow machine.** The recommended model (Large Turbo Q5) needs Apple Silicon or a recent Intel CPU to finish in reasonable time. On older hardware, pick `Base` for ~14× real-time speed at lower accuracy. Transcription is fully optional — recordings work without it.
+
+We strongly recommend using the "Test recording" feature mid-week and "Test wake" the Friday before. Both surface configuration problems *before* the actual service rather than during it.
+
 ## System requirements
 
 |              | macOS                          | Windows                  |
@@ -107,7 +126,7 @@ npm install
 npm test
 ```
 
-The current suite is 1040 tests across 32 suites, pinned to the `Europe/Oslo` timezone so DST handling is deterministic. CI runs the suite on every push.
+The current suite is 1044 tests across 32 suites, pinned to the `Europe/Oslo` timezone so DST handling is deterministic. CI runs the suite on every push.
 
 ## License
 

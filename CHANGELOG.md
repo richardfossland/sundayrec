@@ -7,6 +7,197 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.38.2] — 2026-05-26
+
+### Added
+- **Stream auto-recovery.** If ffmpeg crashes mid-stream (USB drop, libx264
+  OOM, RTMP brief disconnect), the streamer now auto-restarts up to 3 times
+  with 5 s delay between attempts. UI shows "Recovering…" instead of going
+  dark — critical for unattended 90-min Sunday broadcasts.
+- README: new "Reliability" section documenting recoverPartial, USB-drop
+  watchdog, disk-space pre-flight, wake-test recommendation.
+
+### Changed
+- LICENSE: clarified non-commercial use boundary with concrete examples.
+  Megachurches and large dioceses are explicitly PERMITTED. Christian
+  radio stations with paid sponsorships, media companies producing as a
+  paid service, and conference organisers charging admission are
+  explicitly NOT permitted without a commercial agreement.
+- `importProfile` now strips `hasKey: true` from imported `streamDestinations`
+  so the UI prompts the user to re-paste stream keys on the new machine
+  (keys can't be migrated — they're encrypted with the old machine's keychain).
+- README + PRIVACY.md updated for v4.38 — Live streaming, AI transcription,
+  YouTube upload, sermon detection all documented. PRIVACY.md adds
+  `sundayrec-stream-keys.json`, `whisper-models/`, `live-preview/preview.jpg`
+  to the file inventory.
+
+---
+
+## [4.38.1] — 2026-05-26
+
+### Fixed
+- Critical: `ggml-base.bin` model SHA-256 was truncated in v4.37/4.38, causing
+  every Base-model download to fail with "integrity check failed" after 147 MB.
+  Verified against Hugging Face LFS pointers and corrected.
+- Live streaming watchdog added — if ffmpeg produces no progress for 90 s
+  (encoder hang, RTMP stall, USB drop), the process is force-killed and surfaced
+  to the UI instead of showing frozen stats forever.
+
+### Added
+- Live page: real audio VU meter via `getUserMedia` + AnalyserNode, so volunteers
+  can verify the microphone is working *before* clicking Start.
+- Transcribe button probes binary availability at app start; disabled with a
+  clear "Not available in this build" message if the platform binary is missing.
+
+### Changed
+- Translations completed in all 7 languages for `live.*`, `transcript.*` and
+  `publish.stream*` — no more Norwegian fallback strings for non-Norwegian users.
+  **782 keys per language** (up from 722).
+
+---
+
+## [4.38.0] — 2026-05-26
+
+### Added
+- **Direkte (Live RTMP streaming).** New sidebar tab between Tidsplan and
+  Rediger. One ffmpeg process opens camera + mic, encodes once with H.264 + AAC,
+  and tees output to multiple destinations (YouTube, Facebook, custom RTMP)
+  simultaneously via `-f tee`. `onfail=ignore` means one dead destination
+  doesn't kill the others.
+- Live preview thumbnail (JPG snapshot every 2 s) rendered in the page so the
+  user can confirm video is correct without competing for the camera with a
+  separate preview process.
+- Stream-destination editor in Innstillinger → Publisering. Stream keys
+  encrypted via `safeStorage` (system keychain on macOS, DPAPI on Windows).
+- Stats panel with bitrate, FPS, dropped frames, uptime parsed from ffmpeg.
+- Quality selector: 480p / 720p (recommended) / 1080p × 25 or 30 fps.
+
+---
+
+## [4.37.0] — 2026-05-26
+
+### Added
+- **Local AI transcription via `whisper.cpp`.** Transcribe sermons to
+  searchable text entirely on-device — no data leaves your machine. Four
+  curated models:
+  - Base (147 MB, ~14× real-time)
+  - Small (487 MB, ~5× real-time, balanced)
+  - Large Turbo Q5 (547 MB, ~6× real-time — recommended)
+  - Medium (1.5 GB, ~2× real-time, classic)
+- Lazy-download from Hugging Face with SHA-256 verification.
+- 9 input languages + auto-detect; optional translate-to-English.
+- Clickable segment panel below the timeline — click a phrase, playhead jumps.
+- Auto-highlight of currently-playing segment during playback.
+- SRT export for YouTube subtitles.
+
+### Distribution
+- macOS: whisper-cli built from source in CI for both arm64 and x86_64,
+  statically linked (3 MB each), signed and notarised with the app.
+- Windows: upstream `whisper-bin-x64.zip` downloaded in CI, bundled with DLLs.
+
+---
+
+## [4.36.0] – [4.36.2] — 2026-05-26
+
+### Added
+- **Sermon-only recording detection.** If ≥80% of the file is speech and <5%
+  is music, the entire file is treated as sermon; trim only the silent edges.
+  Covers churches that record just the sermon, not the full service.
+- Trusted-paths for files chosen via system dialog or drag-drop — path-defense
+  no longer silently refuses legitimate picks from external drives.
+- YouTube actionable error messages (API not enabled, quota exceeded,
+  insufficient scope — each maps to a specific actionable user-facing string).
+
+### Fixed
+- Waveform disappeared when leaving and returning to the editor tab.
+  Root cause: `deactivateEditor()` cleared peaks/audioBuffer as if the file
+  was closed. Now only stops playback; full cleanup moved to explicit close.
+
+---
+
+## [4.35.0] – [4.35.4] — 2026-05-26
+
+### Added
+- ffmpeg watchdogs on 4 post-recording processes (pre-roll encode, concat,
+  reconnect-merge, recovery remux). Hard limits 3–15 min depending on stage.
+- Path-traversal defense for sidecar files.
+- Drive virus-scan workaround: switched podcast feed download URLs from
+  `drive.google.com/uc?export=download` to `drive.usercontent.google.com/download`
+  which serves binaries directly for files > 25 MB.
+- AbortSignal with 30 s timeout on OAuth token-exchange and refresh.
+
+### Changed
+- `extractAudioForPeaks` streams WAV to disk instead of accumulating in RAM.
+  Peak memory for 3-hour recordings halved: 340 MB → 170 MB.
+- rAF-coalesced waveform draw under mouse drag (60+ paints/sec → 1 per frame).
+- Sticky header removed.
+- Playhead snaps out of cut regions on click/drag-release.
+- 8 unbounded stderr buffers capped.
+
+### i18n
+- Complete translations for Video, Varsler, Publisering tabs in all 7 languages.
+- Tooltips and aria-labels follow language switching.
+- 722 keys per language (up from 564).
+
+---
+
+## [4.34.0] — 2026-05-26
+
+### Added
+- **YouTube upload.** Publish video recordings directly to YouTube from the
+  editor's export modal. Resumable upload protocol with 8 MB chunks, live
+  progress. Defaults to `private` privacy.
+- Reuses the existing Google OAuth client with a separate token under the
+  `youtube` key so Drive and YouTube can be connected independently.
+
+---
+
+## [4.33.0] — 2026-05-26
+
+### Added
+- **Auto-analyse on file load** with suggestion banner: "Forslag klart —
+  fjern X min før talen, Y min etter". One-click apply.
+- **"Er ikke dette prekenen?"** dropdown lets the user override the auto-pick.
+- Improved sermon detection: if only ONE long speech block exists, use it
+  regardless of start time.
+- Snap-to-segment when adjusting cut boundaries (Shift to disable).
+
+---
+
+## [4.32.0] — 2026-05-26
+
+### Added
+- **Playhead extends through intro/outro.** Click anywhere in the intro or
+  outro slot to position the playhead there; audio playback starts from that
+  exact offset.
+- Keyboard shortcuts: Tab/Shift+Tab to jump cut boundaries, Home/End for
+  absolute start/end including intro/outro, P to jump to detected sermon start.
+- Timecode display shows "Intro 0:12" / "Outro 0:05" prefix.
+
+---
+
+## [4.31.0] — 2026-05-25
+
+### Added
+- **Editor UX overhaul.** Intro/outro now appear as dimmed waveforms on the
+  same timeline as the main recording. Drag-and-drop intro/outro onto the
+  left/right thirds of the timeline.
+- "Analyser opptak" and chapter markers merged with speech/music/silence
+  segment highlighting.
+- Sticky editor header with filename + dirty indicator + close-file button.
+- Empty-state with recent-files list (last 5 from history).
+- Cmd/Ctrl+O / W / S / E + Delete keyboard shortcuts.
+- "Eksporter og publiser" with cloud/podcast checkboxes.
+
+### Changed
+- Volume slider and audio-enhancements removed — record raw, post-process in
+  editor with mastering presets + one-click "Normaliser lydnivå".
+- "Avanserte valg" renamed to "Vekk maskin fra dvale" with honest sub-cards
+  about platform-specific wake capabilities.
+- Recording behaviour settings moved from Tidsplan to Filer.
+
+---
+
 ## [4.30.1] — 2026-05-25
 
 ### Changed
@@ -204,6 +395,21 @@ available at <https://github.com/richardfossland/sundayrec/commits/main>.
 
 ---
 
+[4.38.2]: https://github.com/richardfossland/sundayrec/releases/tag/v4.38.2
+[4.38.1]: https://github.com/richardfossland/sundayrec/releases/tag/v4.38.1
+[4.38.0]: https://github.com/richardfossland/sundayrec/releases/tag/v4.38.0
+[4.37.0]: https://github.com/richardfossland/sundayrec/releases/tag/v4.37.0
+[4.36.2]: https://github.com/richardfossland/sundayrec/releases/tag/v4.36.2
+[4.36.1]: https://github.com/richardfossland/sundayrec/releases/tag/v4.36.1
+[4.36.0]: https://github.com/richardfossland/sundayrec/releases/tag/v4.36.0
+[4.35.4]: https://github.com/richardfossland/sundayrec/releases/tag/v4.35.4
+[4.35.3]: https://github.com/richardfossland/sundayrec/releases/tag/v4.35.3
+[4.35.2]: https://github.com/richardfossland/sundayrec/releases/tag/v4.35.2
+[4.35.0]: https://github.com/richardfossland/sundayrec/releases/tag/v4.35.0
+[4.34.0]: https://github.com/richardfossland/sundayrec/releases/tag/v4.34.0
+[4.33.0]: https://github.com/richardfossland/sundayrec/releases/tag/v4.33.0
+[4.32.0]: https://github.com/richardfossland/sundayrec/releases/tag/v4.32.0
+[4.31.0]: https://github.com/richardfossland/sundayrec/releases/tag/v4.31.0
 [4.30.1]: https://github.com/richardfossland/sundayrec/releases/tag/v4.30.1
 [4.30.0]: https://github.com/richardfossland/sundayrec/releases/tag/v4.30.0
 [4.29.0]: https://github.com/richardfossland/sundayrec/releases/tag/v4.29.0

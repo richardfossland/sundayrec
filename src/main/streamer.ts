@@ -90,6 +90,16 @@ let lastStats: StreamStats = emptyStats()
 let statsListener: ((s: StreamStats) => void) | null = null
 let previewFile: string = ''
 
+/** Auto-recovery state: when ffmpeg crashes mid-stream we restart it with
+ *  the same options, up to N times. Critical for a 90-min sermon — if the
+ *  encoder crashes 20 min in (USB drop, RTMP brief disconnect, libx264 OOM),
+ *  the user notices when half the congregation already left. */
+let activeOpts: StreamOptions | null = null
+let restartAttempts = 0
+const MAX_RESTART_ATTEMPTS = 3
+const RESTART_DELAY_MS = 5_000  // Brief pause before relaunch (let RTMP server reset)
+let userInitiatedStop = false   // Flag set by stopStream() to disable auto-restart
+
 function emptyStats(): StreamStats {
   return {
     active:      false,
@@ -228,6 +238,16 @@ export async function startStream(opts: StreamOptions): Promise<{ ok: boolean; e
   if (opts.destinations.filter(d => d.enabled && d.rtmpUrl && d.streamKey).length === 0) {
     return { ok: false, error: 'Ingen aktive destinasjoner. Legg til minst én RTMP-URL + stream-key.' }
   }
+  // Fresh start (not a recovery retry) — reset state
+  activeOpts = opts
+  userInitiatedStop = false
+  restartAttempts = 0
+  return launchFfmpeg(opts)
+}
+
+/** Internal: spawn ffmpeg with given opts. Called by startStream() initially
+ *  and by the auto-recovery handler after a crash. */
+async function launchFfmpeg(opts: StreamOptions): Promise<{ ok: boolean; error?: string }> {
 
   const input = await buildInputArgs(opts)
   if (!input) return { ok: false, error: 'Kunne ikke finne kamera/lydenhet. Sjekk innstillinger.' }
@@ -294,6 +314,35 @@ export async function startStream(opts: StreamOptions): Promise<{ ok: boolean; e
     clearInterval(watchdog)
     const wasActive = streamProc != null
     streamProc = null
+
+    // Decide: auto-recover or finalise?
+    const crashedUnexpectedly =
+      !userInitiatedStop &&
+      wasActive &&
+      code !== 0 &&
+      signal !== 'SIGTERM' &&
+      activeOpts != null &&
+      restartAttempts < MAX_RESTART_ATTEMPTS
+    // Note: SIGKILL is the watchdog killing a hang — treat as crash worth retry.
+
+    if (crashedUnexpectedly) {
+      restartAttempts++
+      console.warn(`[streamer] ffmpeg crashed (code=${code} signal=${signal}) — auto-restart ${restartAttempts}/${MAX_RESTART_ATTEMPTS} in ${RESTART_DELAY_MS}ms`)
+      lastStats = {
+        ...lastStats,
+        active:   true,  // keep "active" so UI shows "reconnecting" not "stopped"
+        lastLine: `Recovering… (attempt ${restartAttempts}/${MAX_RESTART_ATTEMPTS})`,
+      }
+      emitStats()
+      setTimeout(() => {
+        if (userInitiatedStop || !activeOpts) return
+        void launchFfmpeg(activeOpts)
+      }, RESTART_DELAY_MS)
+      return
+    }
+
+    // Final teardown — either user stopped, or we exhausted retries
+    activeOpts = null
     lastStats = {
       ...lastStats,
       active: false,
@@ -320,6 +369,9 @@ export async function startStream(opts: StreamOptions): Promise<{ ok: boolean; e
 }
 
 export function stopStream(): boolean {
+  // Mark user-initiated stop FIRST so the close-handler doesn't auto-restart.
+  userInitiatedStop = true
+  activeOpts = null
   if (!streamProc) return false
   try { streamProc.kill('SIGTERM') } catch {}
   // Force-kill after 5s if it doesn't honour SIGTERM (some ffmpeg builds

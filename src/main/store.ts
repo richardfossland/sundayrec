@@ -315,6 +315,17 @@ export function importProfile(json: string): boolean {
     if (typeof profile.autoDeleteDays       === 'number') profile.autoDeleteDays       = clampNum(profile.autoDeleteDays,       0, 3650, 0)
     if (typeof profile.emailSmtpPort        === 'number') profile.emailSmtpPort        = clampNum(profile.emailSmtpPort,        1, 65535, 587)
 
+    // Stream-keys are encrypted with the system keychain and can NOT be
+    // migrated between machines. Strip `hasKey` flag from imported
+    // destinations so the UI prompts the user to re-paste keys, instead of
+    // showing "•••••• Saved" for a key that doesn't exist on this machine.
+    if (Array.isArray(profile.streamDestinations)) {
+      profile.streamDestinations = profile.streamDestinations.map(d => ({
+        ...d,
+        hasKey: false,
+      }))
+    }
+
     const { recordingHistory, activeRecovery, emailSmtpPassEnc, emailSmtpPassSet, emailSmtpPass, ...safe } = profile
     Object.entries(safe).forEach(([k, v]) => store.set(k as keyof Settings, v as never))
     if (emailSmtpPass) setSmtpPassword(emailSmtpPass)

@@ -4,7 +4,7 @@
 
 Denne siden forklarer i klartekst — uten juridisk språk — hva SundayRec lagrer, hvor det lagres, og hva som eventuelt sendes ut av huset.
 
-Sist oppdatert: 25. mai 2026 · Versjon 4.30.1.
+Sist oppdatert: 26. mai 2026 · Versjon 4.38.1.
 
 ---
 
@@ -14,7 +14,9 @@ Sist oppdatert: 25. mai 2026 · Versjon 4.30.1.
 - **Opptakene ligger lokalt** på maskinen, der dere selv velger. Filene tilhører menigheten — fullstendig.
 - **Hvis dere kobler til Google Drive eller Dropbox**, går opptakene til *deres egen* konto. Vi ser dem aldri.
 - **Vi samler ikke inn statistikk, analyser eller telemetri.** Appen prøver ikke å "ringe hjem" når dere bruker den. Den eneste utgående trafikken er sjekk for nye versjoner.
-- **Passord og innloggingstokens** krypteres med operativsystemets egen sikker-lagring (Keychain på Mac, DPAPI på Windows) før de skrives til disk.
+- **Passord, innloggingstokens og stream-keys** krypteres med operativsystemets egen sikker-lagring (Keychain på Mac, DPAPI på Windows) før de skrives til disk.
+- **AI-transkripsjon kjører lokalt.** Whisper-modellen lastes ned én gang fra Hugging Face og kjører deretter helt på din maskin. Innhold fra prekene-opptak forlater aldri datamaskinen.
+- **Live-streaming kjører lokalt.** SundayRec encoder direkte med ffmpeg til RTMP-URL-en du oppgir (typisk YouTube eller Facebook). Vi ser ikke video- eller lyd-data; vi har ikke noe mellomledd.
 
 ---
 
@@ -30,9 +32,13 @@ SundayRec lagrer all sin egen data i programdatamappen:
 I denne mappen finner du:
 
 - **`config.json`** — innstillingene dine: lydkilde, tidsplan, lagringsmappe, språk, mastering-preset osv.
-- **`sundayrec-cloud.json`** — kryptert lagring av OAuth-tokens for Google Drive og Dropbox. Tokenene er kryptert med operativsystemets egen sikker-lagring og kan ikke leses uten din egen brukerkonto.
+- **`sundayrec-cloud.json`** — kryptert lagring av OAuth-tokens for Google Drive, Dropbox og YouTube. Tokenene er kryptert med operativsystemets egen sikker-lagring og kan ikke leses uten din egen brukerkonto.
+- **`sundayrec-stream-keys.json`** — kryptert lagring av RTMP stream-keys for live-sending (YouTube/Facebook/egen server). Krypteres med samme system-mekanisme som OAuth-tokens.
+- **`whisper-models/`** — AI-modeller for lokal transkripsjon (147 MB - 1.5 GB per modell). Lastes ned én gang fra Hugging Face når brukeren velger å aktivere transkripsjon. Modellene er filer du kan slette uten å miste data — kun nedlasten må gjøres på nytt.
+- **`live-preview/preview.jpg`** — én still-frame fra pågående direktesending, oppdatert hvert 2. sek. Slettes når streamen stopper.
 - **`logs/`** — vanlige programlogger (hvilke opptak som er startet, feilmeldinger osv.). Logger sendes **aldri** til oss eller noen tredjepart.
 - **`review-queue.json`** — hvilke opptak som venter på å bli gjennomgått.
+- **`<recording>.transcript.json`** (sidecar ved siden av lydfilen) — transkripsjon av en gitt fil, hvis brukeren har transkribert den. Ligger der lydfilen ligger; følger fila ved kopi/backup.
 
 Opptaksfilene selv lagres der **dere** har valgt under "Lagringsmappe" i innstillingene — typisk `Music`-mappen eller en USB-disk. Filene tilhører menigheten; SundayRec verken kopierer eller endrer dem uten at dere ber om det.
 
