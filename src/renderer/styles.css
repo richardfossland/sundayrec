@@ -1743,6 +1743,27 @@ body.platform-win32  #wake-instructions-win { display: block; }
 /* ── Editor page position context for overlay ───────────────────── */
 #page-editor { position: relative; }
 
+/* ── Auto-trim suggestion banner ─────────────────────────────────── */
+.editor-suggestion-banner {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 16px; border-radius: var(--rsm);
+  background: linear-gradient(90deg, rgba(240,187,71,.12), rgba(240,187,71,.05));
+  border: 1px solid rgba(240,187,71,.30);
+  margin: 8px 0 12px;
+}
+.editor-suggestion-icon { font-size: 22px; line-height: 1; flex-shrink: 0; }
+.editor-suggestion-body { flex: 1; min-width: 0; }
+.editor-suggestion-title {
+  font-weight: 700; font-size: 13px; color: var(--accent);
+  margin-bottom: 2px;
+}
+.editor-suggestion-detail {
+  font-size: 12px; color: var(--text2);
+}
+.editor-suggestion-actions {
+  display: flex; gap: 8px; flex-shrink: 0;
+}
+
 /* ── Editor remaining duration display ──────────────────────────── */
 .editor-remaining {
   display: flex; align-items: center; gap: 8px;

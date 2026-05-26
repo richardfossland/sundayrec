@@ -841,19 +841,10 @@ export async function exportVideoEdited(params: VideoExportParams): Promise<Edit
 
 // ── Segment detection ─────────────────────────────────────────────────────────
 //
-// Content-aware chapter detection via the audio-analysis module. Instead of
-// only finding silence pauses (the old behaviour), we classify every 100 ms
-// frame as speech / music / silence / mixed / unknown and group same-type
-// frames into chapters. This means a 90-minute service no longer collapses
-// into one "speech" block with breaks — sermon vs hymn vs prayer vs applause
-// are surfaced as separate segments.
-//
-// Backward compatibility: the IPC contract returns `{ start, end, duration,
-// label, type }`. We keep that exact shape so the renderer needs no changes.
-// The old code emitted type='sermon' | 'section'; the new code emits the
-// content types from audio-analysis ('speech', 'music', etc.) plus a special
-// 'sermon' marker for the longest speech segment so the existing UI badge
-// (★ for sermon) still lights up correctly.
+// Content-aware chapter detection via the audio-analysis module. We classify
+// every 100 ms frame as speech / music / silence / mixed / unknown and group
+// same-type frames into chapters. The renderer uses these to drive auto-trim
+// suggestions and segment-snapping when adjusting cuts.
 
 export interface AudioSegment {
   start:    number
@@ -865,43 +856,11 @@ export interface AudioSegment {
 
 export async function detectSegments(filePath: string): Promise<AudioSegment[]> {
   const segments = await analyzeAudio(filePath)
-
-  // Find the single longest speech segment that starts after the 5-minute
-  // mark — that's almost always the sermon in a church service (intro
-  // announcements end by then). Promote it to type='sermon' so the
-  // renderer's star-badge logic keeps working unchanged.
-  let sermonStart = -1
-  let sermonEnd   = -1
-  let longestSpeechDur = 0
-  for (const s of segments) {
-    if (s.type !== 'speech') continue
-    if (s.startSec < 300) continue
-    if (s.durationSec > longestSpeechDur) {
-      longestSpeechDur = s.durationSec
-      sermonStart = s.startSec
-      sermonEnd   = s.endSec
-    }
-  }
-  // Fallback: if no segment after 5 min, just pick the overall longest speech.
-  if (sermonStart < 0) {
-    for (const s of segments) {
-      if (s.type !== 'speech') continue
-      if (s.durationSec > longestSpeechDur) {
-        longestSpeechDur = s.durationSec
-        sermonStart = s.startSec
-        sermonEnd   = s.endSec
-      }
-    }
-  }
-
-  return segments.map(s => {
-    const isSermon = s.startSec === sermonStart && s.endSec === sermonEnd && s.type === 'speech'
-    return {
-      start:    s.startSec,
-      end:      s.endSec,
-      duration: s.durationSec,
-      label:    isSermon ? 'Preken' : s.label,
-      type:     isSermon ? 'sermon' : s.type,
-    }
-  })
+  return segments.map(s => ({
+    start:    s.startSec,
+    end:      s.endSec,
+    duration: s.durationSec,
+    label:    s.label,
+    type:     s.type,
+  }))
 }
