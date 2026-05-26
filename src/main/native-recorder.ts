@@ -454,13 +454,21 @@ async function _resolveVideoInputImpl(
 export async function resolveVideoInput(
   opts: { videoDeviceName?: string | null; videoDeviceIndex?: number | null }
 ): Promise<{ format: string; device: string; resolvedName: string } | null> {
-  return Promise.race([
-    _resolveVideoInputImpl(opts),
-    new Promise<null>(resolve => setTimeout(() => {
+  // Cancel the timeout when the impl resolves first — otherwise the setTimeout
+  // ref keeps the event loop alive for the remaining 5s after a fast resolve,
+  // showing up in profilers as a phantom "active handle".
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const timeoutPromise = new Promise<null>(resolve => {
+    timer = setTimeout(() => {
       console.warn('[native-recorder] resolveVideoInput timed out after 5s')
       resolve(null)
-    }, 5000))
-  ])
+    }, 5000)
+  })
+  try {
+    return await Promise.race([_resolveVideoInputImpl(opts), timeoutPromise])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }
 
 // ── Audio filter chain ──────────────────────────────────────────────────────

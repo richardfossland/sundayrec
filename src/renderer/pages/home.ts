@@ -338,7 +338,13 @@ function showBackendWarning(msg: string, severity: 'warn' | 'error'): void {
   }
 
   if (severity === 'warn') {
-    const tid = setTimeout(() => toast.remove(), 8000)
+    const tid = setTimeout(() => {
+      toast.remove()
+      // Remove fired timer from the bookkeeping array so it doesn't grow
+      // unbounded as warnings accumulate over a long session.
+      const idx = _backendWarningTimers.indexOf(tid)
+      if (idx >= 0) _backendWarningTimers.splice(idx, 1)
+    }, 8000)
     _backendWarningTimers.push(tid)
   }
   // 'error' stays until dismissed
