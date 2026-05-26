@@ -236,7 +236,12 @@
     "flowWake": "Wakes 10 min early",
     "flowRecord": "Recording starts",
     "wakeScheduledLabel": "SCHEDULED WAKE-UPS",
-    "sysSettingsLabel": "SYSTEM SETTINGS"
+    "sysSettingsLabel": "SYSTEM SETTINGS",
+    "platformMacArm": "Apple Silicon Mac (M-series) — can wake from sleep, not from shutdown",
+    "platformMacIntel": "Intel Mac — can wake from sleep and shutdown (manual activation required for the latter)",
+    "platformWin": "Windows — can wake from sleep; cold-start from full shutdown requires BIOS configuration",
+    "platformLinux": "Linux — automatic wake is not supported",
+    "platformOther": "Platform not supported for automatic wake"
   },
   "wake": {
     "reliability": {
@@ -758,6 +763,26 @@
     "language": "LANGUAGE",
     "regenerateFeed": "Generate feed now",
     "podcastIntro": "Automatically generates an RSS feed after each recording. Send the feed URL once to Spotify for Podcasters and Apple Podcasts Connect — new services appear by themselves.",
-    "feedUrlLabel": "FEED URL — send this to Spotify and Apple Podcasts"
+    "feedUrlLabel": "FEED URL — send this to Spotify and Apple Podcasts",
+    "queueEmpty": "No pending cloud uploads.",
+    "queueTitle": "Cloud uploads in queue",
+    "queueNextAttempt": "Next attempt",
+    "queueAttempts": "Attempts",
+    "queueError": "Error",
+    "queueRetry": "Retry now",
+    "queueRemove": "Remove",
+    "queueStatusUploading": "Uploading",
+    "queueStatusFailed": "Failed",
+    "queueStatusReauth": "Sign in",
+    "queueStatusPending": "Pending",
+    "pickFolderTitle": "Choose folder",
+    "loading": "Loading…",
+    "episodeSingular": "episode",
+    "episodePlural": "episodes",
+    "published": "published",
+    "errConnectFirst": "connect to the cloud service first",
+    "errPickFolderFirst": "choose a save folder first",
+    "errEnablePodcast": "enable podcast first",
+    "errUnknown": "unknown error"
   }
 }

@@ -1,5 +1,6 @@
 import { settings, patchSettings } from '../state'
 import { flashSaved } from '../helpers'
+import { t } from '../i18n'
 import type { CloudServiceId, CloudServiceSettings, CloudStatus, CloudQueueStatus } from '../../types'
 
 type ServiceStatus = Record<CloudServiceId, CloudStatus>
@@ -250,56 +251,51 @@ function renderQueue(q: CloudQueueStatus): void {
   if (!panel) {
     panel = document.createElement('div')
     panel.id = 'cloud-queue-panel'
-    panel.style.cssText = 'margin-top:16px;padding:12px;background:#1a1f25;border-radius:8px'
+    panel.className = 'cloud-queue-panel'
     // Anchor lives inside Settings → Filer (sky-backup-kortet). Fallback til body.
     const cloudSection = document.querySelector('#cloud-queue-anchor') ?? document.body
     cloudSection.appendChild(panel)
   }
 
   if (q.entries.length === 0) {
-    panel.innerHTML = '<div style="color:var(--text3);font-size:12px">Ingen ventende skyopplastinger.</div>'
+    panel.innerHTML = `<div class="cloud-queue-empty">${t('publish.queueEmpty', 'Ingen ventende skyopplastinger.')}</div>`
     return
   }
 
-  panel.innerHTML = '<h3 style="margin:0 0 8px 0;font-size:14px">Skyopplastinger i kø</h3>'
+  panel.innerHTML = `<h3 class="cloud-queue-title">${t('publish.queueTitle', 'Skyopplastinger i kø')}</h3>`
   const list = document.createElement('div')
-  list.style.cssText = 'display:flex;flex-direction:column;gap:6px'
+  list.className = 'cloud-queue-list'
 
   for (const e of q.entries) {
     const row = document.createElement('div')
-    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px;background:#252b34;border-radius:6px;font-size:12px'
+    row.className = 'cloud-queue-row'
 
     const statusBadge = document.createElement('span')
-    const badgeStyle = e.status === 'uploading' ? 'background:#1f5b3a;color:#d0ffd0'
-                    : e.status === 'failed'    ? 'background:#5b1f1f;color:#ffd0d0'
-                    : e.status === 'reauth-required' ? 'background:#5b3f1f;color:#ffe0c0'
-                    : 'background:#3a3f4a;color:#ccc'
-    statusBadge.style.cssText = `padding:2px 6px;border-radius:4px;font-size:10px;text-transform:uppercase;${badgeStyle}`
+    statusBadge.className = `cloud-queue-badge cloud-queue-badge-${e.status}`
     statusBadge.textContent = labelForStatus(e.status)
     row.appendChild(statusBadge)
 
     const meta = document.createElement('div')
-    meta.style.cssText = 'flex:1;display:flex;flex-direction:column'
+    meta.className = 'cloud-queue-meta'
     const line1 = document.createElement('div')
     line1.textContent = `${SERVICE_NAMES[e.service]} — ${e.filename}`
-    line1.style.cssText = 'font-weight:500'
+    line1.className = 'cloud-queue-line1'
     const line2 = document.createElement('div')
-    line2.style.cssText = 'color:var(--text3);font-size:11px'
+    line2.className = 'cloud-queue-line2'
     const nextStr = e.nextAttempt > Date.now()
-      ? `Neste forsøk: ${new Date(e.nextAttempt).toLocaleTimeString('no')}`
+      ? `${t('publish.queueNextAttempt', 'Neste forsøk')}: ${new Date(e.nextAttempt).toLocaleTimeString()}`
       : ''
     line2.textContent = [
-      `Forsøk: ${e.attempts}`,
+      `${t('publish.queueAttempts', 'Forsøk')}: ${e.attempts}`,
       nextStr,
-      e.lastError ? `Feil: ${e.lastError}` : '',
+      e.lastError ? `${t('publish.queueError', 'Feil')}: ${e.lastError}` : '',
     ].filter(Boolean).join(' · ')
     meta.append(line1, line2)
     row.appendChild(meta)
 
     const retryBtn = document.createElement('button')
-    retryBtn.textContent = 'Prøv nå'
-    retryBtn.className = 'btn'
-    retryBtn.style.cssText = 'padding:4px 10px;font-size:11px'
+    retryBtn.textContent = t('publish.queueRetry', 'Prøv nå')
+    retryBtn.className = 'btn-secondary btn-sm cloud-queue-retry'
     retryBtn.addEventListener('click', async () => {
       await window.api.cloudQueueRetry(e.id)
       refreshQueue()
@@ -307,9 +303,8 @@ function renderQueue(q: CloudQueueStatus): void {
     row.appendChild(retryBtn)
 
     const removeBtn = document.createElement('button')
-    removeBtn.textContent = 'Fjern'
-    removeBtn.className = 'btn'
-    removeBtn.style.cssText = 'padding:4px 10px;font-size:11px;background:transparent;color:var(--red,#e87878);border:1px solid var(--red,#e87878)'
+    removeBtn.textContent = t('publish.queueRemove', 'Fjern')
+    removeBtn.className = 'btn-ghost btn-sm cloud-queue-remove'
     removeBtn.addEventListener('click', async () => {
       await window.api.cloudQueueRemove(e.id)
       refreshQueue()
@@ -323,10 +318,10 @@ function renderQueue(q: CloudQueueStatus): void {
 
 function labelForStatus(s: CloudQueueStatus['entries'][number]['status']): string {
   switch (s) {
-    case 'uploading':       return 'Laster opp'
-    case 'failed':          return 'Mislyktes'
-    case 'reauth-required': return 'Logg inn'
-    default:                return 'Venter'
+    case 'uploading':       return t('publish.queueStatusUploading', 'Laster opp')
+    case 'failed':          return t('publish.queueStatusFailed',    'Mislyktes')
+    case 'reauth-required': return t('publish.queueStatusReauth',    'Logg inn')
+    default:                return t('publish.queueStatusPending',   'Venter')
   }
 }
 
@@ -336,8 +331,8 @@ async function openFolderPicker(service: CloudServiceId): Promise<void> {
   const title = document.getElementById('cloud-folder-modal-title')
   if (!modal || !list || !title) return
 
-  title.textContent = `Velg mappe — ${SERVICE_NAMES[service]}`
-  list.innerHTML = '<div style="padding:16px;color:var(--text3)">Laster…</div>'
+  title.textContent = `${t('publish.pickFolderTitle', 'Velg mappe')} — ${SERVICE_NAMES[service]}`
+  list.innerHTML = `<div class="cloud-folder-loading">${t('publish.loading', 'Laster…')}</div>`
   modal.style.display = 'flex'
 
   try {

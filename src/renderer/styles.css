@@ -1790,6 +1790,37 @@ body.platform-win32  #wake-instructions-win { display: block; }
 /* Podcast feed-URL "send to Spotify" label */
 .feed-url-label { font-size: 12px; color: #7fc488; margin-bottom: 4px; font-weight: 600; }
 
+/* Cloud-upload-queue panel — pending uploads list under Settings → Filer */
+.cloud-queue-panel {
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--surface2);
+  border-radius: 8px;
+}
+.cloud-queue-empty { color: var(--text3); font-size: 12px; }
+.cloud-queue-title { margin: 0 0 8px 0; font-size: 14px; }
+.cloud-queue-list  { display: flex; flex-direction: column; gap: 6px; }
+.cloud-queue-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px;
+  background: var(--surface);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.cloud-queue-badge {
+  padding: 2px 6px; border-radius: 4px;
+  font-size: 10px; text-transform: uppercase;
+}
+.cloud-queue-badge-uploading       { background: #1f5b3a; color: #d0ffd0; }
+.cloud-queue-badge-failed          { background: #5b1f1f; color: #ffd0d0; }
+.cloud-queue-badge-reauth-required { background: #5b3f1f; color: #ffe0c0; }
+.cloud-queue-badge-pending,
+.cloud-queue-badge-queued          { background: #3a3f4a; color: #ccc; }
+.cloud-queue-meta  { flex: 1; display: flex; flex-direction: column; }
+.cloud-queue-line1 { font-weight: 500; }
+.cloud-queue-line2 { color: var(--text3); font-size: 11px; }
+.cloud-folder-loading { padding: 16px; color: var(--text3); }
+
 /* Review-queue card on Home — items awaiting publish review */
 .review-queue-card {
   background: linear-gradient(135deg, rgba(122,170,255,.08), rgba(127,196,136,.06));

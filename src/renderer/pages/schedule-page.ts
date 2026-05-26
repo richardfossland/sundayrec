@@ -176,12 +176,16 @@ export function setupSchedulePage(): void {
 
 // ── Wake-reliability helpers ────────────────────────────────────────────────
 
-const PLATFORM_LABELS: Record<string, string> = {
-  'mac-arm':   'Apple Silicon-Mac (M-serie) — kan vekkes fra dvale, ikke fra avslått',
-  'mac-intel': 'Intel Mac — kan vekkes fra dvale og avslått (krever manuell aktivering for sistnevnte)',
-  'win':       'Windows — kan vekkes fra dvale; oppstart fra fullstendig avslått krever BIOS-konfig',
-  'linux':     'Linux — automatisk wake støttes ikke',
-  'other':     'Plattform støttes ikke for automatisk wake',
+function platformLabel(key: string): string {
+  // Use t() so labels follow current language. Fallbacks preserve Norwegian
+  // wording for the legacy build where translations haven't loaded yet.
+  switch (key) {
+    case 'mac-arm':   return t('schedule.platformMacArm',   'Apple Silicon-Mac (M-serie) — kan vekkes fra dvale, ikke fra avslått')
+    case 'mac-intel': return t('schedule.platformMacIntel', 'Intel Mac — kan vekkes fra dvale og avslått (krever manuell aktivering for sistnevnte)')
+    case 'win':       return t('schedule.platformWin',      'Windows — kan vekkes fra dvale; oppstart fra fullstendig avslått krever BIOS-konfig')
+    case 'linux':     return t('schedule.platformLinux',    'Linux — automatisk wake støttes ikke')
+    default:          return t('schedule.platformOther',    'Plattform støttes ikke for automatisk wake')
+  }
 }
 
 async function onTestWakeClick(): Promise<void> {
@@ -223,7 +227,7 @@ async function refreshWakeReliability(): Promise<void> {
 
     // Capability summary
     const capText = document.getElementById('wake-capability-text')
-    if (capText) capText.textContent = PLATFORM_LABELS[caps.platform] ?? caps.platform
+    if (capText) capText.textContent = platformLabel(caps.platform) || caps.platform
     const issuesEl = document.getElementById('wake-capability-issues')
     if (issuesEl) {
       if (caps.knownIssues.length > 0) {

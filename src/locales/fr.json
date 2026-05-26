@@ -236,7 +236,12 @@
     "flowWake": "Réveil 10 min avant",
     "flowRecord": "L’enregistrement démarre",
     "wakeScheduledLabel": "RÉVEILS PLANIFIÉS",
-    "sysSettingsLabel": "RÉGLAGES SYSTÈME"
+    "sysSettingsLabel": "RÉGLAGES SYSTÈME",
+    "platformMacArm": "Mac Apple Silicon (série M) — peut sortir de veille, mais pas d’extinction",
+    "platformMacIntel": "Mac Intel — peut sortir de veille et d’extinction (activation manuelle requise)",
+    "platformWin": "Windows — peut sortir de veille ; un démarrage à froid nécessite une configuration BIOS",
+    "platformLinux": "Linux — le réveil automatique n’est pas pris en charge",
+    "platformOther": "Plateforme non prise en charge pour le réveil automatique"
   },
   "wake": {
     "reliability": {
@@ -758,6 +763,26 @@
     "language": "LANGUE",
     "regenerateFeed": "Générer le flux maintenant",
     "podcastIntro": "Génère automatiquement un flux RSS après chaque enregistrement. Envoyez l’URL du flux une fois à Spotify for Podcasters et Apple Podcasts Connect — les nouveaux services apparaissent automatiquement.",
-    "feedUrlLabel": "URL DU FLUX — envoyez-la à Spotify et Apple Podcasts"
+    "feedUrlLabel": "URL DU FLUX — envoyez-la à Spotify et Apple Podcasts",
+    "queueEmpty": "Aucun téléversement cloud en attente.",
+    "queueTitle": "Téléversements cloud en file d’attente",
+    "queueNextAttempt": "Prochaine tentative",
+    "queueAttempts": "Tentatives",
+    "queueError": "Erreur",
+    "queueRetry": "Réessayer",
+    "queueRemove": "Retirer",
+    "queueStatusUploading": "En cours",
+    "queueStatusFailed": "Échoué",
+    "queueStatusReauth": "Connexion",
+    "queueStatusPending": "En attente",
+    "pickFolderTitle": "Choisir un dossier",
+    "loading": "Chargement…",
+    "episodeSingular": "épisode",
+    "episodePlural": "épisodes",
+    "published": "publié",
+    "errConnectFirst": "connectez d’abord le service cloud",
+    "errPickFolderFirst": "choisissez d’abord un dossier d’enregistrement",
+    "errEnablePodcast": "activez d’abord le podcast",
+    "errUnknown": "erreur inconnue"
   }
 }

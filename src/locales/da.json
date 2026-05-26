@@ -236,7 +236,12 @@
     "flowWake": "Vækkes 10 min. før",
     "flowRecord": "Optagelse starter",
     "wakeScheduledLabel": "PLANLAGTE OPVÅGNINGER",
-    "sysSettingsLabel": "SYSTEMINDSTILLINGER"
+    "sysSettingsLabel": "SYSTEMINDSTILLINGER",
+    "platformMacArm": "Apple Silicon-Mac (M-serien) — kan vækkes fra dvale, ikke fra slukket",
+    "platformMacIntel": "Intel Mac — kan vækkes fra dvale og slukket (manuel aktivering kræves for sidstnævnte)",
+    "platformWin": "Windows — kan vækkes fra dvale; opstart fra helt slukket kræver BIOS-konfig",
+    "platformLinux": "Linux — automatisk wake understøttes ikke",
+    "platformOther": "Platformen understøttes ikke til automatisk wake"
   },
   "wake": {
     "reliability": {
@@ -758,6 +763,26 @@
     "language": "SPROG",
     "regenerateFeed": "Generer feed nu",
     "podcastIntro": "Genererer automatisk en RSS-feed efter hver optagelse. Send feed-URL’en én gang til Spotify for Podcasters og Apple Podcasts Connect — nye gudstjenester dukker op af sig selv.",
-    "feedUrlLabel": "FEED-URL — send denne til Spotify og Apple Podcasts"
+    "feedUrlLabel": "FEED-URL — send denne til Spotify og Apple Podcasts",
+    "queueEmpty": "Ingen ventende skyuploads.",
+    "queueTitle": "Skyuploads i kø",
+    "queueNextAttempt": "Næste forsøg",
+    "queueAttempts": "Forsøg",
+    "queueError": "Fejl",
+    "queueRetry": "Prøv nu",
+    "queueRemove": "Fjern",
+    "queueStatusUploading": "Uploader",
+    "queueStatusFailed": "Mislykkedes",
+    "queueStatusReauth": "Log ind",
+    "queueStatusPending": "Venter",
+    "pickFolderTitle": "Vælg mappe",
+    "loading": "Indlæser…",
+    "episodeSingular": "episode",
+    "episodePlural": "episoder",
+    "published": "udgivet",
+    "errConnectFirst": "forbind til skytjenesten først",
+    "errPickFolderFirst": "vælg lagringsmappe først",
+    "errEnablePodcast": "aktivér podcast først",
+    "errUnknown": "ukendt fejl"
   }
 }

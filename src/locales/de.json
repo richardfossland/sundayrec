@@ -236,7 +236,12 @@
     "flowWake": "Wird 10 Min. vorher geweckt",
     "flowRecord": "Aufnahme startet",
     "wakeScheduledLabel": "GEPLANTE AUFWECKZEITEN",
-    "sysSettingsLabel": "SYSTEMEINSTELLUNGEN"
+    "sysSettingsLabel": "SYSTEMEINSTELLUNGEN",
+    "platformMacArm": "Apple Silicon Mac (M-Serie) — kann aus Ruhezustand aufgeweckt werden, nicht aus ausgeschaltetem Zustand",
+    "platformMacIntel": "Intel Mac — kann aus Ruhezustand und aus ausgeschaltetem Zustand aufgeweckt werden (manuelle Aktivierung erforderlich)",
+    "platformWin": "Windows — kann aus Ruhezustand aufgeweckt werden; Kaltstart aus vollständig ausgeschaltetem Zustand erfordert BIOS-Konfiguration",
+    "platformLinux": "Linux — automatisches Aufwachen wird nicht unterstützt",
+    "platformOther": "Plattform wird für automatisches Aufwachen nicht unterstützt"
   },
   "wake": {
     "reliability": {
@@ -758,6 +763,26 @@
     "language": "SPRACHE",
     "regenerateFeed": "Feed jetzt generieren",
     "podcastIntro": "Generiert nach jeder Aufnahme automatisch einen RSS-Feed. Senden Sie die Feed-URL einmal an Spotify for Podcasters und Apple Podcasts Connect — neue Gottesdienste erscheinen automatisch.",
-    "feedUrlLabel": "FEED-URL — diese an Spotify und Apple Podcasts senden"
+    "feedUrlLabel": "FEED-URL — diese an Spotify und Apple Podcasts senden",
+    "queueEmpty": "Keine ausstehenden Cloud-Uploads.",
+    "queueTitle": "Cloud-Uploads in Warteschlange",
+    "queueNextAttempt": "Nächster Versuch",
+    "queueAttempts": "Versuche",
+    "queueError": "Fehler",
+    "queueRetry": "Jetzt erneut versuchen",
+    "queueRemove": "Entfernen",
+    "queueStatusUploading": "Lädt hoch",
+    "queueStatusFailed": "Fehlgeschlagen",
+    "queueStatusReauth": "Anmelden",
+    "queueStatusPending": "Wartet",
+    "pickFolderTitle": "Ordner wählen",
+    "loading": "Lädt…",
+    "episodeSingular": "Episode",
+    "episodePlural": "Episoden",
+    "published": "veröffentlicht",
+    "errConnectFirst": "zuerst mit Cloud-Dienst verbinden",
+    "errPickFolderFirst": "zuerst Speicherordner wählen",
+    "errEnablePodcast": "zuerst Podcast aktivieren",
+    "errUnknown": "unbekannter Fehler"
   }
 }

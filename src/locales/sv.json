@@ -236,7 +236,12 @@
     "flowWake": "Väcks 10 min innan",
     "flowRecord": "Inspelning startar",
     "wakeScheduledLabel": "SCHEMALAGDA VÄCKNINGAR",
-    "sysSettingsLabel": "SYSTEMINSTÄLLNINGAR"
+    "sysSettingsLabel": "SYSTEMINSTÄLLNINGAR",
+    "platformMacArm": "Apple Silicon-Mac (M-serien) — kan väckas från viloläge, inte från avstängt",
+    "platformMacIntel": "Intel Mac — kan väckas från viloläge och avstängt läge (manuell aktivering krävs för det sistnämnda)",
+    "platformWin": "Windows — kan väckas från viloläge; uppstart från helt avstängt kräver BIOS-konfig",
+    "platformLinux": "Linux — automatisk uppvakning stöds inte",
+    "platformOther": "Plattformen stöds inte för automatisk uppvakning"
   },
   "wake": {
     "reliability": {
@@ -758,6 +763,26 @@
     "language": "SPRÅK",
     "regenerateFeed": "Generera feed nu",
     "podcastIntro": "Genererar automatiskt en RSS-feed efter varje inspelning. Skicka feed-URL:en en gång till Spotify for Podcasters och Apple Podcasts Connect — nya gudstjänster dyker upp av sig själva.",
-    "feedUrlLabel": "FEED-URL — skicka denna till Spotify och Apple Podcasts"
+    "feedUrlLabel": "FEED-URL — skicka denna till Spotify och Apple Podcasts",
+    "queueEmpty": "Inga väntande molnuppladdningar.",
+    "queueTitle": "Molnuppladdningar i kö",
+    "queueNextAttempt": "Nästa försök",
+    "queueAttempts": "Försök",
+    "queueError": "Fel",
+    "queueRetry": "Försök igen",
+    "queueRemove": "Ta bort",
+    "queueStatusUploading": "Laddar upp",
+    "queueStatusFailed": "Misslyckades",
+    "queueStatusReauth": "Logga in",
+    "queueStatusPending": "Väntar",
+    "pickFolderTitle": "Välj mapp",
+    "loading": "Laddar…",
+    "episodeSingular": "avsnitt",
+    "episodePlural": "avsnitt",
+    "published": "publicerad",
+    "errConnectFirst": "anslut till molntjänsten först",
+    "errPickFolderFirst": "välj lagringsmapp först",
+    "errEnablePodcast": "aktivera podd först",
+    "errUnknown": "okänt fel"
   }
 }

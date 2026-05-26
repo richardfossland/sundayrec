@@ -236,7 +236,12 @@
     "flowWake": "Wybudzenie 10 min wcześniej",
     "flowRecord": "Start nagrania",
     "wakeScheduledLabel": "ZAPLANOWANE WYBUDZENIA",
-    "sysSettingsLabel": "USTAWIENIA SYSTEMU"
+    "sysSettingsLabel": "USTAWIENIA SYSTEMU",
+    "platformMacArm": "Apple Silicon Mac (seria M) — można wybudzić z uśpienia, ale nie z wyłączenia",
+    "platformMacIntel": "Intel Mac — można wybudzić z uśpienia i wyłączenia (wymaga ręcznej aktywacji)",
+    "platformWin": "Windows — można wybudzić z uśpienia; uruchomienie z pełnego wyłączenia wymaga konfiguracji BIOS",
+    "platformLinux": "Linux — automatyczne wybudzanie nie jest obsługiwane",
+    "platformOther": "Platforma nieobsługiwana dla automatycznego wybudzania"
   },
   "wake": {
     "reliability": {
@@ -758,6 +763,26 @@
     "language": "JĘZYK",
     "regenerateFeed": "Wygeneruj feed teraz",
     "podcastIntro": "Automatycznie generuje feed RSS po każdym nagraniu. Wyślij URL feeda raz do Spotify for Podcasters i Apple Podcasts Connect — nowe nabożeństwa pojawią się same.",
-    "feedUrlLabel": "URL FEEDA — wyślij go do Spotify i Apple Podcasts"
+    "feedUrlLabel": "URL FEEDA — wyślij go do Spotify i Apple Podcasts",
+    "queueEmpty": "Brak oczekujących uploadów do chmury.",
+    "queueTitle": "Uploady do chmury w kolejce",
+    "queueNextAttempt": "Następna próba",
+    "queueAttempts": "Próby",
+    "queueError": "Błąd",
+    "queueRetry": "Spróbuj teraz",
+    "queueRemove": "Usuń",
+    "queueStatusUploading": "Wgrywanie",
+    "queueStatusFailed": "Nieudane",
+    "queueStatusReauth": "Zaloguj",
+    "queueStatusPending": "Oczekuje",
+    "pickFolderTitle": "Wybierz folder",
+    "loading": "Wczytywanie…",
+    "episodeSingular": "odcinek",
+    "episodePlural": "odcinków",
+    "published": "opublikowane",
+    "errConnectFirst": "najpierw połącz z usługą chmurową",
+    "errPickFolderFirst": "najpierw wybierz folder zapisu",
+    "errEnablePodcast": "najpierw włącz podcast",
+    "errUnknown": "nieznany błąd"
   }
 }

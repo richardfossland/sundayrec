@@ -1,6 +1,7 @@
 import { settings, patchSettings } from '../state'
 import type { FileFormat, FilenamePattern, PodcastSettings } from '../../types'
 import { flashSaved, setVal, setRadio, isoDate, setupDirtyBar } from '../helpers'
+import { t } from '../i18n'
 import { getChurchHolidays } from '../../shared/church-calendar'
 import { t } from '../i18n'
 
@@ -117,16 +118,20 @@ export function setupFilesPage(): void {
       const service = (document.getElementById('podcast-service') as HTMLSelectElement | null)?.value ?? 'google-drive'
       const result  = await window.api.podcastRegenerate(service)
       if (result.ok) {
-        status.textContent = `✓ ${result.episodeCount} episode${result.episodeCount === 1 ? '' : 'r'} publisert`
+        const count = result.episodeCount
+        const epWord = count === 1
+          ? t('publish.episodeSingular', 'episode')
+          : t('publish.episodePlural', 'episoder')
+        status.textContent = `✓ ${count} ${epWord} ${t('publish.published', 'publisert')}`
         if (result.feedUrl) {
           settings.podcast = { ...(settings.podcast ?? {} as PodcastSettings), feedUrl: result.feedUrl }
           showFeedUrl(result.feedUrl)
         }
       } else {
-        const reason = result.error === 'not_connected' ? 'koble til skytjenesten først'
-                     : result.error === 'no_save_folder' ? 'velg lagringsmappe først'
-                     : result.error === 'podcast_disabled' ? 'aktiver podcast først'
-                     : result.error ?? 'ukjent feil'
+        const reason = result.error === 'not_connected'    ? t('publish.errConnectFirst',    'koble til skytjenesten først')
+                     : result.error === 'no_save_folder'   ? t('publish.errPickFolderFirst', 'velg lagringsmappe først')
+                     : result.error === 'podcast_disabled' ? t('publish.errEnablePodcast',   'aktiver podcast først')
+                     : result.error ?? t('publish.errUnknown', 'ukjent feil')
         status.textContent = `✕ ${reason}`
       }
     } catch (err) {
