@@ -505,8 +505,21 @@ export interface ExtractAudioResult {
 export async function extractAudioForPeaks(filePath: string): Promise<ExtractAudioResult | null> {
   if (!fs.existsSync(filePath)) return null
 
+  // Stream WAV output to a temp file instead of accumulating in memory.
+  //
+  // The old implementation collected stdout chunks in an array and called
+  // Buffer.concat() at the end. For a 3-hour service that produced ~170 MB
+  // of WAV, the concat allocated a second 170 MB buffer while the chunk
+  // array was still live — ~340 MB transient peak, with V8 heap
+  // fragmentation from thousands of small Buffer objects.
+  //
+  // Writing directly to disk keeps process memory at a small ffmpeg-internal
+  // buffer (~64 KB) during extraction. readFile at the end produces a single
+  // Buffer allocation of the file's actual size — half the previous peak,
+  // no fragmentation.
+  const tempPath = path.join(os.tmpdir(), `sundayrec-peaks-${Date.now()}-${Math.random().toString(36).slice(2)}.wav`)
+
   return new Promise(resolve => {
-    const chunks: Buffer[] = []
     let stderr = ''
 
     const proc = spawn(ffmpegBin, [
@@ -516,29 +529,38 @@ export async function extractAudioForPeaks(filePath: string): Promise<ExtractAud
       '-ac',   '1',               // mono
       '-ar',   '8000',            // 8 kHz — enough for peaks, tiny in memory
       '-f',    'wav',
-      'pipe:1',                   // write WAV to stdout
-    ], { stdio: ['ignore', 'pipe', 'pipe'] })
+      '-y',    tempPath,
+    ], { stdio: ['ignore', 'ignore', 'pipe'] })
 
-    proc.stdout?.on('data', (d: Buffer) => chunks.push(d))
     proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-8192) })
 
-    // Safety kill after 2 min. Cleared on close to avoid keeping a timer
-    // reference alive for 2 minutes after every successful peaks extraction.
     const killTimer = setTimeout(() => { try { proc.kill('SIGTERM') } catch { /* already dead */ } }, 120_000)
 
-    proc.on('close', code => {
+    proc.on('close', async code => {
       clearTimeout(killTimer)
-      if (code !== 0 || chunks.length === 0) { resolve(null); return }
-      const data = Buffer.concat(chunks)
 
-      // Parse duration from ffmpeg stderr  e.g. "Duration: 01:23:45.67,"
-      let duration = 0
-      const m = stderr.match(/Duration:\s*(\d+):(\d+):([\d.]+)/)
-      if (m) {
-        duration = parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseFloat(m[3])
+      if (code !== 0) {
+        fs.promises.unlink(tempPath).catch(() => {})
+        resolve(null)
+        return
       }
 
-      resolve({ data, duration })
+      try {
+        const data = await fs.promises.readFile(tempPath)
+
+        // Parse duration from ffmpeg stderr  e.g. "Duration: 01:23:45.67,"
+        let duration = 0
+        const m = stderr.match(/Duration:\s*(\d+):(\d+):([\d.]+)/)
+        if (m) {
+          duration = parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseFloat(m[3])
+        }
+
+        resolve({ data, duration })
+      } catch {
+        resolve(null)
+      } finally {
+        fs.promises.unlink(tempPath).catch(() => {})
+      }
     })
   })
 }

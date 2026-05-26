@@ -421,7 +421,9 @@
     "behaviourTitle": "Zachowanie nagrywania",
     "behaviourDesc": "Dopracuj sposób uruchamiania, ochrony i dzielenia nagrania.",
     "whileRecording": "Podczas trwającego nagrania",
-    "fileBehaviour": "Pliki"
+    "fileBehaviour": "Pliki",
+    "deleteAfter": "Usuń po",
+    "days": "dniach"
   },
   "general": {
     "title": "Ogólne",
@@ -470,7 +472,8 @@
     "noClipSelected": "Nie wybrano pliku",
     "notifyStartDesc": "Wyświetlane jako powiadomienie systemowe, gdy rozpocznie się zaplanowana sesja.",
     "notifyStopDesc": "Kliknij powiadomienie, aby przejść bezpośrednio do pliku.",
-    "close": "Zamknij"
+    "close": "Zamknij",
+    "pickFile": "Wybierz plik…"
   },
   "editor": {
     "title": "Edytuj plik audio",

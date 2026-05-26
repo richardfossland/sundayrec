@@ -421,7 +421,9 @@
     "behaviourTitle": "Opptaksoppførsel",
     "behaviourDesc": "Finjuster hvordan opptaket starter, beskyttes og deles opp.",
     "whileRecording": "Mens et opptak går",
-    "fileBehaviour": "Filer"
+    "fileBehaviour": "Filer",
+    "deleteAfter": "Slett etter",
+    "days": "dager"
   },
   "general": {
     "title": "Generelt",
@@ -470,7 +472,8 @@
     "testEmailNoConfig": "Fyll inn SMTP-innstillinger",
     "askOpenEditor": "Spør om redigering etter opptak",
     "askOpenEditorDesc": "Vis varsel om å åpne filen i Rediger etter at opptaket er fullført",
-    "noClipSelected": "Ingen fil valgt"
+    "noClipSelected": "Ingen fil valgt",
+    "pickFile": "Velg fil…"
   },
   "editor": {
     "title": "Rediger lydfil",

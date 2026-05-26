@@ -1528,12 +1528,45 @@ const ALLOWED_VIDEO_EXTS = new Set(['.mp4', '.mov', '.mkv', '.m4v',
   '.avi', '.wmv', '.ts', '.mts', '.m2ts', '.flv', '.3gp', '.asf', '.f4v'])
 const ALLOWED_MEDIA_EXTS = new Set([...ALLOWED_AUDIO_EXTS, ...ALLOWED_VIDEO_EXTS])
 
+// Roots under which user media files are allowed to live. Anything outside
+// is treated as a path-traversal attempt (or a misconfigured request) and
+// rejected before it can reach ffmpeg/fs.
+//
+// We collect roots lazily — saveFolder may not be set at startup, and the
+// editor allows reading from any user-selected folder via the file picker
+// (Electron's dialog already enforces user consent there). The Documents
+// folder is a reasonable broad fallback for "user-selected via picker".
+function getAllowedMediaRoots(): string[] {
+  const roots: string[] = []
+  const saveFolder = store.get('saveFolder')
+  if (saveFolder) roots.push(path.resolve(saveFolder))
+  // app.getPath returns absolute paths to per-user folders Electron knows are safe.
+  try { roots.push(path.resolve(app.getPath('documents'))) } catch {}
+  try { roots.push(path.resolve(app.getPath('downloads'))) } catch {}
+  try { roots.push(path.resolve(app.getPath('desktop'))) } catch {}
+  try { roots.push(path.resolve(app.getPath('music'))) } catch {}
+  try { roots.push(path.resolve(app.getPath('videos'))) } catch {}
+  try { roots.push(path.resolve(app.getPath('temp'))) } catch {}
+  return roots
+}
+
+/** True if `child` is the same path as or a descendant of `parent`. Uses
+ *  path.relative to avoid string-prefix bugs (e.g. /foo/bar matching /foo/barr). */
+function isUnderRoot(child: string, parent: string): boolean {
+  const rel = path.relative(parent, child)
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
+}
+
 function isAllowedAudioPath(p: string): boolean {
-  return ALLOWED_AUDIO_EXTS.has(path.extname(p).toLowerCase())
+  if (!ALLOWED_AUDIO_EXTS.has(path.extname(p).toLowerCase())) return false
+  const resolved = path.resolve(p)
+  return getAllowedMediaRoots().some(r => isUnderRoot(resolved, r))
 }
 
 function isAllowedMediaPath(p: string): boolean {
-  return ALLOWED_MEDIA_EXTS.has(path.extname(p).toLowerCase())
+  if (!ALLOWED_MEDIA_EXTS.has(path.extname(p).toLowerCase())) return false
+  const resolved = path.resolve(p)
+  return getAllowedMediaRoots().some(r => isUnderRoot(resolved, r))
 }
 
 function sidecarPath(audioPath: string, suffix: string): string | null {

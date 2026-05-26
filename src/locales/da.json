@@ -421,7 +421,9 @@
     "behaviourTitle": "Optagelsesadfærd",
     "behaviourDesc": "Finjuster, hvordan optagelsen starter, beskyttes og opdeles.",
     "whileRecording": "Mens en optagelse kører",
-    "fileBehaviour": "Filer"
+    "fileBehaviour": "Filer",
+    "deleteAfter": "Slet efter",
+    "days": "dage"
   },
   "general": {
     "title": "Generelt",
@@ -470,7 +472,8 @@
     "noClipSelected": "Ingen fil valgt",
     "notifyStartDesc": "Vises som systemnotifikation når en planlagt optagelse starter.",
     "notifyStopDesc": "Klik på notifikationen for at gå direkte til filen.",
-    "close": "Luk"
+    "close": "Luk",
+    "pickFile": "Vælg fil…"
   },
   "editor": {
     "title": "Rediger lydfil",

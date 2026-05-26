@@ -421,7 +421,9 @@
     "behaviourTitle": "Inspelningsbeteende",
     "behaviourDesc": "Finjustera hur inspelningen startar, skyddas och delas upp.",
     "whileRecording": "Medan en inspelning pågår",
-    "fileBehaviour": "Filer"
+    "fileBehaviour": "Filer",
+    "deleteAfter": "Radera efter",
+    "days": "dagar"
   },
   "general": {
     "title": "Allmänt",
@@ -470,7 +472,8 @@
     "noClipSelected": "Ingen fil vald",
     "notifyStartDesc": "Visas som systemavisering när en planerad inspelning startar.",
     "notifyStopDesc": "Klicka på aviseringen för att gå direkt till filen.",
-    "close": "Stäng"
+    "close": "Stäng",
+    "pickFile": "Välj fil…"
   },
   "editor": {
     "title": "Redigera ljudfil",

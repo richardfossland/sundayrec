@@ -728,7 +728,7 @@
         <label class="form-label" data-i18n="files.saveTo">LAGRES I</label>
         <div class="folder-row">
           <input type="text" class="form-input" id="save-folder" readonly />
-          <button class="btn-secondary" id="btn-pick-folder" data-i18n="files.browse">Velg mappe</button>
+          <button class="btn-secondary" id="btn-pick-folder" data-i18n="files.browse">Velg mappe…</button>
         </div>
       </div>
       <div class="card">
@@ -797,12 +797,10 @@
           </div>
           <label class="toggle"><input type="checkbox" id="opt-auto-delete" /><span class="toggle-track"></span></label>
         </div>
-        <div id="auto-delete-days-row" style="display:none">
-          <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
-            <span style="font-size:13px;color:var(--text2)">Slett etter</span>
-            <input type="number" class="form-input" id="auto-delete-days" value="90" min="1" max="3650" style="max-width:80px" />
-            <span style="font-size:13px;color:var(--text2)">dager</span>
-          </div>
+        <div id="auto-delete-days-row" class="inline-field-row" style="display:none">
+          <span class="inline-field-label" data-i18n="files.deleteAfter">Slett etter</span>
+          <input type="number" class="form-input inline-field-input" id="auto-delete-days" value="90" min="1" max="3650" />
+          <span class="inline-field-label" data-i18n="files.days">dager</span>
         </div>
         <div class="toggle-row mt">
           <div>
@@ -941,7 +939,7 @@
                 <span data-i18n="publish.autoUpload">Last opp automatisk etter opptak</span>
               </label>
               <div style="display:flex;gap:6px;flex-wrap:wrap">
-                <button class="btn-secondary btn-sm" data-cloud-pick-folder="google-drive" data-i18n="publish.pickFolder">Velg mappe</button>
+                <button class="btn-secondary btn-sm" data-cloud-pick-folder="google-drive" data-i18n="publish.pickFolder">Velg mappe…</button>
                 <button class="btn-ghost" data-cloud-disconnect="google-drive" data-i18n="publish.disconnect">Koble fra</button>
               </div>
             </div>
@@ -971,7 +969,7 @@
                 <span data-i18n="publish.autoUpload">Last opp automatisk etter opptak</span>
               </label>
               <div style="display:flex;gap:6px;flex-wrap:wrap">
-                <button class="btn-secondary btn-sm" data-cloud-pick-folder="dropbox" data-i18n="publish.pickFolder">Velg mappe</button>
+                <button class="btn-secondary btn-sm" data-cloud-pick-folder="dropbox" data-i18n="publish.pickFolder">Velg mappe…</button>
                 <button class="btn-ghost" data-cloud-disconnect="dropbox" data-i18n="publish.disconnect">Koble fra</button>
               </div>
             </div>
@@ -1003,7 +1001,7 @@
                 <span data-i18n="publish.autoUpload">Last opp automatisk etter opptak</span>
               </label>
               <div style="display:flex;gap:6px;flex-wrap:wrap">
-                <button class="btn-secondary btn-sm" data-cloud-pick-folder="onedrive" data-i18n="publish.pickFolder">Velg mappe</button>
+                <button class="btn-secondary btn-sm" data-cloud-pick-folder="onedrive" data-i18n="publish.pickFolder">Velg mappe…</button>
                 <button class="btn-ghost" data-cloud-disconnect="onedrive" data-i18n="publish.disconnect">Koble fra</button>
               </div>
             </div>
@@ -1129,7 +1127,7 @@
                 <label class="form-label" for="podcast-default-intro">STANDARD INTRO-JINGLE</label>
                 <div style="display:flex;gap:6px">
                   <input type="text" class="form-input" id="podcast-default-intro" readonly style="flex:1;font-size:12px" placeholder="(ingen)">
-                  <button class="btn-secondary btn-sm" id="btn-podcast-pick-intro">Velg…</button>
+                  <button class="btn-secondary btn-sm" id="btn-podcast-pick-intro" data-i18n="general.pickFile">Velg fil…</button>
                   <button class="btn-ghost btn-sm" id="btn-podcast-clear-intro" aria-label="Fjern intro">×</button>
                 </div>
               </div>
@@ -1137,7 +1135,7 @@
                 <label class="form-label" for="podcast-default-outro">STANDARD OUTRO-JINGLE</label>
                 <div style="display:flex;gap:6px">
                   <input type="text" class="form-input" id="podcast-default-outro" readonly style="flex:1;font-size:12px" placeholder="(ingen)">
-                  <button class="btn-secondary btn-sm" id="btn-podcast-pick-outro">Velg…</button>
+                  <button class="btn-secondary btn-sm" id="btn-podcast-pick-outro" data-i18n="general.pickFile">Velg fil…</button>
                   <button class="btn-ghost btn-sm" id="btn-podcast-clear-outro" aria-label="Fjern outro">×</button>
                 </div>
               </div>
@@ -1660,13 +1658,13 @@
             <div class="editor-io-file-row">
               <span class="editor-io-file-label">INTRO</span>
               <span class="editor-io-file-path" id="editor-intro-display">Ingen fil valgt</span>
-              <button class="btn-secondary btn-sm" id="btn-editor-pick-intro">Velg fil</button>
+              <button class="btn-secondary btn-sm" id="btn-editor-pick-intro" data-i18n="general.pickFile">Velg fil…</button>
               <button class="btn-ghost btn-sm" id="btn-editor-clear-intro" style="display:none">✕</button>
             </div>
             <div class="editor-io-file-row">
               <span class="editor-io-file-label">OUTRO</span>
               <span class="editor-io-file-path" id="editor-outro-display">Ingen fil valgt</span>
-              <button class="btn-secondary btn-sm" id="btn-editor-pick-outro">Velg fil</button>
+              <button class="btn-secondary btn-sm" id="btn-editor-pick-outro" data-i18n="general.pickFile">Velg fil…</button>
               <button class="btn-ghost btn-sm" id="btn-editor-clear-outro" style="display:none">✕</button>
             </div>
           </div>
@@ -1675,13 +1673,13 @@
             <div class="editor-io-file-row">
               <span class="editor-io-file-label">VIDEO-INTRO</span>
               <span class="editor-io-file-path" id="editor-video-intro-display">Ingen fil valgt</span>
-              <button class="btn-secondary btn-sm" id="btn-editor-pick-video-intro">Velg fil</button>
+              <button class="btn-secondary btn-sm" id="btn-editor-pick-video-intro" data-i18n="general.pickFile">Velg fil…</button>
               <button class="btn-ghost btn-sm" id="btn-editor-clear-video-intro" style="display:none">✕</button>
             </div>
             <div class="editor-io-file-row">
               <span class="editor-io-file-label">VIDEO-OUTRO</span>
               <span class="editor-io-file-path" id="editor-video-outro-display">Ingen fil valgt</span>
-              <button class="btn-secondary btn-sm" id="btn-editor-pick-video-outro">Velg fil</button>
+              <button class="btn-secondary btn-sm" id="btn-editor-pick-video-outro" data-i18n="general.pickFile">Velg fil…</button>
               <button class="btn-ghost btn-sm" id="btn-editor-clear-video-outro" style="display:none">✕</button>
             </div>
           </div>
@@ -2136,7 +2134,7 @@
 <div id="cloud-folder-modal" class="modal-backdrop cloud-folder-backdrop" style="display:none">
   <div class="modal modal-sm cloud-folder-modal">
     <div class="cloud-folder-modal-header">
-      <h2 id="cloud-folder-modal-title">Velg mappe</h2>
+      <h2 id="cloud-folder-modal-title">Velg mappe…</h2>
       <button id="cloud-folder-modal-close" class="btn-ghost cloud-folder-modal-close" aria-label="Lukk">×</button>
     </div>
     <div id="cloud-folder-list" class="cloud-folder-list"></div>

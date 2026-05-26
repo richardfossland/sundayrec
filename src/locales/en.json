@@ -421,7 +421,9 @@
     "behaviourTitle": "Recording behaviour",
     "behaviourDesc": "Fine-tune how the recording starts, is protected, and split.",
     "whileRecording": "While a recording is running",
-    "fileBehaviour": "Files"
+    "fileBehaviour": "Files",
+    "deleteAfter": "Delete after",
+    "days": "days"
   },
   "general": {
     "title": "General",
@@ -470,7 +472,8 @@
     "noClipSelected": "No file selected",
     "notifyStartDesc": "Shown as a system notification when a scheduled session begins.",
     "notifyStopDesc": "Click the notification to jump straight to the file.",
-    "close": "Close"
+    "close": "Close",
+    "pickFile": "Choose file…"
   },
   "editor": {
     "title": "Edit audio file",

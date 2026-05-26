@@ -421,7 +421,9 @@
     "behaviourTitle": "Comportement de l’enregistrement",
     "behaviourDesc": "Affinez la manière dont l’enregistrement démarre, est protégé et découpé.",
     "whileRecording": "Pendant un enregistrement",
-    "fileBehaviour": "Fichiers"
+    "fileBehaviour": "Fichiers",
+    "deleteAfter": "Supprimer après",
+    "days": "jours"
   },
   "general": {
     "title": "Général",
@@ -470,7 +472,8 @@
     "noClipSelected": "Aucun fichier sélectionné",
     "notifyStartDesc": "Affiché comme notification système au début d’une session planifiée.",
     "notifyStopDesc": "Cliquez sur la notification pour aller directement au fichier.",
-    "close": "Fermer"
+    "close": "Fermer",
+    "pickFile": "Choisir un fichier…"
   },
   "editor": {
     "title": "Éditer le fichier audio",

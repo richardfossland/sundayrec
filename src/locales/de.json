@@ -421,7 +421,9 @@
     "behaviourTitle": "Aufnahmeverhalten",
     "behaviourDesc": "Feinjustieren Sie, wie die Aufnahme startet, geschützt und aufgeteilt wird.",
     "whileRecording": "Während einer laufenden Aufnahme",
-    "fileBehaviour": "Dateien"
+    "fileBehaviour": "Dateien",
+    "deleteAfter": "Löschen nach",
+    "days": "Tagen"
   },
   "general": {
     "title": "Allgemein",
@@ -470,7 +472,8 @@
     "noClipSelected": "Keine Datei ausgewählt",
     "notifyStartDesc": "Wird als Systembenachrichtigung angezeigt, wenn eine geplante Sitzung beginnt.",
     "notifyStopDesc": "Klicken Sie auf die Benachrichtigung, um direkt zur Datei zu springen.",
-    "close": "Schließen"
+    "close": "Schließen",
+    "pickFile": "Datei wählen…"
   },
   "editor": {
     "title": "Audiodatei bearbeiten",

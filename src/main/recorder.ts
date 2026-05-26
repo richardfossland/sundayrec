@@ -933,9 +933,13 @@ async function applyPreroll(
         '-y', encodedPath,
       ]
       const proc = spawn(ffmpegBin, args, { stdio: ['ignore', 'ignore', 'pipe'] })
+      // Watchdog — pre-roll encode is a trivial operation on a short clip;
+      // anything past 3 min means ffmpeg is hung (corrupt file, codec issue).
+      const watchdog = setTimeout(() => { try { proc.kill('SIGKILL') } catch {} }, 3 * 60_000)
       let stderr = ''
       proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-8192) })
       proc.on('close', code => {
+        clearTimeout(watchdog)
         if (code === 0) resolve()
         else reject(new Error(`pre-roll encode failed (${code}): ${stderr.slice(-500)}`))
       })
@@ -962,9 +966,13 @@ async function applyPreroll(
         '-y', concatTmp,
       ]
       const proc = spawn(ffmpegBin, args, { stdio: ['ignore', 'ignore', 'pipe'] })
+      // Concat-copy is fast (no re-encode). 10 min hard limit covers even
+      // very long files; anything beyond means ffmpeg is hung.
+      const watchdog = setTimeout(() => { try { proc.kill('SIGKILL') } catch {} }, 10 * 60_000)
       let stderr = ''
       proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-8192) })
       proc.on('close', code => {
+        clearTimeout(watchdog)
         if (code === 0) resolve()
         else reject(new Error(`concat failed (${code}): ${stderr.slice(-500)}`))
       })
@@ -1019,9 +1027,12 @@ async function mergeSegments(segments: string[]): Promise<boolean> {
         '-i', concatList,
         '-c', 'copy', '-y', tempPath,
       ], { stdio: ['ignore', 'ignore', 'pipe'] })
+      // Reconnect-merge can combine many segments — 15 min hard limit.
+      const watchdog = setTimeout(() => { try { proc.kill('SIGKILL') } catch {} }, 15 * 60_000)
       let stderr = ''
       proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-8192) })
       proc.on('close', code => {
+        clearTimeout(watchdog)
         if (code === 0) resolve()
         else reject(new Error(`merge failed (${code}): ${stderr.slice(-500)}`))
       })
@@ -1336,7 +1347,12 @@ export function recoverCrashedSession(): void {
   const proc = spawn(ffmpegBin, ['-nostdin', '-hide_banner', '-i', filePath, '-c', 'copy', '-y', out], {
     stdio: ['ignore', 'ignore', 'pipe']
   })
+  // Recovery remux runs at startup — a corrupt file mustn't block the app
+  // forever. 5 min covers even huge crashed sessions; ffmpeg should fail
+  // fast on truly broken headers.
+  const watchdog = setTimeout(() => { try { proc.kill('SIGKILL') } catch {} }, 5 * 60_000)
   proc.on('close', code => {
+    clearTimeout(watchdog)
     if (code === 0) {
       unlinkSilent(filePath)
       const recDate = new Date(recovery.startTime)
