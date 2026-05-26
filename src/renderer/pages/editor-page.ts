@@ -1924,7 +1924,10 @@ function drawRuler(ctx: CanvasRenderingContext2D, W: number, H: number, RULER: n
   // we'd get if we used W, which would over-tick the main region when intro/outro
   // are eating display space).
   const rawInterval  = (vpEnd - vpStart) * 80 / mainW
-  const intervals    = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600]
+  // Note: tick interval ≥ 1 sec so formatTime (which rounds to whole seconds)
+  // never produces duplicate labels (would render "0:05 0:05 0:06 0:06" for
+  // 0.5-sec ticks on short clips).
+  const intervals    = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600]
   const tickInterval = intervals.find(v => v >= rawInterval) ?? 600
   const firstTick    = Math.ceil(vpStart / tickInterval) * tickInterval
 
@@ -2158,10 +2161,11 @@ function setupKeyboardShortcuts(): void {
 }
 
 /** Move playhead to an absolute extended-timeline second, stopping any active
- *  playback. Centralises the seek-and-redraw logic used by keyboard shortcuts. */
+ *  playback. Centralises the seek-and-redraw logic used by keyboard shortcuts.
+ *  Snaps out of cuts so keyboard navigation always lands on playable audio. */
 function seekTo(sec: number): void {
   stopPlay()
-  playStartSec = clampPlayable(sec)
+  playStartSec = snapOutOfCut(clampPlayable(sec))
   updateTimecode(playStartSec)
   if (isVideoFile && videoEl) videoEl.currentTime = clampMain(playStartSec)
   const mainPlayhead = clampMain(playStartSec)
@@ -2843,6 +2847,11 @@ function onCanvasUp(e: MouseEvent): void {
 
   if (playheadDragging) {
     playheadDragging = false
+    // Snap playhead out of any cut region the user dragged into — cuts are
+    // "skip me" zones, so resting the playhead inside one is meaningless.
+    playStartSec = snapOutOfCut(playStartSec)
+    updateTimecode(playStartSec)
+    if (isVideoFile && videoEl) videoEl.currentTime = clampMain(playStartSec)
     drawWaveform()
     return
   }
@@ -2859,9 +2868,11 @@ function onCanvasUp(e: MouseEvent): void {
     renderCutList()
   } else {
     // Tap to seek — covers full extended timeline so users can click into
-    // intro/outro slots.
+    // intro/outro slots. If the click lands inside a cut, snap to the cut's
+    // end (the nearest keep-region start) so playback always begins at a
+    // position that will actually produce audio.
     stopPlay()
-    playStartSec = clampPlayable(extSec)
+    playStartSec = snapOutOfCut(clampPlayable(extSec))
     updateTimecode(playStartSec)
     if (isVideoFile && videoEl) videoEl.currentTime = clampMain(playStartSec)
   }
@@ -2931,6 +2942,21 @@ function onCanvasWheel(e: WheelEvent): void {
   } else {
     panBy(e.deltaY * (vpEnd - vpStart) / 800)
   }
+}
+
+/** If `sec` falls inside a cut region, return the cut's end (the nearest
+ *  keep-region start). Cuts are skip-zones — the playhead resting inside
+ *  one is meaningless because no audio plays there. Out-of-range or
+ *  already-outside-cut input is returned unchanged. */
+function snapOutOfCut(sec: number): number {
+  for (const c of cuts) {
+    if (sec >= c.start && sec < c.end) {
+      // Snap to the cut's end, clamped to the playable range so we never
+      // overshoot duration when a trailing cut runs to the file end.
+      return Math.min(maxPlayableSec(), c.end)
+    }
+  }
+  return sec
 }
 
 /** Snaps a main-coords second to the nearest detected segment boundary within
@@ -3029,6 +3055,11 @@ function startPlay(preview: boolean): void {
     animate()
     return
   }
+
+  // If the playhead has somehow ended up inside a cut (e.g. arrow-key seek
+  // landed there), snap it to the cut's end before scheduling so audio and
+  // playhead stay in sync from the very first frame.
+  playStartSec = snapOutOfCut(playStartSec)
 
   isPreview = preview
   loopStartSec = playStartSec

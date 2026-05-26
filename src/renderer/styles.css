@@ -2988,8 +2988,18 @@ body.platform-win32  #wake-instructions-win { display: block; }
 }
 .recording-overlay.video-active .rec-meta { gap: 28px; }
 
-/* ── Editor video panel ──────────────────────────────────────────────────── */
+/* ── Editor video panel ────────────────────────────────────────────────────
+ *
+ * Defensive isolation: HTML5 <video> can use hardware-accelerated overlay
+ * that ignores CSS z-index. We pin the panel as its own stacking context
+ * (position: relative + isolation) and force the <video> element into a
+ * composited-but-CSS-respecting layer via translateZ(0) so it doesn't
+ * leak past sibling z-indexes (header, modals).
+ */
 .editor-video-panel {
+  position: relative;
+  isolation: isolate;
+  z-index: 0;
   width: 100%;
   background: #000;
   border-radius: var(--rsm);
@@ -3008,6 +3018,7 @@ body.platform-win32  #wake-instructions-win { display: block; }
   object-fit: contain;
   display: block;
   background: #000;
+  transform: translateZ(0);
 }
 
 /* ── Export video notice ─────────────────────────────────────────────────── */
@@ -3075,13 +3086,19 @@ button > svg:first-child { flex-shrink: 0; }
 
 /* ── Editor v6: header, empty state, analyze panel, publishing ─────────── */
 
-/* Sticky header with summary + close button */
+/* Header with summary + close button.
+ *
+ * Was `position: sticky` originally, but the sticky behaviour broke video
+ * files: HTML5 <video> uses hardware-accelerated overlay which can win over
+ * CSS z-index, causing the video preview to render above the sticky header
+ * during scroll. The header is short enough that scrolling past it is rarely
+ * a problem in practice, so plain relative positioning is the safer call. */
 .editor-header-sticky {
-  position: sticky; top: 0; z-index: 12;
+  position: relative; z-index: 12;
   background: var(--surface, #13131c);
   padding: 8px 0;
   border-bottom: 1px solid var(--border);
-  margin: -8px 0 8px 0;
+  margin: 0 0 8px 0;
 }
 .editor-dirty-dot {
   color: var(--accent); font-size: 14px; line-height: 1;
