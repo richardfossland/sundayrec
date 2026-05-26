@@ -23,6 +23,18 @@ function generateState(): string {
   return base64url(crypto.randomBytes(16))
 }
 
+/** Fetch with hard timeout — aborts the request after `timeoutMs` so a
+ *  hanging OAuth endpoint can't block the upload queue indefinitely. */
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const ctl = new AbortController()
+  const tid = setTimeout(() => ctl.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...init, signal: ctl.signal })
+  } finally {
+    clearTimeout(tid)
+  }
+}
+
 interface Pending {
   verifier: string
   state:    string
@@ -248,11 +260,13 @@ export async function exchangeCode(
     body.set('client_secret', CLOUD_CONFIG.googleDrive.clientSecret)
   }
 
-  const res = await fetch(cfg.tokenUrl, {
+  // 30 s timeout — a hanging token endpoint must not block the upload queue
+  // forever. Without this, a network blackhole leaves processQueue stuck.
+  const res = await fetchWithTimeout(cfg.tokenUrl, {
     method:  'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body:    body.toString(),
-  })
+  }, 30_000)
   if (!res.ok) throw new Error(`Token exchange failed: ${res.status} ${await res.text()}`)
 
   const json = await res.json() as Record<string, unknown>
@@ -284,11 +298,11 @@ export async function refreshAccessToken(
     body.set('client_secret', CLOUD_CONFIG.googleDrive.clientSecret)
   }
 
-  const res = await fetch(cfg.tokenUrl, {
+  const res = await fetchWithTimeout(cfg.tokenUrl, {
     method:  'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body:    body.toString(),
-  })
+  }, 30_000)
   if (!res.ok) {
     const bodyText = await res.text()
     let code: string | undefined

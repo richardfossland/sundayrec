@@ -934,7 +934,7 @@ async function applyPreroll(
       ]
       const proc = spawn(ffmpegBin, args, { stdio: ['ignore', 'ignore', 'pipe'] })
       let stderr = ''
-      proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+      proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-8192) })
       proc.on('close', code => {
         if (code === 0) resolve()
         else reject(new Error(`pre-roll encode failed (${code}): ${stderr.slice(-500)}`))
@@ -963,7 +963,7 @@ async function applyPreroll(
       ]
       const proc = spawn(ffmpegBin, args, { stdio: ['ignore', 'ignore', 'pipe'] })
       let stderr = ''
-      proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+      proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-8192) })
       proc.on('close', code => {
         if (code === 0) resolve()
         else reject(new Error(`concat failed (${code}): ${stderr.slice(-500)}`))
@@ -1020,7 +1020,7 @@ async function mergeSegments(segments: string[]): Promise<boolean> {
         '-c', 'copy', '-y', tempPath,
       ], { stdio: ['ignore', 'ignore', 'pipe'] })
       let stderr = ''
-      proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+      proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-8192) })
       proc.on('close', code => {
         if (code === 0) resolve()
         else reject(new Error(`merge failed (${code}): ${stderr.slice(-500)}`))

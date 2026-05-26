@@ -315,7 +315,11 @@ select:focus:not(:focus-visible) {
   background: var(--accent); color: #fff;
   box-shadow: 0 2px 8px rgba(240,187,71,.3);
 }
-.btn-primary:hover { background: var(--accent2); box-shadow: 0 4px 14px rgba(240,187,71,.45); transform: translateY(-1px); }
+.btn-primary:hover {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  box-shadow: 0 4px 14px rgba(240,187,71,.45);
+  transform: translateY(-1px);
+}
 .btn-primary:active { transform: translateY(0); }
 .btn-secondary {
   background: var(--surface2); color: var(--text);
@@ -1086,6 +1090,21 @@ select.form-input {
   box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255,255,255,.04) inset;
 }
 .modal.modal-sm { width: 360px; }
+
+/* Cloud-folder picker modal — list-style folder picker */
+.cloud-folder-backdrop { z-index: 1000; }
+.cloud-folder-modal { display: flex; flex-direction: column; gap: 12px; max-height: 70vh; }
+.cloud-folder-modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.cloud-folder-modal-header h2 { margin: 0; font-size: 16px; }
+.cloud-folder-modal-close { font-size: 18px; padding: 2px 8px; }
+.cloud-folder-list { overflow-y: auto; display: flex; flex-direction: column; gap: 4px; max-height: 50vh; }
+.cloud-folder-item {
+  display: block; width: 100%; text-align: left;
+  padding: 10px 12px; background: transparent;
+  border: 1px solid transparent; border-radius: 6px;
+  color: var(--text); cursor: pointer; font-size: 14px;
+}
+.cloud-folder-item:hover { background: var(--surface2); border-color: var(--border); }
 .modal h2 { font-size: 17px; font-weight: 700; letter-spacing: -.3px; margin-bottom: 6px; }
 .modal p  { font-size: 13px; color: var(--text2); margin-bottom: 16px; line-height: 1.6; }
 .manual-section-divider {
@@ -1371,7 +1390,6 @@ select.form-input {
 .wake-status-dot.error { background: #f87171; box-shadow: 0 0 6px rgba(248,113,113,.4); }
 .wake-status-dot.off   { background: var(--text3); }
 .wake-status-text { flex: 1; }
-.btn-sm { padding: 3px 10px; font-size: 11px; }
 
 /* ── Sleep config panel ─────────────────────────────────────────── */
 .sleep-config-panel { margin-top: 2px; }
@@ -2164,11 +2182,6 @@ body.platform-win32  #wake-instructions-win { display: block; }
   box-shadow: 0 0 0 2px rgba(240,187,71,.3);
 }
 
-/* ── Btn-primary — glow shimmer ───────────────────────────────── */
-.btn-primary:hover {
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-}
-
 /* ── Recording overlay VU bars — match taller height ──────────── */
 .rec-vu-bars .vu-bar-clip { height: 80px; }
 
@@ -2343,7 +2356,17 @@ body.platform-win32  #wake-instructions-win { display: block; }
 .editor-segment-dismiss:hover { color: var(--red); background: rgba(239,68,68,.08); }
 
 /* ── Publish (cloud) settings page ───────────────────────────── */
-.cloud-card { margin-bottom: 12px; transition: border-color .15s, transform .15s; }
+.cloud-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+  transition: border-color .15s, transform .15s;
+}
 .cloud-card:hover { border-color: rgba(122,170,255,.35) !important; }
 .cloud-card .cloud-connected { animation: fadeIn .2s ease; }
 .cloud-card .cloud-disconnected button { width: 100%; justify-content: center; padding: 10px 14px; font-weight: 600; }

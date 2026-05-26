@@ -239,9 +239,13 @@ export async function createPublicShareUrl(token: string, fileId: string): Promi
       const body = await r.text()
       throw new Error(`Drive share-link failed: ${r.status} ${body}`)
     }
-    // Public direct-download URL. Drive shows a virus-scan interstitial for
-    // files >25 MB unless &confirm=t is appended (works on most large files).
-    return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}&confirm=t`
+    // Public direct-download URL. The old `drive.google.com/uc?export=download
+    // &confirm=t` URL still serves the file but stopped bypassing the virus-
+    // scan interstitial for files > 25 MB sometime in 2023. The new host
+    // `drive.usercontent.google.com/download` accepts `confirm=t` and serves
+    // the binary directly without an HTML gate — works reliably for any
+    // size, including hour-long sermons.
+    return `https://drive.usercontent.google.com/download?id=${encodeURIComponent(fileId)}&export=download&confirm=t`
   } catch {
     return null
   }

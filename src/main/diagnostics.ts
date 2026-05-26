@@ -55,7 +55,7 @@ async function runAudioCaptureTest(ffmpegBin: string, settings: Settings): Promi
     ], { stdio: ['ignore', 'ignore', 'pipe'] })
 
     let stderr = ''
-    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+    proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-8192) })
     const killer = setTimeout(() => { try { proc.kill('SIGKILL') } catch {} }, 12000)
 
     proc.on('close', code => {
@@ -122,7 +122,7 @@ async function runVideoCaptureTest(ffmpegBin: string, settings: Settings, win: B
     ], { stdio: ['ignore', 'ignore', 'pipe'] })
 
     let stderr = ''
-    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+    proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-8192) })
     const killer = setTimeout(() => { try { proc.kill('SIGKILL') } catch {} }, 15000)
 
     proc.on('close', code => {

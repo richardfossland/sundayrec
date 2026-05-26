@@ -520,7 +520,7 @@ export async function extractAudioForPeaks(filePath: string): Promise<ExtractAud
     ], { stdio: ['ignore', 'pipe', 'pipe'] })
 
     proc.stdout?.on('data', (d: Buffer) => chunks.push(d))
-    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+    proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-8192) })
 
     // Safety kill after 2 min. Cleared on close to avoid keeping a timer
     // reference alive for 2 minutes after every successful peaks extraction.

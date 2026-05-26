@@ -1482,6 +1482,19 @@ function syncCanvasSize(): void {
   canvas.height = Math.round(h * dpr)
 }
 
+/** Schedule a draw on next rAF — coalesces multiple sync requests into a
+ *  single paint per frame. Use this from hot paths like mousemove/handle-drag
+ *  where caller would otherwise re-trigger drawWaveform 60+ times per second.
+ *  Synchronous drawWaveform() still works for one-shot updates (load/seek/etc). */
+let drawWaveformRaf = 0
+function scheduleDrawWaveform(): void {
+  if (drawWaveformRaf) return
+  drawWaveformRaf = requestAnimationFrame(() => {
+    drawWaveformRaf = 0
+    drawWaveform()
+  })
+}
+
 function drawWaveform(): void {
   if (!canvas || !peaks) return
   const dpr  = window.devicePixelRatio || 1
@@ -1994,15 +2007,26 @@ function updateMinimapViewport(): void {
 }
 
 // ── Minimap click / drag ──────────────────────────────────────────────────
+
+// Module-scoped listener refs so repeated setupEditorPage() calls (renderer
+// reload, page-switch) don't keep adding new window-level listeners. Each
+// re-invocation removes the previous pair before attaching new ones.
+let minimapWindowMoveHandler: ((e: MouseEvent) => void) | null = null
+let minimapWindowUpHandler:   (() => void) | null = null
+
 function setupMinimapInteraction(): void {
   minimap?.addEventListener('mousedown', (e: MouseEvent) => {
     minimapDragging = true
     jumpViewportToMouse(e)
   })
-  window.addEventListener('mousemove', (e: MouseEvent) => {
+  if (minimapWindowMoveHandler) window.removeEventListener('mousemove', minimapWindowMoveHandler)
+  if (minimapWindowUpHandler)   window.removeEventListener('mouseup',   minimapWindowUpHandler)
+  minimapWindowMoveHandler = (e: MouseEvent) => {
     if (minimapDragging) jumpViewportToMouse(e)
-  })
-  window.addEventListener('mouseup', () => { minimapDragging = false })
+  }
+  minimapWindowUpHandler = () => { minimapDragging = false }
+  window.addEventListener('mousemove', minimapWindowMoveHandler)
+  window.addEventListener('mouseup',   minimapWindowUpHandler)
 }
 
 function jumpViewportToMouse(e: MouseEvent): void {
@@ -2756,6 +2780,7 @@ function onCanvasMove(e: MouseEvent): void {
 
   // Handle drag: resize cut boundary. Snap to nearby segment boundaries when
   // shift is NOT held — gives precise lock-in to detected speech/music edges.
+  // Repaints are rAF-coalesced so 60+ mousemoves/sec only redraw ~60 times.
   if (handleDrag) {
     const c = cuts[handleDrag.cutIdx]
     const snapped = e.shiftKey ? mainSec : snapToSegmentBoundary(mainSec, rect.width)
@@ -2765,7 +2790,7 @@ function onCanvasMove(e: MouseEvent): void {
       c.end   = Math.min(duration, Math.max(c.start + 0.1, snapped))
     }
     updateRemainingDisplay()
-    drawWaveform()
+    scheduleDrawWaveform()
     return
   }
 
@@ -2774,7 +2799,7 @@ function onCanvasMove(e: MouseEvent): void {
     playStartSec = clampPlayable(extSec)
     updateTimecode(playStartSec)
     if (isVideoFile && videoEl) videoEl.currentTime = clampMain(playStartSec)
-    drawWaveform()
+    scheduleDrawWaveform()
     return
   }
 
@@ -2796,7 +2821,7 @@ function onCanvasMove(e: MouseEvent): void {
 
   if (isDragging) dragEndSec = clampMain(extSec)
 
-  drawWaveform()
+  scheduleDrawWaveform()
 }
 
 function onCanvasUp(e: MouseEvent): void {

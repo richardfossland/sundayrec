@@ -79,7 +79,7 @@ async function _enumerateAllDevices(): Promise<AllDevices> {
       : ['-f', 'avfoundation', '-list_devices', 'true', '-i', '', '-hide_banner']
     const proc = spawn(ffmpegBin, args, { stdio: ['ignore', 'ignore', 'pipe'] })
     let stderr = ''
-    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+    proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-8192) })
     let settled = false
     const done = () => {
       if (settled) return; settled = true
@@ -217,7 +217,7 @@ export async function listWasapiDevices(): Promise<FfmpegDevice[]> {
       stdio: ['ignore', 'ignore', 'pipe']
     })
     let stderr = ''
-    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+    proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-8192) })
     let settled = false
     const done = () => {
       if (settled) return; settled = true
