@@ -75,7 +75,8 @@
     "toastReadyTitle": "Klar til installation",
     "toastReadyText": "Version {v} er hentet",
     "availableMac": "Version {v} — klik for at hente",
-    "toastAvailableMac": "Version {v} — klik for at hente"
+    "toastAvailableMac": "Version {v} — klik for at hente",
+    "restartInstall": "↺ Genstart og installer"
   },
   "history": {
     "title": "Historik",
@@ -389,7 +390,9 @@
     "release": "RELEASE (ms)",
     "limiter": "Limiter",
     "limiterDesc": "Forhindrer klipning ved høje lydniveauer (anbefalet)",
-    "ceiling": "LOFT (dB)"
+    "ceiling": "LOFT (dB)",
+    "leftOnly": "Kun venstre",
+    "rightOnly": "Kun højre"
   },
   "files": {
     "title": "Filer & Format",
@@ -423,7 +426,9 @@
     "whileRecording": "Mens en optagelse kører",
     "fileBehaviour": "Filer",
     "deleteAfter": "Slet efter",
-    "days": "dage"
+    "days": "dage",
+    "formatWavDesc": "Ukomprimeret, højeste kvalitet",
+    "qualityHighest": "Højeste"
   },
   "general": {
     "title": "Generelt",
@@ -571,7 +576,8 @@
     "beforeSermon": "før prædikenen",
     "afterSermon": "efter prædikenen",
     "willBeTrimmed": "fjernes",
-    "willRemain": "prædiken tilbage"
+    "willRemain": "prædiken tilbage",
+    "export320kbps": "320 kbps (høj kvalitet)"
   },
   "master": {
     "title": "Mastering (klargør til udgivelse)",
@@ -720,5 +726,29 @@
     "defaultIntro": "STANDARD INTRO-JINGLE",
     "defaultOutro": "STANDARD OUTRO-JINGLE",
     "howto": "<strong>Sådan kommer du i gang:</strong> Upload 1-3 testoptagelser til Google Drive, klik ”Generer feed nu”, og send URL’en som dukker op til Spotify for Podcasters og Apple Podcasts Connect. Efter godkendelse (1-2 dage) dukker hver ny optagelse op automatisk."
+  },
+  "tooltip": {
+    "close": "Luk",
+    "toggleVideo": "Slå video til/fra",
+    "clipReset": "Clip — klik for at nulstille",
+    "refreshDevices": "Opdater enhedsliste",
+    "mirrorCamera": "Spejlvend kamera vandret",
+    "deleteAllHistory": "Slet alle optagelser fra historik",
+    "maintenance": "Vedligeholdelse",
+    "gotoToday": "Gå til i dag",
+    "autoChurchHolidays": "Tilføj kirkelige helligdage automatisk",
+    "unsavedChanges": "Ikke-gemte ændringer",
+    "play": "Afspil",
+    "preview": "Afspil forhåndsvisning (springer over klippede dele)",
+    "loop": "Loop afspilning",
+    "jumpToClip": "Klik for at hoppe til første klip",
+    "zoomIn": "Zoom ind",
+    "zoomOut": "Zoom ud",
+    "fitAll": "Vis hele filen"
+  },
+  "publish": {
+    "descPlaceholder": "F.eks. Gudstjenester fra Eksempel kirke, hver søndag kl. 11",
+    "language": "SPROG",
+    "regenerateFeed": "Generer feed nu"
   }
 }

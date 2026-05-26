@@ -75,7 +75,8 @@
     "toastReadyTitle": "Prête à être installée",
     "toastReadyText": "La version {v} a été téléchargée",
     "availableMac": "Version {v} — cliquez pour télécharger",
-    "toastAvailableMac": "Version {v} — cliquez pour télécharger"
+    "toastAvailableMac": "Version {v} — cliquez pour télécharger",
+    "restartInstall": "↺ Redémarrer et installer"
   },
   "history": {
     "title": "Historique",
@@ -389,7 +390,9 @@
     "release": "RELEASE (ms)",
     "limiter": "Limiteur",
     "limiterDesc": "Empêche l’écrêtage en cas de niveaux élevés (recommandé)",
-    "ceiling": "PLAFOND (dB)"
+    "ceiling": "PLAFOND (dB)",
+    "leftOnly": "Gauche uniquement",
+    "rightOnly": "Droite uniquement"
   },
   "files": {
     "title": "Fichiers et format",
@@ -423,7 +426,9 @@
     "whileRecording": "Pendant un enregistrement",
     "fileBehaviour": "Fichiers",
     "deleteAfter": "Supprimer après",
-    "days": "jours"
+    "days": "jours",
+    "formatWavDesc": "Non compressé, qualité maximale",
+    "qualityHighest": "Maximum"
   },
   "general": {
     "title": "Général",
@@ -571,7 +576,8 @@
     "beforeSermon": "avant la prédication",
     "afterSermon": "après la prédication",
     "willBeTrimmed": "sera supprimé",
-    "willRemain": "de prédication restant"
+    "willRemain": "de prédication restant",
+    "export320kbps": "320 kbps (haute qualité)"
   },
   "master": {
     "title": "Mastering (préparation à la publication)",
@@ -720,5 +726,29 @@
     "defaultIntro": "JINGLE D’INTRO PAR DÉFAUT",
     "defaultOutro": "JINGLE D’OUTRO PAR DÉFAUT",
     "howto": "<strong>Pour commencer :</strong> Téléversez 1-3 enregistrements de test sur Google Drive, cliquez sur « Générer le flux maintenant », et envoyez l’URL obtenue à Spotify for Podcasters et Apple Podcasts Connect. Après approbation (1-2 jours), chaque nouvel enregistrement apparaît automatiquement."
+  },
+  "tooltip": {
+    "close": "Fermer",
+    "toggleVideo": "Activer/désactiver la vidéo",
+    "clipReset": "Saturation — cliquer pour réinitialiser",
+    "refreshDevices": "Actualiser la liste des appareils",
+    "mirrorCamera": "Inverser la caméra horizontalement",
+    "deleteAllHistory": "Supprimer tous les enregistrements de l’historique",
+    "maintenance": "Maintenance",
+    "gotoToday": "Aller à aujourd’hui",
+    "autoChurchHolidays": "Ajouter automatiquement les fêtes religieuses",
+    "unsavedChanges": "Modifications non enregistrées",
+    "play": "Lire",
+    "preview": "Lire l’aperçu (saute les sections coupées)",
+    "loop": "Lecture en boucle",
+    "jumpToClip": "Cliquer pour aller au premier clip",
+    "zoomIn": "Zoomer",
+    "zoomOut": "Dézoomer",
+    "fitAll": "Afficher tout le fichier"
+  },
+  "publish": {
+    "descPlaceholder": "Ex : Services de l’Église Exemple, chaque dimanche à 11h",
+    "language": "LANGUE",
+    "regenerateFeed": "Générer le flux maintenant"
   }
 }

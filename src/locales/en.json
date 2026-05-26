@@ -75,7 +75,8 @@
     "toastReadyTitle": "Ready to install",
     "toastReadyText": "Version {v} has been downloaded",
     "availableMac": "Version {v} — click to download",
-    "toastAvailableMac": "Version {v} — click to download"
+    "toastAvailableMac": "Version {v} — click to download",
+    "restartInstall": "↺ Restart and install"
   },
   "history": {
     "title": "History",
@@ -389,7 +390,9 @@
     "release": "RELEASE (ms)",
     "limiter": "Limiter",
     "limiterDesc": "Stops clipping at high signal levels (recommended)",
-    "ceiling": "CEILING (dB)"
+    "ceiling": "CEILING (dB)",
+    "leftOnly": "Left only",
+    "rightOnly": "Right only"
   },
   "files": {
     "title": "Files & Format",
@@ -423,7 +426,9 @@
     "whileRecording": "While a recording is running",
     "fileBehaviour": "Files",
     "deleteAfter": "Delete after",
-    "days": "days"
+    "days": "days",
+    "formatWavDesc": "Uncompressed, highest quality",
+    "qualityHighest": "Highest"
   },
   "general": {
     "title": "General",
@@ -571,7 +576,8 @@
     "beforeSermon": "before the sermon",
     "afterSermon": "after the sermon",
     "willBeTrimmed": "will be trimmed",
-    "willRemain": "of sermon remaining"
+    "willRemain": "of sermon remaining",
+    "export320kbps": "320 kbps (high quality)"
   },
   "master": {
     "title": "Mastering (prepare for publishing)",
@@ -720,5 +726,29 @@
     "defaultIntro": "DEFAULT INTRO JINGLE",
     "defaultOutro": "DEFAULT OUTRO JINGLE",
     "howto": "<strong>Getting started:</strong> Upload 1-3 test recordings to Google Drive, click \"Generate feed now\", and send the resulting URL to Spotify for Podcasters and Apple Podcasts Connect. After approval (1-2 days), every new recording appears automatically."
+  },
+  "tooltip": {
+    "close": "Close",
+    "toggleVideo": "Toggle video",
+    "clipReset": "Clip — click to reset",
+    "refreshDevices": "Refresh device list",
+    "mirrorCamera": "Mirror camera horizontally",
+    "deleteAllHistory": "Delete all recordings from history",
+    "maintenance": "Maintenance",
+    "gotoToday": "Go to today",
+    "autoChurchHolidays": "Add church holidays automatically",
+    "unsavedChanges": "Unsaved changes",
+    "play": "Play",
+    "preview": "Play preview (skips cut sections)",
+    "loop": "Loop playback",
+    "jumpToClip": "Click to jump to first clip",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fitAll": "Show entire file"
+  },
+  "publish": {
+    "descPlaceholder": "E.g. Services from Example Church, every Sunday at 11",
+    "language": "LANGUAGE",
+    "regenerateFeed": "Generate feed now"
   }
 }

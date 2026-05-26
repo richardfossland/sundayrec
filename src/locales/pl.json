@@ -75,7 +75,8 @@
     "toastReadyTitle": "Gotowe do instalacji",
     "toastReadyText": "Wersja {v} została pobrana",
     "availableMac": "Wersja {v} — kliknij, aby pobrać",
-    "toastAvailableMac": "Wersja {v} — kliknij, aby pobrać"
+    "toastAvailableMac": "Wersja {v} — kliknij, aby pobrać",
+    "restartInstall": "↺ Uruchom ponownie i zainstaluj"
   },
   "history": {
     "title": "Historia",
@@ -389,7 +390,9 @@
     "release": "RELEASE (ms)",
     "limiter": "Limiter",
     "limiterDesc": "Zapobiega przesterowaniu przy wysokich poziomach sygnału (zalecane)",
-    "ceiling": "PUŁAP (dB)"
+    "ceiling": "PUŁAP (dB)",
+    "leftOnly": "Tylko lewy",
+    "rightOnly": "Tylko prawy"
   },
   "files": {
     "title": "Pliki i format",
@@ -423,7 +426,9 @@
     "whileRecording": "Podczas trwającego nagrania",
     "fileBehaviour": "Pliki",
     "deleteAfter": "Usuń po",
-    "days": "dniach"
+    "days": "dniach",
+    "formatWavDesc": "Nieskompresowany, najwyższa jakość",
+    "qualityHighest": "Najwyższa"
   },
   "general": {
     "title": "Ogólne",
@@ -571,7 +576,8 @@
     "beforeSermon": "przed kazaniem",
     "afterSermon": "po kazaniu",
     "willBeTrimmed": "zostanie usunięte",
-    "willRemain": "kazania pozostaje"
+    "willRemain": "kazania pozostaje",
+    "export320kbps": "320 kbps (wysoka jakość)"
   },
   "master": {
     "title": "Mastering (przygotuj do publikacji)",
@@ -720,5 +726,29 @@
     "defaultIntro": "DOMYŚLNY JINGIEL INTRO",
     "defaultOutro": "DOMYŚLNY JINGIEL OUTRO",
     "howto": "<strong>Jak zacząć:</strong> Prześlij 1-3 nagrania testowe na Google Drive, kliknij „Wygeneruj feed teraz\" i wyślij wynikowy URL do Spotify for Podcasters i Apple Podcasts Connect. Po zatwierdzeniu (1-2 dni) każde nowe nagranie pojawia się automatycznie."
+  },
+  "tooltip": {
+    "close": "Zamknij",
+    "toggleVideo": "Włącz/wyłącz wideo",
+    "clipReset": "Przesterowanie — kliknij, aby zresetować",
+    "refreshDevices": "Odśwież listę urządzeń",
+    "mirrorCamera": "Odbij kamerę w poziomie",
+    "deleteAllHistory": "Usuń wszystkie nagrania z historii",
+    "maintenance": "Konserwacja",
+    "gotoToday": "Przejdź do dziś",
+    "autoChurchHolidays": "Dodaj święta kościelne automatycznie",
+    "unsavedChanges": "Niezapisane zmiany",
+    "play": "Odtwarzaj",
+    "preview": "Odtwórz podgląd (pomija wycięte fragmenty)",
+    "loop": "Pętla odtwarzania",
+    "jumpToClip": "Kliknij, aby przejść do pierwszego klipu",
+    "zoomIn": "Powiększ",
+    "zoomOut": "Pomniejsz",
+    "fitAll": "Pokaż cały plik"
+  },
+  "publish": {
+    "descPlaceholder": "Np. Nabożeństwa z Kościoła Przykładowego, w każdą niedzielę o 11",
+    "language": "JĘZYK",
+    "regenerateFeed": "Wygeneruj feed teraz"
   }
 }

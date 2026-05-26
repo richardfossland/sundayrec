@@ -1784,6 +1784,33 @@ body.platform-win32  #wake-instructions-win { display: block; }
 .inline-field-label { font-size: 13px; color: var(--text2); }
 .inline-field-input { max-width: 80px; }
 
+/* Editor review-banner detail text */
+.editor-review-banner-detail-text { font-size: 12px; color: var(--text2); }
+
+/* Review-queue card on Home — items awaiting publish review */
+.review-queue-card {
+  background: linear-gradient(135deg, rgba(122,170,255,.08), rgba(127,196,136,.06));
+  border: 1px solid rgba(122,170,255,.30);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.review-queue-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.review-queue-title {
+  margin: 0; font-size: 16px;
+  display: flex; align-items: center; gap: 8px;
+}
+.review-queue-icon { color: #7fc488; }
+.review-queue-count {
+  font-size: 12px; color: var(--text2);
+  background: rgba(255,255,255,.05);
+  padding: 3px 10px; border-radius: 12px;
+}
+.review-queue-list { display: flex; flex-direction: column; gap: 8px; }
+
 /* Notify tab — webhook intro card-desc with restrained color */
 .notify-webhook-intro { font-size: 13px; color: var(--text3); margin-bottom: 12px; }
 

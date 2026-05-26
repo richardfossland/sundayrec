@@ -65,7 +65,7 @@
       <button class="btn-toast-install" id="btn-toast-install"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/></svg><span>Start på nytt og installer</span></button>
     </div>
   </div>
-  <button class="btn-toast-close" id="btn-toast-close" title="Lukk">×</button>
+  <button class="btn-toast-close" id="btn-toast-close" title="Lukk" data-i18n-title="tooltip.close">×</button>
 </div>
 
 <!-- ── Titlebar drag strip (macOS double-click to zoom + drag) ── -->
@@ -88,15 +88,15 @@
   <section id="page-home" class="page active">
 
     <!-- Review queue card — only visible when items are pending review -->
-    <div class="card review-queue-card" id="review-queue-card" style="display:none;background:linear-gradient(135deg,rgba(122,170,255,0.08),rgba(127,196,136,0.06));border:1px solid rgba(122,170,255,0.3);border-radius:10px;padding:16px;margin-bottom:14px">
-      <div class="review-queue-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <h2 style="margin:0;font-size:16px;display:flex;align-items:center;gap:8px">
-          <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor" style="color:#7fc488"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-          <span>Klare for gjennomgang og publisering</span>
+    <div class="card review-queue-card" id="review-queue-card" style="display:none">
+      <div class="review-queue-header">
+        <h2 class="review-queue-title">
+          <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor" class="review-queue-icon"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+          <span data-i18n="review.queueTitle">Klare for gjennomgang og publisering</span>
         </h2>
-        <span class="review-queue-count" id="review-queue-count" style="font-size:12px;color:var(--text2);background:rgba(255,255,255,0.05);padding:3px 10px;border-radius:12px"></span>
+        <span class="review-queue-count" id="review-queue-count"></span>
       </div>
-      <div class="review-queue-list" id="review-queue-list" style="display:flex;flex-direction:column;gap:8px">
+      <div class="review-queue-list" id="review-queue-list">
         <!-- Items injected by review-queue-home.ts -->
       </div>
     </div>
@@ -134,7 +134,7 @@
         <span class="rec-dot-sm"></span>
         <span data-i18n="home.startRecording">Start opptak</span>
       </button>
-      <button class="btn-video-toggle" id="btn-video-toggle" title="Slå video på/av">
+      <button class="btn-video-toggle" id="btn-video-toggle" title="Slå video på/av" data-i18n-title="tooltip.toggleVideo">
         <svg viewBox="0 0 20 20" width="15" height="15" fill="currentColor">
           <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zm12.553 1.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/>
         </svg>
@@ -159,7 +159,7 @@
             <div class="vu-bar-fill" id="vu-l"></div>
             <div class="vu-bar-peak" id="vu-peak-l"></div>
           </div>
-          <div class="vu-bar-clip" id="vu-clip-l" title="Clip — klikk for å nullstille"></div>
+          <div class="vu-bar-clip" id="vu-clip-l" title="Clip — klikk for å nullstille" data-i18n-title="tooltip.clipReset"></div>
           <span class="vu-bar-val" id="vu-db-l">—</span>
         </div>
         <div class="vu-bar-row">
@@ -168,7 +168,7 @@
             <div class="vu-bar-fill" id="vu-r"></div>
             <div class="vu-bar-peak" id="vu-peak-r"></div>
           </div>
-          <div class="vu-bar-clip" id="vu-clip-r" title="Clip — klikk for å nullstille"></div>
+          <div class="vu-bar-clip" id="vu-clip-r" title="Clip — klikk for å nullstille" data-i18n-title="tooltip.clipReset"></div>
           <span class="vu-bar-val" id="vu-db-r">—</span>
         </div>
         <div class="vu-bar-scale-row">
@@ -209,10 +209,10 @@
           <select id="home-video-device-select" class="video-source-select">
             <option value="">Velg kamera…</option>
           </select>
-          <button id="btn-home-video-refresh" class="btn-icon-refresh" title="Oppdater enhetsliste">
+          <button id="btn-home-video-refresh" class="btn-icon-refresh" title="Oppdater enhetsliste" data-i18n-title="tooltip.refreshDevices">
             <svg viewBox="0 0 20 20" width="12" height="12" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/></svg>
           </button>
-          <button id="btn-home-video-flip" class="btn-icon-refresh btn-video-flip" title="Speil kamera horisontalt">
+          <button id="btn-home-video-flip" class="btn-icon-refresh btn-video-flip" title="Speil kamera horisontalt" data-i18n-title="tooltip.mirrorCamera">
             <svg viewBox="0 0 20 20" width="14" height="14" fill="currentColor">
               <path d="M9 4H5a1 1 0 00-1 1v10a1 1 0 001 1h4V4z" opacity=".4"/>
               <path d="M11 4h4a1 1 0 011 1v10a1 1 0 01-1 1h-4V4z"/>
@@ -300,8 +300,8 @@
     <div class="section-header">
       <h2 data-i18n="home.recentRecordings">Siste opptak</h2>
       <div style="display:flex;gap:10px;align-items:center">
-        <a href="#" class="view-all" id="btn-clear-history" title="Slett alle opptak fra historikken" data-i18n="history.clearBtn">Slett alle</a>
-        <button class="btn-history-more" id="btn-history-more" title="Vedlikehold" aria-expanded="false">⋯</button>
+        <a href="#" class="view-all" id="btn-clear-history" title="Slett alle opptak fra historikken" data-i18n-title="tooltip.deleteAllHistory" data-i18n="history.clearBtn">Slett alle</a>
+        <button class="btn-history-more" id="btn-history-more" title="Vedlikehold" data-i18n-title="tooltip.maintenance" aria-expanded="false">⋯</button>
       </div>
     </div>
     <div id="history-more-panel" class="history-more-panel" style="display:none">
@@ -354,11 +354,11 @@
         <div class="cal-month-nav">
           <div class="cal-nav-left">
             <button id="cal-prev">‹</button>
-            <button id="btn-today" class="btn-today" title="Gå til i dag" data-i18n="calendar.today">I dag</button>
+            <button id="btn-today" class="btn-today" title="Gå til i dag" data-i18n-title="tooltip.gotoToday" data-i18n="calendar.today">I dag</button>
           </div>
           <span id="cal-month-label" style="font-weight:700;font-size:15px"></span>
           <div class="cal-nav-right">
-            <button id="btn-autofill" class="btn-autofill-icon" title="Legg til kirkehøytider automatisk">
+            <button id="btn-autofill" class="btn-autofill-icon" title="Legg til kirkehøytider automatisk" data-i18n-title="tooltip.autoChurchHolidays">
               <span data-i18n="calendar.autofillShort">Kirkehøytider</span> <span id="autofill-year"></span>
             </button>
             <button id="cal-next">›</button>
@@ -668,7 +668,7 @@
               <path d="M7 10 Q10 4 13 10 Q16 16 19 10" opacity=".9"/><path d="M22 10h4" opacity=".2"/>
             </svg>
             <div class="option-card-name">Mono L</div>
-            <div class="option-card-desc">Kun venstre</div>
+            <div class="option-card-desc" data-i18n="audio.leftOnly">Kun venstre</div>
           </label>
           <label class="option-card">
             <input type="radio" name="channels" value="monoR" />
@@ -676,7 +676,7 @@
               <path d="M6 10h4" opacity=".2"/><path d="M13 10 Q16 4 19 10 Q22 16 25 10" opacity=".9"/>
             </svg>
             <div class="option-card-name">Mono R</div>
-            <div class="option-card-desc">Kun høyre</div>
+            <div class="option-card-desc" data-i18n="audio.rightOnly">Kun høyre</div>
           </label>
         </div>
 
@@ -763,7 +763,7 @@
             <input type="radio" name="format" value="wav" />
             <div class="format-card-name">WAV</div>
             <div class="format-card-size">~635 MB / time</div>
-            <div class="option-card-desc">Ukomprimert, høyest kvalitet</div>
+            <div class="option-card-desc" data-i18n="files.formatWavDesc">Ukomprimert, høyest kvalitet</div>
           </label>
         </div>
 
@@ -785,7 +785,7 @@
             <label class="quality-step">
               <input type="radio" name="bitrate" value="320" />
               <div class="quality-bars"><div class="qb qb1"></div><div class="qb qb2"></div><div class="qb qb3"></div></div>
-              <div class="quality-label">Høyeste</div>
+              <div class="quality-label" data-i18n="files.qualityHighest">Høyeste</div>
               <div class="quality-sub">~140 MB / time</div>
             </label>
           </div>
@@ -1045,12 +1045,12 @@
 
           <div>
             <label class="form-label" for="podcast-description">BESKRIVELSE</label>
-            <textarea class="form-input" id="podcast-description" rows="2" placeholder="Eks: Gudstjenester fra Eksempel kirke, hver søndag kl 11"></textarea>
+            <textarea class="form-input" id="podcast-description" rows="2" data-i18n-placeholder="publish.descPlaceholder" placeholder="Eks: Gudstjenester fra Eksempel kirke, hver søndag kl 11"></textarea>
           </div>
 
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
             <div>
-              <label class="form-label" for="podcast-language">SPRÅK</label>
+              <label class="form-label" for="podcast-language" data-i18n="publish.language">SPRÅK</label>
               <select class="form-input" id="podcast-language">
                 <option value="no">Norsk</option>
                 <option value="en">English</option>
@@ -1096,7 +1096,7 @@
           </div>
 
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-            <button class="btn-primary" id="btn-podcast-regenerate">Generer feed nå</button>
+            <button class="btn-primary" id="btn-podcast-regenerate" data-i18n="publish.regenerateFeed">Generer feed nå</button>
             <span id="podcast-status" style="font-size:12px;color:var(--text3)"></span>
           </div>
 
@@ -1427,7 +1427,7 @@
         </div>
         <div class="btn-row mt">
           <button class="btn-secondary" id="btn-check-updates" data-i18n="general.checkNow">Se etter oppdateringer</button>
-          <button class="btn-primary" id="btn-restart-install" style="display:none">↺ Start på nytt og installer</button>
+          <button class="btn-primary" id="btn-restart-install" style="display:none" data-i18n="update.restartInstall">↺ Start på nytt og installer</button>
         </div>
       </div>
       <!-- "Rediger — standardklipp"-kortet er fjernet i v4.31. Brukeren setter
@@ -1505,7 +1505,7 @@
           <div style="font-size:22px">✨</div>
           <div style="flex:1">
             <div style="font-weight:600;font-size:14px;color:#7fc488;margin-bottom:2px">Klargjort for publisering</div>
-            <div style="font-size:12px;color:var(--text2)" id="editor-review-banner-detail">Vi har detektert prekenen og foreslått trim. Gå over og trykk publiser.</div>
+            <div class="editor-review-banner-detail-text" id="editor-review-banner-detail" data-i18n="review.bannerDetail">Vi har detektert prekenen og foreslått trim. Gå over og trykk publiser.</div>
           </div>
         </div>
         <!-- Per-episode jingle override -->
@@ -1550,20 +1550,20 @@
         <div class="editor-file-row">
           <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor" style="flex-shrink:0;opacity:.6"><path d="M4 4a2 2 0 012-2h4l2 2h4a2 2 0 012 2v9a2 2 0 01-2 2H6a2 2 0 01-2-2z"/></svg>
           <span id="editor-filename" class="editor-filename"></span>
-          <span id="editor-dirty-dot" class="editor-dirty-dot" title="Ulagrede endringer" style="display:none">●</span>
+          <span id="editor-dirty-dot" class="editor-dirty-dot" title="Ulagrede endringer" data-i18n-title="tooltip.unsavedChanges" style="display:none">●</span>
           <span id="editor-header-summary" class="editor-header-summary"></span>
           <span style="flex:1"></span>
           <button class="btn-ghost btn-sm" id="btn-editor-change" data-i18n="editor.openOther">Åpne annen fil</button>
           <button class="btn-ghost btn-sm" id="btn-editor-close" data-i18n="editor.closeFile">Lukk fil</button>
         </div>
         <div class="editor-transport">
-          <button class="btn-editor-play" id="btn-editor-play" title="Spill av">
+          <button class="btn-editor-play" id="btn-editor-play" title="Spill av" data-i18n-title="tooltip.play">
             <svg id="editor-play-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M6.3 4.6a1 1 0 011.4 0l6 5a1 1 0 010 1.6l-6 5A1 1 0 016 15.4V4.6z"/></svg>
           </button>
-          <button class="btn-editor-play btn-editor-preview" id="btn-editor-preview" title="Spill forhåndsvisning (hopper over kuttede deler)">
+          <button class="btn-editor-play btn-editor-preview" id="btn-editor-preview" title="Spill forhåndsvisning (hopper over kuttede deler)" data-i18n-title="tooltip.preview">
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 4l6 6-6 6V4z" fill="currentColor" stroke="none"/><path d="M14 4v12" stroke-linecap="round"/></svg>
           </button>
-          <button class="btn-editor-play btn-editor-loop" id="btn-editor-loop" title="Loope avspilling">
+          <button class="btn-editor-play btn-editor-loop" id="btn-editor-loop" title="Loope avspilling" data-i18n-title="tooltip.loop">
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 10a6 6 0 016-6h4M14 4l2 2-2 2M16 10a6 6 0 01-6 6H6M6 16l-2-2 2-2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
           <div class="editor-time">
@@ -1571,7 +1571,7 @@
             <span class="editor-time-sep">/</span>
             <span class="editor-time-tot" id="editor-time-tot">0:00:00</span>
           </div>
-          <div id="editor-clip-badge" class="editor-clip-badge" style="display:none" title="Klikk for å hoppe til første klipp"></div>
+          <div id="editor-clip-badge" class="editor-clip-badge" style="display:none" title="Klikk for å hoppe til første klipp" data-i18n-title="tooltip.jumpToClip"></div>
         </div>
       </div>
 
@@ -1589,13 +1589,13 @@
       <!-- Toolbar -->
       <div class="editor-toolbar">
         <div class="editor-zoom-group">
-          <button class="btn-editor-tool" id="btn-zoom-in" title="Zoom inn">
+          <button class="btn-editor-tool" id="btn-zoom-in" title="Zoom inn" data-i18n-title="tooltip.zoomIn">
             <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8zm6-2a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1H6a1 1 0 110-2h1V7a1 1 0 011-1z"/></svg>
           </button>
-          <button class="btn-editor-tool" id="btn-zoom-out" title="Zoom ut">
+          <button class="btn-editor-tool" id="btn-zoom-out" title="Zoom ut" data-i18n-title="tooltip.zoomOut">
             <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8zm3 1a1 1 0 011-1h4a1 1 0 110 2H6a1 1 0 01-1-1z"/></svg>
           </button>
-          <button class="btn-editor-tool" id="btn-zoom-fit" title="Vis hele filen">
+          <button class="btn-editor-tool" id="btn-zoom-fit" title="Vis hele filen" data-i18n-title="tooltip.fitAll">
             <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a1 1 0 000 2h14a1 1 0 100-2H3zm0 5a1 1 0 000 2h14a1 1 0 100-2H3zm0 5a1 1 0 000 2h14a1 1 0 100-2H3z"/></svg>
           </button>
         </div>
@@ -1877,7 +1877,7 @@
         <option value="128">128 kbps</option>
         <option value="192" selected>192 kbps (standard)</option>
         <option value="256">256 kbps</option>
-        <option value="320">320 kbps (høy kvalitet)</option>
+        <option value="320" data-i18n="editor.export320kbps">320 kbps (høy kvalitet)</option>
       </select>
     </div>
     <div id="export-wav-opts" class="export-fmt-opts" style="display:none">
@@ -1999,7 +1999,7 @@
             <div class="vu-bar-fill" id="rec-vu-l"></div>
             <div class="vu-bar-peak" id="rec-vu-peak-l"></div>
           </div>
-          <div class="vu-bar-clip rec-vu-clip-el" id="rec-vu-clip-l" title="Clip — klikk for å nullstille"></div>
+          <div class="vu-bar-clip rec-vu-clip-el" id="rec-vu-clip-l" title="Clip — klikk for å nullstille" data-i18n-title="tooltip.clipReset"></div>
         </div>
         <div class="vu-bar-row">
           <span class="vu-bar-lbl rec-vu-lbl">R</span>
@@ -2007,7 +2007,7 @@
             <div class="vu-bar-fill" id="rec-vu-r"></div>
             <div class="vu-bar-peak" id="rec-vu-peak-r"></div>
           </div>
-          <div class="vu-bar-clip rec-vu-clip-el" id="rec-vu-clip-r" title="Clip — klikk for å nullstille"></div>
+          <div class="vu-bar-clip rec-vu-clip-el" id="rec-vu-clip-r" title="Clip — klikk for å nullstille" data-i18n-title="tooltip.clipReset"></div>
         </div>
         <div class="vu-bar-scale-row">
           <span class="rec-vu-lbl"></span>

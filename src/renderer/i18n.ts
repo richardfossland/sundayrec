@@ -52,5 +52,13 @@ function applyTranslations(): void {
     const key = (el as HTMLInputElement).dataset.i18nPlaceholder!
     const v = t(key); if (v) (el as HTMLInputElement).placeholder = v
   })
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    const key = (el as HTMLElement).dataset.i18nTitle!
+    const v = t(key); if (v) el.setAttribute('title', v)
+  })
+  document.querySelectorAll('[data-i18n-aria-label]').forEach(el => {
+    const key = (el as HTMLElement).dataset.i18nAriaLabel!
+    const v = t(key); if (v) el.setAttribute('aria-label', v)
+  })
   _applyTranslations()
 }

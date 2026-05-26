@@ -75,7 +75,8 @@
     "toastReadyTitle": "Bereit zur Installation",
     "toastReadyText": "Version {v} wurde heruntergeladen",
     "availableMac": "Version {v} — klicken Sie zum Herunterladen",
-    "toastAvailableMac": "Version {v} — klicken Sie zum Herunterladen"
+    "toastAvailableMac": "Version {v} — klicken Sie zum Herunterladen",
+    "restartInstall": "↺ Neu starten und installieren"
   },
   "history": {
     "title": "Verlauf",
@@ -389,7 +390,9 @@
     "release": "RELEASE (ms)",
     "limiter": "Limiter",
     "limiterDesc": "Verhindert Übersteuern bei hohen Pegeln (empfohlen)",
-    "ceiling": "MAXIMALPEGEL (dB)"
+    "ceiling": "MAXIMALPEGEL (dB)",
+    "leftOnly": "Nur links",
+    "rightOnly": "Nur rechts"
   },
   "files": {
     "title": "Dateien & Format",
@@ -423,7 +426,9 @@
     "whileRecording": "Während einer laufenden Aufnahme",
     "fileBehaviour": "Dateien",
     "deleteAfter": "Löschen nach",
-    "days": "Tagen"
+    "days": "Tagen",
+    "formatWavDesc": "Unkomprimiert, höchste Qualität",
+    "qualityHighest": "Höchste"
   },
   "general": {
     "title": "Allgemein",
@@ -571,7 +576,8 @@
     "beforeSermon": "vor der Predigt",
     "afterSermon": "nach der Predigt",
     "willBeTrimmed": "wird entfernt",
-    "willRemain": "Predigt verbleiben"
+    "willRemain": "Predigt verbleiben",
+    "export320kbps": "320 kbps (Hohe Qualität)"
   },
   "master": {
     "title": "Mastering (Vorbereitung zur Veröffentlichung)",
@@ -720,5 +726,29 @@
     "defaultIntro": "STANDARD-INTRO-JINGLE",
     "defaultOutro": "STANDARD-OUTRO-JINGLE",
     "howto": "<strong>Erste Schritte:</strong> Laden Sie 1-3 Testaufnahmen zu Google Drive hoch, klicken Sie auf „Feed jetzt generieren\", und senden Sie die URL an Spotify for Podcasters und Apple Podcasts Connect. Nach Genehmigung (1-2 Tage) erscheint jede neue Aufnahme automatisch."
+  },
+  "tooltip": {
+    "close": "Schließen",
+    "toggleVideo": "Video ein-/ausschalten",
+    "clipReset": "Clip — klicken zum Zurücksetzen",
+    "refreshDevices": "Geräteliste aktualisieren",
+    "mirrorCamera": "Kamera horizontal spiegeln",
+    "deleteAllHistory": "Alle Aufnahmen aus Verlauf löschen",
+    "maintenance": "Wartung",
+    "gotoToday": "Zum heutigen Datum",
+    "autoChurchHolidays": "Kirchliche Feiertage automatisch hinzufügen",
+    "unsavedChanges": "Nicht gespeicherte Änderungen",
+    "play": "Wiedergabe",
+    "preview": "Vorschau abspielen (überspringt geschnittene Bereiche)",
+    "loop": "Wiedergabe in Schleife",
+    "jumpToClip": "Klicken, um zum ersten Clip zu springen",
+    "zoomIn": "Vergrößern",
+    "zoomOut": "Verkleinern",
+    "fitAll": "Gesamte Datei anzeigen"
+  },
+  "publish": {
+    "descPlaceholder": "z. B. Gottesdienste der Beispiel-Kirche, jeden Sonntag um 11",
+    "language": "SPRACHE",
+    "regenerateFeed": "Feed jetzt generieren"
   }
 }

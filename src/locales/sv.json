@@ -75,7 +75,8 @@
     "toastReadyTitle": "Klar att installera",
     "toastReadyText": "Version {v} har laddats ner",
     "availableMac": "Version {v} — klicka för att ladda ner",
-    "toastAvailableMac": "Version {v} — klicka för att ladda ner"
+    "toastAvailableMac": "Version {v} — klicka för att ladda ner",
+    "restartInstall": "↺ Starta om och installera"
   },
   "history": {
     "title": "Historik",
@@ -389,7 +390,9 @@
     "release": "RELEASE (ms)",
     "limiter": "Limiter",
     "limiterDesc": "Förhindrar klippning vid höga ljudnivåer (rekommenderas)",
-    "ceiling": "TAK (dB)"
+    "ceiling": "TAK (dB)",
+    "leftOnly": "Endast vänster",
+    "rightOnly": "Endast höger"
   },
   "files": {
     "title": "Filer & Format",
@@ -423,7 +426,9 @@
     "whileRecording": "Medan en inspelning pågår",
     "fileBehaviour": "Filer",
     "deleteAfter": "Radera efter",
-    "days": "dagar"
+    "days": "dagar",
+    "formatWavDesc": "Okomprimerat, högsta kvalitet",
+    "qualityHighest": "Högsta"
   },
   "general": {
     "title": "Allmänt",
@@ -571,7 +576,8 @@
     "beforeSermon": "före predikan",
     "afterSermon": "efter predikan",
     "willBeTrimmed": "tas bort",
-    "willRemain": "predikan kvar"
+    "willRemain": "predikan kvar",
+    "export320kbps": "320 kbps (hög kvalitet)"
   },
   "master": {
     "title": "Mastring (förbered för publicering)",
@@ -720,5 +726,29 @@
     "defaultIntro": "STANDARD-INTRO-JINGEL",
     "defaultOutro": "STANDARD-OUTRO-JINGEL",
     "howto": "<strong>Kom igång:</strong> Ladda upp 1-3 testinspelningar till Google Drive, klicka på ”Generera feed nu”, och skicka URL:en som visas till Spotify for Podcasters och Apple Podcasts Connect. Efter godkännande (1-2 dagar) dyker varje ny inspelning upp automatiskt."
+  },
+  "tooltip": {
+    "close": "Stäng",
+    "toggleVideo": "Slå video på/av",
+    "clipReset": "Klippning — klicka för att nollställa",
+    "refreshDevices": "Uppdatera enhetslista",
+    "mirrorCamera": "Spegelvänd kamera horisontellt",
+    "deleteAllHistory": "Radera alla inspelningar från historik",
+    "maintenance": "Underhåll",
+    "gotoToday": "Gå till idag",
+    "autoChurchHolidays": "Lägg till kyrkohögtider automatiskt",
+    "unsavedChanges": "Osparade ändringar",
+    "play": "Spela upp",
+    "preview": "Spela förhandsvisning (hoppar över bortklippta delar)",
+    "loop": "Slinga upp uppspelning",
+    "jumpToClip": "Klicka för att hoppa till första klippning",
+    "zoomIn": "Zooma in",
+    "zoomOut": "Zooma ut",
+    "fitAll": "Visa hela filen"
+  },
+  "publish": {
+    "descPlaceholder": "T.ex. Gudstjänster från Exempelkyrkan, varje söndag kl. 11",
+    "language": "SPRÅK",
+    "regenerateFeed": "Generera feed nu"
   }
 }
