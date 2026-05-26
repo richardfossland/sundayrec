@@ -103,6 +103,34 @@ export function findSermonSegment(
   segments: PrepAnalysisSegment[],
   durationSec: number,
 ): { startSec: number; endSec: number; confidence: number; segIndex: number } | null {
+  // ── Case 0: sermon-only recording ─────────────────────────────────────
+  // Some churches record only the sermon, not the full service. If ≥80%
+  // of the file is speech and there's essentially no music (<5%), treat
+  // the entire file as sermon and return bounds covering all speech.
+  if (durationSec > 60) {
+    const speeches = segments.filter(s => s.type === 'speech')
+    const speechDur = speeches.reduce((sum, s) => sum + s.durationSec, 0)
+    const musicDur  = segments
+      .filter(s => s.type === 'music')
+      .reduce((sum, s) => sum + s.durationSec, 0)
+    const speechRatio = speechDur / durationSec
+    const musicRatio  = musicDur / durationSec
+
+    if (speeches.length > 0 && speechRatio >= 0.80 && musicRatio < 0.05) {
+      const first = speeches.reduce((a, b) => (a.startSec < b.startSec ? a : b))
+      const last  = speeches.reduce((a, b) => (a.endSec   > b.endSec   ? a : b))
+      const segIndex = segments.findIndex(s => s === first)
+      // Average confidence across all speech segments
+      const avgConf = speeches.reduce((sum, s) => sum + s.confidence, 0) / speeches.length
+      return {
+        startSec:  first.startSec,
+        endSec:    Math.min(last.endSec, durationSec),
+        confidence: avgConf,
+        segIndex:  Math.max(0, segIndex),
+      }
+    }
+  }
+
   let best: { startSec: number; endSec: number; confidence: number; segIndex: number } | null = null
   for (let i = 0; i < segments.length; i++) {
     const s = segments[i]

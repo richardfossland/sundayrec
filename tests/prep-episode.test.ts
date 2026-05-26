@@ -105,6 +105,66 @@ describe('findSermonSegment', () => {
   it('returns null for an empty segment array', () => {
     expect(prep.findSermonSegment([], 0)).toBeNull()
   })
+
+  // ── Sermon-only recording (Case 0) ───────────────────────────────────────
+  // Some churches record only the sermon, not the full service. The full file
+  // is then ≥80% speech with little/no music. Should return bounds covering
+  // ALL speech, not just the longest segment.
+
+  it('sermon-only: 25-min recording with continuous speech returns full span', () => {
+    // 25 min = 1500s of speech, broken into 3 chunks by short pauses
+    const segs: PrepAnalysisSegment[] = [
+      prepSeg('speech',  0,    480, 0.85),   // 0-8 min
+      prepSeg('silence', 480,  20),           // 20s pause (mic break)
+      prepSeg('speech',  500,  600, 0.85),   // 8m20s-18m20s
+      prepSeg('silence', 1100, 15),
+      prepSeg('speech',  1115, 385, 0.85),   // 18m35s-25m
+    ]
+    const result = prep.findSermonSegment(segs, 1500)
+    expect(result).not.toBeNull()
+    expect(result!.startSec).toBe(0)
+    expect(result!.endSec).toBe(1500)
+  })
+
+  it('sermon-only: trims silent edges (mic-on/mic-off captured pauses)', () => {
+    const segs: PrepAnalysisSegment[] = [
+      prepSeg('silence', 0,   12),           // 12s mic-on silence
+      prepSeg('speech',  12,  1400, 0.85),   // ~23 min sermon
+      prepSeg('silence', 1412, 8),           // 8s mic-off silence
+    ]
+    const result = prep.findSermonSegment(segs, 1420)
+    expect(result).not.toBeNull()
+    expect(result!.startSec).toBe(12)
+    expect(result!.endSec).toBe(1412)
+  })
+
+  it('sermon-only is NOT triggered for full service with music', () => {
+    // 90-min service with worship music, sermon, closing songs.
+    // speech-ratio is below 80% threshold.
+    const segs: PrepAnalysisSegment[] = [
+      prepSeg('music',  0,    900),    // 15 min worship
+      prepSeg('speech', 900,  240, 0.7), // 4 min announcements
+      prepSeg('music',  1140, 240),    // 4 min hymn
+      prepSeg('speech', 1380, 1800, 0.85), // 30 min sermon
+      prepSeg('music',  3180, 600),    // 10 min closing music
+      prepSeg('speech', 3780, 120, 0.7), // closing remarks
+    ]
+    const result = prep.findSermonSegment(segs, 3900)
+    expect(result).not.toBeNull()
+    // Should find the 30-min sermon block, NOT span the entire file
+    expect(result!.startSec).toBe(1380)
+    expect(result!.endSec).toBe(3180)
+  })
+
+  it('sermon-only is skipped for very short clips (under 60s total)', () => {
+    const segs: PrepAnalysisSegment[] = [
+      prepSeg('speech', 0, 50, 0.85),
+    ]
+    // Short clip — should fall through to normal logic, which rejects
+    // the 50s segment as too short for sermon (<3 min minimum).
+    const result = prep.findSermonSegment(segs, 50)
+    expect(result).toBeNull()
+  })
 })
 
 // ── deriveAttentionReasons ────────────────────────────────────────────────

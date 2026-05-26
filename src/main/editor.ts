@@ -896,7 +896,14 @@ export interface AudioSegment {
 }
 
 /** Pick the most plausible "sermon" segment from analysis output.
- *  Improved heuristic vs. the original 4.31 version:
+ *
+ *  Heuristic, in priority order:
+ *
+ *    0. SERMON-ONLY recording. Some churches only record the sermon, not
+ *       the full service. If ≥80% of the file is speech and there is
+ *       essentially no music (<5%), we treat the ENTIRE file as sermon —
+ *       returning bounds from first to last speech segment (trims only
+ *       silence at the very edges).
  *    1. Filter to speech segments ≥ 3 min (anything shorter is announcements,
  *       a reading, or a short prayer — never the sermon).
  *    2. If exactly ONE candidate qualifies → that's the sermon, regardless
@@ -911,6 +918,31 @@ function findSermonSegmentLocal(
 ): { startSec: number; endSec: number } | null {
   const speeches = segments.filter(s => s.type === 'speech')
   if (speeches.length === 0) return null
+
+  // ── Case 0: sermon-only recording ─────────────────────────────────────
+  // Some churches record just the sermon. Compute speech/music ratios
+  // against actual recording span (not just sum-of-segments — silence
+  // between speech still counts as recording time).
+  const firstSeg = segments[0]
+  const lastSeg  = segments[segments.length - 1]
+  const totalDur = lastSeg.endSec - firstSeg.startSec
+  if (totalDur > 60) {  // Skip the heuristic for tiny clips where ratios are noisy
+    const speechDur = speeches.reduce((sum, s) => sum + s.durationSec, 0)
+    const musicDur  = segments
+      .filter(s => s.type === 'music')
+      .reduce((sum, s) => sum + s.durationSec, 0)
+    const speechRatio = speechDur / totalDur
+    const musicRatio  = musicDur / totalDur
+
+    if (speechRatio >= 0.80 && musicRatio < 0.05) {
+      // Sermon-only recording. Return bounds covering all speech — trims
+      // only the silence at the file's edges (e.g. mic-on / mic-off
+      // pauses that the recorder captured).
+      const first = speeches.reduce((a, b) => (a.startSec < b.startSec ? a : b))
+      const last  = speeches.reduce((a, b) => (a.endSec   > b.endSec   ? a : b))
+      return { startSec: first.startSec, endSec: last.endSec }
+    }
+  }
 
   const MIN_SERMON_SEC = 180  // 3 minutes
   const longCandidates = speeches.filter(s => s.durationSec >= MIN_SERMON_SEC)
