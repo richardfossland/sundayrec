@@ -11,7 +11,8 @@
     "audio": "Audioquelle",
     "files": "Dateien",
     "general": "Allgemein",
-    "editor": "Bearbeiten"
+    "editor": "Bearbeiten",
+    "live": "Live"
   },
   "status": {
     "ready": "Alles bereit",

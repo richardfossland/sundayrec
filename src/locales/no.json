@@ -11,7 +11,8 @@
     "audio": "Lydkilde",
     "files": "Filer",
     "general": "Generelt",
-    "editor": "Rediger"
+    "editor": "Rediger",
+    "live": "Direkte"
   },
   "status": {
     "ready": "Alt er klart",
@@ -835,6 +836,40 @@
     "connecting": "Kobler til…",
     "needsReauth": "trenger pålogging på nytt. Klikk for å koble til.",
     "reauth": "Koble til på nytt",
-    "oauthKeyMissing": "-OAuth-nøkkel er ikke satt i denne byggingen."
+    "oauthKeyMissing": "-OAuth-nøkkel er ikke satt i denne byggingen.",
+    "streamTitle": "Direktesending",
+    "streamIntro": "Stream gudstjenester live til YouTube, Facebook eller egen RTMP-server.",
+    "streamAddDestination": "+ Legg til destinasjon",
+    "streamName": "NAVN",
+    "streamRtmpUrl": "RTMP-URL",
+    "streamKey": "STREAM-KEY",
+    "streamKeySaved": "•••••• Lagret",
+    "streamKeyPlaceholder": "Lim inn stream-key her",
+    "streamQuality": "STREAM-KVALITET",
+    "streamFramerate": "BILDERATE",
+    "streamConfirmDelete": "Slette denne destinasjonen?",
+    "streamNoneYet": "Ingen destinasjoner enda.",
+    "enabled": "Aktivert"
+  },
+  "live": {
+    "title": "Direkte sending",
+    "subtitle": "Stream gudstjenester direkte til YouTube, Facebook eller egen RTMP-server.",
+    "statusReady": "Klar",
+    "statusPreparing": "Forbereder…",
+    "statusLive": "🔴 Live",
+    "startBtn": "▶ Start direktesending",
+    "stopBtn": "■ Stopp",
+    "destinations": "Destinasjoner",
+    "statsTitle": "Statistikk",
+    "bitrate": "Bitrate",
+    "fps": "FPS",
+    "dropped": "Tapte rammer",
+    "uptime": "Tid",
+    "configDestinations": "→ Konfigurer destinasjoner",
+    "noDestinations": "Ingen destinasjoner konfigurert. Gå til Innstillinger → Publisering.",
+    "preparing": "Kobler til…",
+    "connectionFailed": "Tilkobling feilet",
+    "previewWaiting": "Forhåndsvisning kommer når stream starter",
+    "errNoActive": "Ingen aktive destinasjoner med lagret stream-key."
   }
 }

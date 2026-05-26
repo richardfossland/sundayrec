@@ -11,7 +11,8 @@
     "audio": "Źródło dźwięku",
     "files": "Pliki",
     "general": "Ogólne",
-    "editor": "Edycja"
+    "editor": "Edycja",
+    "live": "Na żywo"
   },
   "status": {
     "ready": "Wszystko gotowe",

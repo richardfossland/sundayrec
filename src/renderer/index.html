@@ -34,6 +34,10 @@
       <svg viewBox="0 0 20 20"><path d="M6 2v2H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-2V2h-2v2H8V2zm8 6H6v2h8zm0 4H6v2h8z"/></svg>
       <span data-i18n="nav.schedule">Tidsplan</span>
     </a></li>
+    <li><a class="nav-link" data-page="live" href="#">
+      <svg viewBox="0 0 20 20" fill="currentColor"><circle cx="10" cy="10" r="3"/><circle cx="10" cy="10" r="6" stroke="currentColor" stroke-width="1" fill="none" opacity=".5"/></svg>
+      <span data-i18n="nav.live">Direkte</span>
+    </a></li>
     <li><a href="#" class="nav-link" data-page="editor">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 10h14M3 6h3m11 0h-3M3 14h3m11 0h-3" stroke-linecap="round"/><circle cx="7.5" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="12.5" cy="14" r="1.5" fill="currentColor" stroke="none"/></svg>
       <span data-i18n="nav.editor">Rediger</span>
@@ -556,6 +560,118 @@
 
   </section>
 
+  <!-- ══ DIREKTE ═════════════════════════════════════════════════ -->
+  <section id="page-live" class="page">
+
+    <div class="page-header live-page-header">
+      <div>
+        <h1 data-i18n="live.title">Direkte sending</h1>
+        <p class="subtitle" data-i18n="live.subtitle">Stream gudstjenester direkte til YouTube, Facebook eller egen RTMP-server.</p>
+      </div>
+      <span id="live-status-pill" class="live-status-pill is-idle">
+        <span class="live-status-pill-dot"></span>
+        <span id="live-status-pill-text" data-i18n="live.statusReady">Klar</span>
+      </span>
+    </div>
+
+    <!-- Top row: preview + stats/destinations -->
+    <div class="live-grid">
+
+      <!-- Big preview -->
+      <div class="card live-preview-card">
+        <div class="live-preview-frame">
+          <img id="live-preview-img" class="live-preview-img" alt="" />
+          <div id="live-preview-placeholder" class="live-preview-placeholder">
+            <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40">
+              <rect x="6" y="10" width="36" height="28" rx="3"/>
+              <circle cx="24" cy="24" r="6"/>
+              <circle cx="24" cy="24" r="2" fill="currentColor"/>
+            </svg>
+            <div class="live-preview-placeholder-text" data-i18n="live.previewWaiting">Forhåndsvisning kommer når stream starter</div>
+          </div>
+          <div id="live-preview-overlay-tag" class="live-preview-overlay-tag" style="display:none">
+            <span class="live-preview-overlay-dot"></span>
+            <span data-i18n="live.statusLive">🔴 Live</span>
+          </div>
+        </div>
+        <div class="live-preview-vu">
+          <div class="live-vu-bar" id="live-vu-bar-l"><div class="live-vu-fill"></div></div>
+          <div class="live-vu-bar" id="live-vu-bar-r"><div class="live-vu-fill"></div></div>
+        </div>
+      </div>
+
+      <!-- Right column: stats + destinations + quality -->
+      <div class="live-side-col">
+        <div class="card live-stats-card">
+          <div class="card-title" data-i18n="live.statsTitle">Statistikk</div>
+          <div class="live-stats-grid">
+            <div class="live-stat">
+              <div class="live-stat-label" data-i18n="live.uptime">Tid</div>
+              <div class="live-stat-value" id="live-stat-uptime">00:00</div>
+            </div>
+            <div class="live-stat">
+              <div class="live-stat-label" data-i18n="live.bitrate">Bitrate</div>
+              <div class="live-stat-value" id="live-stat-bitrate">0 kbps</div>
+            </div>
+            <div class="live-stat">
+              <div class="live-stat-label" data-i18n="live.fps">FPS</div>
+              <div class="live-stat-value" id="live-stat-fps">0</div>
+            </div>
+            <div class="live-stat">
+              <div class="live-stat-label" data-i18n="live.dropped">Tapte rammer</div>
+              <div class="live-stat-value" id="live-stat-dropped">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card live-destinations-card">
+          <div class="card-title" data-i18n="live.destinations">Destinasjoner</div>
+          <div id="live-destinations-list"></div>
+          <div id="live-destinations-empty" class="live-destinations-empty" style="display:none">
+            <p data-i18n="live.noDestinations">Ingen destinasjoner konfigurert. Gå til Innstillinger → Publisering.</p>
+          </div>
+          <a href="#" class="live-config-link" id="live-config-link" data-i18n="live.configDestinations">→ Konfigurer destinasjoner</a>
+        </div>
+
+        <div class="card live-quality-card">
+          <div class="card-title" data-i18n="publish.streamQuality">STREAM-KVALITET</div>
+          <div class="option-cards live-quality-options" style="grid-template-columns:1fr 1fr 1fr">
+            <label class="option-card">
+              <input type="radio" name="live-resolution" value="480p" />
+              <div class="option-card-name">480p</div>
+              <div class="option-card-desc">1.5 Mbps</div>
+            </label>
+            <label class="option-card">
+              <input type="radio" name="live-resolution" value="720p" checked />
+              <div class="option-card-name">720p</div>
+              <div class="option-card-badge" data-i18n="video.recommended">Anbefalt</div>
+              <div class="option-card-desc">4.5 Mbps</div>
+            </label>
+            <label class="option-card">
+              <input type="radio" name="live-resolution" value="1080p" />
+              <div class="option-card-name">1080p</div>
+              <div class="option-card-desc">6 Mbps</div>
+            </label>
+          </div>
+          <label class="form-label mt" data-i18n="publish.streamFramerate">BILDERATE</label>
+          <select id="live-framerate" class="form-input" style="max-width:200px">
+            <option value="25">25 fps</option>
+            <option value="30" selected>30 fps</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Start/Stop bar -->
+    <div class="live-action-bar">
+      <button class="live-start-btn" id="btn-live-start" type="button">
+        <span data-i18n="live.startBtn">▶ Start direktesending</span>
+      </button>
+      <div class="live-error" id="live-error" style="display:none"></div>
+    </div>
+
+  </section>
+
   <!-- ══ INNSTILLINGER ════════════════════════════════════════════ -->
   <section id="page-settings" class="page">
     <div class="inner-tabs" id="settings-tabs">
@@ -1011,6 +1127,40 @@
 
         <!-- Queue-panelet rendres her av publish-page.ts -->
         <div id="cloud-queue-anchor"></div>
+      </div>
+
+      <!-- ── Direktesending (RTMP / live-stream-destinasjoner) ───── -->
+      <div class="card" id="stream-destinations-card">
+        <div class="card-title" data-i18n="publish.streamTitle">Direktesending</div>
+        <p class="card-desc" data-i18n="publish.streamIntro">Stream gudstjenester live til YouTube, Facebook eller egen RTMP-server.</p>
+        <div id="stream-destinations-list" class="stream-destinations-list"></div>
+        <button class="btn-secondary btn-sm" id="btn-add-stream-destination" type="button" data-i18n="publish.streamAddDestination">+ Legg til destinasjon</button>
+
+        <label class="form-label mt" data-i18n="publish.streamQuality">STREAM-KVALITET</label>
+        <div class="option-cards" style="grid-template-columns:1fr 1fr 1fr">
+          <label class="option-card">
+            <input type="radio" name="stream-resolution" value="480p" />
+            <div class="option-card-name">480p</div>
+            <div class="option-card-desc">1.5 Mbps</div>
+          </label>
+          <label class="option-card">
+            <input type="radio" name="stream-resolution" value="720p" checked />
+            <div class="option-card-name">720p</div>
+            <div class="option-card-badge" data-i18n="video.recommended">Anbefalt</div>
+            <div class="option-card-desc">4.5 Mbps</div>
+          </label>
+          <label class="option-card">
+            <input type="radio" name="stream-resolution" value="1080p" />
+            <div class="option-card-name">1080p</div>
+            <div class="option-card-desc">6 Mbps</div>
+          </label>
+        </div>
+
+        <label class="form-label mt" data-i18n="publish.streamFramerate">BILDERATE</label>
+        <select id="stream-framerate" class="form-input" style="max-width:200px">
+          <option value="25">25 fps</option>
+          <option value="30" selected>30 fps</option>
+        </select>
       </div>
 
       <!-- ── Podcast RSS-feed (auto-publisering) ─────────────────── -->

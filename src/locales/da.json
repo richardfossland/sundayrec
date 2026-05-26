@@ -11,7 +11,8 @@
     "audio": "Lydkilde",
     "files": "Filer",
     "general": "Generelt",
-    "editor": "Rediger"
+    "editor": "Rediger",
+    "live": "Direkte"
   },
   "status": {
     "ready": "Alt er klar",

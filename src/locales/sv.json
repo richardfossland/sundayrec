@@ -11,7 +11,8 @@
     "audio": "Ljudkälla",
     "files": "Filer",
     "general": "Allmänt",
-    "editor": "Redigera"
+    "editor": "Redigera",
+    "live": "Direkt"
   },
   "status": {
     "ready": "Allt är klart",

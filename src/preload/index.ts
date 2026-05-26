@@ -36,6 +36,7 @@ const ALLOWED_CHANNELS = [
   'youtube-upload-progress',
   'whisper-progress',
   'whisper-model-progress',
+  'stream-stats',
 ] as const
 
 type AllowedChannel = typeof ALLOWED_CHANNELS[number]
@@ -121,6 +122,13 @@ contextBridge.exposeInMainWorld('api', {
   podcastRegenerate:   (service: string) => ipcRenderer.invoke('podcast-regenerate', service),
 
   registerTrustedPath: (filePath: string) => ipcRenderer.invoke('register-trusted-path', filePath),
+
+  streamStatus:        ()                             => ipcRenderer.invoke('stream-status'),
+  streamStart:         (params: unknown)              => ipcRenderer.invoke('stream-start', params),
+  streamStop:          ()                             => ipcRenderer.invoke('stream-stop'),
+  streamPreviewPath:   ()                             => ipcRenderer.invoke('stream-preview-path'),
+  streamSetKey:        (destId: string, key: string)  => ipcRenderer.invoke('stream-set-key', destId, key),
+  streamDeleteKey:     (destId: string)               => ipcRenderer.invoke('stream-delete-key', destId),
 
   editorReadTranscript:    (filePath: string)       => ipcRenderer.invoke('editor-read-transcript', filePath),
   editorWriteTranscript:   (filePath: string, t: unknown) => ipcRenderer.invoke('editor-write-transcript', filePath, t),

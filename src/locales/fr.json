@@ -11,7 +11,8 @@
     "audio": "Source audio",
     "files": "Fichiers",
     "general": "Général",
-    "editor": "Éditeur"
+    "editor": "Éditeur",
+    "live": "Direct"
   },
   "status": {
     "ready": "Tout est prêt",

@@ -14,6 +14,7 @@ import { setupEditorPage, openEditorWithFile, openEditorReviewMode, deactivateEd
 import { checkAndShowOnboarding, showOnboarding } from './pages/onboarding'
 import { setupVideoPage, applyVideoSettingsToUI, refreshVideoDevices } from './pages/video-page'
 import { setupPublishPage, applyPublishSettingsToUI } from './pages/publish-page'
+import { setupLivePage, deactivateLivePage, reactivateLivePage } from './pages/live-page'
 
 // Expose globals that sub-modules need
 declare global {
@@ -126,6 +127,13 @@ declare global {
       cloudQueueFlush:     () => Promise<boolean>
       podcastRegenerate:   (service: string) => Promise<{ ok: boolean; feedUrl?: string; episodeCount: number; error?: string }>
       registerTrustedPath: (filePath: string) => Promise<boolean>
+      streamStatus:       () => Promise<{ active: boolean; startedAt: number | null; bitrateKbps: number; fps: number; dropped: number; lastLine: string; destinations: Array<{ id: string; state: string }> }>
+      streamStart:        (params: { resolution?: string; framerate?: number; videoBitrateKbps?: number; destinations: Array<{ id: string; name: string; rtmpUrl: string; enabled: boolean }> }) => Promise<{ ok: boolean; error?: string }>
+      streamStop:         () => Promise<boolean>
+      streamPreviewPath:  () => Promise<string>
+      streamSetKey:       (destId: string, key: string) => Promise<boolean>
+      streamDeleteKey:    (destId: string) => Promise<boolean>
+
       editorReadTranscript:    (filePath: string) => Promise<import('../types').TranscriptData | null>
       editorWriteTranscript:   (filePath: string, t: unknown) => Promise<boolean>
       editorDeleteTranscript:  (filePath: string) => Promise<boolean>
@@ -193,6 +201,7 @@ function applyAllSettingsToUI(s: Settings): void {
 function showPage(id: string): void {
   if (id !== 'home') { stopVU(); stopVideoPreview(); deactivateHome() }
   if (id !== 'editor') deactivateEditor()
+  if (id !== 'live') deactivateLivePage()
   if (id !== 'settings') stopMonitoring()
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'))
   document.querySelectorAll('.nav-link').forEach(a => a.classList.remove('active'))
@@ -201,6 +210,7 @@ function showPage(id: string): void {
   if (id === 'home')     refreshHome()
   if (id === 'schedule') renderCalendar()
   if (id === 'editor')   reactivateEditor()
+  if (id === 'live')     reactivateLivePage()
   if (id === 'settings') {
     const activeTab = document.querySelector<HTMLElement>('#settings-tabs .inner-tab.active')?.dataset.tab
     if (!activeTab || activeTab === 'settings-audio') renderDeviceList('device-list')
@@ -301,6 +311,7 @@ async function init(): Promise<void> {
   setupRecording()
   setupEditorPage()
   setupPublishPage()
+  setupLivePage()
   setupClipReset()
   setupSettingsTabs()
 

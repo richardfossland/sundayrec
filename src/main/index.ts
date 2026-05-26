@@ -1271,6 +1271,73 @@ function setupIPC(): void {
     const yt = await import('./cloud/youtube')
     return { connected: yt.isConnected() }
   })
+  // ─── Live streaming ──────────────────────────────────────────────────────
+  ipcMain.handle('stream-status', async () => {
+    const s = await import('./streamer')
+    return s.getStats()
+  })
+
+  ipcMain.handle('stream-start', async (event, params: unknown) => {
+    if (!params || typeof params !== 'object') return { ok: false, error: 'invalid_params' }
+    const p = params as {
+      resolution?: string
+      framerate?: number
+      videoBitrateKbps?: number
+      destinations?: Array<{ id: string; name: string; rtmpUrl: string; enabled: boolean }>
+    }
+    if (!Array.isArray(p.destinations) || p.destinations.length === 0) {
+      return { ok: false, error: 'Ingen destinasjoner valgt.' }
+    }
+
+    const { getStreamKey } = await import('./stream-keys')
+    const settings = store.getAll()
+    const fullDests = p.destinations.map(d => ({
+      id:        d.id,
+      name:      d.name,
+      rtmpUrl:   d.rtmpUrl,
+      streamKey: getStreamKey(d.id) ?? '',
+      enabled:   d.enabled,
+    }))
+
+    const { startStream, setStatsListener } = await import('./streamer')
+    setStatsListener(stats => {
+      try { mainWindow?.webContents.send('stream-stats', stats) } catch {}
+    })
+    return startStream({
+      audioDeviceName:  settings.deviceName ?? undefined,
+      videoDeviceName:  settings.videoDeviceName ?? undefined,
+      resolution:       (p.resolution as '480p' | '720p' | '1080p') ?? settings.streamResolution ?? '720p',
+      framerate:        (p.framerate as 25 | 30) ?? settings.streamFramerate ?? 30,
+      videoBitrateKbps: p.videoBitrateKbps,
+      destinations:     fullDests,
+    })
+  })
+
+  ipcMain.handle('stream-stop', async () => {
+    const s = await import('./streamer')
+    return s.stopStream()
+  })
+
+  ipcMain.handle('stream-preview-path', async () => {
+    const s = await import('./streamer')
+    return s.getPreviewPath()
+  })
+
+  ipcMain.handle('stream-set-key', async (_, destId: string, key: string) => {
+    if (typeof destId !== 'string' || !destId) return false
+    if (typeof key !== 'string') return false
+    const { setStreamKey } = await import('./stream-keys')
+    setStreamKey(destId, key)
+    return true
+  })
+
+  ipcMain.handle('stream-delete-key', async (_, destId: string) => {
+    if (typeof destId !== 'string' || !destId) return false
+    const { deleteStreamKey } = await import('./stream-keys')
+    deleteStreamKey(destId)
+    return true
+  })
+
   // ─── Transcript sidecar (per-file .transcript.json) ─────────────────────
   ipcMain.handle('editor-read-transcript', async (_, filePath: string) => {
     if (typeof filePath !== 'string' || !isAllowedMediaPath(filePath)) return null

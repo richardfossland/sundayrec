@@ -291,6 +291,30 @@ export interface Settings {
 
   // Wake reliability — capped log of recent missed wakes and test-wake outcomes (max 20)
   wakeFailureHistory?: WakeFailureEntry[]
+
+  // Live streaming destinations. Stream keys are stored ENCRYPTED via
+  // electron-store's safeStorage in the store layer — never persist them
+  // in plain settings JSON.
+  streamDestinations?: StreamDestinationStored[]
+  /** Default stream quality preset. */
+  streamResolution?: '480p' | '720p' | '1080p'
+  /** Default stream framerate. */
+  streamFramerate?: 25 | 30
+  /** Optional override of video bitrate in kbps. Empty/null = auto from resolution. */
+  streamVideoBitrate?: number | null
+}
+
+/** Destination record as stored in settings. Stream key is encrypted at rest;
+ *  fetched via getStreamKey() in main, never returned to renderer directly. */
+export interface StreamDestinationStored {
+  id:        string
+  name:      string
+  rtmpUrl:   string
+  enabled:   boolean
+  /** Set true once user has saved a key. Renderer uses this to render
+   *  "•••••• (saved)" vs the input field. The key itself lives in
+   *  encrypted store and is read main-side only when starting a stream. */
+  hasKey:    boolean
 }
 
 export interface RecordingOpts extends Partial<Settings> {
