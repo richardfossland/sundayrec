@@ -137,7 +137,36 @@
     "jingleNone": "Keine",
     "jingleCustom": "Andere auswählen…",
     "detectedSermon": "Wir haben eine {min}-Minuten-Predigt erkannt und einen Schnitt vorgeschlagen. Überprüfen Sie und klicken Sie auf Veröffentlichen.",
-    "noSermonFound": "Kein eindeutiger Predigtblock gefunden. Überprüfen Sie die Datei vor der Veröffentlichung."
+    "noSermonFound": "Kein eindeutiger Predigtblock gefunden. Überprüfen Sie die Datei vor der Veröffentlichung.",
+    "dayNames": [
+      "Sonntag",
+      "Montag",
+      "Dienstag",
+      "Mittwoch",
+      "Donnerstag",
+      "Freitag",
+      "Samstag"
+    ],
+    "monthNames": [
+      "Januar",
+      "Februar",
+      "März",
+      "April",
+      "Mai",
+      "Juni",
+      "Juli",
+      "August",
+      "September",
+      "Oktober",
+      "November",
+      "Dezember"
+    ],
+    "ageNow": "Gerade jetzt",
+    "ageHours": "vor {n}h",
+    "ageDayOne": "vor 1 Tag",
+    "ageDays": "vor {n} Tagen",
+    "ageOldest": "vor über 14 Tagen",
+    "confident": "sicher"
   },
   "schedule": {
     "title": "Wochenplan",

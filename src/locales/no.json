@@ -137,7 +137,36 @@
     "jingleNone": "Ingen",
     "jingleCustom": "Velg annen…",
     "detectedSermon": "Vi har detektert {min} min preken og foreslått trim. Gå over og trykk publiser.",
-    "noSermonFound": "Vi fant ingen klar preken-blokk. Sjekk filen før publisering."
+    "noSermonFound": "Vi fant ingen klar preken-blokk. Sjekk filen før publisering.",
+    "dayNames": [
+      "Søndag",
+      "Mandag",
+      "Tirsdag",
+      "Onsdag",
+      "Torsdag",
+      "Fredag",
+      "Lørdag"
+    ],
+    "monthNames": [
+      "januar",
+      "februar",
+      "mars",
+      "april",
+      "mai",
+      "juni",
+      "juli",
+      "august",
+      "september",
+      "oktober",
+      "november",
+      "desember"
+    ],
+    "ageNow": "Akkurat nå",
+    "ageHours": "{n}t siden",
+    "ageDayOne": "1 dag siden",
+    "ageDays": "{n} dager siden",
+    "ageOldest": "Over 14 dager siden",
+    "confident": "sikker"
   },
   "schedule": {
     "title": "Ukentlig tidsplan",

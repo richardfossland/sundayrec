@@ -2257,6 +2257,10 @@ function setupDragDrop(): void {
     const fp = (file as File & { path?: string }).path
     if (!fp) return
     if (!confirmDiscardIfDirty('open')) return
+    // Drag-and-drop is an explicit user action — trust the folder for this
+    // session so path-defense doesn't silently refuse legitimate picks from
+    // external drives or non-standard locations.
+    try { await window.api.registerTrustedPath(fp) } catch {}
     loadFile(fp)
   })
 

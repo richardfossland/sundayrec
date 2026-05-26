@@ -11,13 +11,14 @@
  */
 
 import type { ReviewQueueEntry } from '../../types'
-
-const DAYS_NO = ['Søndag', 'Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag']
-const MONTHS_NO = ['januar', 'februar', 'mars', 'april', 'mai', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'desember']
+import { t, tArr } from '../i18n'
 
 function fmtDate(timestamp: number): string {
   const d = new Date(timestamp)
-  return `${DAYS_NO[d.getDay()]} ${d.getDate()}. ${MONTHS_NO[d.getMonth()]}`
+  // Day names: schedule.days is Mon=0..Sun=6; JS Date is Sun=0..Sat=6 (full names).
+  const days = tArr('review.dayNames', ['Søndag', 'Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag'])
+  const months = tArr('review.monthNames', ['januar', 'februar', 'mars', 'april', 'mai', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'desember'])
+  return `${days[d.getDay()]} ${d.getDate()}. ${months[d.getMonth()]}`
 }
 
 function fmtDurationSec(sec: number): string {
@@ -36,26 +37,25 @@ function deriveDurationFromPrep(entry: ReviewQueueEntry): number {
 
 function fmtSermonInfo(entry: ReviewQueueEntry): string {
   const trim = entry.prep.suggestedTrim
-  if (!trim) return 'Preken ikke detektert'
+  if (!trim) return t('review.sermonNotFound', 'Preken ikke detektert')
   const lenMin = Math.round((trim.endSec - trim.startSec) / 60)
-  return `Preken antatt: ${lenMin} min`
+  return t('review.sermonGuess', 'Preken antatt: {min} min').replace('{min}', String(lenMin))
 }
 
 function attentionBadge(entry: ReviewQueueEntry): HTMLElement | null {
   if (entry.prep.status !== 'needs-attention') return null
   const badge = document.createElement('span')
   badge.className = 'review-attention-badge'
-  badge.textContent = '⚠ Trenger oppmerksomhet'
-  badge.style.cssText = 'background:rgba(255,180,107,0.2);color:#ffb46b;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;border:1px solid rgba(255,180,107,0.4)'
+  badge.textContent = '⚠ ' + t('review.needsAttention', 'Trenger oppmerksomhet')
   return badge
 }
 
 function ageLabel(ageInDays: number): string {
-  if (ageInDays < 1 / 24) return 'Akkurat nå'
-  if (ageInDays < 1) return `${Math.floor(ageInDays * 24)}t siden`
-  if (ageInDays < 2) return '1 dag siden'
-  if (ageInDays < 14) return `${Math.floor(ageInDays)} dager siden`
-  return 'Over 14 dager siden'
+  if (ageInDays < 1 / 24) return t('review.ageNow', 'Akkurat nå')
+  if (ageInDays < 1) return t('review.ageHours', '{n}t siden').replace('{n}', String(Math.floor(ageInDays * 24)))
+  if (ageInDays < 2) return t('review.ageDayOne', '1 dag siden')
+  if (ageInDays < 14) return t('review.ageDays', '{n} dager siden').replace('{n}', String(Math.floor(ageInDays)))
+  return t('review.ageOldest', 'Over 14 dager siden')
 }
 
 export async function refreshReviewQueue(): Promise<void> {
@@ -83,7 +83,9 @@ export async function refreshReviewQueue(): Promise<void> {
 
   card.style.display = ''
   if (count) {
-    count.textContent = pending.length === 1 ? '1 episode' : `${pending.length} episoder`
+    count.textContent = pending.length === 1
+      ? t('review.queueCountOne', '1 episode')
+      : t('review.queueCount', '{n} episoder').replace('{n}', String(pending.length))
   }
 
   list.innerHTML = ''
@@ -96,22 +98,21 @@ function renderEntry(entry: ReviewQueueEntry): HTMLElement {
   const item = document.createElement('div')
   item.className = 'review-queue-item'
   item.dataset.id = entry.id
-  item.style.cssText = 'display:flex;align-items:center;gap:14px;padding:12px 14px;background:rgba(255,255,255,0.04);border-radius:8px;border:1px solid rgba(255,255,255,0.06)'
 
   // Left: metadata
   const meta = document.createElement('div')
-  meta.style.cssText = 'flex:1;display:flex;flex-direction:column;gap:4px;min-width:0'
+  meta.className = 'review-queue-item-meta'
 
   const dateRow = document.createElement('div')
-  dateRow.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap'
+  dateRow.className = 'review-queue-item-date-row'
   const dateEl = document.createElement('strong')
   dateEl.textContent = fmtDate(entry.prep.timestamp)
-  dateEl.style.cssText = 'font-size:14px;color:var(--text)'
+  dateEl.className = 'review-queue-item-date'
   dateRow.appendChild(dateEl)
 
   const ageEl = document.createElement('span')
   ageEl.textContent = ageLabel(entry.ageInDays)
-  ageEl.style.cssText = 'font-size:11px;color:var(--text3)'
+  ageEl.className = 'review-queue-item-age'
   dateRow.appendChild(ageEl)
 
   const badge = attentionBadge(entry)
@@ -119,7 +120,7 @@ function renderEntry(entry: ReviewQueueEntry): HTMLElement {
   meta.appendChild(dateRow)
 
   const infoRow = document.createElement('div')
-  infoRow.style.cssText = 'display:flex;align-items:center;gap:12px;font-size:12px;color:var(--text2);flex-wrap:wrap'
+  infoRow.className = 'review-queue-item-info-row'
   const dur = deriveDurationFromPrep(entry)
   const durEl = document.createElement('span')
   durEl.textContent = `🕐 ${fmtDurationSec(dur)}`
@@ -132,8 +133,10 @@ function renderEntry(entry: ReviewQueueEntry): HTMLElement {
   if (entry.prep.sermonConfidence != null) {
     const confEl = document.createElement('span')
     const pct = Math.round(entry.prep.sermonConfidence * 100)
-    confEl.textContent = `${pct}% sikker`
-    confEl.style.color = entry.prep.sermonConfidence < 0.6 ? '#ffb46b' : 'var(--text3)'
+    confEl.textContent = `${pct}% ${t('review.confident', 'sikker')}`
+    confEl.className = entry.prep.sermonConfidence < 0.6
+      ? 'review-queue-item-conf review-queue-item-conf-low'
+      : 'review-queue-item-conf'
     infoRow.appendChild(confEl)
   }
   meta.appendChild(infoRow)
@@ -143,7 +146,7 @@ function renderEntry(entry: ReviewQueueEntry): HTMLElement {
   if (firstReason) {
     const reasonEl = document.createElement('div')
     reasonEl.textContent = firstReason
-    reasonEl.style.cssText = 'font-size:11px;color:#ffb46b;font-style:italic;margin-top:2px'
+    reasonEl.className = 'review-queue-item-reason'
     meta.appendChild(reasonEl)
   }
 
@@ -151,12 +154,11 @@ function renderEntry(entry: ReviewQueueEntry): HTMLElement {
 
   // Right: action button
   const actions = document.createElement('div')
-  actions.style.cssText = 'display:flex;gap:6px;flex-shrink:0'
+  actions.className = 'review-queue-item-actions'
 
   const reviewBtn = document.createElement('button')
-  reviewBtn.className = 'btn btn-primary'
-  reviewBtn.textContent = 'Gjennomgå →'
-  reviewBtn.style.cssText = 'background:#7fc488;color:#0d1a12;font-weight:600;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap'
+  reviewBtn.className = 'review-queue-review-btn'
+  reviewBtn.textContent = t('review.openReview', 'Gjennomgå →')
   reviewBtn.addEventListener('click', () => {
     window.openEditorReviewMode?.(entry.id, entry.prep.recordingPath)
   })

@@ -137,7 +137,36 @@
     "jingleNone": "Brak",
     "jingleCustom": "Wybierz inne…",
     "detectedSermon": "Wykryliśmy {min}-min kazanie i zaproponowaliśmy przycięcie. Przejrzyj i kliknij publikuj.",
-    "noSermonFound": "Nie znaleziono wyraźnego bloku kazania. Sprawdź plik przed publikacją."
+    "noSermonFound": "Nie znaleziono wyraźnego bloku kazania. Sprawdź plik przed publikacją.",
+    "dayNames": [
+      "Niedziela",
+      "Poniedziałek",
+      "Wtorek",
+      "Środa",
+      "Czwartek",
+      "Piątek",
+      "Sobota"
+    ],
+    "monthNames": [
+      "stycznia",
+      "lutego",
+      "marca",
+      "kwietnia",
+      "maja",
+      "czerwca",
+      "lipca",
+      "sierpnia",
+      "września",
+      "października",
+      "listopada",
+      "grudnia"
+    ],
+    "ageNow": "Przed chwilą",
+    "ageHours": "{n}h temu",
+    "ageDayOne": "1 dzień temu",
+    "ageDays": "{n} dni temu",
+    "ageOldest": "Ponad 14 dni temu",
+    "confident": "pewności"
   },
   "schedule": {
     "title": "Harmonogram tygodniowy",

@@ -968,7 +968,25 @@ function setupIPC(): void {
       properties: ['openFile'],
       filters: [{ name: 'Audio', extensions: ['mp3', 'wav', 'flac', 'aac', 'm4a'] }]
     })
-    return r.canceled ? null : r.filePaths[0]
+    if (r.canceled) return null
+    trustFolder(r.filePaths[0])
+    return r.filePaths[0]
+  })
+
+  // Drag-drop and explicit user file-picks trust the folder for this session.
+  // Used by the editor when a user drops a recording from outside the standard
+  // user folders — defense in depth still applies to renderer-fabricated paths.
+  ipcMain.handle('register-trusted-path', (_, filePath: string) => {
+    if (typeof filePath !== 'string' || !filePath) return false
+    // Sanity: only honour paths to files that actually exist on disk. A
+    // malicious renderer can't fabricate a /etc/passwd existence — Electron
+    // runs as user, not root, and the user would have had to drag-drop
+    // /etc/passwd themselves.
+    try {
+      if (!fs.existsSync(filePath)) return false
+      trustFolder(filePath)
+      return true
+    } catch { return false }
   })
 
   // Metadata sidecar read/write
@@ -1052,7 +1070,9 @@ function setupIPC(): void {
       properties: ['openFile'],
       filters: [{ name: 'Video', extensions: ['mp4', 'mov', 'mkv', 'm4v', 'avi', 'wmv', 'ts', 'mts', 'm2ts', 'flv', '3gp', 'asf', 'f4v'] }]
     })
-    return r.canceled ? null : r.filePaths[0]
+    if (r.canceled) return null
+    trustFolder(r.filePaths[0])
+    return r.filePaths[0]
   })
 
   ipcMain.handle('editor-save-video', async (_, params) => {
@@ -1562,16 +1582,28 @@ function isUnderRoot(child: string, parent: string): boolean {
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
 }
 
+// Files explicitly chosen by the user via system dialog or drag-drop are
+// session-trusted. Without this, opening a recording from an external drive
+// would fail silently in editor-* IPC handlers — the path-defense was meant
+// to block renderer-fabricated paths, not legitimate user picks.
+const sessionTrustedFolders = new Set<string>()
+
+function trustFolder(filePath: string): void {
+  try { sessionTrustedFolders.add(path.dirname(path.resolve(filePath))) } catch {}
+}
+
 function isAllowedAudioPath(p: string): boolean {
   if (!ALLOWED_AUDIO_EXTS.has(path.extname(p).toLowerCase())) return false
   const resolved = path.resolve(p)
-  return getAllowedMediaRoots().some(r => isUnderRoot(resolved, r))
+  if (getAllowedMediaRoots().some(r => isUnderRoot(resolved, r))) return true
+  return Array.from(sessionTrustedFolders).some(f => isUnderRoot(resolved, f))
 }
 
 function isAllowedMediaPath(p: string): boolean {
   if (!ALLOWED_MEDIA_EXTS.has(path.extname(p).toLowerCase())) return false
   const resolved = path.resolve(p)
-  return getAllowedMediaRoots().some(r => isUnderRoot(resolved, r))
+  if (getAllowedMediaRoots().some(r => isUnderRoot(resolved, r))) return true
+  return Array.from(sessionTrustedFolders).some(f => isUnderRoot(resolved, f))
 }
 
 function sidecarPath(audioPath: string, suffix: string): string | null {

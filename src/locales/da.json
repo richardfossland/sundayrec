@@ -137,7 +137,36 @@
     "jingleNone": "Ingen",
     "jingleCustom": "Vælg en anden…",
     "detectedSermon": "Vi har detekteret {min} min prædiken og foreslået trim. Gennemgå og klik publicer.",
-    "noSermonFound": "Fandt ingen tydelig prædikenblok. Gennemgå filen før publicering."
+    "noSermonFound": "Fandt ingen tydelig prædikenblok. Gennemgå filen før publicering.",
+    "dayNames": [
+      "Søndag",
+      "Mandag",
+      "Tirsdag",
+      "Onsdag",
+      "Torsdag",
+      "Fredag",
+      "Lørdag"
+    ],
+    "monthNames": [
+      "januar",
+      "februar",
+      "marts",
+      "april",
+      "maj",
+      "juni",
+      "juli",
+      "august",
+      "september",
+      "oktober",
+      "november",
+      "december"
+    ],
+    "ageNow": "Lige nu",
+    "ageHours": "{n}t siden",
+    "ageDayOne": "1 dag siden",
+    "ageDays": "{n} dage siden",
+    "ageOldest": "Over 14 dage siden",
+    "confident": "sikker"
   },
   "schedule": {
     "title": "Ugentlig tidsplan",

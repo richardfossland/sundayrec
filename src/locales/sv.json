@@ -137,7 +137,36 @@
     "jingleNone": "Ingen",
     "jingleCustom": "Välj annan…",
     "detectedSermon": "Vi har detekterat {min} min predikan och föreslagit trim. Granska och klicka publicera.",
-    "noSermonFound": "Hittade inget tydligt predikoblock. Granska filen före publicering."
+    "noSermonFound": "Hittade inget tydligt predikoblock. Granska filen före publicering.",
+    "dayNames": [
+      "Söndag",
+      "Måndag",
+      "Tisdag",
+      "Onsdag",
+      "Torsdag",
+      "Fredag",
+      "Lördag"
+    ],
+    "monthNames": [
+      "januari",
+      "februari",
+      "mars",
+      "april",
+      "maj",
+      "juni",
+      "juli",
+      "augusti",
+      "september",
+      "oktober",
+      "november",
+      "december"
+    ],
+    "ageNow": "Just nu",
+    "ageHours": "{n}t sedan",
+    "ageDayOne": "1 dag sedan",
+    "ageDays": "{n} dagar sedan",
+    "ageOldest": "Över 14 dagar sedan",
+    "confident": "säker"
   },
   "schedule": {
     "title": "Veckoschema",

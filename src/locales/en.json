@@ -137,7 +137,36 @@
     "jingleNone": "None",
     "jingleCustom": "Choose another…",
     "detectedSermon": "We detected a {min}-min sermon and suggested a trim. Review and click publish.",
-    "noSermonFound": "No clear sermon block found. Review the file before publishing."
+    "noSermonFound": "No clear sermon block found. Review the file before publishing.",
+    "dayNames": [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday"
+    ],
+    "monthNames": [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December"
+    ],
+    "ageNow": "Just now",
+    "ageHours": "{n}h ago",
+    "ageDayOne": "1 day ago",
+    "ageDays": "{n} days ago",
+    "ageOldest": "Over 14 days ago",
+    "confident": "confident"
   },
   "schedule": {
     "title": "Weekly schedule",

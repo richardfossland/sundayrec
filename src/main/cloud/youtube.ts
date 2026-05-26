@@ -267,7 +267,10 @@ export async function uploadVideo(
     )
     if (!initRes.ok) {
       const errBody = await initRes.text()
-      return { ok: false, error: `YouTube init failed: ${initRes.status} ${errBody.slice(0, 200)}` }
+      // Map common YouTube API errors to actionable messages so the user
+      // doesn't see raw HTTP status codes in the UI.
+      const friendly = mapYouTubeError(initRes.status, errBody)
+      return { ok: false, error: friendly }
     }
     const location = initRes.headers.get('location')
     if (!location) return { ok: false, error: 'YouTube init missing Location header' }
@@ -354,6 +357,37 @@ async function readChunk(filePath: string, offset: number, length: number): Prom
   } finally {
     await fd.close()
   }
+}
+
+/** Map a raw YouTube API error to an actionable, user-facing message. */
+function mapYouTubeError(status: number, body: string): string {
+  // 403 — most often "accessNotConfigured" (API not enabled in Cloud Console)
+  // or "quotaExceeded". Parse the JSON body to pick the right hint.
+  if (status === 403) {
+    if (body.includes('accessNotConfigured') || body.includes('SERVICE_DISABLED')) {
+      return 'YouTube Data API v3 er ikke aktivert i Google Cloud-prosjektet. Gå til https://console.cloud.google.com/apis/library, søk "YouTube Data API v3" og klikk Enable. Vent 1-2 minutter og prøv igjen.'
+    }
+    if (body.includes('quotaExceeded')) {
+      return 'YouTube-kvoten for i dag er nådd (10 000 enheter = ~6 uploads). Vent til midnatt UTC, eller be Google om kvoteøkning i Cloud Console.'
+    }
+    if (body.includes('insufficientPermissions') || body.includes('insufficient_scope')) {
+      return 'Mangler youtube.upload-scope. Koble fra YouTube i SundayRec-innstillingene og koble til på nytt for å gi den nye tillatelsen.'
+    }
+    return `YouTube avviste forespørselen (403). Detaljer: ${body.slice(0, 200)}`
+  }
+  if (status === 401) {
+    return 'YouTube-tokenet er ugyldig. Koble fra og koble til på nytt.'
+  }
+  if (status === 400) {
+    return `Ugyldig YouTube-forespørsel (400). Mulig at video-metadata er feilformatert: ${body.slice(0, 200)}`
+  }
+  if (status === 413) {
+    return 'Videofilen er for stor for YouTube (over 256 GB). Komprimer eller del opp filen.'
+  }
+  if (status >= 500) {
+    return `YouTube-serveren har problemer (${status}). Prøv igjen om noen minutter.`
+  }
+  return `YouTube-upload feilet: ${status} ${body.slice(0, 200)}`
 }
 
 // Silence unused-import warning in case `app` is needed later (e.g. for

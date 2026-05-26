@@ -118,6 +118,8 @@ contextBridge.exposeInMainWorld('api', {
   cloudQueueFlush:     ()                => ipcRenderer.invoke('cloud-queue-flush'),
   podcastRegenerate:   (service: string) => ipcRenderer.invoke('podcast-regenerate', service),
 
+  registerTrustedPath: (filePath: string) => ipcRenderer.invoke('register-trusted-path', filePath),
+
   youtubeConnect:      ()                  => ipcRenderer.invoke('youtube-connect'),
   youtubeDisconnect:   ()                  => ipcRenderer.invoke('youtube-disconnect'),
   youtubeStatus:       ()                  => ipcRenderer.invoke('youtube-status'),

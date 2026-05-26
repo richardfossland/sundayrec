@@ -125,6 +125,7 @@ declare global {
       cloudQueueRemove:    (id: string) => Promise<boolean>
       cloudQueueFlush:     () => Promise<boolean>
       podcastRegenerate:   (service: string) => Promise<{ ok: boolean; feedUrl?: string; episodeCount: number; error?: string }>
+      registerTrustedPath: (filePath: string) => Promise<boolean>
       youtubeConnect:      () => Promise<{ ok: boolean; error?: string }>
       youtubeDisconnect:   () => Promise<{ ok: boolean }>
       youtubeStatus:       () => Promise<{ connected: boolean }>

@@ -137,7 +137,36 @@
     "jingleNone": "Aucun",
     "jingleCustom": "Choisir un autre…",
     "detectedSermon": "Nous avons détecté une prédication de {min} min et suggéré une coupe. Vérifiez et cliquez sur publier.",
-    "noSermonFound": "Aucun bloc de prédication clair trouvé. Vérifiez le fichier avant publication."
+    "noSermonFound": "Aucun bloc de prédication clair trouvé. Vérifiez le fichier avant publication.",
+    "dayNames": [
+      "Dimanche",
+      "Lundi",
+      "Mardi",
+      "Mercredi",
+      "Jeudi",
+      "Vendredi",
+      "Samedi"
+    ],
+    "monthNames": [
+      "janvier",
+      "février",
+      "mars",
+      "avril",
+      "mai",
+      "juin",
+      "juillet",
+      "août",
+      "septembre",
+      "octobre",
+      "novembre",
+      "décembre"
+    ],
+    "ageNow": "À l’instant",
+    "ageHours": "il y a {n}h",
+    "ageDayOne": "il y a 1 jour",
+    "ageDays": "il y a {n} jours",
+    "ageOldest": "il y a plus de 14 jours",
+    "confident": "sûr"
   },
   "schedule": {
     "title": "Planning hebdomadaire",
