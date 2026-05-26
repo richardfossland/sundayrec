@@ -841,10 +841,12 @@ export async function exportVideoEdited(params: VideoExportParams): Promise<Edit
 
 // ── Segment detection ─────────────────────────────────────────────────────────
 //
-// Content-aware chapter detection via the audio-analysis module. We classify
-// every 100 ms frame as speech / music / silence / mixed / unknown and group
-// same-type frames into chapters. The renderer uses these to drive auto-trim
-// suggestions and segment-snapping when adjusting cuts.
+// Content-aware chapter detection via the audio-analysis module. Classifies
+// every 100 ms frame as speech / music / silence / mixed / unknown and groups
+// same-type frames into chapters. One speech segment is promoted to
+// type='sermon' as the "best guess" of which block is the sermon — the
+// renderer highlights it gold + ★ and offers a one-click trim around it.
+// Users can override the pick from the UI (the renderer remaps type back).
 
 export interface AudioSegment {
   start:    number
@@ -854,13 +856,56 @@ export interface AudioSegment {
   type:     string
 }
 
+/** Pick the most plausible "sermon" segment from analysis output.
+ *  Improved heuristic vs. the original 4.31 version:
+ *    1. Filter to speech segments ≥ 3 min (anything shorter is announcements,
+ *       a reading, or a short prayer — never the sermon).
+ *    2. If exactly ONE candidate qualifies → that's the sermon, regardless
+ *       of where in the recording it starts. Covers the case where the
+ *       recording was started right before the sermon.
+ *    3. If multiple candidates → prefer one starting after 5 min mark (the
+ *       sermon usually lands mid-service after worship/announcements). If
+ *       multiple still tie, pick the longest.
+ *    4. Final fallback: longest speech of any length. */
+function findSermonSegmentLocal(
+  segments: import('./audio-analysis').AnalysisSegment[],
+): { startSec: number; endSec: number } | null {
+  const speeches = segments.filter(s => s.type === 'speech')
+  if (speeches.length === 0) return null
+
+  const MIN_SERMON_SEC = 180  // 3 minutes
+  const longCandidates = speeches.filter(s => s.durationSec >= MIN_SERMON_SEC)
+
+  // Case 1: only one long speech block → it's the sermon
+  if (longCandidates.length === 1) {
+    return { startSec: longCandidates[0].startSec, endSec: longCandidates[0].endSec }
+  }
+
+  // Case 2: multiple long candidates — prefer those starting after 5 min
+  if (longCandidates.length > 1) {
+    const afterFive = longCandidates.filter(s => s.startSec >= 300)
+    const pool = afterFive.length > 0 ? afterFive : longCandidates
+    const winner = pool.reduce((a, b) => (a.durationSec > b.durationSec ? a : b))
+    return { startSec: winner.startSec, endSec: winner.endSec }
+  }
+
+  // Case 3: no long candidates — pick longest speech of any length
+  const longest = speeches.reduce((a, b) => (a.durationSec > b.durationSec ? a : b))
+  return { startSec: longest.startSec, endSec: longest.endSec }
+}
+
 export async function detectSegments(filePath: string): Promise<AudioSegment[]> {
   const segments = await analyzeAudio(filePath)
-  return segments.map(s => ({
-    start:    s.startSec,
-    end:      s.endSec,
-    duration: s.durationSec,
-    label:    s.label,
-    type:     s.type,
-  }))
+  const sermon   = findSermonSegmentLocal(segments)
+
+  return segments.map(s => {
+    const isSermon = sermon != null && s.startSec === sermon.startSec && s.endSec === sermon.endSec && s.type === 'speech'
+    return {
+      start:    s.startSec,
+      end:      s.endSec,
+      duration: s.durationSec,
+      label:    isSermon ? 'Preken' : s.label,
+      type:     isSermon ? 'sermon' : s.type,
+    }
+  })
 }

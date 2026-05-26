@@ -1743,6 +1743,21 @@ body.platform-win32  #wake-instructions-win { display: block; }
 /* ── Editor page position context for overlay ───────────────────── */
 #page-editor { position: relative; }
 
+/* ── Sermon picker (override which speech block is "preken") ─────── */
+.editor-sermon-picker-wrap {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 10px; padding: 8px 10px;
+  background: rgba(240,187,71,.06); border: 1px solid rgba(240,187,71,.22);
+  border-radius: var(--rsm);
+}
+.editor-sermon-picker-lbl { font-size: 12px; color: var(--text2); flex-shrink: 0; }
+.editor-sermon-picker {
+  flex: 1; min-width: 0;
+  padding: 6px 8px; border-radius: var(--rsm);
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); font-size: 12px;
+}
+
 /* ── Auto-trim suggestion banner ─────────────────────────────────── */
 .editor-suggestion-banner {
   display: flex; align-items: center; gap: 14px;
@@ -2578,14 +2593,20 @@ body.platform-win32  #wake-instructions-win { display: block; }
 }
 .ob-field-row--col { align-items: flex-start; flex-direction: column; gap: 8px; }
 
-/* Collapsible advanced section */
-.adv-card { padding-bottom: 2px; }
+/* Collapsible advanced section
+ *
+ * Cancel the card's vertical padding and put it on the toggle button instead,
+ * so text is vertically centred inside the collapsed bar. When the section
+ * expands, #adv-section provides its own bottom padding.
+ */
+.adv-card { padding-top: 0; padding-bottom: 0; }
 .adv-toggle {
   display: flex; align-items: center; justify-content: space-between;
   width: 100%; background: none; border: none; cursor: pointer;
-  padding: 0; font-size: 14px; font-weight: 700; color: var(--text);
-  text-align: left;
+  padding: 16px 0; font-size: 14px; font-weight: 700; color: var(--text);
+  text-align: left; line-height: 1.2;
 }
+#adv-section { padding-bottom: 16px; }
 .adv-toggle:hover { color: var(--accent); }
 .adv-toggle-chevron {
   width: 16px; height: 16px; color: var(--text3); flex-shrink: 0;

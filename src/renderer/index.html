@@ -1747,8 +1747,12 @@
               <span data-i18n="editor.analyzeSilence">Stillhet</span>
             </label>
           </div>
-          <button class="btn-ghost btn-sm" id="btn-apply-auto-trim" style="display:none" data-i18n="editor.applyAutoTrim">↦ Bruk forslag (trim før/etter tale)</button>
-          <div id="editor-auto-trim-hint" class="editor-analyze-hint" style="display:none" data-i18n="editor.applyAutoTrimHint">Trimmer alt før første og etter siste tale-segment. Behold pauser i prekenen.</div>
+          <button class="btn-ghost btn-sm" id="btn-apply-auto-trim" style="display:none" data-i18n="editor.markSermon">↦ Marker preken automatisk</button>
+          <div id="editor-auto-trim-hint" class="editor-analyze-hint" style="display:none" data-i18n="editor.markSermonHint">Trimmer alt før og etter den uthevede preken-blokken.</div>
+          <div id="editor-sermon-picker-wrap" class="editor-sermon-picker-wrap" style="display:none">
+            <label class="editor-sermon-picker-lbl" data-i18n="editor.sermonPickerLabel">Er ikke dette prekenen?</label>
+            <select id="editor-sermon-picker" class="editor-sermon-picker"></select>
+          </div>
         </div>
       </div>
 

@@ -348,12 +348,16 @@ export function setupEditorPage(): void {
   })
 
   // Analyse panel: "Marker preken automatisk"
-  $('btn-apply-auto-trim')?.addEventListener('click', () => applyAutoTrim())
+  $('btn-apply-auto-trim')?.addEventListener('click', () => applySermonTrim())
   $('btn-suggestion-apply')?.addEventListener('click', () => {
-    applyAutoTrim()
+    applySermonTrim()
     hideSuggestionBanner()
   })
   $('btn-suggestion-dismiss')?.addEventListener('click', () => hideSuggestionBanner())
+  $('editor-sermon-picker')?.addEventListener('change', (e) => {
+    const idx = parseInt((e.target as HTMLSelectElement).value, 10)
+    if (!isNaN(idx)) setSermonSegment(idx)
+  })
 
   // Meta save button
   $('btn-meta-save')?.addEventListener('click', saveMetadata)
@@ -395,17 +399,14 @@ export function setupEditorPage(): void {
   canvas?.addEventListener('mouseleave',  onCanvasLeave)
   canvas?.addEventListener('contextmenu', onCanvasContextMenu)
   canvas?.addEventListener('wheel',       onCanvasWheel, { passive: false })
-  // Double-click on a speech segment → trim everything outside it.
-  // Single-click stays as tap-to-seek so this is non-destructive UX:
-  // Double-click on any speech segment commits the auto-trim (drops every-
-  // thing before first speech and after last speech). Deliberate double-tap
-  // prevents accidental trim from stray clicks.
+  // Double-click on the sermon segment → trim around the sermon. Forces a
+  // deliberate double-tap so single-click stays as non-destructive tap-to-seek.
   canvas?.addEventListener('dblclick', (e: MouseEvent) => {
     if (!peaks) return
     const rect = canvas.getBoundingClientRect()
     const sec = xToSec(e.clientX - rect.left, rect.width)
-    const speech = suggestions.find(s => s.type === 'speech' && sec >= s.start && sec <= s.end)
-    if (speech) applyAutoTrim()
+    const sermon = suggestions.find(s => s.type === 'sermon' && sec >= s.start && sec <= s.end)
+    if (sermon) applySermonTrim()
   })
 
   setupMinimapInteraction()
@@ -1134,9 +1135,11 @@ function renderChapterList(): void {
 
 // ── Segment detection ─────────────────────────────────────────────────────
 
-/** Per-type visibility filter for segments. Speech / music / silence honour
- *  the user's toggles in the analyze panel. */
+/** Per-type visibility filter for segments. Sermon (the highlighted
+ *  suggested-keep range) is always visible — it's the most actionable
+ *  outcome of analysis. Speech / music / silence honour the user's toggles. */
 function shouldShowSegment(type: string): boolean {
+  if (type === 'sermon') return true
   if (type === 'speech') return showSpeechSegments
   if (type === 'music')  return showMusicSegments
   if (type === 'silence') return showSilenceSegments
@@ -1204,7 +1207,7 @@ function renderAnalyzePanel(): void {
   // Render summary line if we've ever analyzed this file.
   if (summary) {
     if (lastAnalyzedAt > 0) {
-      const speechCount = suggestions.filter(s => s.type === 'speech').length
+      const speechCount = suggestions.filter(s => s.type === 'speech' || s.type === 'sermon').length
       const d = new Date(lastAnalyzedAt)
       const date = `${d.getDate()}.${d.getMonth() + 1}`
       const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
@@ -1217,48 +1220,25 @@ function renderAnalyzePanel(): void {
 
   if (controls) controls.style.display = lastAnalyzedAt > 0 ? '' : 'none'
 
-  // Show "Bruk forslag" button when we have at least one speech segment that
-  // would actually trim something (pre-speech head or post-speech tail).
-  const trim = computeAutoTrim()
-  const visible = !!trim && (trim.headDur > 0.5 || trim.tailDur > 0.5)
-  if (markBtn)  (markBtn as HTMLElement).style.display  = visible ? '' : 'none'
-  if (markHint) (markHint as HTMLElement).style.display = visible ? '' : 'none'
+  // Show "Bruk forslag" / sermon-picker only when we have a sermon detected.
+  const hasSermon = suggestions.some(s => s.type === 'sermon')
+  if (markBtn)  (markBtn as HTMLElement).style.display  = hasSermon ? '' : 'none'
+  if (markHint) (markHint as HTMLElement).style.display = hasSermon ? '' : 'none'
+  renderSermonPicker()
 }
 
-interface AutoTrim {
-  headEnd:  number  // cut [0, headEnd] if headDur > 0
-  tailStart: number // cut [tailStart, duration] if tailDur > 0
-  headDur:  number
-  tailDur:  number
-  keepDur:  number  // duration that would remain after trim
-}
-
-/** Compute the trim bounds based on detected speech segments: trim everything
- *  before the FIRST speech segment and after the LAST speech segment. Pauses
- *  inside the speech block (e.g. natural breathing in a sermon) are kept. */
-function computeAutoTrim(): AutoTrim | null {
-  if (!duration) return null
-  const speeches = suggestions.filter(s => s.type === 'speech')
-  if (speeches.length === 0) return null
-  const first = speeches.reduce((a, b) => (a.start < b.start ? a : b))
-  const last  = speeches.reduce((a, b) => (a.end   > b.end   ? a : b))
-  const headEnd   = Math.max(0, first.start)
-  const tailStart = Math.min(duration, last.end)
-  const headDur   = headEnd
-  const tailDur   = duration - tailStart
-  const keepDur   = Math.max(0, tailStart - headEnd)
-  return { headEnd, tailStart, headDur, tailDur, keepDur }
-}
-
-/** Apply auto-trim cuts: drop everything before the first speech segment and
- *  after the last speech segment. Replaces existing cuts entirely (matches
- *  the prep-and-review behaviour). */
-function applyAutoTrim(): void {
-  const trim = computeAutoTrim()
-  if (!trim) return
+/** Apply trim cuts around the currently-marked sermon segment: drop every-
+ *  thing before sermon.start and after sermon.end. */
+function applySermonTrim(): void {
+  const sermon = suggestions.find(s => s.type === 'sermon')
+  if (!sermon || !duration) return
   cuts = []
-  if (trim.headDur > 0.5) cuts.push({ start: 0, end: trim.headEnd })
-  if (trim.tailDur > 0.5) cuts.push({ start: trim.tailStart, end: duration })
+  if (sermon.start > 0.5) {
+    cuts.push({ start: 0, end: Math.min(sermon.start, duration) })
+  }
+  if (sermon.end < duration - 0.5) {
+    cuts.push({ start: Math.max(0, sermon.end), end: duration })
+  }
   pushCutHistory()
   markDirty()
   renderCutList()
@@ -1267,17 +1247,72 @@ function applyAutoTrim(): void {
   drawMinimap()
 }
 
+/** Promote a specific speech segment to be the "sermon" (overrides the
+ *  auto-detected pick). Demotes the previous sermon back to plain 'speech'. */
+function setSermonSegment(speechIdx: number): void {
+  // Reset any current sermon → speech
+  for (const s of suggestions) {
+    if (s.type === 'sermon') { s.type = 'speech'; s.label = t('editor.speechLabel', 'Tale') }
+  }
+  // Promote the chosen speech segment
+  const speeches = suggestions.filter(s => s.type === 'speech' || s.type === 'sermon')
+  const target = speeches[speechIdx]
+  if (!target) return
+  target.type = 'sermon'
+  target.label = 'Preken'
+  renderAnalyzePanel()
+  drawWaveform()
+}
+
+/** Render the sermon-picker dropdown so the user can override the auto-pick.
+ *  Shows when there's more than one speech segment that could plausibly be
+ *  the sermon (≥ 1 min). Hidden otherwise — single-segment recordings have
+ *  no alternative to offer. */
+function renderSermonPicker(): void {
+  const picker = $('editor-sermon-picker') as HTMLSelectElement | null
+  const wrap   = $('editor-sermon-picker-wrap')
+  if (!picker || !wrap) return
+
+  // Build list of all speech-like segments (speech + sermon), in time order.
+  const speeches = suggestions
+    .filter(s => s.type === 'speech' || s.type === 'sermon')
+    .filter(s => s.duration >= 60)   // 1-min floor — too-short blocks aren't useful as sermon
+    .slice()
+    .sort((a, b) => a.start - b.start)
+
+  if (speeches.length < 2) {
+    wrap.style.display = 'none'
+    return
+  }
+
+  wrap.style.display = ''
+  picker.innerHTML = ''
+  for (let i = 0; i < speeches.length; i++) {
+    const s = speeches[i]
+    const opt = document.createElement('option')
+    opt.value = String(i)
+    const startLbl = formatTime(s.start)
+    const durLbl   = formatDuration(s.duration)
+    const marker   = s.type === 'sermon' ? '★ ' : ''
+    opt.textContent = `${marker}${t('editor.speechBlock', 'Tale-blokk')} ${i + 1} — ${startLbl} (${durLbl})`
+    if (s.type === 'sermon') opt.selected = true
+    picker.appendChild(opt)
+  }
+}
+
 function showSuggestionBanner(): void {
   const banner = $('editor-suggestion-banner')
   const detail = $('editor-suggestion-detail')
-  const trim = computeAutoTrim()
-  if (!banner || !detail || !trim) return
-  if (trim.headDur < 0.5 && trim.tailDur < 0.5) return
+  const sermon = suggestions.find(s => s.type === 'sermon')
+  if (!banner || !detail || !sermon || !duration) return
+  const headDur = sermon.start
+  const tailDur = duration - sermon.end
+  if (headDur < 0.5 && tailDur < 0.5) { banner.style.display = 'none'; return }
   const parts: string[] = []
-  if (trim.headDur > 0.5) parts.push(`${formatDuration(trim.headDur)} ${t('editor.beforeSpeech', 'før talen')}`)
-  if (trim.tailDur > 0.5) parts.push(`${formatDuration(trim.tailDur)} ${t('editor.afterSpeech', 'etter talen')}`)
-  const keep = formatDuration(trim.keepDur)
-  detail.textContent = `${parts.join(' + ')} ${t('editor.willBeTrimmed', 'fjernes')} · ${keep} ${t('editor.willRemain', 'tale igjen')}`
+  if (headDur > 0.5) parts.push(`${formatDuration(headDur)} ${t('editor.beforeSermon', 'før prekenen')}`)
+  if (tailDur > 0.5) parts.push(`${formatDuration(tailDur)} ${t('editor.afterSermon', 'etter prekenen')}`)
+  const keep = formatDuration(sermon.end - sermon.start)
+  detail.textContent = `${parts.join(' + ')} ${t('editor.willBeTrimmed', 'fjernes')} · ${keep} ${t('editor.willRemain', 'preken igjen')}`
   banner.style.display = ''
 }
 
@@ -1492,12 +1527,14 @@ function drawWaveform(): void {
     if (x2 < geom.mainPxStart || x1 > geom.mainPxEnd) continue
     const clampX1 = Math.max(geom.mainPxStart, x1), clampX2 = Math.min(x2, geom.mainPxEnd)
     // Color by segment type:
+    //   sermon  → gold (suggested keep range)
     //   speech  → light green
     //   music   → blue
     //   silence → grey
     let fillCol = 'rgba(120,120,140,0.10)'
     let strokeCol = 'rgba(120,120,140,0.4)'
-    if (seg.type === 'speech')        { fillCol = 'rgba(72,187,120,0.15)'; strokeCol = '#48bb78' }
+    if (seg.type === 'sermon')        { fillCol = 'rgba(240,187,71,0.22)'; strokeCol = '#f0bb47' }
+    else if (seg.type === 'speech')   { fillCol = 'rgba(72,187,120,0.15)'; strokeCol = '#48bb78' }
     else if (seg.type === 'music')    { fillCol = 'rgba(99,179,237,0.15)'; strokeCol = '#63b3ed' }
     else if (seg.type === 'silence')  { fillCol = 'rgba(150,150,160,0.10)'; strokeCol = 'rgba(150,150,160,0.45)' }
     ctx.fillStyle = fillCol
@@ -1513,14 +1550,17 @@ function drawWaveform(): void {
       ctx.setLineDash([])
       ctx.globalAlpha = 1
     }
-    // Label inside region
+    // Label inside region — show "★ Antatt preken — Nmin" for sermon
     if (clampX2 - clampX1 > 40) {
       ctx.font = '600 9px system-ui, -apple-system, sans-serif'
       ctx.textBaseline = 'top'
       ctx.fillStyle = strokeCol
       ctx.globalAlpha = 0.95
       let lbl = seg.label
-      if (lbl.length > 18) lbl = lbl.slice(0, 17) + '…'
+      if (seg.type === 'sermon') {
+        const mins = Math.round((seg.end - seg.start) / 60)
+        lbl = `★ ${t('editor.sermonLabel', 'Antatt preken')} — ${mins} min`
+      } else if (lbl.length > 18) lbl = lbl.slice(0, 17) + '…'
       ctx.fillText(lbl, Math.max(clampX1 + 4, geom.mainPxStart + 2), RULER + 24)
       ctx.globalAlpha = 1
     }
@@ -1770,7 +1810,8 @@ function drawWaveform(): void {
     }
     const hoveredSeg = suggestions.find(s => hoverSec >= s.start && hoverSec <= s.end && shouldShowSegment(s.type))
     if (hoveredSeg && hoverSec >= 0 && hoverSec <= duration) {
-      const typeLbl = hoveredSeg.type === 'speech' ? t('editor.tooltipSpeech', 'Tale')
+      const typeLbl = hoveredSeg.type === 'sermon' ? t('editor.tooltipSermon', 'Antatt preken')
+        : hoveredSeg.type === 'speech' ? t('editor.tooltipSpeech', 'Tale')
         : hoveredSeg.type === 'music'  ? t('editor.tooltipMusic',  'Musikk')
         : hoveredSeg.type === 'silence'? t('editor.tooltipSilence','Stillhet')
         : t('editor.tooltipMixed', 'Blandet')
@@ -2083,14 +2124,9 @@ function setupKeyboardShortcuts(): void {
         jumpToCutBoundary(e.shiftKey ? -1 : 1)
         break
       case 'KeyP': {
-        // Jump to the start of the longest contiguous speech block — useful
-        // shortcut for "skip to the main talk" when the recording started
-        // before the service.
-        const speeches = suggestions.filter(s => s.type === 'speech')
-        if (speeches.length === 0) break
-        const longest = speeches.reduce((a, b) => (a.duration > b.duration ? a : b))
-        e.preventDefault()
-        seekTo(longest.start)
+        // Jump to the detected sermon start
+        const sermon = suggestions.find(s => s.type === 'sermon')
+        if (sermon) { e.preventDefault(); seekTo(sermon.start) }
         break
       }
     }
