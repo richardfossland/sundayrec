@@ -621,36 +621,41 @@ function setupReviewBanner(): void {
   })
 }
 
+/** Called when the user navigates BACK to the editor tab. Repaints the
+ *  waveform if a file is still loaded — the canvas might have been resized
+ *  or had its backing store cleared while away. Cheap no-op if no file. */
+export function reactivateEditor(): void {
+  if (!peaks) return
+  // Re-sync canvas size first (could've changed if window resized while away)
+  requestAnimationFrame(() => {
+    syncCanvasSize()
+    drawWaveform()
+    drawMinimap()
+    updateMinimapViewport()
+  })
+}
+
+/** Called when the user navigates away from the editor tab.
+ *
+ *  IMPORTANT: We only PAUSE/STOP work that runs in the background — playback
+ *  and video. We do NOT release peaks, audioBuffer, audioCtx, cuts, meta, or
+ *  any of the editing state. Otherwise, returning to the editor with the same
+ *  file open shows an empty waveform — the user has to close and re-open the
+ *  file to see anything. (Reported bug, May 2026.)
+ *
+ *  Actual cleanup happens in closeCurrentFile() (explicit close-button or
+ *  Cmd+W) and at loadFile() entry (replacing one file with another). */
 export function deactivateEditor(): void {
   stopPlay()
-  audioCtx?.close().catch(() => {})
-  audioCtx = null
-  audioBuffer = null
-  introBuffer = null
-  outroBuffer = null
-  introPeaks = null
-  outroPeaks = null
-  // Release peaks/cuts/etc so we don't hold MB+ of arrays in memory between
-  // recording sessions. New loadFile() will populate them fresh.
-  peaks = null
-  cuts = []
-  cutHistory = []
-  cutHistoryIdx = -1
-  suggestions = []
-  clipTimes = []
-  lastAnalyzedAt = 0
-  meta = { title: '', speaker: '', description: '', chapters: [] }
-  clearDirty()
-  // Cleanup video element
-  if (videoEl) {
+  // Pause video element to release decode/GPU resources, but keep the src
+  // so the frame is still there when the user returns.
+  if (videoEl && !videoEl.paused) {
     videoEl.pause()
-    videoEl.src = ''
-    videoEl.load()
   }
-  isVideoFile = false
-  audioGainDb = 0
-  setNormalizeUI(0, false)
-  reviewPrepId = null
+  // Note: deliberately NOT touching peaks / audioBuffer / audioCtx / cuts /
+  // cutHistory / suggestions / clipTimes / meta / isVideoFile / audioGainDb /
+  // reviewPrepId. Those are owned by the open-file lifecycle, not the
+  // tab-visibility lifecycle.
   reviewPrep = null
   loadAndUpdateReviewBanner()
 }
@@ -3756,11 +3761,39 @@ function confirmDiscardIfDirty(intent: 'open' | 'close'): boolean {
 }
 
 /**
- * Tear down the current file and return to the empty state. The user
- * confirmed any dirty-state warning already (caller's responsibility).
+ * Tear down the current file and return to the empty state. Releases all
+ * audio data, peaks, cuts, and metadata. The user confirmed any dirty-state
+ * warning already (caller's responsibility).
  */
 function closeCurrentFile(): void {
-  deactivateEditor()
+  stopPlay()
+  audioCtx?.close().catch(() => {})
+  audioCtx = null
+  audioBuffer = null
+  introBuffer = null
+  outroBuffer = null
+  introPeaks = null
+  outroPeaks = null
+  peaks = null
+  cuts = []
+  cutHistory = []
+  cutHistoryIdx = -1
+  suggestions = []
+  clipTimes = []
+  lastAnalyzedAt = 0
+  meta = { title: '', speaker: '', description: '', chapters: [] }
+  clearDirty()
+  if (videoEl) {
+    videoEl.pause()
+    videoEl.src = ''
+    videoEl.load()
+  }
+  isVideoFile = false
+  audioGainDb = 0
+  setNormalizeUI(0, false)
+  reviewPrepId = null
+  reviewPrep = null
+  loadAndUpdateReviewBanner()
   filePath = ''
   duration = 0
   showState('empty')

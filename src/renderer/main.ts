@@ -10,7 +10,7 @@ import { setupCalendarPage, renderCalendar, renderPlannedList } from './pages/ca
 import { setupFilesPage, applyFilesSettingsToUI, updateFilenamePreview, toggleMp3Quality } from './pages/files-page'
 import { setupGeneralPage, applyGeneralSettingsToUI } from './pages/general-page'
 import { setupRecording } from './pages/recording'
-import { setupEditorPage, openEditorWithFile, openEditorReviewMode, deactivateEditor } from './pages/editor-page'
+import { setupEditorPage, openEditorWithFile, openEditorReviewMode, deactivateEditor, reactivateEditor } from './pages/editor-page'
 import { checkAndShowOnboarding, showOnboarding } from './pages/onboarding'
 import { setupVideoPage, applyVideoSettingsToUI, refreshVideoDevices } from './pages/video-page'
 import { setupPublishPage, applyPublishSettingsToUI } from './pages/publish-page'
@@ -190,6 +190,7 @@ function showPage(id: string): void {
   document.querySelector(`.nav-link[data-page="${id}"]`)?.classList.add('active')
   if (id === 'home')     refreshHome()
   if (id === 'schedule') renderCalendar()
+  if (id === 'editor')   reactivateEditor()
   if (id === 'settings') {
     const activeTab = document.querySelector<HTMLElement>('#settings-tabs .inner-tab.active')?.dataset.tab
     if (!activeTab || activeTab === 'settings-audio') renderDeviceList('device-list')
