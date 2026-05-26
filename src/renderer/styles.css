@@ -1787,6 +1787,9 @@ body.platform-win32  #wake-instructions-win { display: block; }
 /* Editor review-banner detail text */
 .editor-review-banner-detail-text { font-size: 12px; color: var(--text2); }
 
+/* Podcast feed-URL "send to Spotify" label */
+.feed-url-label { font-size: 12px; color: #7fc488; margin-bottom: 4px; font-weight: 600; }
+
 /* Review-queue card on Home — items awaiting publish review */
 .review-queue-card {
   background: linear-gradient(135deg, rgba(122,170,255,.08), rgba(127,196,136,.06));
@@ -2435,7 +2438,10 @@ body.platform-win32  #wake-instructions-win { display: block; }
   transition: border-color .15s, transform .15s;
 }
 .cloud-card:hover { border-color: rgba(122,170,255,.35) !important; }
-.cloud-card .cloud-connected { animation: fadeIn .2s ease; }
+.cloud-card .cloud-connected { animation: fadeIn .2s ease; display: flex; flex-direction: column; gap: 8px; }
+.cloud-card-info { font-size: 12px; color: var(--text3); line-height: 1.6; }
+.cloud-info-value { color: var(--text); font-weight: 500; }
+.cloud-actions-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .cloud-card .cloud-disconnected button { width: 100%; justify-content: center; padding: 10px 14px; font-weight: 600; }
 .cloud-not-configured { font-size: 12px; line-height: 1.4; }
 .cloud-grid { gap: 10px !important; }

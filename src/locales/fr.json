@@ -23,7 +23,7 @@
   },
   "home": {
     "greeting": "Bonjour",
-    "readyTitle": "Tout est prêt pour dimanche",
+    "readyTitle": "Tout est prêt",
     "warnTitle": "La table de mixage n’est pas connectée",
     "warnDetail": "Branchez la table de mixage en USB avant dimanche",
     "nextRecording": "PROCHAIN ENREGISTREMENT",
@@ -59,7 +59,8 @@
     "testSignalOk": "✅ Audio OK",
     "testSignalLow": "⚠️ Signal faible — vérifiez le gain sur la table de mixage",
     "testSignalSilent": "⚠️ Silence — la table de mixage est-elle éteinte ?",
-    "testUnknownError": "Erreur inconnue"
+    "testUnknownError": "Erreur inconnue",
+    "videoPreviewPrompt": "Choisissez une caméra et cliquez sur Actualiser"
   },
   "update": {
     "available": "Nouvelle version {v} disponible — téléchargement en cours…",
@@ -392,7 +393,9 @@
     "limiterDesc": "Empêche l’écrêtage en cas de niveaux élevés (recommandé)",
     "ceiling": "PLAFOND (dB)",
     "leftOnly": "Gauche uniquement",
-    "rightOnly": "Droite uniquement"
+    "rightOnly": "Droite uniquement",
+    "sampleRateMusicDesc": "Musique, CD et podcast",
+    "sampleRateVideoDesc": "Vidéo, Zoom et matériel TV"
   },
   "files": {
     "title": "Fichiers et format",
@@ -417,7 +420,7 @@
     "autoDelete": "Supprimer automatiquement après 90 jours",
     "autoDeleteDesc": "Libère automatiquement de l’espace disque en supprimant les anciens enregistrements",
     "trimSilence": "Couper les silences",
-    "trimSilenceDesc": "Supprime les silences au début et à la fin du fichier",
+    "trimSilenceDesc": "Coupe automatiquement les secondes silencieuses au début et à la fin de l’enregistrement",
     "save": "Enregistrer",
     "cancel": "Annuler",
     "confirmAutoDeleteShort": "Les enregistrements de plus de {n} jours seront supprimés automatiquement et ne peuvent pas être récupérés. Êtes-vous sûr ?",
@@ -428,7 +431,8 @@
     "deleteAfter": "Supprimer après",
     "days": "jours",
     "formatWavDesc": "Non compressé, qualité maximale",
-    "qualityHighest": "Maximum"
+    "qualityHighest": "Maximum",
+    "qualityRecommendedDesc": "Recommandé pour partage et web"
   },
   "general": {
     "title": "Général",
@@ -478,7 +482,8 @@
     "notifyStartDesc": "Affiché comme notification système au début d’une session planifiée.",
     "notifyStopDesc": "Cliquez sur la notification pour aller directement au fichier.",
     "close": "Fermer",
-    "pickFile": "Choisir un fichier…"
+    "pickFile": "Choisir un fichier…",
+    "diagnoseHint": "Copiez ceci et envoyez-le au support si l’enregistrement ne fonctionne pas."
   },
   "editor": {
     "title": "Éditer le fichier audio",
@@ -577,7 +582,9 @@
     "afterSermon": "après la prédication",
     "willBeTrimmed": "sera supprimé",
     "willRemain": "de prédication restant",
-    "export320kbps": "320 kbps (haute qualité)"
+    "export320kbps": "320 kbps (haute qualité)",
+    "kbdJumpToSermon": "Aller à la prédication",
+    "videoFileNotice": "Fichier vidéo — exporté en MP4 (H.264 + AAC)"
   },
   "master": {
     "title": "Mastering (préparation à la publication)",
@@ -749,6 +756,8 @@
   "publish": {
     "descPlaceholder": "Ex : Services de l’Église Exemple, chaque dimanche à 11h",
     "language": "LANGUE",
-    "regenerateFeed": "Générer le flux maintenant"
+    "regenerateFeed": "Générer le flux maintenant",
+    "podcastIntro": "Génère automatiquement un flux RSS après chaque enregistrement. Envoyez l’URL du flux une fois à Spotify for Podcasters et Apple Podcasts Connect — les nouveaux services apparaissent automatiquement.",
+    "feedUrlLabel": "URL DU FLUX — envoyez-la à Spotify et Apple Podcasts"
   }
 }

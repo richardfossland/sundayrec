@@ -23,7 +23,7 @@
   },
   "home": {
     "greeting": "Dzień dobry",
-    "readyTitle": "Wszystko gotowe na niedzielę",
+    "readyTitle": "Wszystko gotowe",
     "warnTitle": "Mikser audio nie jest podłączony",
     "warnDetail": "Podłącz mikser przez USB przed niedzielą",
     "nextRecording": "NASTĘPNE NAGRANIE",
@@ -59,7 +59,8 @@
     "testSignalOk": "✅ Dźwięk OK",
     "testSignalLow": "⚠️ Słaby sygnał — sprawdź wzmocnienie na mikserze",
     "testSignalSilent": "⚠️ Cisza — czy mikser jest wyłączony?",
-    "testUnknownError": "Nieznany błąd"
+    "testUnknownError": "Nieznany błąd",
+    "videoPreviewPrompt": "Wybierz kamerę i kliknij Odśwież"
   },
   "update": {
     "available": "Dostępna nowa wersja {v} — pobieranie…",
@@ -392,7 +393,9 @@
     "limiterDesc": "Zapobiega przesterowaniu przy wysokich poziomach sygnału (zalecane)",
     "ceiling": "PUŁAP (dB)",
     "leftOnly": "Tylko lewy",
-    "rightOnly": "Tylko prawy"
+    "rightOnly": "Tylko prawy",
+    "sampleRateMusicDesc": "Muzyka, CD i podcast",
+    "sampleRateVideoDesc": "Wideo, Zoom i sprzęt TV"
   },
   "files": {
     "title": "Pliki i format",
@@ -417,7 +420,7 @@
     "autoDelete": "Usuwaj automatycznie po 90 dniach",
     "autoDeleteDesc": "Automatycznie zwalnia miejsce na dysku, usuwając stare nagrania",
     "trimSilence": "Wytnij ciszę",
-    "trimSilenceDesc": "Usuwa ciszę z początku i końca pliku",
+    "trimSilenceDesc": "Automatycznie przycina ciche sekundy na początku i końcu nagrania",
     "save": "Zapisz",
     "cancel": "Anuluj",
     "confirmAutoDeleteShort": "Nagrania starsze niż {n} dni zostaną automatycznie usunięte i nie można ich odzyskać. Czy na pewno?",
@@ -428,7 +431,8 @@
     "deleteAfter": "Usuń po",
     "days": "dniach",
     "formatWavDesc": "Nieskompresowany, najwyższa jakość",
-    "qualityHighest": "Najwyższa"
+    "qualityHighest": "Najwyższa",
+    "qualityRecommendedDesc": "Zalecane do udostępniania i sieci"
   },
   "general": {
     "title": "Ogólne",
@@ -478,7 +482,8 @@
     "notifyStartDesc": "Wyświetlane jako powiadomienie systemowe, gdy rozpocznie się zaplanowana sesja.",
     "notifyStopDesc": "Kliknij powiadomienie, aby przejść bezpośrednio do pliku.",
     "close": "Zamknij",
-    "pickFile": "Wybierz plik…"
+    "pickFile": "Wybierz plik…",
+    "diagnoseHint": "Skopiuj to i wyślij do supportu, jeśli nagrywanie nie działa."
   },
   "editor": {
     "title": "Edytuj plik audio",
@@ -577,7 +582,9 @@
     "afterSermon": "po kazaniu",
     "willBeTrimmed": "zostanie usunięte",
     "willRemain": "kazania pozostaje",
-    "export320kbps": "320 kbps (wysoka jakość)"
+    "export320kbps": "320 kbps (wysoka jakość)",
+    "kbdJumpToSermon": "Przejdź do kazania",
+    "videoFileNotice": "Plik wideo — eksportowany jako MP4 (H.264 + AAC)"
   },
   "master": {
     "title": "Mastering (przygotuj do publikacji)",
@@ -749,6 +756,8 @@
   "publish": {
     "descPlaceholder": "Np. Nabożeństwa z Kościoła Przykładowego, w każdą niedzielę o 11",
     "language": "JĘZYK",
-    "regenerateFeed": "Wygeneruj feed teraz"
+    "regenerateFeed": "Wygeneruj feed teraz",
+    "podcastIntro": "Automatycznie generuje feed RSS po każdym nagraniu. Wyślij URL feeda raz do Spotify for Podcasters i Apple Podcasts Connect — nowe nabożeństwa pojawią się same.",
+    "feedUrlLabel": "URL FEEDA — wyślij go do Spotify i Apple Podcasts"
   }
 }

@@ -23,7 +23,7 @@
   },
   "home": {
     "greeting": "God dag",
-    "readyTitle": "Allt är klart inför söndagen",
+    "readyTitle": "Allt klart",
     "warnTitle": "Ljudmixern är inte ansluten",
     "warnDetail": "Anslut mixern via USB före söndag",
     "nextRecording": "NÄSTA INSPELNING",
@@ -59,7 +59,8 @@
     "testSignalOk": "✅ Ljud OK",
     "testSignalLow": "⚠️ Svag signal — kontrollera gain på mixern",
     "testSignalSilent": "⚠️ Tystnad — är mixern avstängd?",
-    "testUnknownError": "Okänt fel"
+    "testUnknownError": "Okänt fel",
+    "videoPreviewPrompt": "Välj kamera och klicka Uppdatera"
   },
   "update": {
     "available": "Ny version {v} tillgänglig — laddar ner…",
@@ -392,7 +393,9 @@
     "limiterDesc": "Förhindrar klippning vid höga ljudnivåer (rekommenderas)",
     "ceiling": "TAK (dB)",
     "leftOnly": "Endast vänster",
-    "rightOnly": "Endast höger"
+    "rightOnly": "Endast höger",
+    "sampleRateMusicDesc": "Musik, CD och podd",
+    "sampleRateVideoDesc": "Video, Zoom och TV-utrustning"
   },
   "files": {
     "title": "Filer & Format",
@@ -417,7 +420,7 @@
     "autoDelete": "Radera automatiskt efter 90 dagar",
     "autoDeleteDesc": "Frigör diskutrymme automatiskt genom att radera gamla inspelningar",
     "trimSilence": "Klipp bort tystnad",
-    "trimSilenceDesc": "Tar bort tystnad i början och slutet av filen",
+    "trimSilenceDesc": "Klipper automatiskt bort tysta sekunder i början och slutet av inspelningen",
     "save": "Spara",
     "cancel": "Avbryt",
     "confirmAutoDeleteShort": "Inspelningar äldre än {n} dagar raderas automatiskt och går inte att återställa. Är du säker?",
@@ -428,7 +431,8 @@
     "deleteAfter": "Radera efter",
     "days": "dagar",
     "formatWavDesc": "Okomprimerat, högsta kvalitet",
-    "qualityHighest": "Högsta"
+    "qualityHighest": "Högsta",
+    "qualityRecommendedDesc": "Rekommenderas för delning och webb"
   },
   "general": {
     "title": "Allmänt",
@@ -478,7 +482,8 @@
     "notifyStartDesc": "Visas som systemavisering när en planerad inspelning startar.",
     "notifyStopDesc": "Klicka på aviseringen för att gå direkt till filen.",
     "close": "Stäng",
-    "pickFile": "Välj fil…"
+    "pickFile": "Välj fil…",
+    "diagnoseHint": "Kopiera detta och skicka till support om inspelning inte fungerar."
   },
   "editor": {
     "title": "Redigera ljudfil",
@@ -577,7 +582,9 @@
     "afterSermon": "efter predikan",
     "willBeTrimmed": "tas bort",
     "willRemain": "predikan kvar",
-    "export320kbps": "320 kbps (hög kvalitet)"
+    "export320kbps": "320 kbps (hög kvalitet)",
+    "kbdJumpToSermon": "Hoppa till predikan",
+    "videoFileNotice": "Videofil — exporteras som MP4 (H.264 + AAC)"
   },
   "master": {
     "title": "Mastring (förbered för publicering)",
@@ -749,6 +756,8 @@
   "publish": {
     "descPlaceholder": "T.ex. Gudstjänster från Exempelkyrkan, varje söndag kl. 11",
     "language": "SPRÅK",
-    "regenerateFeed": "Generera feed nu"
+    "regenerateFeed": "Generera feed nu",
+    "podcastIntro": "Genererar automatiskt en RSS-feed efter varje inspelning. Skicka feed-URL:en en gång till Spotify for Podcasters och Apple Podcasts Connect — nya gudstjänster dyker upp av sig själva.",
+    "feedUrlLabel": "FEED-URL — skicka denna till Spotify och Apple Podcasts"
   }
 }

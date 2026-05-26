@@ -23,7 +23,7 @@
   },
   "home": {
     "greeting": "Goddag",
-    "readyTitle": "Alt er klar til søndag",
+    "readyTitle": "Alt klart",
     "warnTitle": "Lydmixeren er ikke tilsluttet",
     "warnDetail": "Tilslut mixeren via USB inden søndag",
     "nextRecording": "NÆSTE OPTAGELSE",
@@ -59,7 +59,8 @@
     "testSignalOk": "✅ Lyd OK",
     "testSignalLow": "⚠️ Svagt signal — tjek gain på mixeren",
     "testSignalSilent": "⚠️ Stilhed — er mixeren slukket?",
-    "testUnknownError": "Ukendt fejl"
+    "testUnknownError": "Ukendt fejl",
+    "videoPreviewPrompt": "Vælg kamera og klik Opdater"
   },
   "update": {
     "available": "Ny version {v} tilgængelig — henter…",
@@ -392,7 +393,9 @@
     "limiterDesc": "Forhindrer klipning ved høje lydniveauer (anbefalet)",
     "ceiling": "LOFT (dB)",
     "leftOnly": "Kun venstre",
-    "rightOnly": "Kun højre"
+    "rightOnly": "Kun højre",
+    "sampleRateMusicDesc": "Musik, CD og podcast",
+    "sampleRateVideoDesc": "Video, Zoom og TV-udstyr"
   },
   "files": {
     "title": "Filer & Format",
@@ -417,7 +420,7 @@
     "autoDelete": "Slet automatisk efter 90 dage",
     "autoDeleteDesc": "Frigør diskplads automatisk ved at slette gamle optagelser",
     "trimSilence": "Klip stilhed væk",
-    "trimSilenceDesc": "Fjerner stilhed i begyndelsen og slutningen af filen",
+    "trimSilenceDesc": "Beskærer automatisk stille sekunder i starten og slutningen af optagelsen",
     "save": "Gem",
     "cancel": "Annuller",
     "confirmAutoDeleteShort": "Optagelser, der er ældre end {n} dage, slettes automatisk og kan ikke gendannes. Er du sikker?",
@@ -428,7 +431,8 @@
     "deleteAfter": "Slet efter",
     "days": "dage",
     "formatWavDesc": "Ukomprimeret, højeste kvalitet",
-    "qualityHighest": "Højeste"
+    "qualityHighest": "Højeste",
+    "qualityRecommendedDesc": "Anbefales til deling og web"
   },
   "general": {
     "title": "Generelt",
@@ -478,7 +482,8 @@
     "notifyStartDesc": "Vises som systemnotifikation når en planlagt optagelse starter.",
     "notifyStopDesc": "Klik på notifikationen for at gå direkte til filen.",
     "close": "Luk",
-    "pickFile": "Vælg fil…"
+    "pickFile": "Vælg fil…",
+    "diagnoseHint": "Kopiér dette og send til support hvis optagelse ikke virker."
   },
   "editor": {
     "title": "Rediger lydfil",
@@ -577,7 +582,9 @@
     "afterSermon": "efter prædikenen",
     "willBeTrimmed": "fjernes",
     "willRemain": "prædiken tilbage",
-    "export320kbps": "320 kbps (høj kvalitet)"
+    "export320kbps": "320 kbps (høj kvalitet)",
+    "kbdJumpToSermon": "Hop til prædiken",
+    "videoFileNotice": "Videofil — eksporteres som MP4 (H.264 + AAC)"
   },
   "master": {
     "title": "Mastering (klargør til udgivelse)",
@@ -749,6 +756,8 @@
   "publish": {
     "descPlaceholder": "F.eks. Gudstjenester fra Eksempel kirke, hver søndag kl. 11",
     "language": "SPROG",
-    "regenerateFeed": "Generer feed nu"
+    "regenerateFeed": "Generer feed nu",
+    "podcastIntro": "Genererer automatisk en RSS-feed efter hver optagelse. Send feed-URL’en én gang til Spotify for Podcasters og Apple Podcasts Connect — nye gudstjenester dukker op af sig selv.",
+    "feedUrlLabel": "FEED-URL — send denne til Spotify og Apple Podcasts"
   }
 }

@@ -106,7 +106,7 @@
       <div class="hero-icon"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg></div>
       <div class="hero-text">
         <div class="hero-label" data-i18n="status.ok">Klar for opptak</div>
-        <div class="hero-title" id="hero-ready-title">Alt er klart</div>
+        <div class="hero-title" id="hero-ready-title" data-i18n="home.readyTitle">Alt er klart</div>
       </div>
       <div class="hero-next" id="hero-next-section">
         <div class="next-label" data-i18n="home.nextRecording">Neste opptak</div>
@@ -198,7 +198,7 @@
           <div id="video-preview-placeholder" class="video-preview-placeholder">
             <div class="video-placeholder-inner">
               <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.35;margin-bottom:8px"><path d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.889L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span id="video-preview-placeholder-text">Velg kamera og trykk oppdater</span>
+              <span id="video-preview-placeholder-text" data-i18n="home.videoPreviewPrompt">Velg kamera og trykk oppdater</span>
             </div>
           </div>
         </div>
@@ -685,13 +685,13 @@
           <label class="option-card">
             <input type="radio" name="sampleRate" value="44100" id="sr-44" />
             <div class="option-card-name">44 100 Hz</div>
-            <div class="option-card-desc">Musikk, CD og podcast</div>
+            <div class="option-card-desc" data-i18n="audio.sampleRateMusicDesc">Musikk, CD og podcast</div>
           </label>
           <label class="option-card">
             <input type="radio" name="sampleRate" value="48000" id="sr-48" checked />
             <div class="option-card-name">48 000 Hz</div>
             <div class="option-card-badge">Anbefalt</div>
-            <div class="option-card-desc">Video, Zoom og TV-utstyr</div>
+            <div class="option-card-desc" data-i18n="audio.sampleRateVideoDesc">Video, Zoom og TV-utstyr</div>
           </label>
         </div>
         <!-- Hidden select for compatibility with existing save logic -->
@@ -751,7 +751,7 @@
             <input type="radio" name="format" value="mp3" checked />
             <div class="format-card-name">MP3</div>
             <div class="format-card-size">~85 MB / time</div>
-            <div class="option-card-desc">Anbefalt for deling og nett</div>
+            <div class="option-card-desc" data-i18n="files.qualityRecommendedDesc">Anbefalt for deling og nett</div>
           </label>
           <label class="option-card format-card">
             <input type="radio" name="format" value="flac" />
@@ -805,7 +805,7 @@
         <div class="toggle-row mt">
           <div>
             <div class="toggle-title" data-i18n="files.trimSilence">Trim stillhet</div>
-            <div class="toggle-desc">Kutter automatisk stille sekunder i starten og slutten av opptaket</div>
+            <div class="toggle-desc" data-i18n="files.trimSilenceDesc">Kutter automatisk stille sekunder i starten og slutten av opptaket</div>
           </div>
           <label class="toggle"><input type="checkbox" id="opt-trim-silence" /><span class="toggle-track"></span></label>
         </div>
@@ -917,28 +917,28 @@
 
           <!-- Google Drive -->
           <div class="cloud-card" id="cloud-card-google-drive">
-            <div style="display:flex;align-items:center;gap:10px">
+            <div class="cloud-card-header">
               <svg viewBox="0 0 87.3 78" width="24" height="24"><path fill="#0066da" d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3L27.5 53H0c0 1.55.4 3.1 1.2 4.5z"/><path fill="#00ac47" d="M43.65 25L30 1.4C28.65 2.2 27.5 3.3 26.7 4.7L1.2 48.85C.42 50.227.008 51.784 0 53.35h27.5z"/><path fill="#ea4335" d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.8l5.85 11.5z"/><path fill="#00832d" d="M43.65 25l13.65-23.6C55.95.6 54.4 0 52.85 0H34.45c-1.55 0-3.1.45-4.45 1.4z"/><path fill="#2684fc" d="M59.8 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.5 1.2h50.55c1.55 0 3.1-.45 4.45-1.2z"/><path fill="#ffba00" d="M73.4 26.5L60.65 4.7c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25l16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z"/></svg>
-              <div style="font-weight:600;font-size:14px">Google Drive</div>
+              <div class="cloud-card-name">Google Drive</div>
             </div>
             <div class="cloud-disconnected">
               <button class="btn-primary" data-cloud-connect="google-drive" data-i18n="publish.connect">Koble til</button>
             </div>
-            <div class="cloud-connected" style="display:none;flex-direction:column;gap:8px">
-              <div style="font-size:12px;color:var(--text3);line-height:1.6">
-                <div><span data-i18n="publish.account">Konto</span>: <span class="cloud-account-name" style="color:var(--text);font-weight:500"></span></div>
-                <div><span data-i18n="publish.folder">Mappe</span>: <span class="cloud-folder-name" style="color:var(--text);font-weight:500"></span></div>
-                <div><span data-i18n="publish.lastUpload">Siste</span>: <span class="cloud-last-upload" style="color:var(--text)">—</span></div>
+            <div class="cloud-connected" style="display:none">
+              <div class="cloud-card-info">
+                <div><span data-i18n="publish.account">Konto</span>: <span class="cloud-account-name cloud-info-value"></span></div>
+                <div><span data-i18n="publish.folder">Mappe</span>: <span class="cloud-folder-name cloud-info-value"></span></div>
+                <div><span data-i18n="publish.lastUpload">Siste</span>: <span class="cloud-last-upload cloud-info-value">—</span></div>
               </div>
-              <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+              <label class="cloud-toggle-row">
                 <input type="checkbox" data-cloud-enabled="google-drive">
                 <span data-i18n="publish.enabled">Aktivert</span>
               </label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+              <label class="cloud-toggle-row">
                 <input type="checkbox" data-cloud-auto="google-drive">
                 <span data-i18n="publish.autoUpload">Last opp automatisk etter opptak</span>
               </label>
-              <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <div class="cloud-actions-row">
                 <button class="btn-secondary btn-sm" data-cloud-pick-folder="google-drive" data-i18n="publish.pickFolder">Velg mappe…</button>
                 <button class="btn-ghost" data-cloud-disconnect="google-drive" data-i18n="publish.disconnect">Koble fra</button>
               </div>
@@ -947,28 +947,28 @@
 
           <!-- Dropbox -->
           <div class="cloud-card" id="cloud-card-dropbox">
-            <div style="display:flex;align-items:center;gap:10px">
+            <div class="cloud-card-header">
               <svg viewBox="0 0 43 40" width="24" height="24"><path fill="#0061ff" d="M12.5 0L0 7.95l12.5 7.95L25 7.95zm18 0L18 7.95l12.5 7.95L43 7.95zM0 23.85l12.5 7.95L25 23.85l-12.5-7.95zm30.5-7.95L18 23.85l12.5 7.95L43 23.85zM12.5 34.45L25 26.5l-12.5-7.95L0 26.5z"/></svg>
-              <div style="font-weight:600;font-size:14px">Dropbox</div>
+              <div class="cloud-card-name">Dropbox</div>
             </div>
             <div class="cloud-disconnected">
               <button class="btn-primary" data-cloud-connect="dropbox" data-i18n="publish.connect">Koble til</button>
             </div>
-            <div class="cloud-connected" style="display:none;flex-direction:column;gap:8px">
-              <div style="font-size:12px;color:var(--text3);line-height:1.6">
-                <div><span data-i18n="publish.account">Konto</span>: <span class="cloud-account-name" style="color:var(--text);font-weight:500"></span></div>
-                <div><span data-i18n="publish.folder">Mappe</span>: <span class="cloud-folder-name" style="color:var(--text);font-weight:500"></span></div>
-                <div><span data-i18n="publish.lastUpload">Siste</span>: <span class="cloud-last-upload" style="color:var(--text)">—</span></div>
+            <div class="cloud-connected" style="display:none">
+              <div class="cloud-card-info">
+                <div><span data-i18n="publish.account">Konto</span>: <span class="cloud-account-name cloud-info-value"></span></div>
+                <div><span data-i18n="publish.folder">Mappe</span>: <span class="cloud-folder-name cloud-info-value"></span></div>
+                <div><span data-i18n="publish.lastUpload">Siste</span>: <span class="cloud-last-upload cloud-info-value">—</span></div>
               </div>
-              <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+              <label class="cloud-toggle-row">
                 <input type="checkbox" data-cloud-enabled="dropbox">
                 <span data-i18n="publish.enabled">Aktivert</span>
               </label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+              <label class="cloud-toggle-row">
                 <input type="checkbox" data-cloud-auto="dropbox">
                 <span data-i18n="publish.autoUpload">Last opp automatisk etter opptak</span>
               </label>
-              <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <div class="cloud-actions-row">
                 <button class="btn-secondary btn-sm" data-cloud-pick-folder="dropbox" data-i18n="publish.pickFolder">Velg mappe…</button>
                 <button class="btn-ghost" data-cloud-disconnect="dropbox" data-i18n="publish.disconnect">Koble fra</button>
               </div>
@@ -979,28 +979,28 @@
                re-aktivér ved å fjerne style="display:none" når Azure-app er klar
                og ONEDRIVE_CLIENT_ID er satt i GitHub Secrets. -->
           <div class="cloud-card" id="cloud-card-onedrive" style="display:none">
-            <div style="display:flex;align-items:center;gap:10px">
+            <div class="cloud-card-header">
               <svg viewBox="0 0 256 167" width="24" height="24"><path fill="#0364b8" d="M165.7 87.8L154 36.5l-12.4 31.6 13.7 19.6z"/><path fill="#0078d4" d="M154 36.5c-12.6-21.7-40.4-29-62.1-16.4-9.3 5.4-16.4 13.9-20 24l8.1 32.4 38.4-13.1z"/><path fill="#1490df" d="M80 76.5c-6-1-12-1-18 .4-12.6 3-23 12-27.8 24.2L155 122.5z"/><path fill="#28a8ea" d="M34.2 101.1C13.8 107 1.5 127.5 7.4 147.9c4.7 16.4 19.7 27.7 36.7 27.7H210l-55-53.1z"/></svg>
-              <div style="font-weight:600;font-size:14px">OneDrive</div>
+              <div class="cloud-card-name">OneDrive</div>
             </div>
             <div class="cloud-disconnected">
               <button class="btn-primary" data-cloud-connect="onedrive" data-i18n="publish.connect">Koble til</button>
             </div>
-            <div class="cloud-connected" style="display:none;flex-direction:column;gap:8px">
-              <div style="font-size:12px;color:var(--text3);line-height:1.6">
-                <div><span data-i18n="publish.account">Konto</span>: <span class="cloud-account-name" style="color:var(--text);font-weight:500"></span></div>
-                <div><span data-i18n="publish.folder">Mappe</span>: <span class="cloud-folder-name" style="color:var(--text);font-weight:500"></span></div>
-                <div><span data-i18n="publish.lastUpload">Siste</span>: <span class="cloud-last-upload" style="color:var(--text)">—</span></div>
+            <div class="cloud-connected" style="display:none">
+              <div class="cloud-card-info">
+                <div><span data-i18n="publish.account">Konto</span>: <span class="cloud-account-name cloud-info-value"></span></div>
+                <div><span data-i18n="publish.folder">Mappe</span>: <span class="cloud-folder-name cloud-info-value"></span></div>
+                <div><span data-i18n="publish.lastUpload">Siste</span>: <span class="cloud-last-upload cloud-info-value">—</span></div>
               </div>
-              <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+              <label class="cloud-toggle-row">
                 <input type="checkbox" data-cloud-enabled="onedrive">
                 <span data-i18n="publish.enabled">Aktivert</span>
               </label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+              <label class="cloud-toggle-row">
                 <input type="checkbox" data-cloud-auto="onedrive">
                 <span data-i18n="publish.autoUpload">Last opp automatisk etter opptak</span>
               </label>
-              <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <div class="cloud-actions-row">
                 <button class="btn-secondary btn-sm" data-cloud-pick-folder="onedrive" data-i18n="publish.pickFolder">Velg mappe…</button>
                 <button class="btn-ghost" data-cloud-disconnect="onedrive" data-i18n="publish.disconnect">Koble fra</button>
               </div>
@@ -1019,7 +1019,7 @@
           <div class="card-title" style="margin:0">Podcast (RSS-feed)</div>
           <label class="toggle"><input type="checkbox" id="opt-podcast-enabled"><span class="toggle-track"></span></label>
         </div>
-        <p class="card-desc">Genererer en RSS-feed automatisk etter hvert opptak. Send feed-URL-en én gang til Spotify for Podcasters og Apple Podcasts Connect — nye gudstjenester dukker opp av seg selv.</p>
+        <p class="card-desc" data-i18n="publish.podcastIntro">Genererer en RSS-feed automatisk etter hvert opptak. Send feed-URL-en én gang til Spotify for Podcasters og Apple Podcasts Connect — nye gudstjenester dukker opp av seg selv.</p>
 
         <div id="podcast-config" style="display:none;flex-direction:column;gap:12px;margin-top:8px">
 
@@ -1088,7 +1088,7 @@
           </div>
 
           <div id="podcast-feed-url-row" style="display:none;background:#1a2a1f;border:1px solid #2a5a3a;border-radius:6px;padding:10px 12px">
-            <div style="font-size:12px;color:#7fc488;margin-bottom:4px;font-weight:600">FEED-URL — send denne til Spotify og Apple Podcasts</div>
+            <div class="feed-url-label" data-i18n="publish.feedUrlLabel">FEED-URL — send denne til Spotify og Apple Podcasts</div>
             <div style="display:flex;gap:6px;align-items:center">
               <input type="text" class="form-input" id="podcast-feed-url" readonly style="flex:1;font-family:monospace;font-size:12px">
               <button class="btn-secondary btn-sm" id="btn-podcast-copy-url">Kopier</button>
@@ -1608,7 +1608,7 @@
         <span class="editor-kbd-hint"><span class="kbd">Space</span> Spill/pause</span>
         <span class="editor-kbd-hint"><span class="kbd">←</span><span class="kbd">→</span> 5s · <span class="kbd">Shift</span>+<span class="kbd">←→</span> 1s</span>
         <span class="editor-kbd-hint"><span class="kbd">Tab</span> Neste kutt</span>
-        <span class="editor-kbd-hint"><span class="kbd">P</span> Hopp til preken</span>
+        <span class="editor-kbd-hint"><span class="kbd">P</span> <span data-i18n="editor.kbdJumpToSermon">Hopp til preken</span></span>
         <span class="editor-kbd-hint"><span class="kbd">L</span> Loop</span>
         <span class="editor-kbd-hint"><span class="kbd">+</span><span class="kbd">−</span> Zoom</span>
         <span class="editor-kbd-hint"><span class="kbd">F</span> Fit</span>
@@ -1856,7 +1856,7 @@
     <!-- Video export notice (shown instead of format picker for video files) -->
     <div id="export-video-notice" class="export-video-notice" style="display:none">
       <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="flex-shrink:0;opacity:.7"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zm12.553 1.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/></svg>
-      <span>Videofil — eksporteres som MP4 (H.264 + AAC)</span>
+      <span data-i18n="editor.videoFileNotice">Videofil — eksporteres som MP4 (H.264 + AAC)</span>
     </div>
 
     <!-- Format picker (hidden for video files) -->
@@ -2107,7 +2107,7 @@
       <button class="modal-close" id="btn-audio-diagnose-close">×</button>
     </div>
     <pre id="audio-diagnose-body" class="diagnose-body"></pre>
-    <p class="diagnose-hint">Kopier dette og send til support hvis opptak ikke fungerer.</p>
+    <p class="diagnose-hint" data-i18n="general.diagnoseHint">Kopier dette og send til support hvis opptak ikke fungerer.</p>
   </div>
 </div>
 

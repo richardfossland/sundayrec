@@ -947,8 +947,13 @@ async function applyPreroll(
 
     // Step 2: Concat encoded pre-roll + main recording (lossless copy)
     const escPath = (p: string) => {
-      const normalized = process.platform === 'win32' ? p.replace(/\\/g, '/') : p
-      // ffmpeg concat format uses backslash-escaping inside single-quoted paths (not the POSIX shell trick)
+      // Normalize backslashes to forward slashes on Windows so ffmpeg's
+      // concat-list parser doesn't interpret them. On POSIX a literal `\`
+      // in a filename also needs escaping inside single-quoted paths.
+      const normalized = process.platform === 'win32'
+        ? p.replace(/\\/g, '/')
+        : p.replace(/\\/g, '\\\\')
+      // ffmpeg concat format uses backslash-escaping inside single-quoted paths
       return normalized.replace(/'/g, "\\'")
     }
     await fs.promises.writeFile(

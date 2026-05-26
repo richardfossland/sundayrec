@@ -23,7 +23,7 @@
   },
   "home": {
     "greeting": "Good day",
-    "readyTitle": "Everything is ready",
+    "readyTitle": "All set",
     "warnTitle": "The audio mixer isn't connected",
     "warnDetail": "Plug the mixer in via USB before Sunday",
     "nextRecording": "NEXT RECORDING",
@@ -59,7 +59,8 @@
     "testSignalOk": "✅ Audio OK",
     "testSignalLow": "⚠️ Weak signal — check gain on the mixer",
     "testSignalSilent": "⚠️ Silence — is the mixer off?",
-    "testUnknownError": "Unknown error"
+    "testUnknownError": "Unknown error",
+    "videoPreviewPrompt": "Choose a camera and click Refresh"
   },
   "update": {
     "available": "New version {v} available — downloading…",
@@ -392,7 +393,9 @@
     "limiterDesc": "Stops clipping at high signal levels (recommended)",
     "ceiling": "CEILING (dB)",
     "leftOnly": "Left only",
-    "rightOnly": "Right only"
+    "rightOnly": "Right only",
+    "sampleRateMusicDesc": "Music, CD and podcast",
+    "sampleRateVideoDesc": "Video, Zoom and TV equipment"
   },
   "files": {
     "title": "Files & Format",
@@ -417,7 +420,7 @@
     "autoDelete": "Delete automatically after 90 days",
     "autoDeleteDesc": "Frees up disk space automatically by removing old recordings",
     "trimSilence": "Trim silence",
-    "trimSilenceDesc": "Removes silence at the start and end of the file",
+    "trimSilenceDesc": "Automatically trims silent seconds at the start and end of the recording",
     "save": "Save",
     "cancel": "Cancel",
     "confirmAutoDeleteShort": "Recordings older than {n} days will be deleted automatically and can't be recovered. Are you sure?",
@@ -428,7 +431,8 @@
     "deleteAfter": "Delete after",
     "days": "days",
     "formatWavDesc": "Uncompressed, highest quality",
-    "qualityHighest": "Highest"
+    "qualityHighest": "Highest",
+    "qualityRecommendedDesc": "Recommended for sharing and web"
   },
   "general": {
     "title": "General",
@@ -478,7 +482,8 @@
     "notifyStartDesc": "Shown as a system notification when a scheduled session begins.",
     "notifyStopDesc": "Click the notification to jump straight to the file.",
     "close": "Close",
-    "pickFile": "Choose file…"
+    "pickFile": "Choose file…",
+    "diagnoseHint": "Copy this and send to support if recording is not working."
   },
   "editor": {
     "title": "Edit audio file",
@@ -577,7 +582,9 @@
     "afterSermon": "after the sermon",
     "willBeTrimmed": "will be trimmed",
     "willRemain": "of sermon remaining",
-    "export320kbps": "320 kbps (high quality)"
+    "export320kbps": "320 kbps (high quality)",
+    "kbdJumpToSermon": "Jump to sermon",
+    "videoFileNotice": "Video file — exported as MP4 (H.264 + AAC)"
   },
   "master": {
     "title": "Mastering (prepare for publishing)",
@@ -749,6 +756,8 @@
   "publish": {
     "descPlaceholder": "E.g. Services from Example Church, every Sunday at 11",
     "language": "LANGUAGE",
-    "regenerateFeed": "Generate feed now"
+    "regenerateFeed": "Generate feed now",
+    "podcastIntro": "Automatically generates an RSS feed after each recording. Send the feed URL once to Spotify for Podcasters and Apple Podcasts Connect — new services appear by themselves.",
+    "feedUrlLabel": "FEED URL — send this to Spotify and Apple Podcasts"
   }
 }

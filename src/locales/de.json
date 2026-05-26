@@ -23,7 +23,7 @@
   },
   "home": {
     "greeting": "Guten Tag",
-    "readyTitle": "Alles bereit für Sonntag",
+    "readyTitle": "Alles bereit",
     "warnTitle": "Das Mischpult ist nicht angeschlossen",
     "warnDetail": "Schließen Sie das Mischpult vor Sonntag per USB an",
     "nextRecording": "NÄCHSTE AUFNAHME",
@@ -59,7 +59,8 @@
     "testSignalOk": "✅ Ton OK",
     "testSignalLow": "⚠️ Schwaches Signal — Pegel am Mischpult prüfen",
     "testSignalSilent": "⚠️ Stille — ist das Mischpult aus?",
-    "testUnknownError": "Unbekannter Fehler"
+    "testUnknownError": "Unbekannter Fehler",
+    "videoPreviewPrompt": "Kamera wählen und „Aktualisieren\" klicken"
   },
   "update": {
     "available": "Neue Version {v} verfügbar — wird heruntergeladen…",
@@ -392,7 +393,9 @@
     "limiterDesc": "Verhindert Übersteuern bei hohen Pegeln (empfohlen)",
     "ceiling": "MAXIMALPEGEL (dB)",
     "leftOnly": "Nur links",
-    "rightOnly": "Nur rechts"
+    "rightOnly": "Nur rechts",
+    "sampleRateMusicDesc": "Musik, CD und Podcast",
+    "sampleRateVideoDesc": "Video, Zoom und TV-Equipment"
   },
   "files": {
     "title": "Dateien & Format",
@@ -417,7 +420,7 @@
     "autoDelete": "Nach 90 Tagen automatisch löschen",
     "autoDeleteDesc": "Gibt Speicherplatz automatisch frei, indem alte Aufnahmen gelöscht werden",
     "trimSilence": "Stille trimmen",
-    "trimSilenceDesc": "Entfernt Stille am Anfang und Ende der Datei",
+    "trimSilenceDesc": "Schneidet automatisch stille Sekunden am Anfang und Ende der Aufnahme",
     "save": "Speichern",
     "cancel": "Abbrechen",
     "confirmAutoDeleteShort": "Aufnahmen, die älter als {n} Tage sind, werden automatisch gelöscht und können nicht wiederhergestellt werden. Sind Sie sicher?",
@@ -428,7 +431,8 @@
     "deleteAfter": "Löschen nach",
     "days": "Tagen",
     "formatWavDesc": "Unkomprimiert, höchste Qualität",
-    "qualityHighest": "Höchste"
+    "qualityHighest": "Höchste",
+    "qualityRecommendedDesc": "Empfohlen für Teilen und Web"
   },
   "general": {
     "title": "Allgemein",
@@ -478,7 +482,8 @@
     "notifyStartDesc": "Wird als Systembenachrichtigung angezeigt, wenn eine geplante Sitzung beginnt.",
     "notifyStopDesc": "Klicken Sie auf die Benachrichtigung, um direkt zur Datei zu springen.",
     "close": "Schließen",
-    "pickFile": "Datei wählen…"
+    "pickFile": "Datei wählen…",
+    "diagnoseHint": "Kopieren Sie dies und senden Sie es an den Support, wenn die Aufnahme nicht funktioniert."
   },
   "editor": {
     "title": "Audiodatei bearbeiten",
@@ -577,7 +582,9 @@
     "afterSermon": "nach der Predigt",
     "willBeTrimmed": "wird entfernt",
     "willRemain": "Predigt verbleiben",
-    "export320kbps": "320 kbps (Hohe Qualität)"
+    "export320kbps": "320 kbps (Hohe Qualität)",
+    "kbdJumpToSermon": "Zur Predigt springen",
+    "videoFileNotice": "Videodatei — wird als MP4 (H.264 + AAC) exportiert"
   },
   "master": {
     "title": "Mastering (Vorbereitung zur Veröffentlichung)",
@@ -749,6 +756,8 @@
   "publish": {
     "descPlaceholder": "z. B. Gottesdienste der Beispiel-Kirche, jeden Sonntag um 11",
     "language": "SPRACHE",
-    "regenerateFeed": "Feed jetzt generieren"
+    "regenerateFeed": "Feed jetzt generieren",
+    "podcastIntro": "Generiert nach jeder Aufnahme automatisch einen RSS-Feed. Senden Sie die Feed-URL einmal an Spotify for Podcasters und Apple Podcasts Connect — neue Gottesdienste erscheinen automatisch.",
+    "feedUrlLabel": "FEED-URL — diese an Spotify und Apple Podcasts senden"
   }
 }

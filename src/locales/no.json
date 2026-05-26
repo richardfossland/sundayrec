@@ -59,7 +59,8 @@
     "testSignalOk": "✅ Lyd OK",
     "testSignalLow": "⚠️ Svak lyd — sjekk gain på mikser",
     "testSignalSilent": "⚠️ Stillhet — mikser av?",
-    "testUnknownError": "Ukjent feil"
+    "testUnknownError": "Ukjent feil",
+    "videoPreviewPrompt": "Velg kamera og trykk oppdater"
   },
   "update": {
     "available": "Ny versjon {v} er tilgjengelig — laster ned…",
@@ -392,7 +393,9 @@
     "limiterDesc": "Hindrer klipping ved for høye lydnivåer (anbefalt)",
     "ceiling": "TAK (dB)",
     "leftOnly": "Kun venstre",
-    "rightOnly": "Kun høyre"
+    "rightOnly": "Kun høyre",
+    "sampleRateMusicDesc": "Musikk, CD og podcast",
+    "sampleRateVideoDesc": "Video, Zoom og TV-utstyr"
   },
   "files": {
     "title": "Filer & Format",
@@ -417,7 +420,7 @@
     "autoDelete": "Slett automatisk etter 90 dager",
     "autoDeleteDesc": "Frigjør diskplass automatisk ved å slette gamle opptak",
     "trimSilence": "Trim stillhet",
-    "trimSilenceDesc": "Fjerner stillhet i begynnelsen og slutten av filen",
+    "trimSilenceDesc": "Kutter automatisk stille sekunder i starten og slutten av opptaket",
     "save": "Lagre",
     "cancel": "Avbryt",
     "confirmAutoDeleteShort": "Opptak eldre enn {n} dager slettes automatisk og kan ikke gjenopprettes. Er du sikker?",
@@ -428,7 +431,8 @@
     "deleteAfter": "Slett etter",
     "days": "dager",
     "formatWavDesc": "Ukomprimert, høyest kvalitet",
-    "qualityHighest": "Høyeste"
+    "qualityHighest": "Høyeste",
+    "qualityRecommendedDesc": "Anbefalt for deling og nett"
   },
   "general": {
     "title": "Generelt",
@@ -478,7 +482,8 @@
     "askOpenEditor": "Spør om redigering etter opptak",
     "askOpenEditorDesc": "Vis varsel om å åpne filen i Rediger etter at opptaket er fullført",
     "noClipSelected": "Ingen fil valgt",
-    "pickFile": "Velg fil…"
+    "pickFile": "Velg fil…",
+    "diagnoseHint": "Kopier dette og send til support hvis opptak ikke fungerer."
   },
   "editor": {
     "title": "Rediger lydfil",
@@ -577,7 +582,9 @@
     "tooltipSilence": "Stillhet",
     "tooltipMixed": "Blandet",
     "tooltipSermon": "Antatt preken",
-    "export320kbps": "320 kbps (høy kvalitet)"
+    "export320kbps": "320 kbps (høy kvalitet)",
+    "kbdJumpToSermon": "Hopp til preken",
+    "videoFileNotice": "Videofil — eksporteres som MP4 (H.264 + AAC)"
   },
   "master": {
     "title": "Mastering (klargjør for publisering)",
@@ -749,6 +756,8 @@
   "publish": {
     "descPlaceholder": "Eks: Gudstjenester fra Eksempel kirke, hver søndag kl 11",
     "language": "SPRÅK",
-    "regenerateFeed": "Generer feed nå"
+    "regenerateFeed": "Generer feed nå",
+    "podcastIntro": "Genererer en RSS-feed automatisk etter hvert opptak. Send feed-URL-en én gang til Spotify for Podcasters og Apple Podcasts Connect — nye gudstjenester dukker opp av seg selv.",
+    "feedUrlLabel": "FEED-URL — send denne til Spotify og Apple Podcasts"
   }
 }
