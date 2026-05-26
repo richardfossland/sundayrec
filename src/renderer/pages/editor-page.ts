@@ -80,7 +80,7 @@ let loadSeq          = 0
 let dragStartSec     = -1
 let dragEndSec       = -1
 let isDragging       = false
-let hoverSec         = -1        // ghost cursor position
+let hoverSec         = -99999    // ghost cursor position (extended timeline coords; -99999 = no hover)
 let minimapDragging  = false
 
 // Export state
@@ -1682,28 +1682,37 @@ function drawWaveform(): void {
   }
 
   // ── Ghost cursor ───────────────────────────────────────────────────
-  if (hoverSec >= vpStart && hoverSec <= vpEnd && !isDragging && peaks) {
-    const x = secToX(hoverSec, W)
+  // Ghost cursor shows wherever the mouse is on the extended timeline,
+  // including intro/outro slots — useful for previewing where a click will
+  // place the playhead.
+  const hoverX = secToX(hoverSec, W)
+  if (peaks && !isDragging && hoverSec > -9999 && hoverX >= 0 && hoverX <= W) {
     ctx.setLineDash([3, 4])
     ctx.strokeStyle = 'rgba(255,255,255,0.25)'
     ctx.lineWidth = 1
-    ctx.beginPath(); ctx.moveTo(x, RULER); ctx.lineTo(x, H); ctx.stroke()
+    ctx.beginPath(); ctx.moveTo(hoverX, RULER); ctx.lineTo(hoverX, H); ctx.stroke()
     ctx.setLineDash([])
 
-    // Timestamp tooltip at bottom. If we're hovering over an analysed
-    // segment, show the segment type + duration alongside the timecode —
-    // "Tale · 23 min 42 sek" — so the user can immediately see what kind
-    // of audio is under their cursor.
-    let label = formatTime(hoverSec)
+    // Timestamp tooltip at bottom. Shows region-aware label so the user
+    // always knows what region they're hovering over.
+    let label: string
+    if (hoverSec < 0 && effIntroDur() > 0) {
+      label = `Intro ${formatTime(hoverSec + effIntroDur())}`
+    } else if (hoverSec > duration && effOutroDur() > 0) {
+      label = `Outro ${formatTime(hoverSec - duration)}`
+    } else {
+      label = formatTime(hoverSec)
+    }
     const hoveredSeg = suggestions.find(s => hoverSec >= s.start && hoverSec <= s.end && shouldShowSegment(s.type))
-    if (hoveredSeg) {
+    if (hoveredSeg && hoverSec >= 0 && hoverSec <= duration) {
       const typeLbl = hoveredSeg.type === 'sermon' ? t('editor.tooltipSermon', 'Antatt preken')
         : hoveredSeg.type === 'speech' ? t('editor.tooltipSpeech', 'Tale')
         : hoveredSeg.type === 'music'  ? t('editor.tooltipMusic',  'Musikk')
         : hoveredSeg.type === 'silence'? t('editor.tooltipSilence','Stillhet')
         : t('editor.tooltipMixed', 'Blandet')
-      label = `${typeLbl} · ${formatDuration(hoveredSeg.duration)}  (${label})`
+      label = `${typeLbl} · ${formatDuration(hoveredSeg.duration)}  (${formatTime(hoverSec)})`
     }
+    const x = hoverX
     ctx.font = '600 10px system-ui, -apple-system, sans-serif'
     ctx.textBaseline = 'middle'
     const tw = ctx.measureText(label).width
@@ -1719,7 +1728,10 @@ function drawWaveform(): void {
   }
 
   // ── Playhead ───────────────────────────────────────────────────────
-  if (curSec >= vpStart - 0.1 && curSec <= vpEnd + 0.1) {
+  // Playhead is shown across the extended timeline (intro/main/outro). We
+  // gate on pixel position rather than viewport seconds so the triangle is
+  // visible when playing through intro/outro slots.
+  {
     const x = secToX(curSec, W)
     if (x >= 0 && x <= W) {
       // Glow
@@ -1991,8 +2003,67 @@ function setupKeyboardShortcuts(): void {
         else deleteCut(cuts.length - 1)
         break
       }
+      case 'Home':
+        // Jump to start of extended timeline (intro start if present, else 0)
+        e.preventDefault()
+        seekTo(minPlayableSec())
+        break
+      case 'End':
+        // Jump to end of extended timeline (outro end if present, else duration)
+        e.preventDefault()
+        seekTo(maxPlayableSec())
+        break
+      case 'Tab':
+        // Jump to next/previous cut boundary (works in main coords)
+        e.preventDefault()
+        jumpToCutBoundary(e.shiftKey ? -1 : 1)
+        break
+      case 'KeyP': {
+        // Jump to detected sermon start if analyse has run
+        const sermon = suggestions.find(s => s.type === 'sermon')
+        if (sermon) { e.preventDefault(); seekTo(sermon.start) }
+        break
+      }
     }
   })
+}
+
+/** Move playhead to an absolute extended-timeline second, stopping any active
+ *  playback. Centralises the seek-and-redraw logic used by keyboard shortcuts. */
+function seekTo(sec: number): void {
+  stopPlay()
+  playStartSec = clampPlayable(sec)
+  updateTimecode(playStartSec)
+  if (isVideoFile && videoEl) videoEl.currentTime = clampMain(playStartSec)
+  const mainPlayhead = clampMain(playStartSec)
+  if (mainPlayhead < vpStart || mainPlayhead > vpEnd) {
+    const span = vpEnd - vpStart
+    vpStart = Math.max(0, mainPlayhead - span * 0.3)
+    vpEnd   = Math.min(duration, vpStart + span)
+    updateMinimapViewport()
+  }
+  drawWaveform()
+}
+
+/** Jump playhead to the next/previous cut boundary. Direction = +1 forward,
+ *  -1 backward. Considers both cut start and end so each cut counts as two
+ *  navigation stops. */
+function jumpToCutBoundary(dir: 1 | -1): void {
+  if (cuts.length === 0) return
+  const ph = clampMain(playStartSec)
+  const points: number[] = []
+  for (const c of cuts) { points.push(c.start, c.end) }
+  points.sort((a, b) => a - b)
+  let target: number | null = null
+  if (dir > 0) {
+    target = points.find(p => p > ph + 0.05) ?? null
+  } else {
+    for (let i = points.length - 1; i >= 0; i--) {
+      if (points[i] < ph - 0.05) { target = points[i]; break }
+    }
+  }
+  if (target == null) return
+  seekTo(target)
 }
 
 // ── Drag and drop ─────────────────────────────────────────────────────────
@@ -2157,8 +2228,44 @@ function getLayoutGeom(W: number): LayoutGeom {
   }
 }
 
+// Extended-timeline helpers: `playStartSec` runs on an extended timeline so the
+// playhead can be moved (and audio played) inside intro/outro slots:
+//   • sec < 0                 → inside intro, offset into intro = sec + effIntroDur
+//   • 0 ≤ sec ≤ duration       → inside main recording
+//   • duration < sec ≤ end     → inside outro, offset into outro = sec - duration
+// Cuts always stay in main coords ([0, duration]); video.currentTime is
+// clamped to main with clampMain().
+function effIntroDur(): number {
+  return (includeIntroOutro && introBuffer) ? introDuration : 0
+}
+function effOutroDur(): number {
+  return (includeIntroOutro && outroBuffer) ? outroDuration : 0
+}
+function minPlayableSec(): number {
+  return -effIntroDur()
+}
+function maxPlayableSec(): number {
+  return duration + effOutroDur()
+}
+function clampPlayable(sec: number): number {
+  return Math.max(minPlayableSec(), Math.min(maxPlayableSec(), sec))
+}
+function clampMain(sec: number): number {
+  return Math.max(0, Math.min(duration, sec))
+}
+
 function secToX(sec: number, W: number): number {
   const g = getLayoutGeom(W)
+  // Intro slot — negative seconds map into [0, introPx]
+  if (sec < 0 && g.introPx > 0 && g.effIntroDur > 0) {
+    const frac = (sec + g.effIntroDur) / g.effIntroDur
+    return Math.max(0, Math.min(1, frac)) * g.introPx
+  }
+  // Outro slot — seconds > duration map into [mainPxEnd, W]
+  if (sec > duration && g.outroPx > 0 && g.effOutroDur > 0) {
+    const frac = (sec - duration) / g.effOutroDur
+    return g.mainPxEnd + Math.max(0, Math.min(1, frac)) * g.outroPx
+  }
   const mainW = g.mainPxEnd - g.mainPxStart
   if (mainW <= 0) return g.mainPxStart
   return g.mainPxStart + ((sec - vpStart) / (vpEnd - vpStart)) * mainW
@@ -2166,9 +2273,29 @@ function secToX(sec: number, W: number): number {
 
 function xToSec(x: number, W: number): number {
   const g = getLayoutGeom(W)
+  // Intro slot: returns negative seconds in [-effIntroDur, 0]
+  if (g.introPx > 0 && g.effIntroDur > 0 && x < g.mainPxStart) {
+    const frac = Math.max(0, Math.min(1, x / g.introPx))
+    return -g.effIntroDur + frac * g.effIntroDur
+  }
+  // Outro slot: returns seconds in (duration, duration + effOutroDur]
+  if (g.outroPx > 0 && g.effOutroDur > 0 && x > g.mainPxEnd) {
+    const frac = Math.max(0, Math.min(1, (x - g.mainPxEnd) / g.outroPx))
+    return duration + frac * g.effOutroDur
+  }
   const mainW = g.mainPxEnd - g.mainPxStart
   if (mainW <= 0) return vpStart
-  // Clamp clicks in intro/outro regions to the nearest main-file second
+  if (x <= g.mainPxStart) return vpStart
+  if (x >= g.mainPxEnd)   return vpEnd
+  return vpStart + ((x - g.mainPxStart) / mainW) * (vpEnd - vpStart)
+}
+
+/** Returns x in main-coords only — used by cut handling which must never
+ *  read intro/outro coords. */
+function xToMainSec(x: number, W: number): number {
+  const g = getLayoutGeom(W)
+  const mainW = g.mainPxEnd - g.mainPxStart
+  if (mainW <= 0) return vpStart
   if (x <= g.mainPxStart) return vpStart
   if (x >= g.mainPxEnd)   return vpEnd
   return vpStart + ((x - g.mainPxStart) / mainW) * (vpEnd - vpStart)
@@ -2217,13 +2344,16 @@ function panBy(deltaSecs: number): void {
 
 function seekBy(secs: number): void {
   stopPlay()
-  playStartSec = Math.max(0, Math.min(duration, playStartSec + secs))
+  playStartSec = clampPlayable(playStartSec + secs)
   updateTimecode(playStartSec)
-  if (isVideoFile && videoEl) videoEl.currentTime = playStartSec
-  // Pan viewport if playhead is outside
-  if (playStartSec < vpStart || playStartSec > vpEnd) {
+  if (isVideoFile && videoEl) videoEl.currentTime = clampMain(playStartSec)
+  // Pan viewport when playhead drops out of view. Viewport itself stays in
+  // main coords — intro/outro live in their own slots and always remain
+  // visible when at the recording edge.
+  const mainPlayhead = clampMain(playStartSec)
+  if (mainPlayhead < vpStart || mainPlayhead > vpEnd) {
     const half = (vpEnd - vpStart) / 2
-    vpStart = Math.max(0, playStartSec - half)
+    vpStart = Math.max(0, mainPlayhead - half)
     vpEnd   = Math.min(duration, vpStart + half * 2)
     updateMinimapViewport()
   }
@@ -2231,6 +2361,9 @@ function seekBy(secs: number): void {
 }
 
 function autoScrollToPlayhead(curSec: number): void {
+  // Auto-scroll only operates inside the main recording. Intro/outro slots
+  // are fixed and always visible at their respective edges.
+  if (curSec < 0 || curSec > duration) return
   const span = vpEnd - vpStart
   if (curSec > vpEnd - span * 0.1) {
     vpStart = curSec - span * 0.05
@@ -2286,6 +2419,10 @@ export function clearEditorDraft(): void {
 
 function addCut(s: number, e: number): void {
   if (e < s) [s, e] = [e, s]
+  // Cuts must always live in main coords — clamp in case the drag started or
+  // ended in an intro/outro slot (caller may have passed extended-timeline
+  // values).
+  s = clampMain(s); e = clampMain(e)
   if (e - s < 0.1) return
 
   cuts.push({ start: s, end: e })
@@ -2473,16 +2610,18 @@ function previewCut(cut: Cut): void {
 function onCanvasDown(e: MouseEvent): void {
   if (!peaks || e.button !== 0) return
   const rect = canvas.getBoundingClientRect()
-  const sec  = xToSec(e.clientX - rect.left, rect.width)
+  const extSec  = xToSec(e.clientX - rect.left, rect.width)
+  const mainSec = xToMainSec(e.clientX - rect.left, rect.width)
 
-  // Check if clicking near a cut boundary → start handle drag
+  // Check if clicking near a cut boundary → start handle drag. Cut handles
+  // only live in main coords, so this uses mainSec.
   const threshold = (vpEnd - vpStart) / rect.width * 10
   for (let i = 0; i < cuts.length; i++) {
-    if (Math.abs(sec - cuts[i].start) < threshold) {
+    if (Math.abs(mainSec - cuts[i].start) < threshold) {
       handleDrag = { cutIdx: i, side: 'start' }
       return
     }
-    if (Math.abs(sec - cuts[i].end) < threshold) {
+    if (Math.abs(mainSec - cuts[i].end) < threshold) {
       handleDrag = { cutIdx: i, side: 'end' }
       return
     }
@@ -2497,47 +2636,51 @@ function onCanvasDown(e: MouseEvent): void {
     return
   }
 
-  // Normal drag to create cut
-  dragStartSec = sec
-  dragEndSec   = sec
+  // Normal drag to create cut — drag coords are clamped to main, since cuts
+  // can only exist inside the recording.
+  dragStartSec = clampMain(extSec)
+  dragEndSec   = dragStartSec
   isDragging   = true
 }
 
 function onCanvasMove(e: MouseEvent): void {
   if (!peaks) return
   const rect = canvas.getBoundingClientRect()
-  const sec  = xToSec(e.clientX - rect.left, rect.width)
+  const extSec  = xToSec(e.clientX - rect.left, rect.width)
+  const mainSec = xToMainSec(e.clientX - rect.left, rect.width)
 
-  // Handle drag: resize cut boundary
+  // Handle drag: resize cut boundary. Snap to nearby segment boundaries when
+  // shift is NOT held — gives precise lock-in to detected speech/music edges.
   if (handleDrag) {
     const c = cuts[handleDrag.cutIdx]
+    const snapped = e.shiftKey ? mainSec : snapToSegmentBoundary(mainSec, rect.width)
     if (handleDrag.side === 'start') {
-      c.start = Math.max(0, Math.min(c.end - 0.1, sec))
+      c.start = Math.max(0, Math.min(c.end - 0.1, snapped))
     } else {
-      c.end   = Math.min(duration, Math.max(c.start + 0.1, sec))
+      c.end   = Math.min(duration, Math.max(c.start + 0.1, snapped))
     }
     updateRemainingDisplay()
     drawWaveform()
     return
   }
 
-  // Playhead drag
+  // Playhead drag — covers full extended timeline (intro/main/outro)
   if (playheadDragging) {
-    playStartSec = Math.max(0, Math.min(duration, sec))
+    playStartSec = clampPlayable(extSec)
     updateTimecode(playStartSec)
-    if (isVideoFile && videoEl) videoEl.currentTime = playStartSec
+    if (isVideoFile && videoEl) videoEl.currentTime = clampMain(playStartSec)
     drawWaveform()
     return
   }
 
-  hoverSec = sec
+  hoverSec = extSec
 
   // Cursor feedback
   const threshold = (vpEnd - vpStart) / rect.width * 10
   const nearBoundary = cuts.some(c =>
-    Math.abs(sec - c.start) < threshold || Math.abs(sec - c.end) < threshold
+    Math.abs(mainSec - c.start) < threshold || Math.abs(mainSec - c.end) < threshold
   )
-  const overCut = cuts.some(c => sec >= c.start && sec <= c.end)
+  const overCut = cuts.some(c => mainSec >= c.start && mainSec <= c.end)
   const nearPlayhead = Math.abs(e.clientX - rect.left - secToX(playStartSec, rect.width)) < 12
     && (e.clientY - rect.top) < 28
 
@@ -2546,7 +2689,7 @@ function onCanvasMove(e: MouseEvent): void {
     : overCut         ? 'pointer'
     : 'crosshair'
 
-  if (isDragging) dragEndSec = sec
+  if (isDragging) dragEndSec = clampMain(extSec)
 
   drawWaveform()
 }
@@ -2554,7 +2697,8 @@ function onCanvasMove(e: MouseEvent): void {
 function onCanvasUp(e: MouseEvent): void {
   if (!peaks) return
   const rect  = canvas.getBoundingClientRect()
-  const upSec = xToSec(e.clientX - rect.left, rect.width)
+  const extSec = xToSec(e.clientX - rect.left, rect.width)
+  const upMainSec = xToMainSec(e.clientX - rect.left, rect.width)
 
   if (handleDrag) {
     handleDrag = null
@@ -2576,15 +2720,20 @@ function onCanvasUp(e: MouseEvent): void {
   if (!isDragging) return
   isDragging = false
 
-  if (Math.abs(upSec - dragStartSec) > 0.1) {
-    addCut(dragStartSec, upSec)
+  // Cut-creation drag: hold shift to disable snap, otherwise snap both edges
+  // to nearby detected segment boundaries.
+  if (Math.abs(upMainSec - dragStartSec) > 0.1) {
+    const s = e.shiftKey ? dragStartSec : snapToSegmentBoundary(dragStartSec, rect.width)
+    const eSec = e.shiftKey ? upMainSec : snapToSegmentBoundary(upMainSec, rect.width)
+    addCut(s, eSec)
     renderCutList()
   } else {
-    // Tap to seek
+    // Tap to seek — covers full extended timeline so users can click into
+    // intro/outro slots.
     stopPlay()
-    playStartSec = Math.max(0, Math.min(duration, dragStartSec))
+    playStartSec = clampPlayable(extSec)
     updateTimecode(playStartSec)
-    if (isVideoFile && videoEl) videoEl.currentTime = playStartSec
+    if (isVideoFile && videoEl) videoEl.currentTime = clampMain(playStartSec)
   }
 
   dragStartSec = -1
@@ -2594,7 +2743,7 @@ function onCanvasUp(e: MouseEvent): void {
 }
 
 function onCanvasLeave(): void {
-  hoverSec = -1
+  hoverSec = -99999
 
   if (handleDrag) {
     handleDrag = null
@@ -2629,17 +2778,18 @@ function onCanvasContextMenu(e: MouseEvent): void {
   e.preventDefault()
   if (!peaks) return
   const rect = canvas.getBoundingClientRect()
-  const sec  = xToSec(e.clientX - rect.left, rect.width)
-  const idx  = cuts.findIndex(c => sec >= c.start && sec <= c.end)
+  const mainSec = xToMainSec(e.clientX - rect.left, rect.width)
+  const idx  = cuts.findIndex(c => mainSec >= c.start && mainSec <= c.end)
   if (idx >= 0) deleteCut(idx)
 }
 
 function onCanvasWheel(e: WheelEvent): void {
   e.preventDefault()
   if (e.ctrlKey || e.metaKey) {
-    // Zoom centered on mouse position
+    // Zoom centered on mouse position (main coords only — intro/outro slots
+    // have their own fixed scale).
     const rect = canvas.getBoundingClientRect()
-    const mouseSec = xToSec(e.clientX - rect.left, rect.width)
+    const mouseSec = xToMainSec(e.clientX - rect.left, rect.width)
     const factor   = e.deltaY > 0 ? 1.25 : 0.75
     const span     = (vpEnd - vpStart) * factor
     const frac     = (mouseSec - vpStart) / (vpEnd - vpStart)
@@ -2651,6 +2801,26 @@ function onCanvasWheel(e: WheelEvent): void {
   } else {
     panBy(e.deltaY * (vpEnd - vpStart) / 800)
   }
+}
+
+/** Snaps a main-coords second to the nearest detected segment boundary within
+ *  threshold (default ~0.4 sec). Falls through to input unchanged when no
+ *  suggestions are loaded or no boundary is close enough. */
+function snapToSegmentBoundary(sec: number, W: number): number {
+  if (!suggestions.length) return sec
+  // Threshold scales with zoom level (~8 px) — tight at high zoom, lenient
+  // when zoomed out so coarse drags still find the boundary.
+  const threshold = Math.max(0.15, ((vpEnd - vpStart) / Math.max(1, W)) * 8)
+  let closest = sec
+  let minDist = threshold
+  for (const seg of suggestions) {
+    if (!shouldShowSegment(seg.type)) continue
+    for (const t of [seg.start, seg.end]) {
+      const d = Math.abs(sec - t)
+      if (d < minDist) { minDist = d; closest = t }
+    }
+  }
+  return closest
 }
 
 // ── Playback ──────────────────────────────────────────────────────────────
@@ -2686,7 +2856,7 @@ function startPlay(preview: boolean): void {
     isPreview    = preview
     loopStartSec = playStartSec
     isPlaying    = true
-    videoEl.currentTime = playStartSec
+    videoEl.currentTime = clampMain(playStartSec)
     videoEl.play().catch(() => {})
     attachVideoEndedHandler(() => {
       videoEndedHandler = null
@@ -2706,7 +2876,7 @@ function startPlay(preview: boolean): void {
     isPreview    = preview
     loopStartSec = playStartSec
     isPlaying    = true
-    videoEl.currentTime = playStartSec
+    videoEl.currentTime = clampMain(playStartSec)
     videoEl.play().catch(() => {})
 
     // On natural end, handle loop / stop
@@ -2733,16 +2903,20 @@ function startPlay(preview: boolean): void {
   isPreview = preview
   loopStartSec = playStartSec
 
-  const allSegs  = preview ? getKeepSegs() : [{ start: 0, end: duration }]
-  const segments = allSegs.filter(s => s.end > playStartSec)
-  if (segments.length === 0) return
+  // Extended-timeline playback: playStartSec can be inside intro (< 0),
+  // main ([0, duration]), or outro (> duration). We schedule each region's
+  // buffer at the right offset so audio always matches the playhead.
+  const introOn = includeIntroOutro && !!introBuffer
+  const outroOn = includeIntroOutro && !!outroBuffer
+  const inIntro = playStartSec < 0 && introOn
+  const inOutro = playStartSec > duration && outroOn
+  const mainStartSec = inIntro ? 0 : (inOutro ? duration : Math.max(0, playStartSec))
 
   isPlaying        = true
   playStartCtxTime = audioCtx.currentTime
 
   let when = audioCtx.currentTime
   const nodes: AudioBufferSourceNode[] = []
-  let firstSec = -1
 
   const mixGain = audioCtx.createGain()
   // Apply the user-set peak-normalization gain to playback. This mirrors
@@ -2751,44 +2925,69 @@ function startPlay(preview: boolean): void {
   mixGain.gain.value = gainFactor()
   mixGain.connect(audioCtx.destination)
 
-  // Schedule intro before main content (only when at start and preview mode)
-  if (includeIntroOutro && introBuffer && playStartSec < 0.1) {
-    const introNode = audioCtx.createBufferSource()
-    introNode.buffer = introBuffer
-    introNode.connect(mixGain)
-    introNode.start(when)
-    when += introDuration
-    nodes.push(introNode)
+  // Schedule intro from the right offset whenever playhead is at-or-before
+  // main start. When playhead is inside intro (negative sec) we start the
+  // intro from `effIntroDur + playStartSec` so audio matches the playhead.
+  if (introOn && playStartSec < duration) {
+    const iDur = introBuffer!.duration
+    const introOffset = inIntro ? Math.max(0, effIntroDur() + playStartSec) : 0
+    const playDur = iDur - introOffset
+    if (playDur > 0.01) {
+      const introNode = audioCtx.createBufferSource()
+      introNode.buffer = introBuffer
+      introNode.connect(mixGain)
+      introNode.start(when, introOffset, playDur)
+      when += playDur
+      nodes.push(introNode)
+    }
   }
 
-  for (let i = 0; i < segments.length; i++) {
-    const seg    = segments[i]
-    const offset = i === 0 ? Math.max(0, playStartSec - seg.start) : 0
-    const dur    = seg.end - seg.start - offset
-    if (dur <= 0.01) continue
+  if (!inOutro) {
+    const allSegs  = preview ? getKeepSegs() : [{ start: 0, end: duration }]
+    const segments = allSegs.filter(s => s.end > mainStartSec)
 
-    if (firstSec < 0) firstSec = seg.start + offset
+    let firstMainSec = -1
+    for (let i = 0; i < segments.length; i++) {
+      const seg    = segments[i]
+      const offset = i === 0 ? Math.max(0, mainStartSec - seg.start) : 0
+      const dur    = seg.end - seg.start - offset
+      if (dur <= 0.01) continue
 
-    const node = audioCtx.createBufferSource()
-    node.buffer = audioBuffer
-    node.connect(mixGain)
-    node.start(when, seg.start + offset, dur)
-    when += dur
-    nodes.push(node)
+      if (firstMainSec < 0) firstMainSec = seg.start + offset
+
+      const node = audioCtx.createBufferSource()
+      node.buffer = audioBuffer
+      node.connect(mixGain)
+      node.start(when, seg.start + offset, dur)
+      when += dur
+      nodes.push(node)
+    }
+    // Preview-skip: if playback skipped over a cut and started later, advance
+    // playStartSec so the playhead matches where audio actually starts. Only
+    // applies when not playing through intro (we keep negative playStartSec
+    // while inside intro so the timecode shows "Intro …").
+    if (!inIntro && firstMainSec >= 0 && firstMainSec > mainStartSec + 0.01) {
+      playStartSec = firstMainSec
+    }
   }
 
-  if (firstSec < 0) { isPlaying = false; return }
-  playStartSec = firstSec
-  sourceNodes  = nodes
+  sourceNodes = nodes
 
-  // Schedule outro after main content
-  if (includeIntroOutro && outroBuffer) {
-    const outroNode = audioCtx.createBufferSource()
-    outroNode.buffer = outroBuffer
-    outroNode.connect(mixGain)
-    outroNode.start(when)
-    nodes.push(outroNode)
+  // Schedule outro after main content (or partway through if playhead is
+  // already inside outro).
+  if (outroOn) {
+    const outroOffset = inOutro ? Math.max(0, playStartSec - duration) : 0
+    const oDur = outroBuffer!.duration - outroOffset
+    if (oDur > 0.01) {
+      const outroNode = audioCtx.createBufferSource()
+      outroNode.buffer = outroBuffer
+      outroNode.connect(mixGain)
+      outroNode.start(when, outroOffset, oDur)
+      nodes.push(outroNode)
+    }
   }
+
+  if (nodes.length === 0) { isPlaying = false; return }
 
   nodes[nodes.length - 1]?.addEventListener('ended', () => {
     if (!isPlaying) return
@@ -2825,7 +3024,7 @@ function stopPlay(): void {
   for (const n of sourceNodes) { try { n.stop() } catch { /* already stopped */ } }
   sourceNodes = []
   if (isPlaying && audioCtx) {
-    playStartSec = Math.min(duration, playStartSec + (audioCtx.currentTime - playStartCtxTime))
+    playStartSec = clampPlayable(playStartSec + (audioCtx.currentTime - playStartCtxTime))
   }
   isPlaying = false
   cancelAnimationFrame(rafId)
@@ -3361,7 +3560,16 @@ function formatDuration(s: number): string {
 
 function updateTimecode(sec: number): void {
   const el = $('editor-time-cur')
-  if (el) el.textContent = formatTime(Math.min(sec, duration))
+  if (!el) return
+  // Show "Intro 0:12" / "Outro 0:05" prefix when playhead is in those slots
+  // so the user can see at a glance where they are on the extended timeline.
+  if (sec < 0 && effIntroDur() > 0) {
+    el.textContent = `Intro ${formatTime(sec + effIntroDur())}`
+  } else if (sec > duration && effOutroDur() > 0) {
+    el.textContent = `Outro ${formatTime(sec - duration)}`
+  } else {
+    el.textContent = formatTime(Math.max(0, Math.min(sec, duration)))
+  }
 }
 
 function updateTotalTime(): void {
@@ -3471,7 +3679,7 @@ async function runMasterPreview(): Promise<void> {
   if (bar) bar.style.width = '20%'
   if (label) label.textContent = t('master.applying', 'Lager forhåndsvisning…')
 
-  const start = Math.max(0, Math.min(duration > 15 ? duration - 15 : 0, playStartSec))
+  const start = Math.max(0, Math.min(duration > 15 ? duration - 15 : 0, clampMain(playStartSec)))
   try {
     const res = await window.api.masterPreview(filePath, preset.id, start, 15)
     if (!res.ok || !res.previewPath) {
@@ -3501,7 +3709,7 @@ function toggleListenOriginal(): void {
   if (!masterOriginalPreviewPath || audio.dataset.mode !== 'orig') {
     // Play original snippet — file:// directly (browser decodes locally).
     audio.src = 'file://' + filePath
-    audio.currentTime = Math.max(0, playStartSec)
+    audio.currentTime = clampMain(playStartSec)
     audio.dataset.mode = 'orig'
     btn.textContent = t('master.previewListenMastered', 'Lytt mastret')
     audio.style.display = ''
