@@ -125,6 +125,10 @@ declare global {
       cloudQueueRemove:    (id: string) => Promise<boolean>
       cloudQueueFlush:     () => Promise<boolean>
       podcastRegenerate:   (service: string) => Promise<{ ok: boolean; feedUrl?: string; episodeCount: number; error?: string }>
+      youtubeConnect:      () => Promise<{ ok: boolean; error?: string }>
+      youtubeDisconnect:   () => Promise<{ ok: boolean }>
+      youtubeStatus:       () => Promise<{ connected: boolean }>
+      youtubeUpload:       (filePath: string, metadata: unknown) => Promise<{ ok: boolean; videoId?: string; url?: string; error?: string }>
       reviewQueueList:                () => Promise<import('../types').ReviewQueueEntry[]>
       reviewQueueGet:                 (id: string) => Promise<import('../types').ReviewQueueEntry | null>
       reviewQueuePublish:             (id: string) => Promise<{ ok: boolean; error?: string }>

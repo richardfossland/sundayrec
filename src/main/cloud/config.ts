@@ -32,6 +32,19 @@ export const CLOUD_CONFIG = {
     scope:       'https://www.googleapis.com/auth/drive.file openid email profile',
     redirectUri: 'sundayrec://oauth/google-drive',
   },
+  // Same Google OAuth client as Drive — different scope. YouTube uses the
+  // localhost-redirect Desktop flow, just like Drive, so we reuse clientId
+  // and clientSecret. Token is stored under its own key in the token-store
+  // so a user can connect to Drive without granting YouTube (or vice-versa).
+  youtube: {
+    clientId:     pick('GOOGLE_CLIENT_ID',     __GOOGLE_CLIENT_ID__),
+    clientSecret: pick('GOOGLE_CLIENT_SECRET', __GOOGLE_CLIENT_SECRET__),
+    authUrl:     'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenUrl:    'https://oauth2.googleapis.com/token',
+    // youtube.upload = read-write upload-only; smaller surface than youtube.
+    scope:       'https://www.googleapis.com/auth/youtube.upload openid email profile',
+    redirectUri: 'http://127.0.0.1',  // dynamic loopback port, set at runtime
+  },
   dropbox: {
     clientId:    pick('DROPBOX_APP_KEY',    __DROPBOX_APP_KEY__),
     authUrl:     'https://www.dropbox.com/oauth2/authorize',
@@ -48,9 +61,10 @@ export const CLOUD_CONFIG = {
 }
 
 /** True if the OAuth client for this service has been configured (build or env). */
-export function isServiceConfigured(service: 'google-drive' | 'dropbox' | 'onedrive'): boolean {
+export function isServiceConfigured(service: 'google-drive' | 'dropbox' | 'onedrive' | 'youtube'): boolean {
   const id = service === 'google-drive' ? CLOUD_CONFIG.googleDrive.clientId
            : service === 'dropbox'      ? CLOUD_CONFIG.dropbox.clientId
-           :                              CLOUD_CONFIG.oneDrive.clientId
+           : service === 'onedrive'     ? CLOUD_CONFIG.oneDrive.clientId
+           :                              CLOUD_CONFIG.youtube.clientId
   return id.length > 0 && !id.startsWith('PASTE_')
 }

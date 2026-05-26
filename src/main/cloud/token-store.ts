@@ -2,6 +2,11 @@ import Store from 'electron-store'
 import { safeStorage } from 'electron'
 import type { CloudServiceId } from '../../types'
 
+/** Services that can hold an OAuth token. `CloudServiceId` covers backup
+ *  services (Drive/Dropbox/OneDrive); 'youtube' is a publish-only target
+ *  with its own token, stored in the same encrypted vault. */
+export type TokenServiceId = CloudServiceId | 'youtube'
+
 export interface TokenData {
   accessToken:   string
   refreshToken?: string
@@ -21,6 +26,7 @@ interface RawStore {
   'google-drive'?: string
   'dropbox'?: string
   'onedrive'?: string
+  'youtube'?: string
 }
 
 const store = new Store<RawStore>({ name: 'sundayrec-cloud' })
@@ -34,7 +40,7 @@ function warnIfPlaintext(): void {
   }
 }
 
-export function getToken(service: CloudServiceId): TokenData | null {
+export function getToken(service: TokenServiceId): TokenData | null {
   const enc = store.get(service as keyof RawStore)
   if (!enc) return null
   try {
@@ -45,7 +51,7 @@ export function getToken(service: CloudServiceId): TokenData | null {
   } catch { return null }
 }
 
-export function setToken(service: CloudServiceId, data: TokenData | null): void {
+export function setToken(service: TokenServiceId, data: TokenData | null): void {
   if (!data) { store.delete(service as keyof RawStore); return }
   warnIfPlaintext()
   const json = JSON.stringify(data)
@@ -55,7 +61,7 @@ export function setToken(service: CloudServiceId, data: TokenData | null): void 
   store.set(service as keyof RawStore, enc)
 }
 
-export function updateTokenFields(service: CloudServiceId, fields: Partial<TokenData>): void {
+export function updateTokenFields(service: TokenServiceId, fields: Partial<TokenData>): void {
   const cur = getToken(service) ?? {} as TokenData
   setToken(service, { ...cur, ...fields })
 }

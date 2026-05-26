@@ -1228,6 +1228,42 @@ function setupIPC(): void {
     return true
   })
 
+  // ─── YouTube publish target ──────────────────────────────────────────────
+  // YouTube is separate from the cloud-backup queue — exposed only in the
+  // editor's export modal for video files. Token is stored under its own key
+  // in the token-store so users can connect to Drive without YouTube and
+  // vice-versa.
+  ipcMain.handle('youtube-connect', async () => {
+    const yt = await import('./cloud/youtube')
+    return yt.connect()
+  })
+  ipcMain.handle('youtube-disconnect', async () => {
+    const yt = await import('./cloud/youtube')
+    yt.disconnect()
+    return { ok: true }
+  })
+  ipcMain.handle('youtube-status', async () => {
+    const yt = await import('./cloud/youtube')
+    return { connected: yt.isConnected() }
+  })
+  ipcMain.handle('youtube-upload', async (_, filePath: string, metadata: unknown) => {
+    if (typeof filePath !== 'string' || !filePath) return { ok: false, error: 'invalid_path' }
+    if (!isAllowedMediaPath(filePath))             return { ok: false, error: 'invalid_path' }
+    const yt = await import('./cloud/youtube')
+    const md = (metadata && typeof metadata === 'object' ? metadata : {}) as Record<string, unknown>
+    const safeMeta = {
+      title:         typeof md.title === 'string' ? md.title : 'SundayRec Recording',
+      description:   typeof md.description === 'string' ? md.description : '',
+      tags:          Array.isArray(md.tags) ? (md.tags as unknown[]).filter(s => typeof s === 'string') as string[] : undefined,
+      categoryId:    typeof md.categoryId === 'string' ? md.categoryId : undefined,
+      privacyStatus: md.privacyStatus === 'public' || md.privacyStatus === 'unlisted' ? md.privacyStatus : 'private' as const,
+    }
+    const onProgress = (uploadedBytes: number, totalBytes: number) => {
+      mainWindow?.webContents.send('youtube-upload-progress', { uploadedBytes, totalBytes })
+    }
+    return yt.uploadVideo(filePath, safeMeta, onProgress)
+  })
+
   // Coalesce concurrent regenerate requests per service. Two quick clicks
   // (or a publish-after-export running while auto-publish from upload-complete
   // is mid-flight) otherwise race to write podcast.xml and upload it.

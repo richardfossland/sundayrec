@@ -33,6 +33,7 @@ const ALLOWED_CHANNELS = [
   'backend-warning',
   'test-wake-progress',
   'review-queue-update',
+  'youtube-upload-progress',
 ] as const
 
 type AllowedChannel = typeof ALLOWED_CHANNELS[number]
@@ -116,6 +117,11 @@ contextBridge.exposeInMainWorld('api', {
   cloudQueueRemove:    (id: string)      => ipcRenderer.invoke('cloud-queue-remove', id),
   cloudQueueFlush:     ()                => ipcRenderer.invoke('cloud-queue-flush'),
   podcastRegenerate:   (service: string) => ipcRenderer.invoke('podcast-regenerate', service),
+
+  youtubeConnect:      ()                  => ipcRenderer.invoke('youtube-connect'),
+  youtubeDisconnect:   ()                  => ipcRenderer.invoke('youtube-disconnect'),
+  youtubeStatus:       ()                  => ipcRenderer.invoke('youtube-status'),
+  youtubeUpload:       (filePath: string, metadata: unknown) => ipcRenderer.invoke('youtube-upload', filePath, metadata),
 
   // Review queue (prep-and-review v5.0)
   reviewQueueList:    () => ipcRenderer.invoke('review-queue-list'),

@@ -3269,9 +3269,11 @@ interface PublishState {
   dropbox:  boolean
   onedrive: boolean
   podcast:  boolean
+  youtube:  boolean
 }
-const publishSelections: PublishState = { gdrive: false, dropbox: false, onedrive: false, podcast: false }
-let configuredCache: { gdrive: boolean; dropbox: boolean; onedrive: boolean } = { gdrive: false, dropbox: false, onedrive: false }
+const publishSelections: PublishState = { gdrive: false, dropbox: false, onedrive: false, podcast: false, youtube: false }
+let configuredCache: { gdrive: boolean; dropbox: boolean; onedrive: boolean; youtubeConnected: boolean } =
+  { gdrive: false, dropbox: false, onedrive: false, youtubeConnected: false }
 
 /**
  * Build the publishing checkbox list in the export modal. Each service is
@@ -3300,11 +3302,13 @@ async function renderPublishOptions(): Promise<void> {
     configuredCache.gdrive   = await window.api.cloudIsConfigured('google-drive') as boolean
     configuredCache.dropbox  = await window.api.cloudIsConfigured('dropbox') as boolean
     configuredCache.onedrive = await window.api.cloudIsConfigured('onedrive') as boolean
+    const yt = await window.api.youtubeStatus()
+    configuredCache.youtubeConnected = !!yt?.connected
   } catch { /* leave defaults — falsy */ }
 
   const podcastEnabled = settings.podcast?.enabled === true
 
-  const haveAny = configuredCache.gdrive || configuredCache.dropbox || configuredCache.onedrive || podcastEnabled
+  const haveAny = configuredCache.gdrive || configuredCache.dropbox || configuredCache.onedrive || podcastEnabled || (isVideoFile && configuredCache.youtubeConnected)
   configL.style.display = haveAny ? 'none' : ''
   // The "Eksporter og publiser" button is only meaningful if at least one
   // service is configured.
@@ -3327,22 +3331,52 @@ async function renderPublishOptions(): Promise<void> {
   }
 
   // Reset selections each time we open
-  publishSelections.gdrive = false
-  publishSelections.dropbox = false
+  publishSelections.gdrive   = false
+  publishSelections.dropbox  = false
   publishSelections.onedrive = false
-  publishSelections.podcast = false
+  publishSelections.podcast  = false
+  publishSelections.youtube  = false
 
   if (configuredCache.gdrive)   addRow('gdrive',   t('editor.exportPublishGdrive',   'Last opp til Google Drive'), true)
   if (configuredCache.dropbox)  addRow('dropbox',  t('editor.exportPublishDropbox',  'Last opp til Dropbox'),       true)
   if (configuredCache.onedrive) addRow('onedrive', t('editor.exportPublishOnedrive', 'Last opp til OneDrive'),      true)
   if (podcastEnabled)           addRow('podcast',  t('editor.exportPublishPodcast',  'Oppdater podcast RSS-feed'),  true)
 
-  // Video file: also append disabled YouTube/Vimeo placeholder rows.
+  // Video files: surface YouTube as an actionable row. If user is connected,
+  // checkbox enables upload; otherwise we render a "Koble til YouTube"-link
+  // so they can opt-in inline without leaving the modal.
   if (isVideoFile) {
-    const ytLabel = t('editor.exportPublishYoutube', 'Last opp video til YouTube')
-    const vmLabel = t('editor.exportPublishVimeo',   'Last opp video til Vimeo')
-    const phase2  = t('editor.exportPublishPhase2',  'Kommer i en senere versjon — krever separat OAuth-oppsett')
-    addRow('gdrive', ytLabel, false, /*disabled*/ true, phase2)
+    if (configuredCache.youtubeConnected) {
+      addRow('youtube', t('editor.exportPublishYoutube', 'Last opp video til YouTube (privat)'), true)
+    } else {
+      const row = document.createElement('div')
+      row.className = 'export-publish-option export-publish-connect-row'
+      const span = document.createElement('span')
+      span.textContent = t('editor.exportPublishYoutube', 'Last opp video til YouTube')
+      const link = document.createElement('a')
+      link.href = '#'
+      link.className = 'export-publish-connect-link'
+      link.textContent = t('editor.exportPublishYoutubeConnect', '→ Koble til YouTube')
+      link.addEventListener('click', async (e) => {
+        e.preventDefault()
+        link.textContent = t('editor.exportPublishYoutubeConnecting', 'Åpner Google-pålogging…')
+        const res = await window.api.youtubeConnect()
+        if (res?.ok) {
+          configuredCache.youtubeConnected = true
+          await renderPublishOptions()
+        } else {
+          link.textContent = `${t('editor.exportPublishYoutubeFailed', 'Tilkobling feilet')}: ${res?.error ?? ''}`.slice(0, 80)
+        }
+      })
+      row.appendChild(span)
+      row.appendChild(link)
+      wrap.appendChild(row)
+    }
+
+    // Vimeo placeholder remains for later phase — it has a fundamentally
+    // different OAuth+API model so it's a separate workstream.
+    const vmLabel = t('editor.exportPublishVimeo', 'Last opp video til Vimeo')
+    const phase2  = t('editor.exportPublishPhase2', 'Kommer i en senere versjon — krever separat OAuth-oppsett')
     addRow('gdrive', vmLabel, false, /*disabled*/ true, phase2)
   }
 }
@@ -3357,7 +3391,7 @@ async function runPublishingForExport(outputPath: string): Promise<void> {
   const progress = $('export-publish-progress')
   if (progress) { progress.style.display = ''; progress.classList.remove('is-error', 'is-success'); progress.textContent = '' }
 
-  const tasks: { label: string; run: () => Promise<{ ok: boolean; error?: string }> }[] = []
+  const tasks: { label: string; run: () => Promise<{ ok: boolean; error?: string; url?: string }> }[] = []
   if (publishSelections.gdrive) {
     tasks.push({ label: 'Google Drive', run: () => window.api.cloudUploadFile('google-drive', outputPath) as Promise<{ ok: boolean; error?: string }> })
   }
@@ -3366,6 +3400,38 @@ async function runPublishingForExport(outputPath: string): Promise<void> {
   }
   if (publishSelections.onedrive) {
     tasks.push({ label: 'OneDrive', run: () => window.api.cloudUploadFile('onedrive', outputPath) as Promise<{ ok: boolean; error?: string }> })
+  }
+  if (publishSelections.youtube) {
+    // Build metadata from the file name + chapter metadata.
+    const title = (meta.title?.trim() || (outputPath.split(/[/\\]/).pop() ?? 'SundayRec opptak')).replace(/\.[^.]+$/, '')
+    const description = (meta.description ?? '').slice(0, 5000)
+    tasks.push({
+      label: 'YouTube',
+      run: async () => {
+        // Subscribe to progress events for this upload so the user sees a
+        // live percentage instead of a frozen "Laster opp…" string. The
+        // unsubscribe call is fired when the upload-promise settles.
+        const unsub = window.api.on?.('youtube-upload-progress', (payload: unknown) => {
+          if (progress && payload && typeof payload === 'object') {
+            const { uploadedBytes, totalBytes } = payload as { uploadedBytes: number; totalBytes: number }
+            if (totalBytes > 0) {
+              const pct = Math.floor((uploadedBytes / totalBytes) * 100)
+              progress.textContent = `${t('editor.publishUploading', 'Laster opp til')} YouTube… ${pct}%`
+            }
+          }
+        })
+        try {
+          const r = await window.api.youtubeUpload(outputPath, {
+            title,
+            description,
+            privacyStatus: 'private',  // safe default — user changes from YouTube Studio if they want public
+          })
+          return { ok: !!r?.ok, error: r?.error, url: r?.url }
+        } finally {
+          unsub?.()
+        }
+      },
+    })
   }
 
   let allOk = true
@@ -3377,6 +3443,8 @@ async function runPublishingForExport(outputPath: string): Promise<void> {
       if (r && r.ok === false) {
         allOk = false
         messages.push(`${task.label}: ${r.error ?? 'feil'}`)
+      } else if (r && r.url) {
+        messages.push(`${task.label}: ✓ (${r.url})`)
       } else {
         messages.push(`${task.label}: ✓`)
       }
