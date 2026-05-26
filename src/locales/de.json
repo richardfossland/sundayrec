@@ -467,7 +467,10 @@
     "testEmailNoConfig": "Bitte SMTP-Einstellungen ausfüllen",
     "askOpenEditor": "Nach der Aufnahme zur Bearbeitung nachfragen",
     "askOpenEditorDesc": "Zeigt nach Abschluss der Aufnahme eine Aufforderung, die Datei im Editor zu öffnen",
-    "noClipSelected": "Keine Datei ausgewählt"
+    "noClipSelected": "Keine Datei ausgewählt",
+    "notifyStartDesc": "Wird als Systembenachrichtigung angezeigt, wenn eine geplante Sitzung beginnt.",
+    "notifyStopDesc": "Klicken Sie auf die Benachrichtigung, um direkt zur Datei zu springen.",
+    "close": "Schließen"
   },
   "editor": {
     "title": "Audiodatei bearbeiten",
@@ -523,7 +526,7 @@
     "analyzeMusic": "Musiksegmente",
     "analyzeSilence": "Stille",
     "markSermon": "↦ Predigt automatisch markieren",
-    "markSermonHint": "Verwendet das längste Sprachsegment nach 5 Min. als „Predigt“.",
+    "markSermonHint": "Schneidet alles vor und nach dem hervorgehobenen Predigtblock weg.",
     "analyzedAt": "Zuletzt analysiert",
     "speechSegments": "Sprachsegmente gefunden",
     "ioTitle": "Intro & Outro",
@@ -555,7 +558,17 @@
     "tooltipMusic": "Musik",
     "tooltipSilence": "Stille",
     "tooltipMixed": "Gemischt",
-    "tooltipSermon": "Vermutete Predigt"
+    "tooltipSermon": "Vermutete Predigt",
+    "sermonPickerLabel": "Ist dies nicht die Predigt?",
+    "speechBlock": "Sprachblock",
+    "speechLabel": "Sprache",
+    "suggestionTitle": "Vorschlag bereit",
+    "suggestionApply": "Vorschlag übernehmen",
+    "suggestionDismiss": "Schließen",
+    "beforeSermon": "vor der Predigt",
+    "afterSermon": "nach der Predigt",
+    "willBeTrimmed": "wird entfernt",
+    "willRemain": "Predigt verbleiben"
   },
   "master": {
     "title": "Mastering (Vorbereitung zur Veröffentlichung)",

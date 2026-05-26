@@ -467,7 +467,10 @@
     "testEmailNoConfig": "Please fill in the SMTP settings",
     "askOpenEditor": "Ask about editing after recording",
     "askOpenEditorDesc": "Show a prompt to open the file in the Editor once a recording finishes",
-    "noClipSelected": "No file selected"
+    "noClipSelected": "No file selected",
+    "notifyStartDesc": "Shown as a system notification when a scheduled session begins.",
+    "notifyStopDesc": "Click the notification to jump straight to the file.",
+    "close": "Close"
   },
   "editor": {
     "title": "Edit audio file",
@@ -523,7 +526,7 @@
     "analyzeMusic": "Music segments",
     "analyzeSilence": "Silence",
     "markSermon": "↦ Mark sermon automatically",
-    "markSermonHint": "Uses the longest speech segment after 5 min as the “sermon”.",
+    "markSermonHint": "Trims everything before and after the highlighted sermon block.",
     "analyzedAt": "Last analyzed",
     "speechSegments": "speech segments found",
     "ioTitle": "Intro & Outro",
@@ -555,7 +558,17 @@
     "tooltipMusic": "Music",
     "tooltipSilence": "Silence",
     "tooltipMixed": "Mixed",
-    "tooltipSermon": "Estimated sermon"
+    "tooltipSermon": "Estimated sermon",
+    "sermonPickerLabel": "Is this not the sermon?",
+    "speechBlock": "Speech block",
+    "speechLabel": "Speech",
+    "suggestionTitle": "Suggestion ready",
+    "suggestionApply": "Use suggestion",
+    "suggestionDismiss": "Dismiss",
+    "beforeSermon": "before the sermon",
+    "afterSermon": "after the sermon",
+    "willBeTrimmed": "will be trimmed",
+    "willRemain": "of sermon remaining"
   },
   "master": {
     "title": "Mastering (prepare for publishing)",

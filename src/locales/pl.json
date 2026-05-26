@@ -467,7 +467,10 @@
     "testEmailNoConfig": "Uzupełnij ustawienia SMTP",
     "askOpenEditor": "Pytaj o edycję po zakończeniu nagrania",
     "askOpenEditorDesc": "Po zakończeniu nagrania wyświetla pytanie o otwarcie pliku w edytorze",
-    "noClipSelected": "Nie wybrano pliku"
+    "noClipSelected": "Nie wybrano pliku",
+    "notifyStartDesc": "Wyświetlane jako powiadomienie systemowe, gdy rozpocznie się zaplanowana sesja.",
+    "notifyStopDesc": "Kliknij powiadomienie, aby przejść bezpośrednio do pliku.",
+    "close": "Zamknij"
   },
   "editor": {
     "title": "Edytuj plik audio",
@@ -523,7 +526,7 @@
     "analyzeMusic": "Segmenty muzyki",
     "analyzeSilence": "Cisza",
     "markSermon": "↦ Zaznacz kazanie automatycznie",
-    "markSermonHint": "Używa najdłuższego segmentu mowy po 5 min jako „kazania”.",
+    "markSermonHint": "Przycina wszystko przed i po wyróżnionym bloku kazania.",
     "analyzedAt": "Ostatnio analizowane",
     "speechSegments": "znaleziono segmentów mowy",
     "ioTitle": "Intro i outro",
@@ -555,7 +558,17 @@
     "tooltipMusic": "Muzyka",
     "tooltipSilence": "Cisza",
     "tooltipMixed": "Mieszane",
-    "tooltipSermon": "Przypuszczalne kazanie"
+    "tooltipSermon": "Przypuszczalne kazanie",
+    "sermonPickerLabel": "Czy to nie kazanie?",
+    "speechBlock": "Blok mowy",
+    "speechLabel": "Mowa",
+    "suggestionTitle": "Sugestia gotowa",
+    "suggestionApply": "Użyj sugestii",
+    "suggestionDismiss": "Zamknij",
+    "beforeSermon": "przed kazaniem",
+    "afterSermon": "po kazaniu",
+    "willBeTrimmed": "zostanie usunięte",
+    "willRemain": "kazania pozostaje"
   },
   "master": {
     "title": "Mastering (przygotuj do publikacji)",

@@ -467,7 +467,10 @@
     "testEmailNoConfig": "Udfyld SMTP-indstillingerne",
     "askOpenEditor": "Spørg om redigering efter optagelse",
     "askOpenEditorDesc": "Viser en besked om at åbne filen i Rediger, når optagelsen er færdig",
-    "noClipSelected": "Ingen fil valgt"
+    "noClipSelected": "Ingen fil valgt",
+    "notifyStartDesc": "Vises som systemnotifikation når en planlagt optagelse starter.",
+    "notifyStopDesc": "Klik på notifikationen for at gå direkte til filen.",
+    "close": "Luk"
   },
   "editor": {
     "title": "Rediger lydfil",
@@ -523,7 +526,7 @@
     "analyzeMusic": "Musiksegmenter",
     "analyzeSilence": "Stilhed",
     "markSermon": "↦ Markér prædiken automatisk",
-    "markSermonHint": "Bruger det længste talesegment efter 5 min. som „prædiken“.",
+    "markSermonHint": "Trimmer alt før og efter det fremhævede prædikenblok.",
     "analyzedAt": "Senest analyseret",
     "speechSegments": "talesegmenter fundet",
     "ioTitle": "Intro & Outro",
@@ -555,7 +558,17 @@
     "tooltipMusic": "Musik",
     "tooltipSilence": "Stilhed",
     "tooltipMixed": "Blandet",
-    "tooltipSermon": "Antaget prædiken"
+    "tooltipSermon": "Antaget prædiken",
+    "sermonPickerLabel": "Er dette ikke prædikenen?",
+    "speechBlock": "Taleblok",
+    "speechLabel": "Tale",
+    "suggestionTitle": "Forslag klar",
+    "suggestionApply": "Brug forslag",
+    "suggestionDismiss": "Luk",
+    "beforeSermon": "før prædikenen",
+    "afterSermon": "efter prædikenen",
+    "willBeTrimmed": "fjernes",
+    "willRemain": "prædiken tilbage"
   },
   "master": {
     "title": "Mastering (klargør til udgivelse)",

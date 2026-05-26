@@ -467,7 +467,10 @@
     "testEmailNoConfig": "Fyll i SMTP-inställningarna",
     "askOpenEditor": "Fråga om redigering efter inspelning",
     "askOpenEditorDesc": "Visar en uppmaning att öppna filen i Redigera när inspelningen är klar",
-    "noClipSelected": "Ingen fil vald"
+    "noClipSelected": "Ingen fil vald",
+    "notifyStartDesc": "Visas som systemavisering när en planerad inspelning startar.",
+    "notifyStopDesc": "Klicka på aviseringen för att gå direkt till filen.",
+    "close": "Stäng"
   },
   "editor": {
     "title": "Redigera ljudfil",
@@ -523,7 +526,7 @@
     "analyzeMusic": "Musiksegment",
     "analyzeSilence": "Tystnad",
     "markSermon": "↦ Markera predikan automatiskt",
-    "markSermonHint": "Använder det längsta talsegmentet efter 5 min som ”predikan”.",
+    "markSermonHint": "Trimmer allt före och efter det markerade predikoblocket.",
     "analyzedAt": "Senast analyserad",
     "speechSegments": "talsegment hittade",
     "ioTitle": "Intro & Outro",
@@ -555,7 +558,17 @@
     "tooltipMusic": "Musik",
     "tooltipSilence": "Tystnad",
     "tooltipMixed": "Blandat",
-    "tooltipSermon": "Förmodad predikan"
+    "tooltipSermon": "Förmodad predikan",
+    "sermonPickerLabel": "Är detta inte predikan?",
+    "speechBlock": "Talblock",
+    "speechLabel": "Tal",
+    "suggestionTitle": "Förslag klart",
+    "suggestionApply": "Använd förslag",
+    "suggestionDismiss": "Stäng",
+    "beforeSermon": "före predikan",
+    "afterSermon": "efter predikan",
+    "willBeTrimmed": "tas bort",
+    "willRemain": "predikan kvar"
   },
   "master": {
     "title": "Mastring (förbered för publicering)",

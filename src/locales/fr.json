@@ -467,7 +467,10 @@
     "testEmailNoConfig": "Veuillez compléter les paramètres SMTP",
     "askOpenEditor": "Proposer l’édition après l’enregistrement",
     "askOpenEditorDesc": "Affiche une invitation à ouvrir le fichier dans l’éditeur une fois l’enregistrement terminé",
-    "noClipSelected": "Aucun fichier sélectionné"
+    "noClipSelected": "Aucun fichier sélectionné",
+    "notifyStartDesc": "Affiché comme notification système au début d’une session planifiée.",
+    "notifyStopDesc": "Cliquez sur la notification pour aller directement au fichier.",
+    "close": "Fermer"
   },
   "editor": {
     "title": "Éditer le fichier audio",
@@ -523,7 +526,7 @@
     "analyzeMusic": "Segments musicaux",
     "analyzeSilence": "Silence",
     "markSermon": "↦ Marquer le sermon automatiquement",
-    "markSermonHint": "Utilise le plus long segment parlé après 5 min comme « sermon ».",
+    "markSermonHint": "Coupe tout avant et après le bloc de prédication mis en évidence.",
     "analyzedAt": "Dernière analyse",
     "speechSegments": "segments parlés trouvés",
     "ioTitle": "Intro et Outro",
@@ -555,7 +558,17 @@
     "tooltipMusic": "Musique",
     "tooltipSilence": "Silence",
     "tooltipMixed": "Mixte",
-    "tooltipSermon": "Sermon estimé"
+    "tooltipSermon": "Sermon estimé",
+    "sermonPickerLabel": "N’est-ce pas la prédication ?",
+    "speechBlock": "Bloc de parole",
+    "speechLabel": "Parole",
+    "suggestionTitle": "Suggestion prête",
+    "suggestionApply": "Utiliser la suggestion",
+    "suggestionDismiss": "Ignorer",
+    "beforeSermon": "avant la prédication",
+    "afterSermon": "après la prédication",
+    "willBeTrimmed": "sera supprimé",
+    "willRemain": "de prédication restant"
   },
   "master": {
     "title": "Mastering (préparation à la publication)",
