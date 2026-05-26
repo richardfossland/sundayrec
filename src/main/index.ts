@@ -381,9 +381,14 @@ app.whenReady().then(async () => {
   )
 
   // Clean up leftover editor temp/backup files from a previous crashed save.
-  // The user's save folder is the only place we own — never walk arbitrary
-  // editor sources.
-  import('./editor').then(e => e.cleanupEditorTempFiles(saveFolder)).then(n => {
+  // Includes saveFolder + every folder we've ever saved a recording to (from
+  // recordingHistory) so external/mounted drives don't accumulate orphans.
+  const editFolders = new Set<string>()
+  if (saveFolder) editFolders.add(saveFolder)
+  for (const entry of store.getHistory()) {
+    if (entry.path) editFolders.add(path.dirname(entry.path))
+  }
+  import('./editor').then(e => e.cleanupEditorTempFiles(Array.from(editFolders))).then(n => {
     if (n > 0) console.log(`[editor] cleaned ${n} stale temp file(s)`)
   }).catch(err => console.error('[editor] temp cleanup failed:', (err as Error).message))
 

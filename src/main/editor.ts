@@ -32,24 +32,41 @@ export function cancelExport(jobId: string): boolean {
 
 /**
  * Clean up `__editor_tmp` and `__editor_bak` files left behind by a crashed
- * editor save. Called once at app startup. Scans the configured save folder
- * (only — we don't walk arbitrary directories the user might be editing
- * files from).
+ * editor save. Called once at app startup.
+ *
+ * Scans EVERY folder where the user has previously saved a recording (derived
+ * from recordingHistory) plus `saveFolder`. Originally we only scanned
+ * saveFolder, but the editor writes temp files next to the source file —
+ * so editing a recording from a mounted drive or external folder would leak
+ * temp files there forever.
  */
-export async function cleanupEditorTempFiles(saveFolder: string): Promise<number> {
-  if (!saveFolder || !fs.existsSync(saveFolder)) return 0
+export async function cleanupEditorTempFiles(folders: string | string[]): Promise<number> {
+  const input = Array.isArray(folders) ? folders : (folders ? [folders] : [])
+  // De-dupe and filter to existing dirs in one pass.
+  const seen = new Set<string>()
+  const dirs: string[] = []
+  for (const f of input) {
+    if (!f) continue
+    const resolved = path.resolve(f)
+    if (seen.has(resolved)) continue
+    seen.add(resolved)
+    if (fs.existsSync(resolved)) dirs.push(resolved)
+  }
+
   let removed = 0
-  try {
-    const entries = await fs.promises.readdir(saveFolder)
-    for (const name of entries) {
-      if (name.endsWith('.__editor_tmp') || name.endsWith('.__editor_bak')) {
-        try {
-          await fs.promises.unlink(path.join(saveFolder, name))
-          removed++
-        } catch {}
+  for (const dir of dirs) {
+    try {
+      const entries = await fs.promises.readdir(dir)
+      for (const name of entries) {
+        if (name.endsWith('.__editor_tmp') || name.endsWith('.__editor_bak')) {
+          try {
+            await fs.promises.unlink(path.join(dir, name))
+            removed++
+          } catch {}
+        }
       }
-    }
-  } catch {}
+    } catch {}
+  }
   return removed
 }
 

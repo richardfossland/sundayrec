@@ -1101,40 +1101,40 @@
           </div>
 
           <!-- ── Prep-and-review (v5.0) ────────────────────────────── -->
-          <div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:14px;margin-top:6px">
-            <div style="font-weight:600;font-size:13px;margin-bottom:6px">Forhåndsklargjøring og gjennomgang</div>
-            <p class="card-desc" style="margin:0 0 10px 0;font-size:12px">Etter hvert opptak blir det automatisk analysert (preken-deteksjon), klargjort med mastering og intro/outro, og lagt i en kø for menneskelig gjennomgang før publisering.</p>
+          <div class="prep-review-section">
+            <div class="prep-review-title" data-i18n="prep.sectionTitle">Forhåndsklargjøring og gjennomgang</div>
+            <p class="card-desc prep-review-desc" data-i18n="prep.sectionDesc">Etter hvert opptak blir det automatisk analysert (preken-deteksjon), klargjort med mastering og intro/outro, og lagt i en kø for menneskelig gjennomgang før publisering.</p>
 
-            <div class="toggle-row" style="margin-bottom:10px">
+            <div class="toggle-row prep-review-toggle">
               <div>
-                <div class="toggle-title">Aktiver auto-klargjøring</div>
-                <div class="toggle-desc">Kjør analyse + klargjøring etter hvert opptak</div>
+                <div class="toggle-title" data-i18n="prep.enableTitle">Aktiver auto-klargjøring</div>
+                <div class="toggle-desc" data-i18n="prep.enableDesc">Kjør analyse + klargjøring etter hvert opptak</div>
               </div>
               <label class="toggle"><input type="checkbox" id="opt-podcast-auto-prep" checked><span class="toggle-track"></span></label>
             </div>
 
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px">
+            <div class="prep-review-grid">
               <div>
-                <label class="form-label" for="podcast-default-master-preset">MASTERING-PRESETT</label>
+                <label class="form-label" for="podcast-default-master-preset" data-i18n="prep.masterPreset">MASTERING-PRESETT</label>
                 <select class="form-input" id="podcast-default-master-preset">
-                  <option value="speech-clear">Tale — tydelig (anbefalt)</option>
-                  <option value="speech-natural">Tale — naturlig</option>
-                  <option value="speech-punchy">Tale — kraftig</option>
-                  <option value="music-speech">Musikk + tale</option>
+                  <option value="speech-clear" data-i18n="prep.presetSpeechClear">Tale — tydelig (anbefalt)</option>
+                  <option value="speech-natural" data-i18n="prep.presetSpeechNatural">Tale — naturlig</option>
+                  <option value="speech-punchy" data-i18n="prep.presetSpeechPunchy">Tale — kraftig</option>
+                  <option value="music-speech" data-i18n="prep.presetMusicSpeech">Musikk + tale</option>
                 </select>
               </div>
               <div>
-                <label class="form-label" for="podcast-default-intro">STANDARD INTRO-JINGLE</label>
-                <div style="display:flex;gap:6px">
-                  <input type="text" class="form-input" id="podcast-default-intro" readonly style="flex:1;font-size:12px" placeholder="(ingen)">
+                <label class="form-label" for="podcast-default-intro" data-i18n="prep.defaultIntro">STANDARD INTRO-JINGLE</label>
+                <div class="prep-jingle-row">
+                  <input type="text" class="form-input prep-jingle-input" id="podcast-default-intro" readonly placeholder="(ingen)">
                   <button class="btn-secondary btn-sm" id="btn-podcast-pick-intro" data-i18n="general.pickFile">Velg fil…</button>
                   <button class="btn-ghost btn-sm" id="btn-podcast-clear-intro" aria-label="Fjern intro">×</button>
                 </div>
               </div>
               <div>
-                <label class="form-label" for="podcast-default-outro">STANDARD OUTRO-JINGLE</label>
-                <div style="display:flex;gap:6px">
-                  <input type="text" class="form-input" id="podcast-default-outro" readonly style="flex:1;font-size:12px" placeholder="(ingen)">
+                <label class="form-label" for="podcast-default-outro" data-i18n="prep.defaultOutro">STANDARD OUTRO-JINGLE</label>
+                <div class="prep-jingle-row">
+                  <input type="text" class="form-input prep-jingle-input" id="podcast-default-outro" readonly placeholder="(ingen)">
                   <button class="btn-secondary btn-sm" id="btn-podcast-pick-outro" data-i18n="general.pickFile">Velg fil…</button>
                   <button class="btn-ghost btn-sm" id="btn-podcast-clear-outro" aria-label="Fjern outro">×</button>
                 </div>
@@ -1142,11 +1142,8 @@
             </div>
           </div>
 
-          <p style="font-size:11px;color:var(--text3);line-height:1.5;margin:0">
-            <strong>Slik kommer du i gang:</strong> Last opp 1-3 testopptak til Google Drive, klikk "Generer feed nå", og send URL-en som dukker opp til
-            <a href="https://podcasters.spotify.com" target="_blank" style="color:var(--accent,#7aaaff)">Spotify for Podcasters</a> og
-            <a href="https://podcastsconnect.apple.com" target="_blank" style="color:var(--accent,#7aaaff)">Apple Podcasts Connect</a>.
-            Etter godkjenning (1-2 dager) dukker hvert nytt opptak opp automatisk.
+          <p class="prep-howto" data-i18n="prep.howto">
+            <strong>Slik kommer du i gang:</strong> Last opp 1-3 testopptak til Google Drive, klikk "Generer feed nå", og send URL-en som dukker opp til Spotify for Podcasters og Apple Podcasts Connect. Etter godkjenning (1-2 dager) dukker hvert nytt opptak opp automatisk.
           </p>
         </div>
       </div>
@@ -1160,11 +1157,11 @@
     <!-- ── Video ─────────────────────────────────────────────────── -->
     <div id="settings-video" class="inner-page">
       <div class="card">
-        <div class="card-title">Videoopptak</div>
+        <div class="card-title" data-i18n="video.title">Videoopptak</div>
         <div class="toggle-row">
           <div>
-            <div class="toggle-title">Aktiver videoopptak</div>
-            <div class="toggle-desc">Tar opp video i tillegg til lyd ved hvert opptak</div>
+            <div class="toggle-title" data-i18n="video.enableTitle">Aktiver videoopptak</div>
+            <div class="toggle-desc" data-i18n="video.enableDesc">Tar opp video i tillegg til lyd ved hvert opptak</div>
           </div>
           <label class="toggle"><input type="checkbox" id="opt-video-enable" /><span class="toggle-track"></span></label>
         </div>
@@ -1172,20 +1169,20 @@
 
       <div id="video-settings-panel" style="display:none">
         <div class="card">
-          <div class="card-title">Kamera</div>
-          <label class="form-label">VELG KAMERA</label>
+          <div class="card-title" data-i18n="video.cameraTitle">Kamera</div>
+          <label class="form-label" data-i18n="video.pickCamera">VELG KAMERA</label>
           <div style="display:flex;gap:8px;align-items:center">
             <select class="form-input" id="video-device-select" style="flex:1">
-              <option value="">Trykk Oppdater for å søke etter kameraer</option>
+              <option value="" data-i18n="video.cameraSearchPrompt">Trykk Oppdater for å søke etter kameraer</option>
             </select>
-            <button class="btn-secondary" id="btn-video-refresh-devices">Oppdater</button>
+            <button class="btn-secondary" id="btn-video-refresh-devices" data-i18n="video.refresh">Oppdater</button>
           </div>
-          <p class="form-hint">USB-webkamera og HDMI-opptakskort støttes på macOS og Windows.</p>
+          <p class="form-hint" data-i18n="video.cameraHint">USB-webkamera og HDMI-opptakskort støttes på macOS og Windows.</p>
         </div>
 
         <div class="card">
-          <div class="card-title">Kvalitet</div>
-          <label class="form-label">OPPLØSNING</label>
+          <div class="card-title" data-i18n="video.qualityTitle">Kvalitet</div>
+          <label class="form-label" data-i18n="video.resolution">OPPLØSNING</label>
           <div class="option-cards" style="grid-template-columns:1fr 1fr 1fr">
             <label class="option-card">
               <input type="radio" name="video-resolution" value="480p" />
@@ -1195,7 +1192,7 @@
             <label class="option-card">
               <input type="radio" name="video-resolution" value="720p" checked />
               <div class="option-card-name">720p</div>
-              <div class="option-card-badge">Anbefalt</div>
+              <div class="option-card-badge" data-i18n="video.recommended">Anbefalt</div>
               <div class="option-card-desc">~3.5 GB / t</div>
             </label>
             <label class="option-card">
@@ -1205,32 +1202,32 @@
             </label>
           </div>
 
-          <label class="form-label mt">BILDERATE</label>
+          <label class="form-label mt" data-i18n="video.framerate">BILDERATE</label>
           <select class="form-input" id="video-fps-select" style="max-width:200px">
             <option value="25">25 fps</option>
-            <option value="30" selected>30 fps (Anbefalt)</option>
+            <option value="30" selected data-i18n="video.fps30Recommended">30 fps (Anbefalt)</option>
           </select>
 
-          <label class="form-label mt">BITHASTIGHET</label>
+          <label class="form-label mt" data-i18n="video.bitrate">BITHASTIGHET</label>
           <div style="display:flex;flex-direction:column;gap:8px">
-            <label style="display:flex;align-items:center;gap:8px;font-size:13px">
+            <label class="video-bitrate-radio">
               <input type="radio" name="video-bitrate" id="opt-video-bitrate-auto" checked />
-              Automatisk (anbefalt — basert på oppløsning)
+              <span data-i18n="video.bitrateAuto">Automatisk (anbefalt — basert på oppløsning)</span>
             </label>
-            <label style="display:flex;align-items:center;gap:8px;font-size:13px">
+            <label class="video-bitrate-radio">
               <input type="radio" name="video-bitrate" id="opt-video-bitrate-custom" />
-              Egendefinert
+              <span data-i18n="video.bitrateCustom">Egendefinert</span>
             </label>
           </div>
-          <div id="video-bitrate-custom-row" style="display:none;margin-top:8px;display:flex;align-items:center;gap:8px">
-            <input type="number" class="form-input" id="video-bitrate-value" value="4000" min="500" max="50000" style="max-width:100px" />
-            <span style="font-size:13px;color:var(--text2)">kbps</span>
+          <div id="video-bitrate-custom-row" class="inline-field-row" style="display:none">
+            <input type="number" class="form-input inline-field-input" id="video-bitrate-value" value="4000" min="500" max="50000" />
+            <span class="inline-field-label">kbps</span>
           </div>
         </div>
 
         <div class="card">
-          <div class="card-title">Utdataformat</div>
-          <p class="card-desc">Velg om lyd og video skal kombineres til én fil eller lagres separat.</p>
+          <div class="card-title" data-i18n="video.outputFormat">Utdataformat</div>
+          <p class="card-desc" data-i18n="video.outputFormatDesc">Velg om lyd og video skal kombineres til én fil eller lagres separat.</p>
           <div class="option-cards" style="grid-template-columns:1fr 1fr">
             <label class="option-card">
               <input type="radio" name="video-mode" value="combined" checked />
@@ -1239,8 +1236,8 @@
                 <path d="M10 10h12"/>
                 <path d="M8 7l2 3-2 3"/>
               </svg>
-              <div class="option-card-name">Kombinert MP4</div>
-              <div class="option-card-desc">Lyd + video i én fil — klar for YouTube</div>
+              <div class="option-card-name" data-i18n="video.combinedName">Kombinert MP4</div>
+              <div class="option-card-desc" data-i18n="video.combinedDesc">Lyd + video i én fil — klar for YouTube</div>
             </label>
             <label class="option-card">
               <input type="radio" name="video-mode" value="separate" />
@@ -1249,20 +1246,20 @@
                 <rect x="18" y="3" width="13" height="14" rx="2"/>
                 <path d="M5 10h5M22 8v4"/>
               </svg>
-              <div class="option-card-name">Separate filer</div>
-              <div class="option-card-desc">Lyd og video lagres hver for seg</div>
+              <div class="option-card-name" data-i18n="video.separateName">Separate filer</div>
+              <div class="option-card-desc" data-i18n="video.separateDesc">Lyd og video lagres hver for seg</div>
             </label>
           </div>
-          <div id="video-split-warning" class="notice-warn" style="display:none">
+          <div id="video-split-warning" class="notice-warn" style="display:none" data-i18n="video.splitWarning">
             Delt opptak er aktivt — video lagres alltid som separat fil uavhengig av valget over. Deaktiver automatisk oppdeling i planleggingsinnstillingene for å kombinere lyd og video til én MP4.
           </div>
-          <p class="form-hint" id="video-split-hint">Ved automatisk oppdeling av filer brukes alltid separate filer.</p>
+          <p class="form-hint" id="video-split-hint" data-i18n="video.splitHint">Ved automatisk oppdeling av filer brukes alltid separate filer.</p>
 
           <!-- Keep audio toggle — only visible when "combined" mode is selected -->
-          <div id="video-keep-audio-row" class="toggle-row" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border,rgba(255,255,255,.08))">
-            <div style="padding-left:16px">
-              <div class="toggle-title">Behold separat lydfil</div>
-              <div class="toggle-desc">Lagrer også den høykvalitets lydfilen ved siden av den kombinerte MP4</div>
+          <div id="video-keep-audio-row" class="toggle-row video-keep-audio-row">
+            <div class="video-keep-audio-text">
+              <div class="toggle-title" data-i18n="video.keepAudioTitle">Behold separat lydfil</div>
+              <div class="toggle-desc" data-i18n="video.keepAudioDesc">Lagrer også den høykvalitets lydfilen ved siden av den kombinerte MP4</div>
             </div>
             <label class="toggle"><input type="checkbox" id="opt-video-keep-audio" checked /><span class="toggle-track"></span></label>
           </div>
@@ -1270,15 +1267,15 @@
       </div>
 
       <div class="page-footer">
-        <button class="btn-primary" id="btn-video-save">Lagre</button>
-        <button class="btn-ghost" id="btn-video-cancel">Avbryt</button>
+        <button class="btn-primary" id="btn-video-save" data-i18n="general.save">Lagre</button>
+        <button class="btn-ghost" id="btn-video-cancel" data-i18n="general.cancel">Avbryt</button>
       </div>
     </div>
 
     <!-- ── Varsler ───────────────────────────────────────────────── -->
     <div id="settings-notifications" class="inner-page">
       <div class="card">
-        <div class="card-title">Systemvarsler</div>
+        <div class="card-title" data-i18n="notify.systemTitle">Systemvarsler</div>
         <div class="toggle-row">
           <div>
             <div class="toggle-title" data-i18n="general.notifyStart">Varsel på PC når opptak starter</div>
@@ -1308,7 +1305,7 @@
         </div>
       </div>
       <div class="card">
-        <div class="card-title">E-postvarsler</div>
+        <div class="card-title" data-i18n="notify.emailTitle">E-postvarsler</div>
         <div class="toggle-row">
           <div>
             <div class="toggle-title" data-i18n="general.emailError">Send e-post ved feil</div>
@@ -1319,42 +1316,42 @@
         <div id="email-section" style="display:none">
           <label class="form-label mt" data-i18n="general.sendTo">SEND TIL</label>
           <input type="email" class="form-input" id="email-address" placeholder="navn@kirke.no" />
-          <label class="form-label mt">E-POSTTJENESTE (SMTP)</label>
+          <label class="form-label mt" data-i18n="notify.smtpServer">E-POSTTJENESTE (SMTP)</label>
           <input type="text" class="form-input" id="email-smtp" placeholder="smtp.gmail.com" />
-          <div class="form-hint">Gmail: smtp.gmail.com · Outlook: smtp.office365.com</div>
-          <label class="form-label mt">BRUKERNAVN (E-POSTADRESSE)</label>
+          <div class="form-hint" data-i18n="notify.smtpHint">Gmail: smtp.gmail.com · Outlook: smtp.office365.com</div>
+          <label class="form-label mt" data-i18n="notify.smtpUser">BRUKERNAVN (E-POSTADRESSE)</label>
           <input type="text" class="form-input" id="email-user" placeholder="din@epost.no" />
-          <label class="form-label mt">PASSORD / APP-PASSORD</label>
+          <label class="form-label mt" data-i18n="notify.smtpPass">PASSORD / APP-PASSORD</label>
           <div class="pass-row">
             <input type="password" class="form-input" id="email-pass" />
             <button type="button" class="btn-link" id="btn-clear-smtp-pass" style="display:none" data-i18n="general.clearPass">Fjern</button>
           </div>
-          <div class="form-hint">Gmail krever et «App-passord» fra kontosikkerhetsinnstillingene.</div>
+          <div class="form-hint" data-i18n="notify.smtpPassHint">Gmail krever et «App-passord» fra kontosikkerhetsinnstillingene.</div>
           <input type="hidden" id="email-port" value="587" />
           <button type="button" class="btn-secondary" id="btn-test-email" style="margin-top:12px" data-i18n="general.testEmail">Test e-post</button>
         </div>
       </div>
 
       <div class="card">
-        <div class="card-title">Webhook (Slack / Discord / Teams)</div>
-        <div class="card-desc" style="font-size:13px;color:var(--text3);margin-bottom:12px">
+        <div class="card-title" data-i18n="notify.webhookTitle">Webhook (Slack / Discord / Teams)</div>
+        <div class="card-desc notify-webhook-intro" data-i18n="notify.webhookIntro">
           Send varsler til en chat-kanal i tillegg til e-post. Lim inn webhook-URL fra Slack, Discord eller Teams.
         </div>
         <label class="form-label" data-i18n="general.webhookUrl">WEBHOOK-URL</label>
         <input type="url" class="form-input" id="webhook-url" placeholder="https://hooks.slack.com/services/..." />
-        <div class="form-hint">Slack: https://hooks.slack.com/... · Discord: https://discord.com/api/webhooks/...</div>
+        <div class="form-hint" data-i18n="notify.webhookHint">Slack: https://hooks.slack.com/... · Discord: https://discord.com/api/webhooks/...</div>
         <div class="toggle-row mt">
           <div>
-            <div class="toggle-title">Send også på advarsler</div>
-            <div class="toggle-desc">Som standard sendes kun feilmeldinger. Slå på dette for å få beskjed også ved mindre problemer.</div>
+            <div class="toggle-title" data-i18n="notify.webhookOnWarn">Send også på advarsler</div>
+            <div class="toggle-desc" data-i18n="notify.webhookOnWarnDesc">Som standard sendes kun feilmeldinger. Slå på dette for å få beskjed også ved mindre problemer.</div>
           </div>
           <label class="toggle"><input type="checkbox" id="opt-webhook-on-warn" /><span class="toggle-track"></span></label>
         </div>
-        <button type="button" class="btn-secondary" id="btn-test-webhook" style="margin-top:12px">Test webhook</button>
+        <button type="button" class="btn-secondary" id="btn-test-webhook" style="margin-top:12px" data-i18n="notify.testWebhook">Test webhook</button>
       </div>
       <div class="page-footer">
-        <button class="btn-primary" id="btn-varsler-save">Lagre</button>
-        <button class="btn-ghost" id="btn-varsler-cancel">Avbryt</button>
+        <button class="btn-primary" id="btn-varsler-save" data-i18n="general.save">Lagre</button>
+        <button class="btn-ghost" id="btn-varsler-cancel" data-i18n="general.cancel">Avbryt</button>
       </div>
     </div>
 

@@ -697,7 +697,15 @@ async function loadFile(fp: string): Promise<void> {
   stopPlay()
   const prevCtx = audioCtx
   audioCtx = null
-  prevCtx?.close().catch(() => {})
+  // Await the close — fire-and-forget could leave an old context partially
+  // alive while a new one is created. The seq-guard further down still
+  // catches cases where two loadFile calls overlap, but awaiting close()
+  // here means we never have two contexts processing audio at once.
+  if (prevCtx) {
+    try { await prevCtx.close() } catch {}
+    // Bail out if a newer load started while we were closing the old context.
+    if (seq !== loadSeq) return
+  }
 
   cuts = []
   cutHistory = []
