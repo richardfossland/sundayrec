@@ -46,7 +46,7 @@ export const MODELS: WhisperModelMeta[] = [
     description: 'Liten modell. Bra for en rask oversikt. Noen feil på lange/komplekse setninger.',
     url:         'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin',
     sizeBytes:   147951465,
-    sha256:      '60ed5bc3dd14eea95fe88d2f5d1de2b97d6362ac4cf4d6dfb31cdc4cca31b1aa',
+    sha256:      '60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe',
     realtimeFactor: 14,
     quality:     'medium',
   },

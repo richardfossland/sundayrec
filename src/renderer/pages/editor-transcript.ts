@@ -45,6 +45,11 @@ export function setupTranscriptPanel(onSeek: (sec: number) => void): void {
   $('btn-transcript-export')?.addEventListener('click', exportSrt)
   $('btn-transcript-delete')?.addEventListener('click', deleteTranscript)
 
+  // Probe availability once at startup so the button can be disabled with
+  // an inline explanation if the binary didn't ship (CI build issue,
+  // unsupported platform, missing dependency on Linux build).
+  void checkBinaryAvailabilityOnce()
+
   // Listen for progress events from main process
   window.api.on?.('whisper-progress', (payload: unknown) => {
     if (!payload || typeof payload !== 'object') return
@@ -58,6 +63,23 @@ export function setupTranscriptPanel(onSeek: (sec: number) => void): void {
     const p = payload as { id: string; bytesDownloaded: number; bytesTotal: number; fraction: number | null }
     updateDownloadUI(p)
   })
+}
+
+async function checkBinaryAvailabilityOnce(): Promise<void> {
+  try {
+    const status = await window.api.whisperStatus()
+    const btn = $('btn-transcribe') as HTMLButtonElement | null
+    if (!btn) return
+    if (!status.binaryAvailable) {
+      btn.disabled = true
+      btn.title = t('transcript.unavailableHint',
+        'Transkribering er ikke tilgjengelig i denne bygging. Sjekk Innstillinger → System for plattform-informasjon.')
+      btn.textContent = t('transcript.unavailable', '✕ Ikke tilgjengelig')
+    }
+  } catch {
+    // If status check itself fails, leave the button enabled — user can
+    // click and see the actual error then.
+  }
 }
 
 /** Called by editor when a file loads — clears state and loads existing sidecar if any. */

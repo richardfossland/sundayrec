@@ -266,15 +266,32 @@ export async function startStream(opts: StreamOptions): Promise<{ ok: boolean; e
   emitStats()
 
   let stderrBuf = ''
+  let lastProgressAt = Date.now()
+
+  // Watchdog: if ffmpeg produces no progress for 90 s, the encode pipeline
+  // is hung (RTMP server stalled, encoder deadlock, USB drop). Kill and
+  // surface to UI rather than letting the user stare at frozen stats.
+  const watchdog = setInterval(() => {
+    if (streamProc !== proc) { clearInterval(watchdog); return }
+    const stalled = Date.now() - lastProgressAt > 90_000
+    if (stalled) {
+      console.warn('[streamer] no progress for 90s — killing hung ffmpeg')
+      try { proc.kill('SIGKILL') } catch {}
+      clearInterval(watchdog)
+    }
+  }, 15_000)
+
   proc.stderr?.on('data', (d: Buffer) => {
     const chunk = d.toString()
     stderrBuf = (stderrBuf + chunk).slice(-8192)
+    if (chunk.includes('frame=')) lastProgressAt = Date.now()
     for (const line of chunk.split(/\r?\n/)) parseStderrLine(line, opts.destinations)
   })
 
   proc.stdout?.on('data', () => {})  // discard
 
   proc.on('close', (code, signal) => {
+    clearInterval(watchdog)
     const wasActive = streamProc != null
     streamProc = null
     lastStats = {

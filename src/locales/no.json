@@ -853,7 +853,7 @@
   },
   "live": {
     "title": "Direkte sending",
-    "subtitle": "Stream gudstjenester direkte til YouTube, Facebook eller egen RTMP-server.",
+    "subtitle": "Stream til YouTube, Facebook eller egen RTMP-server",
     "statusReady": "Klar",
     "statusPreparing": "Forbereder…",
     "statusLive": "🔴 Live",
@@ -870,6 +870,35 @@
     "preparing": "Kobler til…",
     "connectionFailed": "Tilkobling feilet",
     "previewWaiting": "Forhåndsvisning kommer når stream starter",
-    "errNoActive": "Ingen aktive destinasjoner med lagret stream-key."
+    "errNoActive": "Aktiver minst én destinasjon før du starter."
+  },
+  "transcript": {
+    "title": "Transkribering",
+    "start": "▶ Transkriber",
+    "export": "↧ Eksporter SRT",
+    "delete": "Slett",
+    "empty": "Ingen transkripsjon ennå. Klikk «Transkriber» for å lage søkbar tekst av talen.",
+    "modalTitle": "Transkriber tale til tekst",
+    "modalDesc": "Bruker lokal AI (whisper.cpp) — ingen data sendes til skyen. Velg modell og språk.",
+    "modelLabel": "MODELL",
+    "langLabel": "SPRÅK",
+    "langAuto": "Auto-detekter",
+    "translateToEn": "Oversett til engelsk samtidig",
+    "cancel": "Avbryt",
+    "run": "Start",
+    "progressTitle": "Transkriberer…",
+    "downloadTitle": "Laster ned modell…",
+    "recommended": "Anbefalt",
+    "speed": "Hastighet",
+    "size": "Størrelse",
+    "modelInstalled": "✓ Lastet ned",
+    "segments": "segmenter",
+    "confirmDelete": "Slett transkripsjonen?",
+    "unavailable": "✕ Ikke tilgjengelig",
+    "unavailableHint": "Transkribering er ikke tilgjengelig i denne bygging. Sjekk Innstillinger → System for plattform-informasjon.",
+    "errNoBinary": "Whisper er ikke tilgjengelig på denne plattformen. Kontakt support.",
+    "errStatusFailed": "Kunne ikke sjekke Whisper-status",
+    "errDownload": "Modell-nedlasting feilet",
+    "errFailed": "Transkribering feilet"
   }
 }

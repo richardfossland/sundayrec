@@ -83,12 +83,99 @@ export function reactivateLivePage(): void {
   startPreviewInterval()
   startUptimeInterval()
   subscribeStats()
+  startVuMeter()
 }
 
 export function deactivateLivePage(): void {
   if (previewInterval) { clearInterval(previewInterval); previewInterval = null }
   if (uptimeInterval)  { clearInterval(uptimeInterval);  uptimeInterval  = null }
   if (unsubStats) { unsubStats(); unsubStats = undefined }
+  stopVuMeter()
+}
+
+// ── VU meter (audio pre-stream confidence check) ─────────────────────────
+//
+// The agent left the VU bars as static placeholders. We hook a lightweight
+// MediaStream + AnalyserNode chain so the user can SEE that the configured
+// microphone is producing signal before they click Start. Stops cleanly on
+// page leave to release the device.
+
+interface VuState {
+  ctx:    AudioContext | null
+  stream: MediaStream  | null
+  raf:    number
+}
+const liveVu: VuState = { ctx: null, stream: null, raf: 0 }
+
+function startVuMeter(): void {
+  if (liveVu.stream) return  // already running
+  const fillL = document.querySelector<HTMLElement>('#live-vu-bar-l .live-vu-fill')
+  const fillR = document.querySelector<HTMLElement>('#live-vu-bar-r .live-vu-fill')
+  if (!fillL || !fillR) return
+
+  const devId = settings.deviceId && settings.deviceId !== 'default' ? settings.deviceId : null
+  navigator.mediaDevices.getUserMedia({
+    audio: {
+      ...(devId ? { deviceId: { ideal: devId } } : {}),
+      channelCount:     { ideal: 2 },
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl:  false,
+    },
+    video: false,
+  }).then(stream => {
+    liveVu.stream = stream
+    liveVu.ctx    = new AudioContext()
+    const src   = liveVu.ctx.createMediaStreamSource(stream)
+    const split = liveVu.ctx.createChannelSplitter(2)
+    const aL    = liveVu.ctx.createAnalyser()
+    const aR    = liveVu.ctx.createAnalyser()
+    aL.fftSize = 512
+    aR.fftSize = 512
+    src.connect(split)
+    split.connect(aL, 0)
+    split.connect(aR, 1)
+    const bufL = new Uint8Array(aL.fftSize)
+    const bufR = new Uint8Array(aR.fftSize)
+
+    const tick = (): void => {
+      if (!liveVu.stream) return
+      // @ts-expect-error: getByteTimeDomainData accepts Uint8Array
+      aL.getByteTimeDomainData(bufL)
+      // @ts-expect-error: getByteTimeDomainData accepts Uint8Array
+      aR.getByteTimeDomainData(bufR)
+      const lvlL = peakLevel(bufL)
+      const lvlR = peakLevel(bufR)
+      fillL.style.width = `${Math.min(100, lvlL * 100)}%`
+      fillR.style.width = `${Math.min(100, lvlR * 100)}%`
+      liveVu.raf = requestAnimationFrame(tick)
+    }
+    tick()
+  }).catch(err => {
+    console.warn('[live-page] VU mic access failed', err)
+  })
+}
+
+function stopVuMeter(): void {
+  if (liveVu.raf) { cancelAnimationFrame(liveVu.raf); liveVu.raf = 0 }
+  if (liveVu.stream) {
+    for (const t of liveVu.stream.getTracks()) t.stop()
+    liveVu.stream = null
+  }
+  if (liveVu.ctx) { void liveVu.ctx.close(); liveVu.ctx = null }
+  const fillL = document.querySelector<HTMLElement>('#live-vu-bar-l .live-vu-fill')
+  const fillR = document.querySelector<HTMLElement>('#live-vu-bar-r .live-vu-fill')
+  if (fillL) fillL.style.width = '0%'
+  if (fillR) fillR.style.width = '0%'
+}
+
+function peakLevel(buf: Uint8Array): number {
+  let max = 0
+  for (let i = 0; i < buf.length; i++) {
+    const v = Math.abs(buf[i] - 128) / 128
+    if (v > max) max = v
+  }
+  return max
 }
 
 // ── Stats subscription ───────────────────────────────────────────────────
