@@ -15,6 +15,11 @@ import { registerGmailIpc } from './ipc/gmail'
 import { registerYouTubeIpc } from './ipc/youtube'
 import { registerStreamIpc } from './ipc/stream'
 import { registerCloudIpc } from './ipc/cloud'
+import { registerThumbnailIpc } from './ipc/thumbnail'
+import { registerWhisperIpc } from './ipc/whisper'
+import { registerMasterIpc } from './ipc/master'
+import { registerVideoPreviewIpc } from './ipc/video-preview'
+import { registerReviewQueueIpc } from './ipc/review-queue'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 
@@ -1106,133 +1111,11 @@ function setupIPC(): void {
     return exportVideoEdited({ ...params, onProgress })
   })
 
-  // ── Mastering (publish-ready audio) ───────────────────────────────────────
-  ipcMain.handle('master-presets', async () => {
-    const { MASTER_PRESETS } = await import('./mastering')
-    return MASTER_PRESETS
-  })
+  // Mastering (publish-ready audio) — moved to ipc/master.ts
+  registerMasterIpc({ ...ipcCtx, isAllowedMediaPath })
 
-  ipcMain.handle('master-preview', async (_, inputPath: string, presetId: string, startSec: number, durationSec: number) => {
-    if (typeof inputPath !== 'string' || !isAllowedMediaPath(inputPath)) return { ok: false, error: 'invalid_path' }
-    const { buildPreview, getPresetById } = await import('./mastering')
-    const preset = getPresetById(presetId)
-    if (!preset) return { ok: false, error: 'invalid_preset' }
-    try {
-      const previewPath = await buildPreview(inputPath, preset, Number(startSec) || 0, Number(durationSec) || 15)
-      return { ok: true, previewPath }
-    } catch (err) {
-      return { ok: false, error: (err as Error).message }
-    }
-  })
-
-  ipcMain.handle('master-measure', async (_, inputPath: string, presetId: string) => {
-    if (typeof inputPath !== 'string' || !isAllowedMediaPath(inputPath)) return { ok: false, error: 'invalid_path' }
-    const { measureLoudness, getPresetById } = await import('./mastering')
-    const preset = getPresetById(presetId)
-    if (!preset) return { ok: false, error: 'invalid_preset' }
-    try {
-      const measurement = await measureLoudness(inputPath, preset)
-      return { ok: true, measurement, targetLufs: preset.targetLufs }
-    } catch (err) {
-      return { ok: false, error: (err as Error).message }
-    }
-  })
-
-  ipcMain.handle('master-apply', async (event, params) => {
-    if (!params || typeof params !== 'object' || Array.isArray(params)) return { ok: false, error: 'invalid_params' }
-    const p = params as {
-      inputPath?:   string
-      outputPath?:  string
-      presetId?:    string
-      measurement?: import('./mastering').LoudnessMeasurement
-      jobId?:       string
-    }
-    if (typeof p.inputPath !== 'string' || !isAllowedMediaPath(p.inputPath)) return { ok: false, error: 'invalid_path' }
-    if (typeof p.outputPath !== 'string' || !p.outputPath) return { ok: false, error: 'invalid_output_path' }
-    if (typeof p.presetId !== 'string' || !p.presetId)     return { ok: false, error: 'invalid_preset' }
-    if (!p.measurement || typeof p.measurement !== 'object') return { ok: false, error: 'invalid_measurement' }
-    const { applyMastering, getPresetById } = await import('./mastering')
-    const preset = getPresetById(p.presetId)
-    if (!preset) return { ok: false, error: 'invalid_preset' }
-    const onProgress = (currentSec: number, totalSec: number) => {
-      try { event.sender.send('master-progress', { currentSec, totalSec }) } catch {}
-    }
-    try {
-      await applyMastering(p.inputPath, p.outputPath, preset, p.measurement, onProgress, p.jobId)
-      return { ok: true, outputPath: p.outputPath }
-    } catch (err) {
-      return { ok: false, error: (err as Error).message }
-    }
-  })
-
-  ipcMain.handle('master-cancel', async (_, jobId: string) => {
-    if (typeof jobId !== 'string') return false
-    const { cancelMastering } = await import('./mastering')
-    return cancelMastering(jobId)
-  })
-
-  // ── Thumbnail (podcast cover art) ─────────────────────────────────────────
-  // Pick an image via the OS file picker. Returns the source path the renderer
-  // then hands to thumbnail-set-default / thumbnail-set-episode.
-  async function pickThumbnailFile(event: Electron.IpcMainInvokeEvent): Promise<string | null> {
-    const win = BrowserWindow.fromWebContents(event.sender) ?? mainWindow
-    const r = await dialog.showOpenDialog(win!, {
-      properties: ['openFile'],
-      filters: [{ name: 'Bilde', extensions: ['jpg', 'jpeg', 'png', 'webp'] }],
-    })
-    return r.canceled ? null : r.filePaths[0]
-  }
-
-  ipcMain.handle('thumbnail:set-default', async (event, sourcePath?: string) => {
-    let chosen = typeof sourcePath === 'string' && sourcePath ? sourcePath : null
-    if (!chosen) chosen = await pickThumbnailFile(event)
-    if (!chosen) return null
-    if (!fs.existsSync(chosen)) return { error: 'file_not_found' }
-    const { setDefaultThumbnail, readThumbnailAsDataUrl } = await import('./thumbnail')
-    const result = await setDefaultThumbnail(chosen)
-    if ('error' in result) return result
-    return { ...result, dataUrl: await readThumbnailAsDataUrl(result.path, result.info.format) }
-  })
-
-  ipcMain.handle('thumbnail:clear-default', async () => {
-    const { clearDefaultThumbnail } = await import('./thumbnail')
-    await clearDefaultThumbnail()
-    return true
-  })
-
-  ipcMain.handle('thumbnail:set-episode', async (event, recordingPath: string, sourcePath?: string) => {
-    if (typeof recordingPath !== 'string' || !isAllowedMediaPath(recordingPath)) return { error: 'invalid_path' }
-    let chosen = typeof sourcePath === 'string' && sourcePath ? sourcePath : null
-    if (!chosen) chosen = await pickThumbnailFile(event)
-    if (!chosen) return null
-    if (!fs.existsSync(chosen)) return { error: 'file_not_found' }
-    const { setEpisodeThumbnail, readThumbnailAsDataUrl } = await import('./thumbnail')
-    const result = await setEpisodeThumbnail(recordingPath, chosen)
-    if ('error' in result) return result
-    return { ...result, dataUrl: await readThumbnailAsDataUrl(result.path, result.info.format) }
-  })
-
-  ipcMain.handle('thumbnail:clear-episode', async (_, recordingPath: string) => {
-    if (typeof recordingPath !== 'string' || !isAllowedMediaPath(recordingPath)) return false
-    const { clearEpisodeThumbnail } = await import('./thumbnail')
-    await clearEpisodeThumbnail(recordingPath)
-    return true
-  })
-
-  ipcMain.handle('thumbnail:resolve', async (_, recordingPath: string) => {
-    if (typeof recordingPath !== 'string' || !isAllowedMediaPath(recordingPath)) return null
-    const { resolveThumbnail, readThumbnailAsDataUrl } = await import('./thumbnail')
-    const r = await resolveThumbnail(recordingPath)
-    if (!r) return null
-    return { ...r, dataUrl: await readThumbnailAsDataUrl(r.path, r.info.format) }
-  })
-
-  ipcMain.handle('thumbnail:get-default-info', async () => {
-    const { getDefaultThumbnailInfo, readThumbnailAsDataUrl } = await import('./thumbnail')
-    const r = await getDefaultThumbnailInfo()
-    if (!r) return null
-    return { ...r, dataUrl: await readThumbnailAsDataUrl(r.path, r.info.format) }
-  })
+  // Thumbnail (podcast cover art) — moved to ipc/thumbnail.ts
+  registerThumbnailIpc({ ...ipcCtx, isAllowedMediaPath })
 
   ipcMain.handle('list-asio-drivers', async () => {
     const { listAsioDrivers } = await import('./native-recorder')
@@ -1372,79 +1255,8 @@ function setupIPC(): void {
     } catch { return false }
   })
 
-  // ─── Whisper transcription ───────────────────────────────────────────────
-  ipcMain.handle('whisper-status', async () => {
-    const { isWhisperAvailable } = await import('./whisper')
-    const { MODELS, isModelInstalled } = await import('./whisper-models')
-    return {
-      binaryAvailable: isWhisperAvailable(),
-      models: MODELS.map(m => ({
-        id:             m.id,
-        label:          m.label,
-        description:    m.description,
-        sizeBytes:      m.sizeBytes,
-        quality:        m.quality,
-        realtimeFactor: m.realtimeFactor,
-        ...isModelInstalled(m.id),
-      })),
-    }
-  })
-
-  // Active model-download tracker — supports cancel from UI
-  const modelDownloads = new Map<string, () => void>()
-
-  ipcMain.handle('whisper-download-model', async (event, modelId: string) => {
-    if (typeof modelId !== 'string') return { ok: false, error: 'invalid_id' }
-    const { downloadModel } = await import('./whisper-models')
-    if (modelDownloads.has(modelId)) return { ok: false, error: 'already_downloading' }
-    try {
-      const { promise, abort } = downloadModel(modelId, p => {
-        try {
-          event.sender.send('whisper-model-progress', p)
-        } catch {}
-      })
-      modelDownloads.set(modelId, abort)
-      try { await promise } finally { modelDownloads.delete(modelId) }
-      return { ok: true }
-    } catch (err) {
-      modelDownloads.delete(modelId)
-      return { ok: false, error: (err as Error).message }
-    }
-  })
-
-  ipcMain.handle('whisper-cancel-download', async (_, modelId: string) => {
-    const abort = modelDownloads.get(modelId)
-    if (!abort) return false
-    abort()
-    return true
-  })
-
-  ipcMain.handle('whisper-delete-model', async (_, modelId: string) => {
-    const { deleteModel } = await import('./whisper-models')
-    return deleteModel(modelId)
-  })
-
-  ipcMain.handle('whisper-transcribe', async (event, params: unknown) => {
-    if (!params || typeof params !== 'object') return { ok: false, error: 'invalid_params' }
-    const p = params as { filePath?: string; modelId?: string; language?: string; translate?: boolean; jobId?: string }
-    if (typeof p.filePath !== 'string' || !isAllowedMediaPath(p.filePath)) return { ok: false, error: 'invalid_path' }
-    if (typeof p.modelId !== 'string') return { ok: false, error: 'invalid_model' }
-    const jobId = typeof p.jobId === 'string' && p.jobId ? p.jobId : 'whisper-' + Date.now()
-    const { transcribeFile } = await import('./whisper')
-    return transcribeFile({
-      filePath:  p.filePath,
-      modelId:   p.modelId,
-      language:  typeof p.language === 'string' ? p.language : 'auto',
-      translate: !!p.translate,
-      jobId,
-      onProgress: pct => { try { event.sender.send('whisper-progress', { jobId, percent: pct }) } catch {} },
-    })
-  })
-
-  ipcMain.handle('whisper-cancel-transcribe', async (_, jobId: string) => {
-    const { cancelTranscription } = await import('./whisper')
-    return cancelTranscription(jobId)
-  })
+  // Whisper transcription — moved to ipc/whisper.ts
+  registerWhisperIpc({ ...ipcCtx, isAllowedMediaPath })
 
   ipcMain.handle('youtube-upload', async (_, filePath: string, metadata: unknown) => {
     if (typeof filePath !== 'string' || !filePath) return { ok: false, error: 'invalid_path' }
@@ -1481,103 +1293,8 @@ function setupIPC(): void {
     return promise
   })
 
-  // ── Review queue (prep-and-review v5.0) ───────────────────────────────────
-  ipcMain.handle('review-queue-list', async () => {
-    const rq = await import('./review-queue')
-    return rq.getQueue()
-  })
-
-  ipcMain.handle('review-queue-get', async (_, id: string) => {
-    if (typeof id !== 'string') return null
-    const rq = await import('./review-queue')
-    return rq.getQueueEntry(id)
-  })
-
-  ipcMain.handle('review-queue-update-trim', async (_, id: string, trim: { startSec: number; endSec: number }) => {
-    if (typeof id !== 'string') return false
-    if (!trim || typeof trim.startSec !== 'number' || typeof trim.endSec !== 'number') return false
-    if (trim.endSec <= trim.startSec) return false
-    const rq = await import('./review-queue')
-    const ok = rq.updateEntry(id, { suggestedTrim: trim })
-    if (ok) try { mainWindow.webContents.send('review-queue-update', { reason: 'patched', id }) } catch {}
-    return ok
-  })
-
-  ipcMain.handle('review-queue-update-master-preset', async (_, id: string, presetId: string) => {
-    if (typeof id !== 'string' || typeof presetId !== 'string') return false
-    const rq = await import('./review-queue')
-    const ok = rq.updateEntry(id, { masterPreset: presetId })
-    if (ok) try { mainWindow.webContents.send('review-queue-update', { reason: 'patched', id }) } catch {}
-    return ok
-  })
-
-  ipcMain.handle('review-queue-update-jingles', async (
-    _, id: string, jingles: { introPath?: string | null; outroPath?: string | null },
-  ) => {
-    if (typeof id !== 'string' || !jingles || typeof jingles !== 'object') return false
-    const rq = await import('./review-queue')
-    const patch: { introPath?: string; outroPath?: string } = {}
-    if ('introPath' in jingles) patch.introPath = jingles.introPath ?? undefined
-    if ('outroPath' in jingles) patch.outroPath = jingles.outroPath ?? undefined
-    const ok = rq.updateEntry(id, patch)
-    if (ok) try { mainWindow.webContents.send('review-queue-update', { reason: 'patched', id }) } catch {}
-    return ok
-  })
-
-  ipcMain.handle('review-queue-discard', async (_, id: string) => {
-    if (typeof id !== 'string') return false
-    const rq = await import('./review-queue')
-    rq.markDiscarded(id)
-    const removed = rq.removeFromQueue(id)
-    if (removed) {
-      try { mainWindow.webContents.send('review-queue-update', { reason: 'discarded', id }) } catch {}
-      void syncTrayReviewQueueCount()
-    }
-    return removed
-  })
-
-  // Tracks in-flight publishes to enforce idempotency — clicking the button
-  // twice within the same prep id MUST result in a single publish.
-  const publishInFlight = new Set<string>()
-
-  ipcMain.handle('review-queue-publish', async (_, id: string) => {
-    if (typeof id !== 'string') return { ok: false, error: 'invalid_id' }
-    const rq = await import('./review-queue')
-    const entry = rq.getQueueEntry(id)
-    if (!entry) return { ok: false, error: 'not_found' }
-    if (entry.prep.status === 'published' || entry.prep.publishedAt) {
-      return { ok: false, error: 'already_published' }
-    }
-    if (publishInFlight.has(id)) return { ok: false, error: 'in_progress' }
-    publishInFlight.add(id)
-    try {
-      // Step 1 — mark as published so a re-entrant call is rejected even
-      // before the upload finishes. publishedAt is set immediately.
-      rq.markPublished(id)
-
-      // Step 2 — for v1 we treat the existing recording file as the publish
-      // target. The cloud auto-upload will have run already; we just kick the
-      // RSS regenerate which inserts this episode into the public feed.
-      const podcast = store.get('podcast')
-      if (podcast?.enabled) {
-        const cloud = await import('./cloud')
-        await cloud.regeneratePodcastFeedManual(podcast.service)
-      }
-
-      // Step 3 — emit renderer update so the queue card refreshes
-      try { mainWindow.webContents.send('review-queue-update', { reason: 'published', id }) } catch {}
-
-      // Step 4 — remove from queue (v1 keeps history of publication via
-      // history entries already; the queue is for pending items only).
-      rq.removeFromQueue(id)
-      void syncTrayReviewQueueCount()
-      return { ok: true }
-    } catch (err) {
-      return { ok: false, error: (err as Error).message }
-    } finally {
-      publishInFlight.delete(id)
-    }
-  })
+  // Review queue (prep-and-review v5.0) — moved to ipc/review-queue.ts
+  registerReviewQueueIpc({ ...ipcCtx, syncTrayReviewQueueCount })
   // Note: kick off reminder processing once at startup + hourly thereafter.
   // Scheduler will be re-checked further down (in app.whenReady).
   setInterval(() => {
@@ -1597,29 +1314,8 @@ function setupIPC(): void {
     return cloud.isServiceConfigured(service as import('../types').CloudServiceId)
   })
 
-  // ── Video ─────────────────────────────────────────────────────────────────
-  ipcMain.handle('list-video-devices', async () => {
-    const { listVideoFfmpegDevices } = await import('./native-recorder')
-    return listVideoFfmpegDevices()
-  })
-
-  ipcMain.handle('video-preview-start', async (_, opts: { videoDeviceName?: string | null; videoDeviceIndex?: number | null; videoFramerate?: number }) => {
-    // macOS: request camera permission before opening device
-    if (process.platform === 'darwin') {
-      const granted = await systemPreferences.askForMediaAccess('camera')
-      if (!granted) {
-        console.warn('[video-preview] Camera permission denied by macOS')
-        return false
-      }
-    }
-    const preview = await import('./video-preview')
-    return preview.startPreview(opts, mainWindow)
-  })
-
-  ipcMain.handle('video-preview-stop', async () => {
-    const preview = await import('./video-preview')
-    await preview.stopPreview()
-  })
+  // Video preview — moved to ipc/video-preview.ts
+  registerVideoPreviewIpc(ipcCtx)
 
   ipcMain.handle('run-diagnostics', async () => {
     const settings = store.getAll()

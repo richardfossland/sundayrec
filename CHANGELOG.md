@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.53.2] — 2026-05-27
+
+### Refactored — IPC-splitting fase 2
+
+Fortsatte mekanisk flytting av IPC-handlers ut av `src/main/index.ts`
+til domene-spesifikke filer i `src/main/ipc/`. Ingen funksjonelle
+endringer for brukeren.
+
+**Nye filer:**
+- `ipc/thumbnail.ts` — 6 handlers (set/clear/resolve default + episode)
+- `ipc/whisper.ts` — 6 handlers (status, download, transcribe + cancel)
+- `ipc/master.ts` — 5 handlers (presets, preview, measure, apply, cancel)
+- `ipc/video-preview.ts` — 3 handlers (list-cameras, start, stop)
+- `ipc/review-queue.ts` — 7 handlers (list, get, update, discard, publish)
+
+**Resultat:**
+- 27 nye handlers flyttet ut (totalt 52 fra fase 1 + 2)
+- `index.ts`: **1792 → 1488 linjer** (denne fasen alene: −17 %, kumulativ
+  fra v4.53.0: 2045 → 1488 = **−27 %**)
+- 1080 tester fortsatt grønne
+
+**Mønster:** hver ipc-fil eksporterer `registerXxxIpc(ctx)`. Domener
+som trenger ekstra context (path-guard, tray-helper) utvider
+`IpcContext` med flere felt i sin egen `XxxIpcContext`.
+
+### Gjenstår i index.ts
+- editor-* (~17 handlers)
+- wake-*, schedule-* (~9 handlers)
+- recording-related (~5 handlers)
+- system/app (~15 handlers) — get-platform, save-settings, history-ops, etc
+
+Kommer i fremtidige sesjoner.
+
+---
+
 ## [4.53.1] — 2026-05-27
 
 ### Refactored — IPC-handlers begynt å splittes per domene
