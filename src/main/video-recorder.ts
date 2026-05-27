@@ -2,6 +2,7 @@ import { spawn } from 'child_process'
 import type { ChildProcess } from 'child_process'
 import { ffmpegBin, resolveVideoInput } from './native-recorder'
 import { getWorkingMacConfigIdx, MAC_CONFIGS, buildMacInputArgs } from './video-preview'
+import { classifyRecordingError } from './recorder-utils'
 import type { Settings } from '../types'
 
 export interface VideoHandle {
@@ -15,33 +16,10 @@ export interface VideoHandle {
   onFrame:      ((frame: Buffer) => void) | null
 }
 
-/** Exported for unit testing. */
+/** Exported for unit testing and external use. Delegates to the shared
+ *  recorder-utils classifier — see comments there. */
 export function classifyVideoError(stderr: string): string {
-  const s = stderr.toLowerCase()
-  if (
-    s.includes('device not found') || s.includes('no such') || s.includes('no video') ||
-    s.includes('no capture device') || s.includes('avfoundation: device') ||
-    s.includes('could not find video') || s.includes('video device not found') ||
-    s.includes('no such file or directory') || s.includes('the handle is invalid') ||
-    s.includes('no video device') || s.includes('failed to find video')
-  ) return 'device_not_found'
-  if (
-    s.includes('permission') || s.includes('access denied') || s.includes('not permitted') ||
-    s.includes('authorization') || s.includes('camera access') || s.includes('privacy') ||
-    s.includes('e_accessdenied') || s.includes('tcm_access')
-  ) return 'device_permission_denied'
-  if (
-    s.includes('already in use') || s.includes('device busy') || s.includes('resource busy') ||
-    s.includes('device or resource busy') || s.includes('audclnt_e_device_in_use') ||
-    s.includes('audclnt_e_exclusive_mode_not_allowed')
-  ) return 'device_busy'
-  if (s.includes('no space left') || s.includes('disk full') || s.includes('enospc')) return 'disk_full'
-  if (
-    s.includes('broken pipe') || s.includes('i/o error') || s.includes('input/output') ||
-    s.includes('unplugged') || s.includes('audclnt_e_device_invalidated') ||
-    s.includes('connection reset') || s.includes('eof')
-  ) return 'device_disconnected'
-  return 'device_error'
+  return classifyRecordingError(stderr)
 }
 
 /** Exported for unit testing. */

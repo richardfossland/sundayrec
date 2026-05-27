@@ -26,6 +26,7 @@ import { buildOverlayPipeline } from './overlay'
 import type { NdiOverlayRuntime } from './overlay'
 import type { ReceiverHandle, StartReceiverOpts } from './ndi-receiver'
 import type { OverlayConfig } from '../types'
+import { RECORDER_TIMEOUTS } from './recorder-utils'
 
 /** Find AVFoundation audio device index by name. Returns null when no
  *  match. Caller uses ":none" or "none" in the input string. */
@@ -262,7 +263,7 @@ async function startNdiReceiversForOverlays(
 async function stopActiveNdiReceivers(): Promise<void> {
   const handles = activeNdiReceivers
   activeNdiReceivers = []
-  await Promise.allSettled(handles.map(h => withTimeout(h.stop(), 2000, 'ndi-stop-timeout')))
+  await Promise.allSettled(handles.map(h => withTimeout(h.stop(), RECORDER_TIMEOUTS.ndiStopTimeoutMs, 'ndi-stop-timeout')))
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number, tag: string): Promise<T> {

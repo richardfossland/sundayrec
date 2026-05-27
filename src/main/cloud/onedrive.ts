@@ -31,7 +31,14 @@ export async function listFolders(token: string, parentId?: string): Promise<{ i
  */
 const ONEDRIVE_CHUNK = 24 * 320 * 1024  // 7.5 MB, multiple of 320 KiB
 
-export async function uploadFile(token: string, filePath: string, folderId?: string): Promise<string> {
+export type ProgressFn = (uploaded: number, total: number) => void
+
+export async function uploadFile(
+  token: string,
+  filePath: string,
+  folderId?: string,
+  onProgress?: ProgressFn,
+): Promise<string> {
   const filename = path.basename(filePath)
   const encoded  = encodeURIComponent(filename)
   const stat     = await fs.promises.stat(filePath)
@@ -136,6 +143,7 @@ export async function uploadFile(token: string, filePath: string, folderId?: str
     }
 
     offset += attemptChunkSize
+    onProgress?.(offset, size)
   }
 
   if (!fileId) throw new Error('OneDrive upload completed without file id')

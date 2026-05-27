@@ -18,8 +18,8 @@
  * explicitly-allowed test users.
  */
 
-import { openGoogleAuthWithScope, exchangeCode } from './oauth'
-import { CLOUD_CONFIG, isServiceConfigured } from './config'
+import { openGoogleAuthWithScope, exchangeCode, refreshAccessToken } from './oauth'
+import { isServiceConfigured } from './config'
 import { getToken, setToken } from './token-store'
 
 const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.send'
@@ -101,7 +101,10 @@ export async function getFreshGmailAccessToken(): Promise<string | null> {
   }
   if (!t.refreshToken) return null
   try {
-    const refreshed = await refreshGmailToken(t.refreshToken)
+    // `'google-drive'` is the service-id under which Google OAuth credentials
+    // live in CLOUD_CONFIG — Gmail reuses the same client_id/secret pair
+    // (one Google OAuth app covers all of Drive + Gmail + YouTube scopes).
+    const refreshed = await refreshAccessToken('google-drive', t.refreshToken)
     setToken('gmail', {
       ...t,
       accessToken: refreshed.accessToken,
@@ -114,44 +117,23 @@ export async function getFreshGmailAccessToken(): Promise<string | null> {
     return refreshed.accessToken
   } catch (e) {
     // invalid_grant from Google = user revoked access or refresh-token
-    // was wiped from server side. Surface that to the UI via needsReauth
-    // so the next render can show the "log in again"-banner.
-    if (e instanceof Error && /invalid_grant/i.test(e.message)) {
+    // was wiped from server side. oauth.refreshAccessToken sets .code on
+    // the error for us — fall back to message-string match for older
+    // call sites that might not have the code field.
+    const err = e as Error & { code?: string }
+    if (err.code === 'invalid_grant' || /invalid_grant/i.test(err.message)) {
       setToken('gmail', { ...t, needsReauth: true })
     }
     return null
   }
 }
 
-interface RefreshedToken {
-  accessToken:  string
-  refreshToken?: string
-  expiresAt:    number
-}
-
-async function refreshGmailToken(refreshToken: string): Promise<RefreshedToken> {
-  const body = new URLSearchParams({
-    client_id:     CLOUD_CONFIG.googleDrive.clientId,
-    client_secret: CLOUD_CONFIG.googleDrive.clientSecret,
-    refresh_token: refreshToken,
-    grant_type:    'refresh_token',
-  })
-  const r = await fetch(CLOUD_CONFIG.googleDrive.tokenUrl, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  })
-  if (!r.ok) {
-    const text = await r.text().catch(() => '')
-    throw new Error(`Gmail token refresh failed: ${r.status} ${text.slice(0, 200)}`)
-  }
-  const j = await r.json() as { access_token: string; expires_in: number; refresh_token?: string }
-  return {
-    accessToken:  j.access_token,
-    refreshToken: j.refresh_token,
-    expiresAt:    Date.now() + (j.expires_in * 1000),
-  }
-}
+// Token refresh is delegated to cloud/oauth.ts. Gmail uses the same Google
+// OAuth endpoint + client credentials as Drive, so reusing the shared
+// helper means invalid_grant detection, timeout handling and (eventually)
+// the refresh-mutex all stay in one place. Earlier we had a parallel
+// implementation here that drifted from the canonical one — same risk
+// YouTube's local helper had until v4.53.
 
 async function fetchGmailAccountEmail(accessToken: string): Promise<string | undefined> {
   // userinfo endpoint returns { email, name, picture, ... } — we only

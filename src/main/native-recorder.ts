@@ -18,6 +18,7 @@ import fs from 'fs'
 import { app } from 'electron'
 import ffmpegStatic from 'ffmpeg-static'
 import type { RecordingOpts } from '../types'
+import { classifyRecordingError, RECORDER_TIMEOUTS } from './recorder-utils'
 
 // ── Binary resolution ───────────────────────────────────────────────────────
 
@@ -584,56 +585,18 @@ export interface NativeHandle {
 
 // ── Start / stop ────────────────────────────────────────────────────────────
 
-// Classify ffmpeg stderr into a user-facing error code. Exported for testing.
+// Classify ffmpeg stderr into a user-facing error code.
+//
+// Delegates to `classifyRecordingError` in recorder-utils.ts — the single
+// source of truth shared with video-recorder.ts and unified-recorder.ts.
+// Earlier each recorder had its own (slightly different) classifier; the
+// audit caught audio-only patterns being missed by the video-classifier
+// in the unified path, which made the watchdog burn through 20 reconnect
+// attempts on what should have been a fail-stop disconnection.
+//
+// Exported for test compatibility (tests still import the old name).
 export function classifyFfmpegError(stderr: string): string {
-  const s = stderr.toLowerCase()
-  if (
-    s.includes('device not found') ||
-    s.includes('no such audio device') || s.includes('no such audio input') ||
-    s.includes('no devices found') ||
-    s.includes('no audio endpoint') ||
-    s.includes('could not find audio') || s.includes('cannot find audio') ||
-    s.includes('failed to find audio') ||
-    s.includes('the handle is invalid') ||
-    s.includes('no audio device') || s.includes('audio device not found') ||
-    s.includes('avfoundation: device') || s.includes('no such file or directory') ||
-    s.includes('audclnt_e_device_not_active') ||
-    s.includes('no audio endpoint device') ||
-    s.includes('mmdevapi') ||
-    s.includes('failed to create audio client') ||
-    s.includes('the system cannot find the file specified')
-  ) {
-    return 'device_not_found'
-  }
-  if (
-    s.includes('access is denied') || s.includes('permission') ||
-    s.includes('not permitted') || s.includes('avfoundation: video not enabled') ||
-    s.includes('authorization') || s.includes('microphone access') ||
-    s.includes('privacy') || s.includes('tcm_access') ||
-    s.includes('e_accessdenied')
-  ) {
-    return 'device_permission_denied'
-  }
-  if (
-    s.includes('already in use') || s.includes('device busy') ||
-    s.includes('being used by another') || s.includes('resource busy') ||
-    s.includes('device or resource busy') || s.includes('audclnt_e_device_in_use') ||
-    s.includes('audclnt_e_exclusive_mode_not_allowed') ||
-    s.includes('audclnt_e_already_initialized') ||
-    s.includes('audclnt_e_wrong_endpoint_type')
-  ) {
-    return 'device_busy'
-  }
-  if (s.includes('no space left') || s.includes('disk full') || s.includes('enospc')) {
-    return 'disk_full'
-  }
-  if (
-    s.includes('broken pipe') || s.includes('i/o error') || s.includes('input/output') ||
-    s.includes('unplugged') || s.includes('audclnt_e_device_invalidated')
-  ) {
-    return 'device_disconnected'
-  }
-  return 'device_error'
+  return classifyRecordingError(stderr)
 }
 
 // 'startup_timeout' is a synthetic error code (not from ffmpeg stderr) used when
@@ -692,9 +655,10 @@ async function startCaptureWithInput(
   /** Throttle onProgress IPC — ffmpeg emits size= every second; over a 2 h
    *  recording that's 7200 IPC roundtrips. Renderer just shows MB-level
    *  bytes so 5 s resolution is plenty. The first size= still resolves
-   *  startup (separate path below). */
+   *  startup (separate path below). Constant lives in recorder-utils so
+   *  all three recorders use the same fidelity. */
   let lastProgressEmit = 0
-  const PROGRESS_THROTTLE_MS = 5000
+  const PROGRESS_THROTTLE_MS = RECORDER_TIMEOUTS.progressThrottleMs
 
   const handle: NativeHandle = {
     proc, outputPath,
@@ -780,7 +744,7 @@ async function startCaptureWithInput(
   //   - Slow USB audio interfaces on Windows can take 6–7 s to initialize
   //   - We now resolve *early* on first size= line, so the timeout is only a
   //     safety net — typical fast devices still start in <2 s
-  const startupMs = process.platform === 'win32' ? 10000 : 5000
+  const startupMs = RECORDER_TIMEOUTS.startupMs
 
   const startupError = await new Promise<string | null>(resolve => {
     resolveStartup = resolve

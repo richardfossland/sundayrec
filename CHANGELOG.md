@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.53.0] — 2026-05-27
+
+### Refactored — konsolidert gjeld fra audit-runden
+
+Trygge konsolideringer av kode som tidligere hadde drifted i ulike
+retninger. Ingen funksjonelle endringer for brukeren — alt skal
+oppføre seg identisk, men koden er nå mer vedlikeholdbar.
+
+#### 1. Én konsolidert error-klassifiserer
+- `recorder-utils.ts` har nå `classifyRecordingError()` som single
+  source of truth med alle audio + video patterns.
+- `native-recorder.classifyFfmpegError` og `video-recorder.classifyVideoError`
+  delegerer nå hit (eksisterende exports beholdt for test-kompatibilitet).
+- `unified-recorder` bruker den direkte i stedet for å kombinere to
+  klassifiserere selv.
+- Fjernet ~80 linjer duplikat-kode på tvers av 3 filer.
+
+#### 2. Sentraliserte timeouts
+- `RECORDER_TIMEOUTS` i `recorder-utils.ts` samler:
+  `startupMs`, `stuckProgressMs`, `stuckPollMs`,
+  `reconnectMaxDelayMs`, `progressThrottleMs`, `ndiStopTimeoutMs`.
+- native-recorder, unified-recorder og streamer bruker dem nå —
+  tidligere var disse spredt som magic numbers i 5+ filer.
+
+#### 3. Token-refresh konsolidert
+- `gmail-auth.refreshGmailToken` slettet — bruker nå den delte
+  `refreshAccessToken('google-drive', ...)` fra `cloud/oauth.ts`.
+  Samme Google OAuth-endepunkt og samme client_id/secret-par dekker
+  Drive + Gmail + YouTube. invalid_grant-detection nå konsekvent
+  på tvers av alle tre.
+- YouTube brukte allerede den delte (siden v4.50). Gmail var siste
+  duplikatet — nå borte.
+
+#### 4. Progress-callback i alle cloud-services
+- `uploadFile()` i Google Drive, Dropbox og OneDrive aksepterer nå
+  en valgfri `onProgress(uploaded, total)`-callback per chunk.
+- YouTube hadde den allerede — nå er API'et konsistent på tvers av
+  alle fire cloud-targets.
+- UI-kobling (status-bar med faktisk progress per fil) kan kobles inn
+  i en oppfølger — infrastrukturen er klar.
+
+### Internt
+- 1080 tester fortsatt grønne (ingen behavior-change)
+- Recorder/streamer-modulene har nå konsistent import-tilstand fra
+  `recorder-utils.ts` (single source of truth)
+
+### Roadmap (fortsatt utsatt)
+- IPC-handler-splitting (~95 handlers i index.ts → ipc/<domain>.ts) —
+  stort mekanisk arbeid, egen sesjon med fokus
+- HTML-modulering (2200 linjer monolitt)
+- CSS-modulering (4100 linjer flat fil)
+- editor-page.ts state-konsolidering (50+ module-level let)
+
+---
+
 ## [4.52.0] — 2026-05-27
 
 ### Fixed — Konsoliderte audit-funn (5 parallelle Explore-agenter)

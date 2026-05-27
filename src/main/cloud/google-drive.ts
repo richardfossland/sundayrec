@@ -30,7 +30,15 @@ export async function listFolders(token: string, parentId = 'root'): Promise<{ i
  * resuming via the Upload-Status query. Integrity-checked via MD5 sum returned
  * by Drive against md5 calculated locally.
  */
-export async function uploadFile(token: string, filePath: string, folderId?: string, metadata?: RecordingMetadata): Promise<string> {
+export type ProgressFn = (uploaded: number, total: number) => void
+
+export async function uploadFile(
+  token: string,
+  filePath: string,
+  folderId?: string,
+  metadata?: RecordingMetadata,
+  onProgress?: ProgressFn,
+): Promise<string> {
   const filename = path.basename(filePath)
   const mimeType = audioMime(filename)
   const stat     = await fs.promises.stat(filePath)
@@ -182,6 +190,7 @@ export async function uploadFile(token: string, filePath: string, folderId?: str
     }
 
     offset += attemptChunkSize
+    onProgress?.(offset, size)
   }
 
   // If the final 200 was never observed via a chunk PUT but the probe found

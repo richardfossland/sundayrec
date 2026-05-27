@@ -33,7 +33,14 @@ export async function listFolders(token: string, folderPath = ''): Promise<{ id:
  * one code path is easier to maintain. 8 MB chunks (Dropbox accepts up to 150 MB
  * per append).
  */
-export async function uploadFile(token: string, filePath: string, destFolder?: string): Promise<string> {
+export type ProgressFn = (uploaded: number, total: number) => void
+
+export async function uploadFile(
+  token: string,
+  filePath: string,
+  destFolder?: string,
+  onProgress?: ProgressFn,
+): Promise<string> {
   const filename = path.basename(filePath)
   const destPath = destFolder ? `${destFolder.replace(/\/$/, '')}/${filename}` : `/${filename}`
   const stat     = await fs.promises.stat(filePath)
@@ -95,6 +102,7 @@ export async function uploadFile(token: string, filePath: string, destFolder?: s
     })
 
     offset += chunkSize
+    onProgress?.(offset, size)
   }
 
   // Step 3 — finish, commit to path
