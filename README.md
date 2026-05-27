@@ -7,7 +7,7 @@
   Records, prepares, and publishes Sunday services as podcasts — set it once, forget it.
 
   [![Latest release](https://img.shields.io/github/v/release/richardfossland/sundayrec)](https://github.com/richardfossland/sundayrec/releases/latest)
-  [![Tests](https://img.shields.io/badge/tests-1044%20passing-brightgreen)](#tests)
+  [![Tests](https://img.shields.io/badge/tests-1080%20passing-brightgreen)](#tests)
   [![License](https://img.shields.io/badge/license-source--available-blue)](LICENSE)
   [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows-lightgrey)](#system-requirements)
 
@@ -31,7 +31,9 @@ There is no cloud service. SundayRec runs entirely on your own computer; recordi
 ## Key features
 
 - **Automatic scheduled recording** — weekly slots plus one-off specials (e.g. Christmas Eve)
-- **Live RTMP streaming** *(new in v4.38)* — stream services live to YouTube, Facebook, or your own RTMP server, multi-destination from one ffmpeg process. No subscription, no cloud middleman, no scenes to learn.
+- **Live RTMP streaming + simultaneous recording** *(stream+record in v4.46, RTMP in v4.38)* — stream services live to YouTube, Facebook, or your own RTMP server, multi-destination from one ffmpeg process. Same pipeline writes a higher-bitrate local master file to disk for editing/podcast. No subscription, no cloud middleman, no scenes to learn.
+- **Native NDI receiver** *(new in v4.44)* — accept video from EasyWorship, ProPresenter (incl. Alpha Key), OBS, Keynote and PowerPoint over the network as a livestream overlay. Same architecture as OBS — libndi linked natively, no proxy.
+- **Live overlays** *(new in v4.43)* — composite the church logo, lyrics from EasyWorship (via screen capture on the same machine), lower-thirds or PIP windows on top of the camera while streaming. Chroma key for green-screen sources; per-overlay enable/disable. Recordings stay clean.
 - **Local AI transcription** *(new in v4.37)* — transcribe sermons to searchable text on-device with `whisper.cpp`. Four model tiers from Base to Large Turbo Q5. Click any segment in the transcript to jump the playhead. SRT export for YouTube subtitles.
 - **YouTube upload** *(new in v4.34)* — publish video recordings directly to YouTube from the editor. Resumable upload protocol with live progress; defaults to private so you can review before going public.
 - **Automatic sermon detection** *(new in v4.33)* — analyses the recording on file load, finds the sermon block, and suggests one-click trim of the surrounding music and announcements. Sermon-only recordings (no full service) are detected and kept intact.
@@ -126,7 +128,7 @@ npm install
 npm test
 ```
 
-The current suite is 1044 tests across 32 suites, pinned to the `Europe/Oslo` timezone so DST handling is deterministic. CI runs the suite on every push.
+The current suite is 1080 tests across 34 suites, pinned to the `Europe/Oslo` timezone so DST handling is deterministic. CI runs the suite on every push.
 
 ## License
 
