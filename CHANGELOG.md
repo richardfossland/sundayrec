@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.44.0] — 2026-05-27
+
+### Added
+- **Native NDI-mottaker — fungerer som i OBS.** Du kan nå velge NDI som
+  overlay-kilde og motta video direkte fra EasyWorship 7.3+, ProPresenter
+  7 (inkludert Alpha Key for ekte gjennomsiktige overlays!), OBS NDI
+  Output, eller Keynote/PowerPoint via NDI Screen Capture HX. Discovery
+  oppdager kilder automatisk på det lokale nettverket (~2 sekunder),
+  uten ekstra programvare som måtte installeres.
+- **Vendoret grandiose** (Node-bindinger til libndi) ligger nå i
+  `vendor/grandiose/` med custom build-script som håndterer path-med-
+  mellomrom-feilen i grandiose sin binding.gyp. libndi-runtime (~28 MB
+  Mac dylib, tilsvarende Windows DLL) følger med installeren.
+
+### Setup-guide (per program)
+- **EasyWorship 7.3+:** Edit → Options → Live → Alternate Output →
+  «NDI Stream». Krever Private network på Windows.
+- **ProPresenter 7:** Screens → Ny NDI-skjerm. For lower-thirds:
+  åpne Alpha Key-fanen og enable. SundayRec mottar gjennomsiktig
+  output direkte.
+- **OBS Studio:** Installér NDI Output-pluginen. Tools → NDI Output
+  Settings → Enable Main Output. Resten er automatisk.
+- **Keynote/PowerPoint:** Last ned gratis NDI Tools fra ndi.video.
+  Kjør «NDI Screen Capture HX» og pek mot Keynote/PowerPoint-vinduet.
+- **Chroma key:** Aktiver per-overlay for å bli kvitt grønn/sort
+  bakgrunn (tradisjonell green screen) — ProPresenter Alpha Key
+  trenger IKKE chroma key fordi den allerede sender ekte transparens.
+
+### Architecture
+- NDI-frames piped til ffmpeg via loopback TCP (`tcp://127.0.0.1:<port>`)
+  med `-f rawvideo` input. Pixel-format auto-detekteres til UYVY (uten
+  alpha) eller BGRA (med alpha). Én receiver per overlay, ryddes opp
+  automatisk ved stopp av direktesending.
+
+### Testing
+- 1 ny test for NDI input-args bygging (1079 totalt). Smoke-test for
+  source discovery i `scripts/test-ndi.js`.
+
+---
+
 ## [4.43.1] — 2026-05-27
 
 ### Fixed

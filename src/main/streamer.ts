@@ -23,6 +23,8 @@ import path from 'path'
 import fs from 'fs'
 import { ffmpegBin, resolveVideoInput, listFfmpegDevices, findBestDeviceMatch } from './native-recorder'
 import { buildOverlayPipeline } from './overlay'
+import type { NdiOverlayRuntime } from './overlay'
+import type { ReceiverHandle, StartReceiverOpts } from './ndi-receiver'
 import type { OverlayConfig } from '../types'
 
 /** Find AVFoundation audio device index by name. Returns null when no
@@ -181,6 +183,69 @@ function buildAudioOnlyInputArgs(opts: StreamOptions): string[] {
 
 function stripQuotes(s: string): string { return s.replace(/^"|"$/g, '') }
 
+// ─── NDI receiver lifecycle ──────────────────────────────────────────────────
+//
+// Each NDI overlay needs an out-of-band receiver running while the stream is
+// alive — the receiver reads frames from libndi and serves them on a
+// loopback TCP socket that ffmpeg connects to. We track active receivers
+// here so stopStream() can tear them all down, even when the user disables
+// an NDI overlay mid-stream.
+
+let activeNdiReceivers: ReceiverHandle[] = []
+
+/**
+ * For every enabled NDI overlay, spin up a receiver and return a map from
+ * overlay.id → runtime metadata (port, pixFmt, width, height). Caller
+ * threads the map into buildOverlayPipeline via opts.ndiRuntime.
+ *
+ * If any receiver fails to start we tear down ALL of them and propagate the
+ * error so the streamer can surface a single friendly message.
+ */
+async function startNdiReceiversForOverlays(
+  overlays: OverlayConfig[],
+): Promise<Record<string, NdiOverlayRuntime>> {
+  const enabled = overlays.filter(o => o.enabled && o.type === 'ndi')
+  if (enabled.length === 0) return {}
+
+  const { startNdiReceiver, isNdiAvailable, getNdiLoadError } = await import('./ndi-receiver')
+  if (!isNdiAvailable()) {
+    throw new Error(`NDI er ikke tilgjengelig: ${getNdiLoadError() ?? 'ukjent feil'}`)
+  }
+
+  const runtime: Record<string, NdiOverlayRuntime> = {}
+  for (const ov of enabled) {
+    if (!ov.source) throw new Error(`NDI-overlay «${ov.name}» mangler kilde`)
+    // Alpha is requested when the user has set up chroma key — ProPresenter's
+    // alpha-key NDI output ships true transparency we can composite directly.
+    const wantAlpha = !!ov.chromaKey
+    const opts: StartReceiverOpts = { sourceName: ov.source, wantAlpha }
+    const handle = await startNdiReceiver(opts)
+    activeNdiReceivers.push(handle)
+    runtime[ov.id] = {
+      port:      handle.port,
+      pixFmt:    handle.pixFmt,
+      width:     handle.width,
+      height:    handle.height,
+      framerate: handle.framerate,
+    }
+    // Forward fatal errors to the streamer's logger — the receiver will
+    // already have closed the socket; ffmpeg will detect EOF and exit,
+    // triggering our standard restart logic.
+    handle.events.on('error', err => {
+      console.warn('[streamer] NDI receiver error for', ov.name, '—', err)
+    })
+  }
+  return runtime
+}
+
+/** Tear down every NDI receiver started for the current stream. Safe to
+ *  call from error paths even if startNdiReceivers... never ran. */
+async function stopActiveNdiReceivers(): Promise<void> {
+  const handles = activeNdiReceivers
+  activeNdiReceivers = []
+  await Promise.allSettled(handles.map(h => h.stop()))
+}
+
 /**
  * Compose the full filter_complex string. When overlays are active, the
  * camera's video stream first runs through the overlay pipeline producing a
@@ -303,6 +368,21 @@ async function launchFfmpeg(opts: StreamOptions): Promise<{ ok: boolean; error?:
   // threaded through to buildOutputArgs so it doesn't rebuild and risk a
   // second, uncaught throw.
   const res = RES_MAP[opts.resolution]
+
+  // Start any NDI receivers BEFORE building the ffmpeg pipeline — we need
+  // each receiver's TCP port and resolved frame dimensions to wire the
+  // input args correctly. Any failure here is surfaced as a friendly
+  // error and any receivers that DID start are torn down so we don't
+  // leak grandiose handles.
+  let ndiRuntime: Record<string, NdiOverlayRuntime> = {}
+  try {
+    ndiRuntime = await startNdiReceiversForOverlays(opts.overlays ?? [])
+  } catch (e: unknown) {
+    await stopActiveNdiReceivers()
+    const msg = e instanceof Error ? e.message : String(e)
+    return { ok: false, error: `NDI-feil: ${msg}` }
+  }
+
   let overlay: ReturnType<typeof buildOverlayPipeline>
   try {
     overlay = buildOverlayPipeline(opts.overlays ?? [], {
@@ -310,8 +390,10 @@ async function launchFfmpeg(opts: StreamOptions): Promise<{ ok: boolean; error?:
       outputH:   res.h,
       baseLabel: '0:v',
       framerate: opts.framerate,
+      ndiRuntime,
     })
   } catch (e: unknown) {
+    await stopActiveNdiReceivers()
     const msg = e instanceof Error ? e.message : String(e)
     return { ok: false, error: `Overlay-feil: ${msg}` }
   }
@@ -440,6 +522,10 @@ export function stopStream(): boolean {
   // Mark user-initiated stop FIRST so the close-handler doesn't auto-restart.
   userInitiatedStop = true
   activeOpts = null
+  // Tear down any NDI receivers — fire-and-forget so the IPC handler can
+  // return synchronously; ffmpeg shutdown drives the perceived latency
+  // anyway, the libndi handles can close in the background.
+  void stopActiveNdiReceivers()
   if (!streamProc) return false
   try { streamProc.kill('SIGTERM') } catch {}
   // Force-kill after 5s if it doesn't honour SIGTERM (some ffmpeg builds

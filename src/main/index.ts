@@ -1430,14 +1430,34 @@ function setupIPC(): void {
     }
   })
 
-  // Native NDI receiver is on the roadmap for v4.44 (vendored grandiose +
-  // libndi bundling + electron-rebuild in CI). Until that ships, we surface
-  // a clear notice so the UI doesn't pretend NDI is available.
+  // Native NDI source discovery via vendored grandiose. Returns the same
+  // shape regardless of whether NDI is currently available — the renderer
+  // shows different UI based on the `available` flag.
   ipcMain.handle('overlay-list-ndi-sources', async () => {
-    return {
-      available: false,
-      reason:    'Native NDI-mottaker kommer i v4.44 (skal fungere som i OBS). Bruk skjerm-capture med EasyWorship på samme maskin inntil videre.',
-      sources:   [] as Array<{ name: string; url: string }>,
+    const { isNdiAvailable, getNdiLoadError, listNdiSources } = await import('./ndi-receiver')
+    if (!isNdiAvailable()) {
+      return {
+        available: false,
+        reason:    `Native NDI er ikke tilgjengelig (${getNdiLoadError() ?? 'ukjent feil'}). Sjekk at appen ble installert riktig — libndi følger med i .dmg/.exe.`,
+        sources:   [] as Array<{ name: string; url: string }>,
+      }
+    }
+    try {
+      const sources = await listNdiSources(2000)
+      return {
+        available: true,
+        reason:    sources.length > 0
+          ? `Fant ${sources.length} NDI-kilde${sources.length === 1 ? '' : 'r'} på nettverket.`
+          : 'Ingen NDI-kilder oppdaget. Sjekk at EasyWorship/ProPresenter/OBS sender NDI og at maskinene er på samme nettverk.',
+        sources:   sources.map(s => ({ name: s.name, url: s.address })),
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      return {
+        available: true,
+        reason:    `Kunne ikke skanne for NDI-kilder: ${msg}`,
+        sources:   [] as Array<{ name: string; url: string }>,
+      }
     }
   })
 

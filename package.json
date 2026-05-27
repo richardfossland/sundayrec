@@ -1,6 +1,6 @@
 {
   "name": "sundayrec",
-  "version": "4.43.1",
+  "version": "4.44.0",
   "author": "Richard Fossland",
   "description": "Automatic church service recorder for Windows and Mac",
   "repository": {
@@ -20,6 +20,7 @@
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
+    "bindings": "^1.5.0",
     "electron-store": "^11.0.2",
     "electron-updater": "^6.3.0",
     "ffmpeg-static": "^5.3.0",
@@ -45,14 +46,21 @@
     "productName": "SundayRec",
     "copyright": "Copyright © 2025",
     "asarUnpack": [
-      "node_modules/ffmpeg-static/**"
+      "node_modules/ffmpeg-static/**",
+      "vendor/grandiose/**"
     ],
     "files": [
       "dist/main/**/*",
       "dist/preload/**/*",
       "dist/renderer/**/*",
       "src/locales/**/*",
-      "assets/**/*"
+      "assets/**/*",
+      "vendor/grandiose/index.js",
+      "vendor/grandiose/index.d.ts",
+      "vendor/grandiose/package.json",
+      "vendor/grandiose/build/Release/grandiose.node",
+      "vendor/grandiose/build/Release/libndi.dylib",
+      "vendor/grandiose/build/Release/Processing.NDI.Lib.x64.dll"
     ],
     "extraResources": [
       {

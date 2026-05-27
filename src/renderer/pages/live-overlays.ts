@@ -31,7 +31,7 @@ const TYPE_LABELS: Record<OverlaySourceType, string> = {
   image:  'Bilde (PNG/JPG)',
   screen: 'Skjerm',
   window: 'Vindu / regionsutsnitt',
-  ndi:    'NDI (kommer i v4.44)',
+  ndi:    'NDI (EasyWorship · ProPresenter · OBS · Keynote/PowerPoint)',
 }
 
 // ─── Setup ───────────────────────────────────────────────────────────────
@@ -62,8 +62,10 @@ function renderOverlayList(): void {
 }
 
 function renderOverlayRow(ov: OverlayConfig): string {
+  // Show a small hint for NDI overlays — most users come from OBS where NDI
+  // discovery is one click; we want the same low-friction flow here.
   const ndiNotice = ov.type === 'ndi'
-    ? `<div class="overlay-row-warn">⚠ NDI er under utvikling. Bruk skjerm-capture inntil videre.</div>`
+    ? `<div class="overlay-row-hint">💡 NDI: aktiver chroma key for ProPresenter Alpha Key (gjennomsiktig output).</div>`
     : ''
 
   const sourceLabel = ov.type === 'image'
@@ -238,10 +240,47 @@ async function onPickSource(id: string): Promise<void> {
   }
 
   if (ov.type === 'ndi') {
-    const r = await window.api.overlayListNdiSources() as { available: boolean; reason?: string }
-    alert(r.reason ?? 'NDI er under utvikling.')
+    await pickNdiSource(id)
     return
   }
+}
+
+/**
+ * Modal-style NDI picker. We use prompt() while the implementation is fresh
+ * — it's a single dialog, no fancy markup needed, and the source list is
+ * short enough that numeric selection is faster than scrolling. A proper
+ * inline picker on the overlay row can land in v4.45 once we have user
+ * feedback on what's missing.
+ */
+async function pickNdiSource(id: string): Promise<void> {
+  const r = await window.api.overlayListNdiSources()
+  if (!r.available) {
+    alert(r.reason ?? 'NDI er ikke tilgjengelig.')
+    return
+  }
+  if (r.sources.length === 0) {
+    alert(
+      (r.reason ?? 'Ingen NDI-kilder.') +
+      '\n\nSjekk:\n' +
+      '  • EasyWorship 7.3+: Edit → Options → Live → Alternate Output → NDI Stream\n' +
+      '  • ProPresenter 7: Screens → Ny NDI-skjerm → Alpha Key (valgfritt)\n' +
+      '  • OBS: NDI Output plugin → Source → Enable\n' +
+      '  • Keynote/PowerPoint: kjør NDI Screen Capture HX og pek mot vinduet\n' +
+      '  • Begge maskiner må være på samme private nettverk',
+    )
+    return
+  }
+  const choices = r.sources.map((s, i) => `${i + 1}. ${s.name}`).join('\n')
+  const answer = prompt(`Velg NDI-kilde:\n${choices}\n\nSkriv tallet:`, '1')
+  const idx = parseInt(answer ?? '', 10) - 1
+  if (Number.isNaN(idx) || idx < 0 || idx >= r.sources.length) return
+  const picked = r.sources[idx]
+  const overlay = getOverlay(id)
+  updateOverlay(id, {
+    source: picked.name,
+    name: overlay?.name === 'Overlay' ? picked.name.split(' (')[0] : (overlay?.name ?? 'NDI'),
+  })
+  renderOverlayList()
 }
 
 // ─── Mutations ───────────────────────────────────────────────────────────

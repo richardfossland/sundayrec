@@ -61,13 +61,37 @@ describe('buildOverlayPipeline — no overlays', () => {
     expect(r.outputLabel).toBe('0:v')
   })
 
-  it('skips NDI overlays (not implemented in v1)', () => {
+  it('NDI overlay throws when runtime info is missing', () => {
+    // NDI inputs require a running receiver — the streamer threads that
+    // through via opts.ndiRuntime. Without it the builder fails loudly so
+    // we don't spawn ffmpeg with a half-built filter graph.
+    expect(() =>
+      buildOverlayPipeline(
+        [makeOverlay({ id: 'ov-1', source: 'CAMERA-1', type: 'ndi', enabled: true })],
+        BASE_OPTS,
+      ),
+    ).toThrow(/overlay-ndi-no-runtime/)
+  })
+
+  it('NDI overlay builds tcp://… input when runtime is provided', () => {
     const r = buildOverlayPipeline(
-      [makeOverlay({ source: 'CAMERA-1', type: 'ndi', enabled: true })],
-      BASE_OPTS,
+      [makeOverlay({ id: 'cam', source: 'STUDIO (Cam 1)', type: 'ndi', enabled: true })],
+      {
+        ...BASE_OPTS,
+        ndiRuntime: {
+          cam: { port: 51234, pixFmt: 'uyvy422', width: 1920, height: 1080, framerate: 30 },
+        },
+      },
     )
-    expect(r.extraInputCount).toBe(0)
-    expect(r.outputLabel).toBe('0:v')
+    expect(r.inputArgs).toEqual([
+      '-f',         'rawvideo',
+      '-pix_fmt',   'uyvy422',
+      '-s',         '1920x1080',
+      '-framerate', '30',
+      '-i',         'tcp://127.0.0.1:51234',
+    ])
+    expect(r.extraInputCount).toBe(1)
+    expect(r.outputLabel).toBe('vov0')
   })
 })
 

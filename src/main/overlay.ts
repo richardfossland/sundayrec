@@ -63,6 +63,24 @@ export interface BuildOverlayOpts {
   framerate: number
   /** Platform — affects screen capture input args. Defaults to process.platform. */
   platform?: NodeJS.Platform
+  /** Per-overlay runtime info for sources that can't be expressed as a
+   *  static file or device — most notably NDI, whose receiver is started
+   *  out-of-band by the streamer and exposed as a loopback TCP server. The
+   *  map is keyed by overlay.id. Image/screen/window overlays don't need
+   *  an entry here. */
+  ndiRuntime?: Record<string, NdiOverlayRuntime>
+}
+
+export interface NdiOverlayRuntime {
+  /** Loopback TCP port the receiver is listening on. */
+  port:      number
+  /** ffmpeg raw-video pixel format: 'uyvy422' or 'bgra'. */
+  pixFmt:    string
+  /** Frame dimensions resolved from the first NDI frame. */
+  width:     number
+  height:    number
+  /** NDI source's reported framerate (or 30 fallback). */
+  framerate: number
 }
 
 // ─── Build pipeline ──────────────────────────────────────────────────────────
@@ -241,11 +259,28 @@ function buildInputArgs(
     case 'window':
       return buildScreenInputArgs(ov, opts, platform)
     case 'ndi':
-      // NDI receiver is not in v1. The caller filters out 'ndi' overlays
-      // before reaching here via isSupportedType(). Defensive throw so a
-      // misuse is loud rather than silent.
-      throw new Error(`overlay-ndi-not-implemented: ${ov.name}`)
+      return buildNdiInputArgs(ov, opts)
   }
+}
+
+/**
+ * NDI overlay input. The streamer starts the NDI receiver out-of-band; we
+ * just need ffmpeg to connect to the loopback TCP server it exposes. The
+ * receiver pushes raw video bytes in the agreed pixel format, so ffmpeg
+ * reads with `-f rawvideo` + `-pix_fmt` + `-s WxH`.
+ */
+function buildNdiInputArgs(ov: OverlayConfig, opts: BuildOverlayOpts): string[] {
+  const rt = opts.ndiRuntime?.[ov.id]
+  if (!rt) throw new Error(`overlay-ndi-no-runtime: ${ov.id}`)
+  // -re paces input at native rate so ffmpeg doesn't burn cycles draining
+  // the TCP buffer faster than the source produces frames.
+  return [
+    '-f',         'rawvideo',
+    '-pix_fmt',   rt.pixFmt,
+    '-s',         `${rt.width}x${rt.height}`,
+    '-framerate', String(rt.framerate || opts.framerate),
+    '-i',         `tcp://127.0.0.1:${rt.port}`,
+  ]
 }
 
 function buildImageInputArgs(ov: OverlayConfig, framerate: number): string[] {
@@ -304,8 +339,9 @@ function buildScreenInputArgs(
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function isSupportedType(t: OverlayConfig['type']): boolean {
-  // NDI lands in a follow-up release; image/screen/window ship in v1.
-  return t === 'image' || t === 'screen' || t === 'window'
+  // All four overlay source types ship as of v4.44 — NDI joined the set
+  // once native libndi bindings were vendored.
+  return t === 'image' || t === 'screen' || t === 'window' || t === 'ndi'
 }
 
 function resolvePosition(ov: OverlayConfig, outputH: number): { xExpr: string; yExpr: string } {
@@ -365,7 +401,7 @@ function validCrop(c: { x: number; y: number; w: number; h: number }): boolean {
 // Re-export the source-resolution helper for index.ts (used by the IPC handler
 // that lists available screens / windows for the overlay UI).
 export function isOverlayTypeImplemented(t: string): boolean {
-  return t === 'image' || t === 'screen' || t === 'window'
+  return t === 'image' || t === 'screen' || t === 'window' || t === 'ndi'
 }
 
 // ─── Source discovery helpers (used by the IPC layer) ────────────────────────
