@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.53.8] — 2026-05-27
+
+### Refactored — IPC-splitting fase 8 (siste handlers, index.ts handler-fri!)
+
+Flyttet de siste 8 handlerne ut av `src/main/index.ts`. **Alle 127
+IPC-handlers** bor nå i 23 isolerte domenefiler i `src/main/ipc/`.
+
+**Nye filer:**
+- `ipc/lifecycle.ts` (1): install-update — eksponerer setForceQuit /
+  setQuitting via context for `before-quit`-koordinering.
+- `ipc/settings.ts` (1): save-settings — full orkestrering: scheduler
+  reload, OS launch-at-login, wake reschedule, tray, pre-roll restart.
+  Tar `storeNextExpected` via context.
+- `ipc/profile.ts` (3): export-profile, import-profile, reset-settings
+- `ipc/cloud-extras.ts` (3): youtube-upload, podcast-regenerate
+  (med in-flight coalescing per service), cloud-is-configured
+
+### Bonus — fikset latent type-bug
+
+`ipcCtx.sendBackendWarning` ble eksponert med feil signatur (skulle vært
+3-args men pekte direkte på den 4-args modul-funksjonen). TS plukket det
+ikke opp pga strukturell typing + at ingen ipc-handler hadde brukt
+det enda. Nå wraper vi med riktig signatur:
+
+```ts
+sendBackendWarning: (msg, severity, category) =>
+  sendBackendWarning(mainWindow ?? null, msg, severity, category as ...),
+```
+
+### Resultat
+- index.ts: **996 → 922 linjer** (kumulativ fra v4.53.0:
+  2045 → 922 = **−55 %**)
+- **0 `ipcMain.handle()`-kall** igjen i index.ts
+- Alle 127 handlers fordelt på 23 domenefiler i `src/main/ipc/`
+- 1080 tester fortsatt grønne, typecheck ren
+
+### Full IPC-arkitektur
+```
+src/main/ipc/  (23 filer)
+├── types.ts              IpcContext { mainWindow getter, sendBackendWarning }
+├── gmail.ts              3 handlers
+├── youtube.ts            3 handlers
+├── stream.ts             8 handlers
+├── cloud.ts              11 handlers
+├── thumbnail.ts          6 handlers
+├── whisper.ts            6 handlers
+├── master.ts             5 handlers
+├── video-preview.ts      3 handlers
+├── review-queue.ts       7 handlers
+├── editor.ts             21 handlers
+├── wake.ts               12 handlers
+├── history.ts            5 handlers
+├── recording.ts          6 handlers
+├── audio-devices.ts      3 handlers
+├── transcript.ts         2 handlers
+├── email-webhook.ts      3 handlers
+├── app-system.ts         6 handlers
+├── files.ts              5 handlers
+├── lifecycle.ts          1 handler   ← ny i v4.53.8
+├── settings.ts           1 handler   ← ny i v4.53.8
+├── profile.ts            3 handlers  ← ny i v4.53.8
+└── cloud-extras.ts       3 handlers  ← ny i v4.53.8
+                          ──────────
+                          127 handlers (alle flyttet ✅)
+```
+
+index.ts inneholder nå BARE: livssyklus-orkestrering (createWindow,
+before-quit-vakter, powerMonitor, IPC-context-konstruksjon, og
+`registerXxxIpc(ctx)`-kall). Ingen handler-implementasjoner.
+
+---
+
 ## [4.53.7] — 2026-05-27
 
 ### Refactored — IPC-splitting fase 7 (app-system + files)

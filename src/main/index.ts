@@ -29,6 +29,10 @@ import { registerTranscriptIpc } from './ipc/transcript'
 import { registerEmailWebhookIpc } from './ipc/email-webhook'
 import { registerAppSystemIpc } from './ipc/app-system'
 import { registerFilesIpc } from './ipc/files'
+import { registerLifecycleIpc } from './ipc/lifecycle'
+import { registerSettingsIpc } from './ipc/settings'
+import { registerProfileIpc } from './ipc/profile'
+import { registerCloudExtrasIpc } from './ipc/cloud-extras'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 
@@ -620,76 +624,33 @@ function setupIPC(): void {
   // mainWindow is exposed via getter because crash-recovery reassigns it.
   const ipcCtx: import('./ipc/types').IpcContext = {
     get mainWindow() { return mainWindow ?? null },
-    sendBackendWarning,
+    // Wrap with current mainWindow lookup so crash-recovery reassignment is
+    // honoured. Note: the underlying sendBackendWarning takes win as the
+    // first arg; IpcContext exposes a 3-arg version with win curried in.
+    sendBackendWarning: (msg, severity, category) =>
+      sendBackendWarning(mainWindow ?? null, msg, severity, category as Parameters<typeof sendBackendWarning>[3]),
   }
 
-  ipcMain.handle('install-update', () => {
-    if (process.platform === 'darwin') {
-      // macOS: unsigned app — open the releases page instead of attempting in-place install
-      shell.openExternal('https://github.com/richardfossland/sundayrec/releases/latest')
-      return
-    }
-    forceQuit = true
-    quitting  = true
-    setImmediate(() => {
-      updater.doInstall()
-      // Fallback: if quitAndInstall hasn't exited in 3s, force relaunch
-      setTimeout(() => { app.relaunch(); app.exit(0) }, 3000)
-    })
+  // App lifecycle (install-update) — moved to ipc/lifecycle.ts
+  registerLifecycleIpc({
+    ...ipcCtx,
+    setForceQuit: () => { forceQuit = true },
+    setQuitting:  () => { quitting  = true },
   })
 
   // App/system info + run-diagnostics + log read — moved to ipc/app-system.ts
   registerAppSystemIpc(ipcCtx)
 
-  ipcMain.handle('save-settings', (_, settings) => {
-    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return false
-    store.setAll(settings)
-    scheduler.reschedule()
-    if (process.platform === 'win32') {
-      app.setLoginItemSettings({ openAtLogin: !!settings.launchAtLogin, path: process.execPath, args: settings.launchAtLogin ? ['--hidden'] : [] })
-    } else {
-      app.setLoginItemSettings({ openAtLogin: !!settings.launchAtLogin, openAsHidden: true })
-    }
-    const upcomingAfterSave = scheduler.getUpcomingDates()
-    storeNextExpected(upcomingAfterSave)
-    wake.reschedule(upcomingAfterSave, mainWindow).catch(err => {
-      console.error('[wake] reschedule error:', err)
-      sendBackendWarning(mainWindow, `Wake rescheduling failed after settings save: ${(err as Error).message}`, 'warn', 'wake')
-    })
-    tray.setNextRecording(upcomingAfterSave[0] ?? null)
-    // Sync pre-roll state with new settings (stop must complete before start)
-    if (!recorder.isActive()) {
-      const newPreRollSec = (settings as { preRollSeconds?: number }).preRollSeconds ?? 0
-      preroll.stop().then(() => {
-        if (newPreRollSec > 0) return preroll.start(store.getAll())
-      }).catch(err => {
-        console.error('[preroll] settings-change restart error:', err)
-        sendBackendWarning(mainWindow, `Pre-roll failed to restart after settings change: ${(err as Error).message}`, 'warn', 'preroll')
-      })
-    }
-    return true
-  })
+  // save-settings — moved to ipc/settings.ts (handles full orchestration:
+  // scheduler reload, launch-at-login, wake reschedule, tray, pre-roll)
+  registerSettingsIpc({ ...ipcCtx, storeNextExpected })
 
   // Wake/schedule IPC — moved to ipc/wake.ts (schedule-os-wakes,
   // wake-detect-capabilities, wake-test, etc.)
   registerWakeIpc(ipcCtx)
 
-  ipcMain.handle('export-profile', () => store.exportProfile())
-  ipcMain.handle('import-profile', (_, json: string) => {
-    const ok = store.importProfile(json)
-    if (ok) scheduler.reschedule()
-    return ok
-  })
-  ipcMain.handle('reset-settings', () => {
-    store.reset()
-    const musicPath = app.getPath('music')
-    const defaultFolder = fs.existsSync(musicPath)
-      ? path.join(musicPath, 'SundayRec')
-      : path.join(app.getPath('documents'), 'SundayRec')
-    store.set('saveFolder', defaultFolder)
-    scheduler.reschedule()
-    return true
-  })
+  // Profile export/import/reset — moved to ipc/profile.ts
+  registerProfileIpc(ipcCtx)
 
   // History IPC — moved to ipc/history.ts (get/delete/clear/prune + note)
   registerHistoryIpc(ipcCtx)
@@ -773,40 +734,8 @@ function setupIPC(): void {
   // Whisper transcription — moved to ipc/whisper.ts
   registerWhisperIpc({ ...ipcCtx, isAllowedMediaPath })
 
-  ipcMain.handle('youtube-upload', async (_, filePath: string, metadata: unknown) => {
-    if (typeof filePath !== 'string' || !filePath) return { ok: false, error: 'invalid_path' }
-    if (!isAllowedMediaPath(filePath))             return { ok: false, error: 'invalid_path' }
-    const yt = await import('./cloud/youtube')
-    const md = (metadata && typeof metadata === 'object' ? metadata : {}) as Record<string, unknown>
-    const safeMeta = {
-      title:         typeof md.title === 'string' ? md.title : 'SundayRec Recording',
-      description:   typeof md.description === 'string' ? md.description : '',
-      tags:          Array.isArray(md.tags) ? (md.tags as unknown[]).filter(s => typeof s === 'string') as string[] : undefined,
-      categoryId:    typeof md.categoryId === 'string' ? md.categoryId : undefined,
-      privacyStatus: md.privacyStatus === 'public' || md.privacyStatus === 'unlisted' ? md.privacyStatus : 'private' as const,
-    }
-    const onProgress = (uploadedBytes: number, totalBytes: number) => {
-      mainWindow?.webContents.send('youtube-upload-progress', { uploadedBytes, totalBytes })
-    }
-    return yt.uploadVideo(filePath, safeMeta, onProgress)
-  })
-
-  // Coalesce concurrent regenerate requests per service. Two quick clicks
-  // (or a publish-after-export running while auto-publish from upload-complete
-  // is mid-flight) otherwise race to write podcast.xml and upload it.
-  const podcastRegenInflight = new Map<string, Promise<unknown>>()
-  ipcMain.handle('podcast-regenerate', async (_, service: string) => {
-    if (typeof service !== 'string' || !service) {
-      return { ok: false, episodeCount: 0, error: 'invalid_service' }
-    }
-    const existing = podcastRegenInflight.get(service)
-    if (existing) return existing
-    const cloud = await import('./cloud')
-    const promise = cloud.regeneratePodcastFeedManual(service as import('../types').CloudServiceId)
-      .finally(() => podcastRegenInflight.delete(service))
-    podcastRegenInflight.set(service, promise)
-    return promise
-  })
+  // youtube-upload + podcast-regenerate + cloud-is-configured — moved to ipc/cloud-extras.ts
+  registerCloudExtrasIpc({ ...ipcCtx, isAllowedMediaPath })
 
   // Review queue (prep-and-review v5.0) — moved to ipc/review-queue.ts
   registerReviewQueueIpc({ ...ipcCtx, syncTrayReviewQueueCount })
@@ -824,10 +753,7 @@ function setupIPC(): void {
       .catch(() => {})
   }, 30_000)
 
-  ipcMain.handle('cloud-is-configured', async (_, service: string) => {
-    const cloud = await import('./cloud')
-    return cloud.isServiceConfigured(service as import('../types').CloudServiceId)
-  })
+  // cloud-is-configured — moved to ipc/cloud-extras.ts (above)
 
   // Video preview — moved to ipc/video-preview.ts
   registerVideoPreviewIpc(ipcCtx)
