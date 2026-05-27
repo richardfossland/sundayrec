@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.53.3] — 2026-05-27
+
+### Refactored — IPC-splitting fase 3 (editor)
+
+Flyttet hele editor-domenet ut av `src/main/index.ts` til
+`src/main/ipc/editor.ts`. Ingen funksjonelle endringer.
+
+**21 handlers flyttet** (alle `editor-*`):
+- File ops: read-file, save-file, pick-file, export-file, cancel-export,
+  pick-output-folder
+- Metadata sidecar: read-meta, save-meta
+- Cuts-draft sidecar (crash recovery): read/save/delete
+- Segments: detect-segments
+- Video editor: set-video-path, extract-audio-peaks, probe-streams,
+  pick-video-file, save-video, export-video
+- Transcript sidecar: read/write/delete-transcript
+
+**EditorIpcContext** utvider basis `IpcContext` med fem helpers fra
+index.ts (`isAllowedAudioPath`, `isAllowedMediaPath`, `sidecarPath`,
+`trustFolder`, `setEditorVideoPath`). `currentEditorVideoPath` blir
+fortsatt i index.ts fordi `editor://`-protokollhandleren leser den
+direkte fra modulscope.
+
+**Resultat:**
+- index.ts: **1488 → 1294 linjer** (denne fasen: −13 %, kumulativ
+  fra v4.53.0: 2045 → 1294 = **−37 %**)
+- 73 handlers flyttet ut totalt (av ~127)
+- 1080 tester fortsatt grønne
+
+---
+
 ## [4.53.2] — 2026-05-27
 
 ### Refactored — IPC-splitting fase 2
