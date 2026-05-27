@@ -158,6 +158,10 @@ export function applyVideoSettingsToUI(): void {
   if (keepAudioEl) keepAudioEl.checked = settings.videoKeepAudio !== false
   updateKeepAudioVisibility()
 
+  // Unified-recorder toggle (experimental A/V-sync fix)
+  const unifiedEl = document.getElementById('opt-use-unified-recorder') as HTMLInputElement | null
+  if (unifiedEl) unifiedEl.checked = !!settings.useUnifiedRecorder
+
   // Populate device select (best-effort — may not have been loaded yet)
   if (loadedDevices.length) {
     const selectEl = document.getElementById('video-device-select') as HTMLSelectElement | null
@@ -199,6 +203,9 @@ async function saveVideoSettings(): Promise<void> {
   const keepAudioEl = document.getElementById('opt-video-keep-audio') as HTMLInputElement | null
   const keepAudio   = keepAudioEl ? keepAudioEl.checked : true
 
+  const unifiedEl = document.getElementById('opt-use-unified-recorder') as HTMLInputElement | null
+  const useUnifiedRecorder = !!unifiedEl?.checked
+
   const updated = {
     ...settings,
     videoEnabled:      enabled,
@@ -209,6 +216,7 @@ async function saveVideoSettings(): Promise<void> {
     videoBitrate:      bitrate,
     videoSeparate:     separate,
     videoKeepAudio:    keepAudio,
+    useUnifiedRecorder,
   }
 
   patchSettings(updated)

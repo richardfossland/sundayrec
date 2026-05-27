@@ -734,7 +734,9 @@
     "splitWarning": "Datei-Aufteilung ist aktiv — Video wird unabhängig von der obigen Auswahl immer als separate Datei gespeichert. Deaktivieren Sie die automatische Aufteilung in den Zeitplaneinstellungen, um Audio und Video in einer MP4 zu kombinieren.",
     "splitHint": "Bei automatischer Datei-Aufteilung werden immer getrennte Dateien verwendet.",
     "keepAudioTitle": "Separate Audiodatei behalten",
-    "keepAudioDesc": "Speichert die hochwertige Audiodatei zusätzlich zur kombinierten MP4"
+    "keepAudioDesc": "Speichert die hochwertige Audiodatei zusätzlich zur kombinierten MP4",
+    "unifiedTitle": "Perfekte A/V-Synchronisierung (experimentell)",
+    "unifiedDesc": "Verwendet einen einzelnen ffmpeg-Prozess für Audio und Video — eliminiert jegliche Sync-Drift. Aktivieren Sie diese Option, wenn Audio und Video bei langen Aufnahmen allmählich aus der Sync geraten."
   },
   "wizard": {
     "step1": "Audioquelle",

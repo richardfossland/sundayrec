@@ -37,6 +37,7 @@ import { startCapture, stopCapture, ffmpegBin, buildCodecArgs, resolveDeviceInpu
 import * as preroll from './preroll'
 import type { NativeHandle } from './native-recorder'
 import { startVideoCapture, stopVideoCapture, muxAudioVideo } from './video-recorder'
+import { startUnifiedCapture, stopUnifiedCapture, type UnifiedHandle } from './unified-recorder'
 import type { VideoHandle } from './video-recorder'
 import { stopPreview } from './video-preview'
 import type { RecordingOpts, RecordingEntry, Settings, RecordingPhase } from '../types'
@@ -183,6 +184,10 @@ interface Session {
   splitAutoRestart: boolean
   videoHandle:      VideoHandle | null
   videoOutputPath:  string | null    // path to the in-progress video file
+  /** True when this session was spawned via the unified-recorder pipeline.
+   *  The combined MP4 is produced by ffmpeg directly, so the post-mux step
+   *  is skipped (the file is already audio+video in one container). */
+  unified?:         boolean
 }
 
 let activeSession:       Session | null      = null
@@ -502,15 +507,88 @@ export async function startSession(
     videoOutputPath   = useSeparate ? `${audioBase}_video.mp4` : `${audioBase}_vtmp.mp4`
   }
 
-  // Start audio and video captures concurrently — both ffmpeg processes are
-  // spawned within milliseconds of each other, aligning their wall-clock
-  // timestamps and eliminating A/V sync drift in the combined MP4.
-  const [audioResult, rawVideoResult] = await Promise.all([
-    startCapture(settings, outputPath),
-    hasVideo && videoOutputPath
-      ? startVideoCapture(s, videoOutputPath)
-      : Promise.resolve(null as null)
-  ])
+  // ── Unified-pipeline branch (experimental — gated by setting) ───────────
+  //
+  // When the user has opted in to useUnifiedRecorder AND video is enabled,
+  // we spawn a SINGLE ffmpeg that opens camera + mic in one process. This
+  // is the definitive A/V-sync fix: both streams share the same internal
+  // clock from the first packet on. The post-mux step is skipped because
+  // the file is already combined.
+  //
+  // We adapt the unified handle to look like a regular NativeHandle so the
+  // existing watchdog/stop/finalize code paths run unchanged. The video
+  // handle points at the SAME process so stopCapture() + stopVideoCapture()
+  // both target the right ffmpeg (the second call is a no-op when the
+  // process is already gone).
+  const useUnified = !!s.useUnifiedRecorder && hasVideo && process.platform !== 'linux' && !!videoOutputPath
+
+  let unifiedHandle: UnifiedHandle | null = null
+  let audioResult: Awaited<ReturnType<typeof startCapture>>
+  let rawVideoResult: Awaited<ReturnType<typeof startVideoCapture>> | null = null
+
+  if (useUnified) {
+    // Unified spawn: produces a combined MP4 at videoOutputPath plus, when
+    // the user wants a separate audio master, a lossless file at outputPath.
+    const unified = await startUnifiedCapture({
+      settings:     s,
+      combinedPath: videoOutputPath!,
+      audioPath:    s.videoKeepAudio === false ? null : outputPath,
+    })
+    if ('error' in unified) {
+      _phase = 'idle'
+      return { error: unified.error }
+    }
+    unifiedHandle = unified
+    // Adapter — minimal NativeHandle-shaped surface that points at the
+    // unified process so the rest of recorder.ts (watchdog, stop, retry)
+    // sees the same lifecycle events it expects from native-recorder.
+    audioResult = {
+      proc:             unified.proc,
+      outputPath:       outputPath,
+      startTime:        unified.startTime,
+      bytesWritten:     unified.bytesWritten,
+      format:           unified.format,
+      onExit:           null,
+      onProgress:       null,
+      onSilenceEnd:     null,
+      onSilenceWarning: null,
+      getStderrTail:    () => '',
+      lastError:        null,
+    } as Awaited<ReturnType<typeof startCapture>>
+    // Video "handle" also wraps the same proc so the renderer's preview
+    // frame channel works (unified emits the same MJPEG sidecar that
+    // video-recorder does).
+    rawVideoResult = {
+      proc:         unified.proc,
+      outputPath:   videoOutputPath!,
+      startTime:    unified.startTime,
+      bytesWritten: unified.bytesWritten,
+      format:       unified.format,
+      onExit:       null,
+      onProgress:   null,
+      onFrame:      null,
+    } as Awaited<ReturnType<typeof startVideoCapture>>
+    // Forward unified's onFrame/onProgress into the adapter handles so the
+    // renderer receives them just like the two-process path.
+    unified.onFrame    = (frame: Buffer) => (rawVideoResult as VideoHandle | null)?.onFrame?.(frame)
+    unified.onProgress = (bytes: number) => (rawVideoResult as VideoHandle | null)?.onProgress?.(bytes)
+    unified.onExit     = (code: number | null) => {
+      (audioResult as { onExit: ((c: number | null) => void) | null }).onExit?.(code)
+      ;(rawVideoResult as VideoHandle | null)?.onExit?.(code)
+    }
+  } else {
+    // Legacy two-process path — kept for the default config until unified
+    // has hours-on-it confidence. Spawns audio + video ffmpegs concurrently
+    // so their wall-clock timestamps align as closely as parallel spawns allow.
+    const [a, v] = await Promise.all([
+      startCapture(settings, outputPath),
+      hasVideo && videoOutputPath
+        ? startVideoCapture(s, videoOutputPath)
+        : Promise.resolve(null as null)
+    ])
+    audioResult    = a
+    rawVideoResult = v
+  }
 
   if ('error' in audioResult) {
     if (rawVideoResult && !('error' in rawVideoResult)) {
@@ -564,6 +642,7 @@ export async function startSession(
     segments:   [outputPath],
     splitTimer: null, splitAutoRestart: false,
     videoHandle, videoOutputPath,
+    unified: useUnified,
   }
 
   // Persist recovery info so a crash restart can salvage the partial file
@@ -663,7 +742,10 @@ export function stopSession(): void {
   clearRecoveryInterval()
 
   const audioStop = stopCapture(session.handle)
-  const videoStop = session.videoHandle
+  // When unified, audio + video share one ffmpeg process — stopping audio
+  // already kills the process, so a second stopVideoCapture call would
+  // race the close-handler and emit a confusing "already exited" log.
+  const videoStop = (session.videoHandle && !session.unified)
     ? stopVideoCapture(session.videoHandle)
     : Promise.resolve()
 
@@ -779,7 +861,13 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
     }
   }
 
-  if (videoFinalPath && !(session.settings as Settings).videoSeparate && !session.splitAutoRestart) {
+  if (videoFinalPath && session.unified) {
+    // Unified pipeline: the combined MP4 was produced directly by ffmpeg
+    // (same process, same clock — perfect sync), so no post-mux is needed.
+    // The "audio" output (if kept) is already a separate lossless file
+    // written in the same ffmpeg, so nothing to delete or rename here.
+    logger.info('recorder', 'unified-recorder: skipping mux step (file already combined)')
+  } else if (videoFinalPath && !(session.settings as Settings).videoSeparate && !session.splitAutoRestart) {
     // Combined mode: mux audio + video → one MP4
     const audioExt  = path.extname(session.outputPath)
     const audioBase = session.outputPath.slice(0, -audioExt.length)

@@ -734,7 +734,9 @@
     "splitWarning": "Delt opptak er aktivt — video lagres alltid som separat fil uavhengig av valget over. Deaktiver automatisk oppdeling i planleggingsinnstillingene for å kombinere lyd og video til én MP4.",
     "splitHint": "Ved automatisk oppdeling av filer brukes alltid separate filer.",
     "keepAudioTitle": "Behold separat lydfil",
-    "keepAudioDesc": "Lagrer også den høykvalitets lydfilen ved siden av den kombinerte MP4"
+    "keepAudioDesc": "Lagrer også den høykvalitets lydfilen ved siden av den kombinerte MP4",
+    "unifiedTitle": "Perfekt A/V-synk (eksperimentell)",
+    "unifiedDesc": "Bruker én ffmpeg-prosess for både lyd og bilde — eliminerer all sync-drift. Slå PÅ hvis du opplever at lyd og bilde gradvis kommer ut av sync over lange opptak."
   },
   "wizard": {
     "step1": "Lydkilde",

@@ -734,7 +734,9 @@
     "splitWarning": "File splitting is active — video is always saved as a separate file regardless of the choice above. Disable automatic splitting in schedule settings to combine audio and video into one MP4.",
     "splitHint": "When automatic file splitting is enabled, separate files are always used.",
     "keepAudioTitle": "Keep separate audio file",
-    "keepAudioDesc": "Also saves the high-quality audio file alongside the combined MP4"
+    "keepAudioDesc": "Also saves the high-quality audio file alongside the combined MP4",
+    "unifiedTitle": "Perfect A/V sync (experimental)",
+    "unifiedDesc": "Uses a single ffmpeg process for both audio and video — eliminates all sync drift. Turn ON if you experience audio and video gradually getting out of sync over long recordings."
   },
   "wizard": {
     "step1": "Audio source",

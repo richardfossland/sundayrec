@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.49.0] — 2026-05-27
+
+### Added — Unified ffmpeg-pipeline (eksperimentell)
+
+**Definitiv A/V-sync-fix.** Innstillinger → Video har en ny toggle
+«Perfekt A/V-synk (eksperimentell)». Når aktivert spawnes ÉN ffmpeg-
+prosess som åpner kamera + mikser samtidig:
+
+- **macOS**: AVFoundation `videoIdx:audioIdx`-syntaks — én `-i` med
+  begge enheter
+- **Windows**: dshow med to `-i` (video + audio) i samme prosess
+- **Outputs**: kombinert MP4 (H.264 + AAC) + valgfri lossless separat
+  audio i samme ffmpeg via multi-output mapping
+
+Fordi begge streams deler samme interne klokke fra første packet,
+har det:
+- Ingen oppstart-offset (mux-stepets probe-and-correct er overflødig)
+- Ingen drift over tid (audio/video bruker samme tidsbase)
+- Ingen reconnect-race mellom to separate prosesser
+
+**Default OFF** til vi har timer-på-det confidence. Brukere som har
+opplevd sync-drift kan opte inn via Settings → Video.
+
+### Architecture
+- `src/main/unified-recorder.ts` (ny) — `startUnifiedCapture` med
+  separate Mac/Win input-bygging og delt spawn-helper
+- `src/main/recorder.ts` — branch i `startSession`: når
+  `useUnifiedRecorder && hasVideo`, spawn unified med to handle-
+  adaptere som peker på samme proc, slik at watchdog + stop + finalize
+  ser samme livssyklus som dagens to-prosess-path
+- Mux-stepet skippes automatisk når sesjonen er unified (filen er
+  allerede kombinert i én ffmpeg)
+- Stop drepe én prosess som dropper begge streams atomisk
+
+### Internt
+- i18n for «Perfekt A/V-synk (eksperimentell)»-toggle i no/en/de/sv/da/pl/fr
+- Type `Settings.useUnifiedRecorder` lagt til
+- Reconnect, split-recording og preroll støttes IKKE i unified-modus
+  enda (slås av automatisk når flagget er på). Roadmap for v4.50.
+
+---
+
 ## [4.48.1] — 2026-05-27
 
 ### Fixed — A/V-sync i opptak

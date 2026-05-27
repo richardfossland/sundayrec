@@ -257,6 +257,14 @@ export interface Settings {
   videoKeepAudio?: boolean     // when combined MP4: also keep the separate high-quality audio file (default true)
   videoFlip?: boolean          // mirror the camera horizontally (e.g. front-facing cameras)
 
+  /**
+   * Experimental: route audio + video through a single ffmpeg process
+   * instead of two parallel processes + post-mux. Eliminates A/V drift at
+   * the source by sharing the same clock. Default OFF until we have
+   * production-hours-on-it confidence. Toggle via Settings → Video.
+   */
+  useUnifiedRecorder?: boolean
+
   // Editor
   askOpenEditor?: boolean
   editorIntroPath?: string

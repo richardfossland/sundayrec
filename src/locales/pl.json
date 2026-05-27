@@ -734,7 +734,9 @@
     "splitWarning": "Dzielenie plików jest aktywne — wideo zawsze zapisywane jest jako osobny plik niezależnie od powyższego wyboru. Wyłącz automatyczne dzielenie w ustawieniach harmonogramu, aby połączyć audio i wideo w jeden MP4.",
     "splitHint": "Przy automatycznym dzieleniu plików zawsze używane są osobne pliki.",
     "keepAudioTitle": "Zachowaj osobny plik audio",
-    "keepAudioDesc": "Zapisuje także wysokiej jakości plik audio obok połączonego MP4"
+    "keepAudioDesc": "Zapisuje także wysokiej jakości plik audio obok połączonego MP4",
+    "unifiedTitle": "Idealna synchronizacja A/V (eksperymentalna)",
+    "unifiedDesc": "Używa jednego procesu ffmpeg dla audio i wideo — eliminuje cały dryft synchronizacji. Włącz, jeśli audio i wideo stopniowo desynchronizują się podczas długich nagrań."
   },
   "wizard": {
     "step1": "Źródło dźwięku",
