@@ -74,7 +74,10 @@
       "errors": "Fehler erkannt",
       "warns": "Warnungen",
       "more": "mehr — siehe Einstellungen → Audio → Systemprüfung"
-    }
+    },
+    "cloudLabel": "CLOUD-BACKUP",
+    "thumbLabel": "EPISODENBILD",
+    "whisperLabel": "TRANSKRIPTION"
   },
   "update": {
     "available": "Neue Version {v} verfügbar — wird heruntergeladen…",
@@ -863,7 +866,7 @@
     "statusReady": "Bereit",
     "statusPreparing": "Bereitet vor…",
     "statusLive": "🔴 Live",
-    "startBtn": "▶ Übertragung starten",
+    "startBtn": "🔴 Stream + Aufnahme starten",
     "stopBtn": "■ Stoppen",
     "destinations": "Ziele",
     "bitrate": "Bitrate",
@@ -876,7 +879,12 @@
     "preparing": "Verbinde…",
     "connectionFailed": "Verbindung fehlgeschlagen",
     "previewWaiting": "Vorschau erscheint, wenn die Übertragung beginnt",
-    "errNoActive": "Aktivieren Sie mindestens ein Ziel vor dem Start."
+    "errNoActive": "Aktivieren Sie mindestens ein Ziel vor dem Start.",
+    "startStreamOnly": "Nur Stream (ohne lokale Aufnahme)",
+    "alsoRecordHint": "Die lokale Aufnahme erscheint nach dem Stream in Letzte Aufnahmen — höhere Bitrate als der Livestream, bereit für Bearbeitung oder Podcast.",
+    "overlays": "Overlays — Grafiken und Präsentation",
+    "overlaysDesc": "Lege Logo, Liedtexte aus EasyWorship (via Bildschirmaufnahme auf gleicher Maschine) oder andere Grafiken über das gesendete Bild. Overlays wirken nur auf den Livestream — Aufnahmen bleiben sauber.",
+    "addOverlay": "+ Overlay hinzufügen"
   },
   "transcript": {
     "title": "Transkription",

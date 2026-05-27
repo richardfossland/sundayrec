@@ -74,7 +74,10 @@
       "errors": "erreurs détectées",
       "warns": "avertissements",
       "more": "autres — voir Paramètres → Audio → Vérifier le système"
-    }
+    },
+    "cloudLabel": "SAUVEGARDE CLOUD",
+    "thumbLabel": "IMAGE D'ÉPISODE",
+    "whisperLabel": "TRANSCRIPTION"
   },
   "update": {
     "available": "Nouvelle version {v} disponible — téléchargement en cours…",
@@ -863,7 +866,7 @@
     "statusReady": "Prêt",
     "statusPreparing": "Préparation…",
     "statusLive": "🔴 En direct",
-    "startBtn": "▶ Démarrer la diffusion",
+    "startBtn": "🔴 Démarrer diffusion + enregistrement",
     "stopBtn": "■ Arrêter",
     "destinations": "Destinations",
     "bitrate": "Débit",
@@ -876,7 +879,12 @@
     "preparing": "Connexion…",
     "connectionFailed": "Connexion échouée",
     "previewWaiting": "L’aperçu apparaît lorsque la diffusion démarre",
-    "errNoActive": "Activez au moins une destination avant de démarrer."
+    "errNoActive": "Activez au moins une destination avant de démarrer.",
+    "startStreamOnly": "Diffusion seulement (sans enregistrement local)",
+    "alsoRecordHint": "Le fichier local arrive dans Enregistrements récents à l'arrêt — bitrate plus élevé que la diffusion, prêt pour montage ou podcast.",
+    "overlays": "Superpositions — graphiques et présentation",
+    "overlaysDesc": "Ajoutez le logo de l'église, les paroles d'EasyWorship (via capture d'écran sur la même machine), ou d'autres graphiques sur le flux. Les superpositions n'affectent que la diffusion — les enregistrements restent propres.",
+    "addOverlay": "+ Ajouter une superposition"
   },
   "transcript": {
     "title": "Transcription",

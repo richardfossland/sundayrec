@@ -74,7 +74,10 @@
       "errors": "błędów wykrytych",
       "warns": "ostrzeżeń",
       "more": "więcej — zobacz Ustawienia → Dźwięk → Sprawdź system"
-    }
+    },
+    "cloudLabel": "KOPIA W CHMURZE",
+    "thumbLabel": "OKŁADKA ODCINKA",
+    "whisperLabel": "TRANSKRYPCJA"
   },
   "update": {
     "available": "Dostępna nowa wersja {v} — pobieranie…",
@@ -863,7 +866,7 @@
     "statusReady": "Gotowy",
     "statusPreparing": "Przygotowywanie…",
     "statusLive": "🔴 Na żywo",
-    "startBtn": "▶ Rozpocznij transmisję",
+    "startBtn": "🔴 Start transmisji + nagrywania",
     "stopBtn": "■ Zatrzymaj",
     "destinations": "Destynacje",
     "bitrate": "Bitrate",
@@ -876,7 +879,12 @@
     "preparing": "Łączenie…",
     "connectionFailed": "Połączenie nieudane",
     "previewWaiting": "Podgląd pojawi się po rozpoczęciu transmisji",
-    "errNoActive": "Włącz przynajmniej jedną destynację przed startem."
+    "errNoActive": "Włącz przynajmniej jedną destynację przed startem.",
+    "startStreamOnly": "Tylko transmisja (bez lokalnego nagrywania)",
+    "alsoRecordHint": "Lokalny plik nagrania trafia do Ostatnie nagrania po zakończeniu transmisji — wyższy bitrate niż live, gotowy do montażu lub podcastu.",
+    "overlays": "Nakładki — grafika i prezentacja",
+    "overlaysDesc": "Dodaj logo kościoła, słowa z EasyWorship (przez przechwytywanie ekranu na tej samej maszynie) lub inną grafikę na obrazie transmisji. Nakładki wpływają tylko na transmisję — nagrania są czyste.",
+    "addOverlay": "+ Dodaj nakładkę"
   },
   "transcript": {
     "title": "Transkrypcja",

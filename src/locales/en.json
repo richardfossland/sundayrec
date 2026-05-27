@@ -74,7 +74,10 @@
       "errors": "errors detected",
       "warns": "warnings",
       "more": "more — see Settings → Audio → Run system check"
-    }
+    },
+    "cloudLabel": "CLOUD BACKUP",
+    "thumbLabel": "EPISODE ARTWORK",
+    "whisperLabel": "TRANSCRIPTION"
   },
   "update": {
     "available": "New version {v} available — downloading…",
@@ -863,7 +866,7 @@
     "statusReady": "Ready",
     "statusPreparing": "Preparing…",
     "statusLive": "🔴 Live",
-    "startBtn": "▶ Start broadcast",
+    "startBtn": "🔴 Start streaming + recording",
     "stopBtn": "■ Stop",
     "destinations": "Destinations",
     "bitrate": "Bitrate",
@@ -876,7 +879,12 @@
     "preparing": "Connecting…",
     "connectionFailed": "Connection failed",
     "previewWaiting": "Preview appears when the stream starts",
-    "errNoActive": "Enable at least one destination before starting."
+    "errNoActive": "Enable at least one destination before starting.",
+    "startStreamOnly": "Streaming only (no local recording)",
+    "alsoRecordHint": "Local recording lands in Recent recordings when the stream stops — higher bitrate than the livestream, ready for editing or podcast.",
+    "overlays": "Overlays — graphics and presentation",
+    "overlaysDesc": "Add the church logo, lyrics from EasyWorship (via screen capture on the same machine), or other graphics on top of what is being streamed. Overlays only affect the livestream — recordings stay clean.",
+    "addOverlay": "+ Add overlay"
   },
   "transcript": {
     "title": "Transcription",

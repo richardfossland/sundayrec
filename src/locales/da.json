@@ -74,7 +74,10 @@
       "errors": "fejl fundet",
       "warns": "advarsler",
       "more": "flere — se Indstillinger → Lyd → Kør systemtjek"
-    }
+    },
+    "cloudLabel": "CLOUD-BACKUP",
+    "thumbLabel": "EPISODEBILLEDE",
+    "whisperLabel": "TRANSSKRIPTION"
   },
   "update": {
     "available": "Ny version {v} tilgængelig — henter…",
@@ -863,7 +866,7 @@
     "statusReady": "Klar",
     "statusPreparing": "Forbereder…",
     "statusLive": "🔴 Live",
-    "startBtn": "▶ Start udsendelse",
+    "startBtn": "🔴 Start livestream + optagelse",
     "stopBtn": "■ Stop",
     "destinations": "Destinationer",
     "bitrate": "Bitrate",
@@ -876,7 +879,12 @@
     "preparing": "Forbinder…",
     "connectionFailed": "Forbindelse mislykkedes",
     "previewWaiting": "Forhåndsvisning vises når udsendelsen starter",
-    "errNoActive": "Aktivér mindst én destination før du starter."
+    "errNoActive": "Aktivér mindst én destination før du starter.",
+    "startStreamOnly": "Kun livestream (uden lokal optagelse)",
+    "alsoRecordHint": "Lokal optagelse havner i Seneste optagelser når streamen stopper — højere bitrate end livestreamet, klar til redigering eller podcast.",
+    "overlays": "Overlays — grafik og præsentation",
+    "overlaysDesc": "Læg kirkens logo, sangtekster fra EasyWorship (via skærmoptagelse på samme maskine), eller anden grafik oven på det der sendes. Overlays påvirker kun livestreamet — optagelser bliver rene.",
+    "addOverlay": "+ Tilføj overlay"
   },
   "transcript": {
     "title": "Transskribering",

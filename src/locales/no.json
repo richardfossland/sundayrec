@@ -74,7 +74,10 @@
       "errors": "feil oppdaget",
       "warns": "advarsel",
       "more": "flere — se Innstillinger → Lyd → Sjekk system"
-    }
+    },
+    "cloudLabel": "SKY-BACKUP",
+    "thumbLabel": "EPISODEBILDE",
+    "whisperLabel": "TRANSKRIPSJON"
   },
   "update": {
     "available": "Ny versjon {v} er tilgjengelig — laster ned…",
@@ -863,7 +866,7 @@
     "statusReady": "Klar",
     "statusPreparing": "Forbereder…",
     "statusLive": "🔴 Live",
-    "startBtn": "▶ Start direktesending",
+    "startBtn": "🔴 Start direktesending + opptak",
     "stopBtn": "■ Stopp",
     "destinations": "Destinasjoner",
     "statsTitle": "Statistikk",
@@ -876,7 +879,12 @@
     "preparing": "Kobler til…",
     "connectionFailed": "Tilkobling feilet",
     "previewWaiting": "Forhåndsvisning kommer når stream starter",
-    "errNoActive": "Aktiver minst én destinasjon før du starter."
+    "errNoActive": "Aktiver minst én destinasjon før du starter.",
+    "startStreamOnly": "Bare direktesending (uten lokal opptak)",
+    "alsoRecordHint": "Lokal opptaksfil havner i Siste opptak når strømmen stopper — høyere bitrate enn livestreamen, klar for redigering eller podkast.",
+    "overlays": "Overlays — grafikk og presentasjon",
+    "overlaysDesc": "Legg over kirkens logo, lyrics fra EasyWorship (via skjerm-capture på samme maskin), eller annen grafikk på det som sendes ut. Overlays påvirker bare direktesendingen — opptak gjøres rent.",
+    "addOverlay": "+ Legg til overlay"
   },
   "transcript": {
     "title": "Transkribering",

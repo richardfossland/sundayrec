@@ -74,7 +74,10 @@
       "errors": "fel upptäckta",
       "warns": "varningar",
       "more": "fler — se Inställningar → Ljud → Kör systemkontroll"
-    }
+    },
+    "cloudLabel": "MOLN-BACKUP",
+    "thumbLabel": "AVSNITTSBILD",
+    "whisperLabel": "TRANSKRIBERING"
   },
   "update": {
     "available": "Ny version {v} tillgänglig — laddar ner…",
@@ -863,7 +866,7 @@
     "statusReady": "Klar",
     "statusPreparing": "Förbereder…",
     "statusLive": "🔴 Live",
-    "startBtn": "▶ Starta sändning",
+    "startBtn": "🔴 Starta direktsändning + inspelning",
     "stopBtn": "■ Stoppa",
     "destinations": "Destinationer",
     "bitrate": "Bitrate",
@@ -876,7 +879,12 @@
     "preparing": "Ansluter…",
     "connectionFailed": "Anslutning misslyckades",
     "previewWaiting": "Förhandsvisning visas när sändningen startar",
-    "errNoActive": "Aktivera minst en destination innan du startar."
+    "errNoActive": "Aktivera minst en destination innan du startar.",
+    "startStreamOnly": "Bara direktsändning (utan lokal inspelning)",
+    "alsoRecordHint": "Lokal inspelningsfil hamnar i Senaste inspelningar när strömmen stannar — högre bitrate än livestreamen, redo för redigering eller podd.",
+    "overlays": "Overlays — grafik och presentation",
+    "overlaysDesc": "Lägg kyrkans logo, sångtexter från EasyWorship (via skärminspelning på samma maskin), eller annan grafik ovanpå det som sänds. Overlays påverkar bara direktsändningen — inspelningar görs rena.",
+    "addOverlay": "+ Lägg till overlay"
   },
   "transcript": {
     "title": "Transkribering",
