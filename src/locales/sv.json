@@ -782,7 +782,18 @@
     "webhookHint": "Slack: https://hooks.slack.com/... · Discord: https://discord.com/api/webhooks/...",
     "webhookOnWarn": "Skicka även vid varningar",
     "webhookOnWarnDesc": "Som standard skickas endast felmeddelanden. Aktivera detta för att även få besked om mindre problem.",
-    "testWebhook": "Testa webhook"
+    "testWebhook": "Testa webhook",
+    "emailMethodLabel": "SÄNDMETOD",
+    "emailGmailTitle": "Logga in med Google",
+    "emailGmailDesc": "Skicka via ditt Gmail-konto — ingen SMTP-konfiguration.",
+    "emailGmailConnect": "Anslut",
+    "emailGmailDisconnect": "Koppla från",
+    "emailGmailConnecting": "Ansluter…",
+    "emailGmailFailed": "Kunde inte ansluta till Google: ",
+    "emailGmailConfirmDisconnect": "Koppla från Google-kontot? E-postaviseringar faller tillbaka till SMTP.",
+    "emailGmailSendsAs": "Skickar via",
+    "emailGmailReauth": "⚠ Kräver ny inloggning",
+    "emailAdvanced": "Avancerat: använd SMTP istället"
   },
   "prep": {
     "sectionTitle": "Förberedelse och granskning",

@@ -1337,6 +1337,24 @@ function setupIPC(): void {
     const yt = await import('./cloud/youtube')
     return { connected: yt.isConnected() }
   })
+
+  // ─── Gmail (OAuth-based email notifications) ───────────────────────────
+  // When connected, mailer.ts prefers sending via the Gmail API over SMTP —
+  // gives users a one-click alternative to app-passwords + smtp.gmail.com.
+  ipcMain.handle('gmail-connect', async () => {
+    const g = await import('./cloud/gmail-auth')
+    return g.connectGmail()
+  })
+  ipcMain.handle('gmail-disconnect', async () => {
+    const g = await import('./cloud/gmail-auth')
+    g.disconnectGmail()
+    return { ok: true }
+  })
+  ipcMain.handle('gmail-status', async () => {
+    const g = await import('./cloud/gmail-auth')
+    return g.getGmailStatus()
+  })
+
   // ─── Live streaming ──────────────────────────────────────────────────────
   ipcMain.handle('stream-status', async () => {
     const s = await import('./streamer')

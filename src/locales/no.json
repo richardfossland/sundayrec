@@ -782,7 +782,18 @@
     "webhookHint": "Slack: https://hooks.slack.com/... · Discord: https://discord.com/api/webhooks/...",
     "webhookOnWarn": "Send også på advarsler",
     "webhookOnWarnDesc": "Som standard sendes kun feilmeldinger. Slå på dette for å få beskjed også ved mindre problemer.",
-    "testWebhook": "Test webhook"
+    "testWebhook": "Test webhook",
+    "emailMethodLabel": "SENDEMETODE",
+    "emailGmailTitle": "Logg inn med Google",
+    "emailGmailDesc": "Send via din Gmail-konto — ingen SMTP-konfig.",
+    "emailGmailConnect": "Koble til",
+    "emailGmailDisconnect": "Koble fra",
+    "emailGmailConnecting": "Kobler til…",
+    "emailGmailFailed": "Kunne ikke koble til Google: ",
+    "emailGmailConfirmDisconnect": "Koble fra Google-kontoen? E-postvarsler vil falle tilbake til SMTP.",
+    "emailGmailSendsAs": "Sender via",
+    "emailGmailReauth": "⚠ Krever ny pålogging",
+    "emailAdvanced": "Avansert: bruk SMTP i stedet"
   },
   "prep": {
     "sectionTitle": "Forhåndsklargjøring og gjennomgang",

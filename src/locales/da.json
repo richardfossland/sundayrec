@@ -782,7 +782,18 @@
     "webhookHint": "Slack: https://hooks.slack.com/... · Discord: https://discord.com/api/webhooks/...",
     "webhookOnWarn": "Send også ved advarsler",
     "webhookOnWarnDesc": "Som standard sendes kun fejlmeddelelser. Aktivér dette for også at få besked om mindre problemer.",
-    "testWebhook": "Test webhook"
+    "testWebhook": "Test webhook",
+    "emailMethodLabel": "SENDEMETODE",
+    "emailGmailTitle": "Log ind med Google",
+    "emailGmailDesc": "Send via din Gmail-konto — ingen SMTP-konfiguration.",
+    "emailGmailConnect": "Tilslut",
+    "emailGmailDisconnect": "Frakobl",
+    "emailGmailConnecting": "Tilslutter…",
+    "emailGmailFailed": "Kunne ikke tilslutte til Google: ",
+    "emailGmailConfirmDisconnect": "Frakobl Google-kontoen? E-mail-meddelelser falder tilbage til SMTP.",
+    "emailGmailSendsAs": "Sender via",
+    "emailGmailReauth": "⚠ Kræver ny tilslutning",
+    "emailAdvanced": "Avanceret: brug SMTP i stedet"
   },
   "prep": {
     "sectionTitle": "Forberedelse og gennemgang",

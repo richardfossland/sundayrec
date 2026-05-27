@@ -143,6 +143,10 @@ declare global {
       cloudQueueFlush:     () => Promise<boolean>
       podcastRegenerate:   (service: string) => Promise<{ ok: boolean; feedUrl?: string; episodeCount: number; error?: string }>
       registerTrustedPath: (filePath: string) => Promise<boolean>
+      gmailConnect:       () => Promise<{ ok: boolean; email?: string; error?: string }>
+      gmailDisconnect:    () => Promise<{ ok: boolean }>
+      gmailStatus:        () => Promise<{ connected: boolean; email?: string; needsReauth?: boolean }>
+
       streamStatus:       () => Promise<{ active: boolean; startedAt: number | null; bitrateKbps: number; fps: number; dropped: number; lastLine: string; destinations: Array<{ id: string; state: string }> }>
       streamStart:        (params: { resolution?: string; framerate?: number; videoBitrateKbps?: number; destinations: Array<{ id: string; name: string; rtmpUrl: string; enabled: boolean }>; alsoRecord?: boolean }) => Promise<{ ok: boolean; error?: string }>
       streamStop:         () => Promise<boolean>

@@ -782,7 +782,18 @@
     "webhookHint": "Slack: https://hooks.slack.com/... · Discord: https://discord.com/api/webhooks/...",
     "webhookOnWarn": "Auch bei Warnungen senden",
     "webhookOnWarnDesc": "Standardmäßig werden nur Fehlermeldungen gesendet. Aktivieren Sie dies, um auch über kleinere Probleme benachrichtigt zu werden.",
-    "testWebhook": "Webhook testen"
+    "testWebhook": "Webhook testen",
+    "emailMethodLabel": "SENDEMETHODE",
+    "emailGmailTitle": "Mit Google anmelden",
+    "emailGmailDesc": "Versand über Ihr Gmail-Konto — keine SMTP-Konfiguration nötig.",
+    "emailGmailConnect": "Verbinden",
+    "emailGmailDisconnect": "Trennen",
+    "emailGmailConnecting": "Verbinde…",
+    "emailGmailFailed": "Verbindung zu Google fehlgeschlagen: ",
+    "emailGmailConfirmDisconnect": "Google-Konto trennen? E-Mail-Benachrichtigungen fallen auf SMTP zurück.",
+    "emailGmailSendsAs": "Sendet über",
+    "emailGmailReauth": "⚠ Erneute Anmeldung nötig",
+    "emailAdvanced": "Erweitert: SMTP verwenden"
   },
   "prep": {
     "sectionTitle": "Vorbereitung und Überprüfung",

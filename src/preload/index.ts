@@ -132,6 +132,10 @@ contextBridge.exposeInMainWorld('api', {
 
   registerTrustedPath: (filePath: string) => ipcRenderer.invoke('register-trusted-path', filePath),
 
+  gmailConnect:        ()                             => ipcRenderer.invoke('gmail-connect'),
+  gmailDisconnect:     ()                             => ipcRenderer.invoke('gmail-disconnect'),
+  gmailStatus:         ()                             => ipcRenderer.invoke('gmail-status'),
+
   streamStatus:        ()                             => ipcRenderer.invoke('stream-status'),
   streamStart:         (params: unknown)              => ipcRenderer.invoke('stream-start', params),
   streamStop:          ()                             => ipcRenderer.invoke('stream-stop'),

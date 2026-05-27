@@ -4103,6 +4103,57 @@ button > svg:first-child { flex-shrink: 0; }
 }
 .thumb-card-icon-home { width: 48px; height: 48px; margin-right: 10px; }
 
+/* ─── Gmail OAuth card on the email-notifications settings ────────────── */
+.email-oauth-block { display: flex; flex-direction: column; gap: 6px; }
+.email-oauth-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--rsm);
+  padding: 12px 14px;
+}
+.email-oauth-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.email-oauth-text {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.email-oauth-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.email-oauth-sub {
+  font-size: 12px;
+  color: var(--muted, #8a8a92);
+  line-height: 1.4;
+}
+
+/* Avansert SMTP collapsible — feels secondary so it doesn't compete with
+   the primary "Logg inn med Google" CTA above it. */
+.email-advanced {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.email-advanced-summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted, #8a8a92);
+  padding: 6px 0;
+  user-select: none;
+}
+.email-advanced-summary:hover { color: var(--text2); }
+.email-advanced[open] .email-advanced-summary {
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.email-advanced-body { padding-top: 4px; }
+
 /* ─── Live overlay configuration ───────────────────────────────────────── */
 .live-overlay-card { margin-top: 16px; }
 .overlay-list { display: flex; flex-direction: column; gap: 10px; }

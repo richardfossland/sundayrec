@@ -782,7 +782,18 @@
     "webhookHint": "Slack: https://hooks.slack.com/... · Discord: https://discord.com/api/webhooks/...",
     "webhookOnWarn": "Wysyłaj także przy ostrzeżeniach",
     "webhookOnWarnDesc": "Domyślnie wysyłane są tylko komunikaty o błędach. Włącz to, aby otrzymywać powiadomienia także o drobnych problemach.",
-    "testWebhook": "Testuj webhook"
+    "testWebhook": "Testuj webhook",
+    "emailMethodLabel": "METODA WYSYŁKI",
+    "emailGmailTitle": "Zaloguj się przez Google",
+    "emailGmailDesc": "Wysyłaj przez konto Gmail — bez konfiguracji SMTP.",
+    "emailGmailConnect": "Połącz",
+    "emailGmailDisconnect": "Rozłącz",
+    "emailGmailConnecting": "Łączenie…",
+    "emailGmailFailed": "Nie udało się połączyć z Google: ",
+    "emailGmailConfirmDisconnect": "Rozłączyć konto Google? Powiadomienia e-mail wrócą do SMTP.",
+    "emailGmailSendsAs": "Wysyłka przez",
+    "emailGmailReauth": "⚠ Wymagane ponowne logowanie",
+    "emailAdvanced": "Zaawansowane: użyj SMTP zamiast tego"
   },
   "prep": {
     "sectionTitle": "Przygotowanie i przegląd",

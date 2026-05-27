@@ -782,7 +782,18 @@
     "webhookHint": "Slack: https://hooks.slack.com/... · Discord: https://discord.com/api/webhooks/...",
     "webhookOnWarn": "Also send for warnings",
     "webhookOnWarnDesc": "By default only error messages are sent. Enable this to also be notified about minor issues.",
-    "testWebhook": "Test webhook"
+    "testWebhook": "Test webhook",
+    "emailMethodLabel": "SEND METHOD",
+    "emailGmailTitle": "Sign in with Google",
+    "emailGmailDesc": "Send via your Gmail account — no SMTP setup required.",
+    "emailGmailConnect": "Connect",
+    "emailGmailDisconnect": "Disconnect",
+    "emailGmailConnecting": "Connecting…",
+    "emailGmailFailed": "Could not connect to Google: ",
+    "emailGmailConfirmDisconnect": "Disconnect Google account? Email notifications will fall back to SMTP.",
+    "emailGmailSendsAs": "Sending via",
+    "emailGmailReauth": "⚠ Re-login required",
+    "emailAdvanced": "Advanced: use SMTP instead"
   },
   "prep": {
     "sectionTitle": "Auto-prep and review",

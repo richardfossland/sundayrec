@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.50.0] — 2026-05-27
+
+### Added — «Logg inn med Google» for e-postvarsel
+
+E-postvarsler kan nå sendes via Gmail API i stedet for SMTP. Slipp
+app-passord, smtp.gmail.com, og portnummer-juggling.
+
+**Slik virker det:**
+1. Innstillinger → Varsler → E-postvarsler
+2. Slå PÅ «Send e-post ved feil» og fyll inn mottakeradressen
+3. Under «SENDEMETODE» — klikk **«Koble til»** ved siden av Google-logoen
+4. Logg inn i Google's consent-skjerm i nettleseren
+5. Ferdig — kortet viser nå «Sender via din@gmail.com»
+
+SMTP-feltene er flyttet til en **«Avansert»-utfellbar** under Gmail-
+kortet, så kirker med egen mail-server fortsatt kan bruke dem. Når
+Gmail er tilkoblet, kollapses Avansert-seksjonen automatisk.
+
+### Architecture
+- `src/main/cloud/gmail-auth.ts` — connect/disconnect/status + token-refresh
+- `mailer.ts` — Gmail API send-path med base64url-kodet RFC 2822 message
+- IPC: `gmail-connect`, `gmail-disconnect`, `gmail-status`
+- Token lagret i samme krypterte vault som Drive/Dropbox/OneDrive
+- Scope: `gmail.send` (sensitive — krever App Review for offentlig
+  distribusjon, se `docs/USER-TASKS.md`)
+
+### Internt
+- 11 nye i18n-nøkler i 7 språk (no/en/de/sv/da/pl/fr)
+- `email-oauth-card` med Google-logo + connect/disconnect-state
+- `details/summary` for Avansert SMTP — collapsed by default når Gmail er på
+
+---
+
 ## [4.49.1] — 2026-05-27
 
 ### Added — Reconnect + preroll i unified-modus
