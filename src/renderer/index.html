@@ -1561,17 +1561,16 @@
             <label class="toggle"><input type="checkbox" id="opt-video-keep-audio" checked /><span class="toggle-track"></span></label>
           </div>
 
-          <!-- Unified-recorder toggle — experimental. When ON, a single
-               ffmpeg opens both camera and microphone in one process,
-               giving perfect A/V sync from the first frame. Default OFF
-               until we have hours-on-it confidence; users who want to
-               try it (typically those who've seen sync drift) can opt in. -->
+          <!-- Unified-recorder toggle — default ON since v4.51. Single
+               ffmpeg opens both camera and microphone in one process so
+               A/V sync is frame-accurate from the first frame. Power
+               users can opt out if they hit an unusual edge case. -->
           <div class="toggle-row" id="video-unified-row">
             <div>
-              <div class="toggle-title" data-i18n="video.unifiedTitle">Perfekt A/V-synk (eksperimentell)</div>
-              <div class="toggle-desc" data-i18n="video.unifiedDesc">Bruker én ffmpeg-prosess for både lyd og bilde — eliminerer all sync-drift. Slå PÅ hvis du opplever at lyd og bilde gradvis kommer ut av sync over lange opptak.</div>
+              <div class="toggle-title" data-i18n="video.unifiedTitle">Perfekt A/V-synk</div>
+              <div class="toggle-desc" data-i18n="video.unifiedDesc">Bruker én ffmpeg-prosess for både lyd og bilde — eliminerer all sync-drift. Anbefales på. Slå av kun hvis du opplever uventede problemer med video-opptak.</div>
             </div>
-            <label class="toggle"><input type="checkbox" id="opt-use-unified-recorder" /><span class="toggle-track"></span></label>
+            <label class="toggle"><input type="checkbox" id="opt-use-unified-recorder" checked /><span class="toggle-track"></span></label>
           </div>
         </div>
       </div>

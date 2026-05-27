@@ -520,7 +520,12 @@ export async function startSession(
   // handle points at the SAME process so stopCapture() + stopVideoCapture()
   // both target the right ffmpeg (the second call is a no-op when the
   // process is already gone).
-  const useUnified = !!s.useUnifiedRecorder && hasVideo && process.platform !== 'linux' && !!videoOutputPath
+  // Unified is the default A/V capture path as of v4.51. Users can opt OUT
+  // by explicitly setting useUnifiedRecorder=false in Innstillinger → Video
+  // (e.g. if they need split-recording with the legacy two-process path's
+  // exact behaviour, or if they hit an unknown unified-mode edge case).
+  // `undefined` (= never touched) is treated as opted-in.
+  const useUnified = s.useUnifiedRecorder !== false && hasVideo && process.platform !== 'linux' && !!videoOutputPath
 
   let unifiedHandle: UnifiedHandle | null = null
   let audioResult: Awaited<ReturnType<typeof startCapture>>

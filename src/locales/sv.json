@@ -735,8 +735,8 @@
     "splitHint": "Vid automatisk filuppdelning används alltid separata filer.",
     "keepAudioTitle": "Behåll separat ljudfil",
     "keepAudioDesc": "Sparar också den högkvalitativa ljudfilen vid sidan av den kombinerade MP4-filen",
-    "unifiedTitle": "Perfekt A/V-synk (experimentell)",
-    "unifiedDesc": "Använder en enda ffmpeg-process för både ljud och video — eliminerar all sync-drift. Aktivera om du upplever att ljud och bild gradvis hamnar ur synk vid långa inspelningar."
+    "unifiedTitle": "Perfekt A/V-synk",
+    "unifiedDesc": "Använder en enda ffmpeg-process för både ljud och video — eliminerar all sync-drift. Rekommenderas på. Stäng av endast vid oväntade problem med videoinspelning."
   },
   "wizard": {
     "step1": "Ljudkälla",

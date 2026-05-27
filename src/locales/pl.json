@@ -735,8 +735,8 @@
     "splitHint": "Przy automatycznym dzieleniu plików zawsze używane są osobne pliki.",
     "keepAudioTitle": "Zachowaj osobny plik audio",
     "keepAudioDesc": "Zapisuje także wysokiej jakości plik audio obok połączonego MP4",
-    "unifiedTitle": "Idealna synchronizacja A/V (eksperymentalna)",
-    "unifiedDesc": "Używa jednego procesu ffmpeg dla audio i wideo — eliminuje cały dryft synchronizacji. Włącz, jeśli audio i wideo stopniowo desynchronizują się podczas długich nagrań."
+    "unifiedTitle": "Idealna synchronizacja A/V",
+    "unifiedDesc": "Używa jednego procesu ffmpeg dla audio i wideo — eliminuje cały dryft synchronizacji. Zalecane włączone. Wyłącz tylko w przypadku nieoczekiwanych problemów z nagrywaniem wideo."
   },
   "wizard": {
     "step1": "Źródło dźwięku",

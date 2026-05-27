@@ -735,8 +735,8 @@
     "splitHint": "Avec le découpage automatique de fichiers, des fichiers séparés sont toujours utilisés.",
     "keepAudioTitle": "Conserver le fichier audio séparé",
     "keepAudioDesc": "Enregistre également le fichier audio haute qualité à côté du MP4 combiné",
-    "unifiedTitle": "Synchronisation A/V parfaite (expérimental)",
-    "unifiedDesc": "Utilise un seul processus ffmpeg pour l'audio et la vidéo — élimine toute dérive de synchronisation. Activez si l'audio et la vidéo se désynchronisent progressivement sur de longs enregistrements."
+    "unifiedTitle": "Synchronisation A/V parfaite",
+    "unifiedDesc": "Utilise un seul processus ffmpeg pour l'audio et la vidéo — élimine toute dérive de synchronisation. Recommandé activé. Désactivez uniquement en cas de problèmes inattendus avec l'enregistrement vidéo."
   },
   "wizard": {
     "step1": "Source audio",

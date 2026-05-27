@@ -158,9 +158,11 @@ export function applyVideoSettingsToUI(): void {
   if (keepAudioEl) keepAudioEl.checked = settings.videoKeepAudio !== false
   updateKeepAudioVisibility()
 
-  // Unified-recorder toggle (experimental A/V-sync fix)
+  // Unified-recorder toggle — default ON since v4.51. Treat `undefined`
+  // (= never-touched setting) the same as `true` so fresh installs and
+  // upgrade-paths get perfect A/V sync without having to opt in.
   const unifiedEl = document.getElementById('opt-use-unified-recorder') as HTMLInputElement | null
-  if (unifiedEl) unifiedEl.checked = !!settings.useUnifiedRecorder
+  if (unifiedEl) unifiedEl.checked = settings.useUnifiedRecorder !== false
 
   // Populate device select (best-effort — may not have been loaded yet)
   if (loadedDevices.length) {

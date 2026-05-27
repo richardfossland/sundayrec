@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.51.0] — 2026-05-27
+
+### Changed — Unified-pipeline er nå default
+
+«Perfekt A/V-synk» (unified-ffmpeg-pathen) er nå **default ON** for alle
+brukere. Eksperimentell-merket er fjernet. Etter v4.49–v4.50 har den
+hatt reconnect, preroll og split-recording — funksjonelt på samme nivå
+som den gamle to-prosess-pathen, og med garantert perfekt A/V-sync fra
+første frame.
+
+**Hvem påvirkes:**
+- Nye installasjoner får unified ON som default
+- Eksisterende brukere som aldri har rørt toggle (vanlig) får unified
+  ON automatisk ved oppdatering
+- Eksisterende brukere som EKSPLISITT slo den av forblir med den av
+
+**Hvis du vil opt out:** Innstillinger → Video → slå av «Perfekt A/V-synk».
+Toggle-en finnes fortsatt for power-users som måtte hit en uventet
+edge-case og vil tilbake til legacy-pathen midlertidig.
+
+### Internt
+- `recorder.ts`: `s.useUnifiedRecorder !== false` (undefined = ON) i
+  stedet for `!!s.useUnifiedRecorder` (undefined = OFF)
+- `video-page.ts`: samme tristate-check så toggle viser default-state riktig
+- HTML: `checked`-attributt så fresh DOM-load matcher default
+- i18n oppdatert i 7 språk — fjernet «eksperimentell»-tekst, omformulert
+  beskrivelse til «Anbefales på»-fokus
+
+---
+
 ## [4.50.1] — 2026-05-27
 
 ### Added — Split-recording i unified-modus

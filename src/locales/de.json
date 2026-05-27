@@ -735,8 +735,8 @@
     "splitHint": "Bei automatischer Datei-Aufteilung werden immer getrennte Dateien verwendet.",
     "keepAudioTitle": "Separate Audiodatei behalten",
     "keepAudioDesc": "Speichert die hochwertige Audiodatei zusätzlich zur kombinierten MP4",
-    "unifiedTitle": "Perfekte A/V-Synchronisierung (experimentell)",
-    "unifiedDesc": "Verwendet einen einzelnen ffmpeg-Prozess für Audio und Video — eliminiert jegliche Sync-Drift. Aktivieren Sie diese Option, wenn Audio und Video bei langen Aufnahmen allmählich aus der Sync geraten."
+    "unifiedTitle": "Perfekte A/V-Synchronisierung",
+    "unifiedDesc": "Verwendet einen einzelnen ffmpeg-Prozess für Audio und Video — eliminiert jegliche Sync-Drift. Empfohlen ein. Nur ausschalten bei unerwarteten Problemen mit der Videoaufnahme."
   },
   "wizard": {
     "step1": "Audioquelle",
