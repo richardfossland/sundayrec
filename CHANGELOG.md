@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.49.1] — 2026-05-27
+
+### Added — Reconnect + preroll i unified-modus
+
+Følger opp v4.49.0 (unified ffmpeg-pipeline) med to hovedfeatures
+som tidligere kun fungerte i to-prosess-pathen:
+
+- **Reconnect i unified.** Hvis kameraet eller mikseren mister
+  tilkobling mid-opptak, spawnes nå en NY unified-ffmpeg som åpner
+  begge enheter på nytt. Reconnect-segmentet legges til
+  `session.segments` slik at den eksisterende mergeSegments-koden
+  stitcher det inn ved finalize. Samme 20-forsøk-med-exponential-
+  backoff som dagens path — opptil ~3 min vindu for å håndtere en
+  USB-kabel-knekk.
+
+- **Preroll i unified (med separat audio-fil).** Når brukeren har
+  «Behold separat lydfil» PÅ, prepender preroll-WAV som vanlig på
+  den separate audio-filen (samme applyPreroll-vei som dagens
+  to-prosess-mode). Hvis brukeren har slått av separat audio, logges
+  en advarsel og preroll skippes — å embedde preroll inn i den
+  kombinerte MP4-en krever sin egen mux-pass og kommer i v4.50.
+
+### Architecture
+- `recorder.ts:tryReconnect` har nå en unified-branch som spawn'er
+  ny unified, lager handle-adaptere som peker på samme ffmpeg-proc,
+  og kobler callbacks til renderer (preview-frame + progress).
+- `finishSessionAsync` har nytt fallback: `unified && !keepAudio →
+  skip preroll med log-advarsel` (i stedet for å feile).
+
+---
+
 ## [4.49.0] — 2026-05-27
 
 ### Added — Unified ffmpeg-pipeline (eksperimentell)

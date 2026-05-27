@@ -807,12 +807,28 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
   // Step 1: Pre-roll always prepends to the very first segment (the start of the recording).
   // Previously this targeted session.outputPath which after reconnects pointed to the last
   // segment — applying pre-roll mid-recording was wrong. segments[0] is always the correct target.
+  //
+  // Unified-mode caveat: when the user opted for unified-recorder AND
+  // disabled "keep separate audio", we have no standalone audio file to
+  // prepend onto — the audio is muxed inside the combined MP4. Skip
+  // pre-roll-apply in that case with a clear log; the workaround is to
+  // keep the separate audio file (Settings → Video → "Behold separat lydfil").
   if (session.prerollRaw && session.prerollMs > 0) {
-    try {
-      await applyPreroll(session.prerollRaw, session.prerollMs, session.segments[0], session.settings)
-    } catch (err) {
-      logger.error('recorder', 'pre-roll concat failed — continuing without pre-roll', { msg: String(err) })
+    const s = session.settings as Settings
+    const skipUnifiedPreroll = session.unified && s.videoKeepAudio === false
+    if (skipUnifiedPreroll) {
+      logger.warn('recorder', 'unified-mode + keepAudio=false: pre-roll cannot be embedded into combined MP4 yet — skipping (slå på Behold separat lydfil for preroll-støtte)')
       fs.promises.unlink(session.prerollRaw).catch(() => {})
+    } else {
+      // segments[0] points to the separate audio file (in both legacy and
+      // unified-with-keepAudio modes); applyPreroll prepends the rolling-buffer
+      // WAV onto it.
+      try {
+        await applyPreroll(session.prerollRaw, session.prerollMs, session.segments[0], session.settings)
+      } catch (err) {
+        logger.error('recorder', 'pre-roll concat failed — continuing without pre-roll', { msg: String(err) })
+        fs.promises.unlink(session.prerollRaw).catch(() => {})
+      }
     }
   }
 
@@ -1242,12 +1258,94 @@ function startWatchdog(session: Session): void {
     }
     attempts++
     session.reconnectCount++
-    logger.info('recorder', `reconnect attempt ${attempts}/${MAX_RECONNECT_ATTEMPTS}`)
+    logger.info('recorder', `reconnect attempt ${attempts}/${MAX_RECONNECT_ATTEMPTS}${session.unified ? ' (unified)' : ''}`)
 
     // Build a new output path with _r1/_r2 suffix for the reconnected segment
     const ext     = path.extname(session.outputPath)
     const base    = session.outputPath.slice(0, -ext.length).replace(/_r\d+$/, '')
     const newPath = `${base}_r${session.reconnectCount}${ext}`
+
+    if (session.unified) {
+      // Unified reconnect: spawn a new single-ffmpeg that re-opens BOTH
+      // devices. We allocate a fresh combined-MP4 segment path so the
+      // merger can stitch all reconnect-segments together at finalize time.
+      const newCombinedPath = newPath.replace(/\.[^.]+$/, '_video.mp4')
+      const s = session.settings as Settings
+      const keepAudio = s.videoKeepAudio !== false
+      const unifiedResult = await startUnifiedCapture({
+        settings:     s,
+        combinedPath: newCombinedPath,
+        audioPath:    keepAudio ? newPath : null,
+      })
+      if ('error' in unifiedResult) {
+        setTimeout(tryReconnect, reconnectDelay(attempts))
+        return
+      }
+
+      _phase = 'recording'
+      logger.info('recorder', 'reconnected (unified)', { segment: path.basename(newCombinedPath) })
+
+      // Build new adapter-handles pointing at the new unified proc, mirroring
+      // what startSession does for the first segment.
+      const newAudioAdapter = {
+        proc:             unifiedResult.proc,
+        outputPath:       newPath,
+        startTime:        unifiedResult.startTime,
+        bytesWritten:     unifiedResult.bytesWritten,
+        format:           unifiedResult.format,
+        onExit:           null,
+        onProgress:       null,
+        onSilenceEnd:     null,
+        onSilenceWarning: null,
+        getStderrTail:    () => '',
+        lastError:        null,
+      } as unknown as NativeHandle
+
+      const newVideoAdapter = session.videoHandle ? ({
+        proc:         unifiedResult.proc,
+        outputPath:   newCombinedPath,
+        startTime:    unifiedResult.startTime,
+        bytesWritten: unifiedResult.bytesWritten,
+        format:       unifiedResult.format,
+        onExit:       null,
+        onProgress:   null,
+        onFrame:      null,
+      } as unknown as VideoHandle) : null
+
+      // Wire unified's callbacks to the renderer the same way startSession does.
+      unifiedResult.onFrame    = (frame: Buffer) => {
+        if (activeSession?.sessionId === session.sessionId) {
+          safeSend(session.win, 'video-preview-frame', frame)
+        }
+      }
+      unifiedResult.onProgress = (bytes: number) => {
+        if (activeSession?.sessionId === session.sessionId) {
+          session.lastProgressAt = Date.now()
+          safeSend(session.win, 'recording-progress', { bytes })
+          safeSend(session.win, 'video-progress', { bytes })
+        }
+      }
+      unifiedResult.onExit = (code: number | null) => {
+        if (!activeSession || activeSession.sessionId !== session.sessionId) return
+        if (session.stopping || code === 0) { stopStuckTimer(session); finishSession(session) }
+        else startWatchdog(session)
+      }
+
+      session.outputPath      = newPath
+      session.handle          = newAudioAdapter
+      session.videoHandle     = newVideoAdapter
+      session.videoOutputPath = newCombinedPath
+      session.startTime       = unifiedResult.startTime
+      session.lastProgressAt  = Date.now()
+      session.segments.push(newPath)
+      persistRecovery(session)
+      startRecoveryInterval(session)
+      installStuckTimer(session, session.sessionId)
+
+      safeSend(session.win, 'recording-reconnected', {})
+      notify('SundayRec', getNL().reconnected)
+      return
+    }
 
     const result = await startCapture(session.settings, newPath)
     if ('error' in result) {
