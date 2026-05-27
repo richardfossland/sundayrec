@@ -249,12 +249,27 @@ async function startNdiReceiversForOverlays(
   return runtime
 }
 
-/** Tear down every NDI receiver started for the current stream. Safe to
- *  call from error paths even if startNdiReceivers... never ran. */
+/** Tear down every NDI receiver started for the current stream.
+ *
+ *  Idempotent: atomic array-swap means concurrent callers (the proc.close
+ *  handler + the stopStream IPC handler can both fire when SIGKILL hits)
+ *  see at most one non-empty list — the second invocation iterates a
+ *  fresh [] and is a no-op.
+ *
+ *  Each receiver.stop() races a 2 s timeout so a hung libndi unwind can't
+ *  block shutdown forever — preferable to let the receiver leak than to
+ *  freeze the renderer waiting on a native module that's deadlocked. */
 async function stopActiveNdiReceivers(): Promise<void> {
   const handles = activeNdiReceivers
   activeNdiReceivers = []
-  await Promise.allSettled(handles.map(h => h.stop()))
+  await Promise.allSettled(handles.map(h => withTimeout(h.stop(), 2000, 'ndi-stop-timeout')))
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, tag: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${tag}: ${ms}ms`)), ms)
+    p.then(v => { clearTimeout(t); resolve(v) }, err => { clearTimeout(t); reject(err) })
+  })
 }
 
 /**
@@ -267,12 +282,25 @@ async function stopActiveNdiReceivers(): Promise<void> {
 async function registerAlsoRecordInHistory(filePath: string, startedAt: number): Promise<void> {
   try {
     const stat = await fs.promises.stat(filePath)
-    if (!stat.isFile() || stat.size < 1024) {
-      console.warn('[streamer] alsoRecord file missing or too small — skipping history', filePath)
+    // 100 KB minimum — earlier 1 KB threshold let through ffmpeg's bare
+    // MP4 header (the moov+mdat skeleton ffmpeg writes BEFORE any actual
+    // video frames). Those zero-content files were polluting history with
+    // entries the editor couldn't decode. 100 KB ≈ a few seconds of
+    // H.264 at typical bitrates, which means we have at least some video
+    // worth keeping.
+    if (!stat.isFile() || stat.size < 100 * 1024) {
+      console.warn('[streamer] alsoRecord file missing or too small — skipping history', filePath, 'size=', stat.isFile() ? stat.size : 'n/a')
       return
     }
-    const durationMs = Math.max(0, Date.now() - startedAt)
-    const durationSec = Math.round(durationMs / 1000)
+    // Prefer the duration ffmpeg embedded in the MP4 container over the
+    // wall-clock window (ffmpeg can lag the start by 100-300 ms for camera
+    // warm-up; trailing close can take another 200 ms after SIGTERM).
+    // Falls back to wall-clock when probing fails (very short recordings).
+    let durationSec = Math.round(Math.max(0, Date.now() - startedAt) / 1000)
+    try {
+      const probed = await probeMp4DurationSec(filePath)
+      if (probed !== null && probed > 0) durationSec = Math.round(probed)
+    } catch { /* ignore — fall back to wall-clock */ }
     const startDate = new Date(startedAt)
     const date      = startDate.toLocaleDateString('nb-NO')
     const startTime = startDate.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })
@@ -293,6 +321,33 @@ async function registerAlsoRecordInHistory(filePath: string, startedAt: number):
   } catch (e) {
     console.warn('[streamer] failed to register alsoRecord in history:', e instanceof Error ? e.message : String(e))
   }
+}
+
+/**
+ * Probe an MP4 file's duration via ffmpeg's stderr metadata. Returns
+ * seconds as a float, or null if probing fails (corrupt file, ffmpeg
+ * not responding, etc.). Used to derive `durationSec` for the local
+ * alsoRecord copy — more accurate than wall-clock minus startedAt
+ * because ffmpeg has 100-300 ms of camera warmup we can't subtract
+ * from outside the process.
+ */
+async function probeMp4DurationSec(filePath: string): Promise<number | null> {
+  return new Promise(resolve => {
+    const proc = spawn(ffmpegBin, ['-v', 'info', '-i', filePath], {
+      stdio: ['ignore', 'ignore', 'pipe'],
+    })
+    let stderr = ''
+    proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-4096) })
+    const timeout = setTimeout(() => { try { proc.kill() } catch {}; resolve(null) }, 5000)
+    proc.on('close', () => {
+      clearTimeout(timeout)
+      // "Duration: HH:MM:SS.ms"
+      const m = stderr.match(/Duration:\s*(\d+):(\d+):([\d.]+)/)
+      if (!m) { resolve(null); return }
+      const sec = parseInt(m[1], 10) * 3600 + parseInt(m[2], 10) * 60 + parseFloat(m[3])
+      resolve(Number.isFinite(sec) && sec > 0 ? sec : null)
+    })
+  })
 }
 
 function formatDurationHms(totalSec: number): string {

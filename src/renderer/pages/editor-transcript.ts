@@ -373,14 +373,27 @@ async function startTranscription(): Promise<void> {
 }
 
 function cancelActiveJob(): void {
+  // Cancel calls are fire-and-forget (IPC return values aren't actionable
+  // for us — main process does the actual abort). But the IPC bridge can
+  // throw if main is mid-restart (e.g. renderer crashed and reloaded
+  // before main re-registered handlers), so wrap both .catch'es to keep
+  // the modal close path running even when cancel IPC fails.
   if (activeJobId) {
-    void window.api.whisperCancelTranscribe(activeJobId)
+    void window.api.whisperCancelTranscribe(activeJobId).catch((err: unknown) => {
+      console.warn('[transcript] whisperCancelTranscribe failed:', err)
+    })
   }
-  // Also try to cancel any in-flight download (no-op if none active)
   if (selectedModelId) {
-    void window.api.whisperCancelDownload(selectedModelId)
+    void window.api.whisperCancelDownload(selectedModelId).catch((err: unknown) => {
+      console.warn('[transcript] whisperCancelDownload failed:', err)
+    })
   }
+  // Always close the modal — even if both cancel calls threw, the user
+  // expects the dialog to disappear. A 1.5 s safety timer hard-closes
+  // the modal in case some future change introduces a path where
+  // closeProgressModal itself blocks (today it's synchronous DOM removal).
   closeProgressModal()
+  setTimeout(closeProgressModal, 1500)
 }
 
 function showProgressModal(title: string, percent: number): void {

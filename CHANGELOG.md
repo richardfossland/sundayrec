@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.52.0] — 2026-05-27
+
+### Fixed — Konsoliderte audit-funn (5 parallelle Explore-agenter)
+
+Dyp arkitektur-audit avdekket flere kritiske stabilitets-bugs som ville
+ha kommet opp i produksjon. Adressert i denne releasen:
+
+#### 🚨 Opptak-stack
+- **Adapter ignorerte `lastError`.** Recorder.ts pakket unified-handle
+  som NativeHandle med `lastError: null` hardkodet. Når unified
+  klassifiserte en fatal feil (disk_full, device_disconnected),
+  watchdog så «ingen feil» og loopet reconnect 20 ganger på det som
+  egentlig burde vært fail-stop. Nå brukes en getter som forwarder
+  unified.lastError live til adapter — samme i både start-pathen og
+  reconnect-pathen.
+- **`classifyVideoError` for audio-feil.** Unified-prosessen kan
+  rapportere både audio og video stderr på samme stream, men
+  klassifisereren matchet kun video-mønstre. Audio-mikrofon-
+  disconnect ble feilkategorisert som `device_error` (generisk) i
+  stedet for `device_disconnected` (skulle trigge reconnect). Ny
+  `classifyUnifiedError` kombinerer begge.
+
+#### 🚨 Streaming/NDI
+- **NDI-receiver-stop hadde ingen timeout-guard.** Hvis libndi var
+  deadlocked, `stopActiveNdiReceivers()` kunne blokkere stream-stop
+  evig. Nå races hver receiver.stop() mot en 2 s timeout — vi
+  foretrekker en lekket receiver over en frosset renderer.
+- **`alsoRecord` registrerte 1KB-filer som gyldige opptak.** Earlier
+  threshold på 1 KB lot ffmpegs MP4-header (moov+mdat-skjelett uten
+  faktiske frames) gjennom. Hevet til 100 KB så history bare får
+  filer med faktisk video.
+- **`alsoRecord` brukte wall-clock for varighet.** Avvek 100-300 ms
+  fra faktisk video-lengde pga kamera-warmup. Nå probes MP4-en
+  via ffmpeg metadata for nøyaktig varighet, faller tilbake til
+  wall-clock hvis det feiler.
+
+#### 🚨 Editor/transcript
+- **whisper-cancel kunne henge progress-modal.** Cancel-IPC var
+  fire-and-forget uten error-håndtering, så hvis main-prosessen var
+  midt i restart eller hadde unngått å re-registere handler,
+  feilet IPC og modal stod fast. Nå wrappes begge cancel-call i
+  catch + en 1.5 s safety-timer hard-lukker modal'en uansett.
+
+#### 🚨 Renderer
+- **Save-settings hadde ingen debounce.** Slider/text-input som
+  sendte `save-settings` per keystroke utløste scheduler.reschedule
+  + wake.reschedule + login-item-update + preroll-restart per
+  keystroke — disk-thrashing og potensielle race conditions. Ny
+  `saveSettingsDebounced()` helper i `state.ts` collapser rapid
+  endringer til én IPC-roundtrip per ~400 ms. live-overlays.ts
+  byttet til den delte helperen (og kan deles til flere pages senere).
+
+### Internt
+- 5 parallelle Explore-agenter analyserte opptak, sky, editor,
+  streaming og renderer-arkitektur
+- Konsolidert rapport med 30+ funn klassifisert som 🚨 KRITISK
+  / 🔧 REFAKTOR / 💡 MULIGHET
+- v4.52.0 dekker alle 🚨 KRITISK-funn
+- 🔧 REFAKTOR-gjeld (3 ulike error-klassifiserere, YouTube duplikat
+  PKCE, 50+ module-level let i editor-page, IPC-monolitt) flagget
+  for fremtidige iterasjoner
+
+---
+
 ## [4.51.0] — 2026-05-27
 
 ### Changed — Unified-pipeline er nå default

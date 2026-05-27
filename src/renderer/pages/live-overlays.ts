@@ -12,7 +12,7 @@
  * stay scannable when the stream is running.
  */
 
-import { settings, patchSettings } from '../state'
+import { settings, patchSettings, saveSettingsDebounced } from '../state'
 import { escHtml } from '../helpers'
 import type { OverlayConfig, OverlayPosition, OverlaySourceType } from '../../types'
 
@@ -328,14 +328,13 @@ function deleteOverlay(id: string): void {
 
 // ─── Persistence ─────────────────────────────────────────────────────────
 
-let saveTimer: ReturnType<typeof setTimeout> | null = null
 function persistOnly(): void {
-  // Debounce — sliders fire many input events per second.
-  if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => {
-    saveTimer = null
-    window.api.saveSettings(settings).catch(err => console.error('[overlays] save failed', err))
-  }, 250)
+  // Sliders fire many input events per second — use the shared debounce
+  // helper from state.ts so all renderer pages collapse rapid saves into
+  // one IPC round-trip + disk write. Earlier we had our own 250 ms timer
+  // local to this file, which conflicted with similar timers elsewhere
+  // (each fired independently and stole IPC bandwidth).
+  void saveSettingsDebounced(250).catch(err => console.error('[overlays] save failed', err))
 }
 
 function persistAndRerender(): void {

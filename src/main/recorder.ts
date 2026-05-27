@@ -547,19 +547,27 @@ export async function startSession(
     // Adapter — minimal NativeHandle-shaped surface that points at the
     // unified process so the rest of recorder.ts (watchdog, stop, retry)
     // sees the same lifecycle events it expects from native-recorder.
-    audioResult = {
+    //
+    // CRITICAL: lastError must FORWARD from the live unified handle, not
+    // be a static null. Earlier versions captured `lastError: null` once
+    // and the watchdog therefore saw "no fatal error" even when unified
+    // had classified disk_full / device_disconnected → reconnect would
+    // loop 20× on a permanent failure. We use a getter so each read picks
+    // up the current value from the underlying unified.lastError.
+    audioResult = Object.defineProperties({
       proc:             unified.proc,
       outputPath:       outputPath,
       startTime:        unified.startTime,
-      bytesWritten:     unified.bytesWritten,
       format:           unified.format,
       onExit:           null,
       onProgress:       null,
       onSilenceEnd:     null,
       onSilenceWarning: null,
       getStderrTail:    () => '',
-      lastError:        null,
-    } as Awaited<ReturnType<typeof startCapture>>
+    }, {
+      bytesWritten: { get: () => unified.bytesWritten, enumerable: true },
+      lastError:    { get: () => unified.lastError ?? null, enumerable: true },
+    }) as Awaited<ReturnType<typeof startCapture>>
     // Video "handle" also wraps the same proc so the renderer's preview
     // frame channel works (unified emits the same MJPEG sidecar that
     // video-recorder does).
@@ -1299,20 +1307,25 @@ function startWatchdog(session: Session): void {
       logger.info('recorder', 'reconnected (unified)', { segment: path.basename(newCombinedPath) })
 
       // Build new adapter-handles pointing at the new unified proc, mirroring
-      // what startSession does for the first segment.
-      const newAudioAdapter = {
+      // what startSession does for the first segment. Same lastError-getter
+      // pattern — without the live forward the next watchdog cycle would
+      // see "no fatal error" even when unified had classified disk_full or
+      // device_disconnected → reconnect would loop forever on a permanent
+      // failure.
+      const newAudioAdapter = Object.defineProperties({
         proc:             unifiedResult.proc,
         outputPath:       newPath,
         startTime:        unifiedResult.startTime,
-        bytesWritten:     unifiedResult.bytesWritten,
         format:           unifiedResult.format,
         onExit:           null,
         onProgress:       null,
         onSilenceEnd:     null,
         onSilenceWarning: null,
         getStderrTail:    () => '',
-        lastError:        null,
-      } as unknown as NativeHandle
+      }, {
+        bytesWritten: { get: () => unifiedResult.bytesWritten, enumerable: true },
+        lastError:    { get: () => unifiedResult.lastError ?? null, enumerable: true },
+      }) as unknown as NativeHandle
 
       const newVideoAdapter = session.videoHandle ? ({
         proc:         unifiedResult.proc,

@@ -33,10 +33,32 @@ import {
   listFfmpegDevices,
   findBestDeviceMatch,
   buildCodecArgs,
+  classifyFfmpegError,
 } from './native-recorder'
 import { resolveVideoInput } from './native-recorder'
 import { getWorkingMacConfigIdx, MAC_CONFIGS, buildMacInputArgs } from './video-preview'
 import { classifyVideoError, resolutionToDimensions, autoBitrate, buildVideoFilterComplex } from './video-recorder'
+
+/**
+ * Classify ffmpeg stderr from a unified-recorder process. The unified
+ * process opens BOTH a camera and a microphone, so stderr can contain
+ * either audio-flavoured errors (`audclnt_e_…`, "no audio endpoint", USB
+ * mixer disconnects) or video-flavoured ones ("no video device", camera
+ * permission denied).
+ *
+ * Earlier we only ran the video classifier here, which meant audio-only
+ * failures (microphone unplugged) were tagged `device_error` instead of
+ * the more specific `device_disconnected` — causing the reconnect watchdog
+ * to burn through 20 retries when fail-stop would have been the right
+ * call. We now run BOTH classifiers and prefer the more specific one
+ * (anything other than the generic `device_error` fallback).
+ */
+function classifyUnifiedError(stderr: string): string {
+  const audioVerdict = classifyFfmpegError(stderr)
+  if (audioVerdict !== 'device_error') return audioVerdict
+  const videoVerdict = classifyVideoError(stderr)
+  return videoVerdict
+}
 import type { Settings, RecordingOpts } from '../types'
 
 export interface UnifiedHandle {
@@ -290,9 +312,11 @@ function spawnUnified(
     const text = d.toString()
     stderrBuf = (stderrBuf + text).slice(-32768)
     // Watchdog cue: classify any fatal error so the recorder can decide
-    // between fail-stop and reconnect (same vocabulary as the legacy
-    // recorders so the existing classification table in recorder.ts works).
-    const err = classifyVideoError(text)
+    // between fail-stop and reconnect. Use the hybrid audio+video classifier
+    // because a unified process can report either flavour of failure on
+    // the same stderr stream — using video-only patterns dropped audio
+    // disconnects on the floor (mic unplug → device_error → 20 retries).
+    const err = classifyUnifiedError(text)
     if (err !== 'device_error') handle.lastError = err
     // Progress: ffmpeg emits "size=12345kB" every second. Throttle to 5 s.
     const m = /size=\s*(\d+)kB/.exec(text)
