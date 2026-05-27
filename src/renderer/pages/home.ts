@@ -75,22 +75,29 @@ function relocateVuForVideoMode(enabled: boolean): void {
     const previewCard = preview?.querySelector<HTMLElement>('.video-preview-card')
     if (vu && previewCard) move(vu, previewCard)
 
-    // Three audio info-cards from the horizontal strip — pull them OUT of
-    // .info-strip and stack them in the right column. Keep the empty
-    // .info-strip in place so move-back logic is symmetric.
+    // Place info-cards in the side column in a specific order so video-
+    // mode reads top→bottom as: Lydkilde, Kamera, Videokvalitet, Lagring,
+    // Format. The cards live in two physically separate strips on the
+    // page (the audio strip + #video-info-strip), so we pick each by a
+    // stable inner anchor and append individually — order in the source
+    // markup doesn't matter.
     const audioStrip = document.querySelector<HTMLElement>('#page-home > .info-strip:not(.video-info-strip)')
-    if (audioStrip) {
-      Array.from(audioStrip.children).forEach(child => {
-        if (child instanceof HTMLElement) move(child, cardSlot)
-      })
-    }
-
-    // Two video info-cards (KAMERA + VIDEOKVALITET) — move out of their strip
     const videoStrip = document.getElementById('video-info-strip') as HTMLElement | null
-    if (videoStrip) {
-      Array.from(videoStrip.children).forEach(child => {
-        if (child instanceof HTMLElement) move(child, cardSlot)
-      })
+
+    const findAudioCard = (innerId: string): HTMLElement | null =>
+      audioStrip?.querySelector<HTMLElement>(`#${innerId}`)?.closest<HTMLElement>('.info-card') ?? null
+    const findVideoCard = (innerId: string): HTMLElement | null =>
+      videoStrip?.querySelector<HTMLElement>(`#${innerId}`)?.closest<HTMLElement>('.info-card') ?? null
+
+    const ordered: Array<HTMLElement | null> = [
+      findAudioCard('home-device-name'),     // LYDKILDE
+      findVideoCard('home-video-device-name'), // KAMERA
+      findVideoCard('home-video-quality'),     // VIDEOKVALITET
+      findAudioCard('home-storage-value'),     // LAGRING
+      document.getElementById('home-format-card'), // FORMAT
+    ]
+    for (const card of ordered) {
+      if (card) move(card, cardSlot)
     }
   } else {
     if (!_videoLayoutActive) return

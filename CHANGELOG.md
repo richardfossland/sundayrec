@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.48.0] — 2026-05-27
+
+### Added
+- **Live kamera-preview FØR du klikker Start** på Direktesending-fanen.
+  Tidligere var preview-vinduet svart helt til strømmen kom i gang —
+  nå ser du kameraet idle med en gang du går inn på fanen, så du kan
+  ramme inn motivet før du går live. Preview stoppes automatisk når
+  strømmen starter (avfoundation låser kameraet eksklusivt) og
+  restartes når strømmen stopper.
+- **«Logg inn med Google» for e-postvarsel** (backend ferdig, UI nesten):
+  bytt SMTP-konfigurasjon med å koble inn Google-kontoen din direkte.
+  Sender e-poster via Gmail API i stedet for SMTP-server. Ingen
+  app-passord eller server-navn. SMTP beholdes som «Avansert» for
+  brukere med egen mail-server. Krever `gmail.send`-scope i Google
+  OAuth-appen (App Review).
+
+### Changed
+- **Info-kort-rekkefølge i video-modus.** Sidekolonne på Hjem stables
+  nå som: Lydkilde → Kamera → Videokvalitet → Lagring → Format
+  (matcher logisk «hva spilles inn» → «hvor lagres det»-flyt).
+- **Disabled Live-knapp er nå dempet rød** i stedet for grå/mørk —
+  matcher Hjem-skjermens «Start opptak»-knapp så den røde
+  call-to-action-fargen forblir konsistent på tvers av fanene.
+- **Opptak-overlay: video fyller hele ramma.** Den sorte letterboxen
+  rundt opptaks-preview i recording-overlay er borte. Bytte fra
+  `object-fit: contain` til `cover` så kameraet fyller hele
+  rammen — bevarer den dynamiske aspect-ratio-en så ingenting
+  bli unaturlig strukket.
+
+---
+
 ## [4.47.2] — 2026-05-27
 
 ### Changed

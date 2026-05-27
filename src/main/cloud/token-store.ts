@@ -4,8 +4,10 @@ import type { CloudServiceId } from '../../types'
 
 /** Services that can hold an OAuth token. `CloudServiceId` covers backup
  *  services (Drive/Dropbox/OneDrive); 'youtube' is a publish-only target
- *  with its own token, stored in the same encrypted vault. */
-export type TokenServiceId = CloudServiceId | 'youtube'
+ *  with its own token; 'gmail' powers the OAuth-based email-notification
+ *  path (so users can skip SMTP-config + app-passwords entirely). All
+ *  share the same encrypted vault. */
+export type TokenServiceId = CloudServiceId | 'youtube' | 'gmail'
 
 export interface TokenData {
   accessToken:   string
@@ -27,6 +29,7 @@ interface RawStore {
   'dropbox'?: string
   'onedrive'?: string
   'youtube'?: string
+  'gmail'?: string
 }
 
 const store = new Store<RawStore>({ name: 'sundayrec-cloud' })

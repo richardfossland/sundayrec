@@ -1613,18 +1613,45 @@
         <div id="email-section" style="display:none">
           <label class="form-label mt" data-i18n="general.sendTo">SEND TIL</label>
           <input type="email" class="form-input" id="email-address" placeholder="navn@kirke.no" />
-          <label class="form-label mt" data-i18n="notify.smtpServer">E-POSTTJENESTE (SMTP)</label>
-          <input type="text" class="form-input" id="email-smtp" placeholder="smtp.gmail.com" />
-          <div class="form-hint" data-i18n="notify.smtpHint">Gmail: smtp.gmail.com · Outlook: smtp.office365.com</div>
-          <label class="form-label mt" data-i18n="notify.smtpUser">BRUKERNAVN (E-POSTADRESSE)</label>
-          <input type="text" class="form-input" id="email-user" placeholder="din@epost.no" />
-          <label class="form-label mt" data-i18n="notify.smtpPass">PASSORD / APP-PASSORD</label>
-          <div class="pass-row">
-            <input type="password" class="form-input" id="email-pass" />
-            <button type="button" class="btn-link" id="btn-clear-smtp-pass" style="display:none" data-i18n="general.clearPass">Fjern</button>
+
+          <!-- Gmail OAuth — primary path so users don't have to deal with
+               app-passwords + SMTP server names. The button toggles between
+               "connect" and "disconnect/email" via JS in publish-page.ts. -->
+          <div class="email-oauth-block" style="margin-top:16px">
+            <label class="form-label" data-i18n="notify.emailMethodLabel">SENDEMETODE</label>
+            <div class="email-oauth-card" id="email-gmail-card">
+              <div class="email-oauth-row">
+                <svg viewBox="0 0 48 48" width="22" height="22" style="flex-shrink:0"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24c0 3.55.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>
+                <div class="email-oauth-text">
+                  <div class="email-oauth-title" data-i18n="notify.emailGmailTitle">Logg inn med Google</div>
+                  <div class="email-oauth-sub" id="email-gmail-status" data-i18n="notify.emailGmailDesc">Send via din Gmail-konto — ingen SMTP-konfig.</div>
+                </div>
+                <button type="button" class="btn-secondary btn-sm" id="btn-email-gmail-connect" data-i18n="notify.emailGmailConnect">Koble til</button>
+                <button type="button" class="btn-ghost btn-sm" id="btn-email-gmail-disconnect" style="display:none" data-i18n="notify.emailGmailDisconnect">Koble fra</button>
+              </div>
+            </div>
           </div>
-          <div class="form-hint" data-i18n="notify.smtpPassHint">Gmail krever et «App-passord» fra kontosikkerhetsinnstillingene.</div>
-          <input type="hidden" id="email-port" value="587" />
+
+          <!-- Advanced: SMTP — collapsed by default. Power users (kirker med
+               egen mail-server) kan utvide; vanlige brukere ser kun Gmail-knappen. -->
+          <details class="email-advanced" id="email-smtp-advanced" style="margin-top:16px">
+            <summary class="email-advanced-summary" data-i18n="notify.emailAdvanced">Avansert: bruk SMTP i stedet</summary>
+            <div class="email-advanced-body">
+              <label class="form-label mt" data-i18n="notify.smtpServer">E-POSTTJENESTE (SMTP)</label>
+              <input type="text" class="form-input" id="email-smtp" placeholder="smtp.gmail.com" />
+              <div class="form-hint" data-i18n="notify.smtpHint">Gmail: smtp.gmail.com · Outlook: smtp.office365.com</div>
+              <label class="form-label mt" data-i18n="notify.smtpUser">BRUKERNAVN (E-POSTADRESSE)</label>
+              <input type="text" class="form-input" id="email-user" placeholder="din@epost.no" />
+              <label class="form-label mt" data-i18n="notify.smtpPass">PASSORD / APP-PASSORD</label>
+              <div class="pass-row">
+                <input type="password" class="form-input" id="email-pass" />
+                <button type="button" class="btn-link" id="btn-clear-smtp-pass" style="display:none" data-i18n="general.clearPass">Fjern</button>
+              </div>
+              <div class="form-hint" data-i18n="notify.smtpPassHint">Gmail krever et «App-passord» fra kontosikkerhetsinnstillingene.</div>
+              <input type="hidden" id="email-port" value="587" />
+            </div>
+          </details>
+
           <button type="button" class="btn-secondary" id="btn-test-email" style="margin-top:12px" data-i18n="general.testEmail">Test e-post</button>
         </div>
       </div>

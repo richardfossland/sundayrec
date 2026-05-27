@@ -18,6 +18,7 @@ import { makeVuState, tickVU, stopVuState } from '../audio/vu'
 import type { VuState } from '../audio/vu'
 import type { StreamDestinationStored } from '../../types'
 import { setupLiveOverlays, reactivateLiveOverlays } from './live-overlays'
+import { normalizeFrameData } from '../../shared/normalize-frame-data'
 
 // ── State ────────────────────────────────────────────────────────────────
 interface StreamStats {
@@ -92,6 +93,10 @@ export function reactivateLivePage(): void {
   startUptimeInterval()
   subscribeStats()
   startVuMeter()
+  // Idle camera-preview so the user sees the camera BEFORE clicking Start.
+  // Skipped when a stream is already running (avfoundation locks the device,
+  // and the live stream's snapshot-JPG path covers the active state).
+  if (!lastStats.active) startIdleCameraPreview()
 }
 
 export function deactivateLivePage(): void {
@@ -99,6 +104,69 @@ export function deactivateLivePage(): void {
   if (uptimeInterval)  { clearInterval(uptimeInterval);  uptimeInterval  = null }
   if (unsubStats) { unsubStats(); unsubStats = undefined }
   stopVuMeter()
+  stopIdleCameraPreview()
+}
+
+// ── Idle camera preview (before stream starts) ─────────────────────────────
+//
+// Same MJPEG-frame mechanism the Home page uses for its preview. We only run
+// this while idle — when the user starts the stream, ffmpeg takes the camera
+// over and the active-stream branch in startPreviewInterval() takes the
+// snapshot JPG path instead. avfoundation locks the device exclusively, so
+// trying to keep preview running alongside the stream would compete with
+// streamer.ts for the camera handle.
+
+let idlePreviewFrameUnsub: (() => void) | undefined
+let idlePreviewLastFrameTs = 0
+let idlePreviewActive = false
+
+function startIdleCameraPreview(): void {
+  if (idlePreviewActive) return
+  // Skip when there's no camera configured — user is doing audio-only,
+  // the preview will stay on the "waiting for stream" placeholder.
+  if (!settings.videoDeviceName && settings.videoDeviceIndex == null) return
+  idlePreviewActive = true
+
+  const img         = document.getElementById('live-preview-img') as HTMLImageElement | null
+  const placeholder = document.getElementById('live-preview-placeholder') as HTMLElement | null
+
+  window.api.videoPreviewStart?.({
+    videoDeviceName:  settings.videoDeviceName,
+    videoDeviceIndex: settings.videoDeviceIndex,
+    videoFramerate:   settings.videoFramerate,
+  })?.catch(() => { /* main-side handles the error path */ })
+
+  const frameIntervalMs = Math.floor(1000 / (settings.videoFramerate ?? 30)) - 2
+  idlePreviewFrameUnsub = window.api.on('video-preview-frame', (data: unknown) => {
+    if (!idlePreviewActive || lastStats.active) return
+    const now = Date.now()
+    if (now - idlePreviewLastFrameTs < frameIntervalMs) return
+    idlePreviewLastFrameTs = now
+    const arr = normalizeFrameData(data)
+    if (!img || !arr || arr.length < 4) return
+    const url = URL.createObjectURL(new Blob([arr as BlobPart], { type: 'image/jpeg' }))
+    const prev = img.src
+    img.src = url
+    img.style.display = ''
+    if (placeholder) placeholder.style.display = 'none'
+    if (prev.startsWith('blob:')) URL.revokeObjectURL(prev)
+  }) ?? undefined
+}
+
+function stopIdleCameraPreview(): void {
+  if (!idlePreviewActive) return
+  idlePreviewActive = false
+  if (idlePreviewFrameUnsub) { idlePreviewFrameUnsub(); idlePreviewFrameUnsub = undefined }
+  window.api.videoPreviewStop?.().catch(() => {})
+  // Restore placeholder so the next visit doesn't show a stale frame.
+  const img         = document.getElementById('live-preview-img') as HTMLImageElement | null
+  const placeholder = document.getElementById('live-preview-placeholder') as HTMLElement | null
+  if (img) {
+    if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src)
+    img.removeAttribute('src')
+    img.style.display = 'none'
+  }
+  if (placeholder) placeholder.style.display = ''
 }
 
 // ── VU meter (pre-stream audio confidence check) ─────────────────────────
@@ -377,6 +445,13 @@ async function onStartStopClick(alsoRecord: boolean): Promise<void> {
   setStatusPill('is-preparing', t('live.statusPreparing', 'Forbereder…'))
   btn.disabled = true
   if (streamOnlyBtn) streamOnlyBtn.disabled = true
+
+  // Stop idle camera preview BEFORE asking main to spawn the stream
+  // ffmpeg — avfoundation holds an exclusive lock on the camera, and
+  // failing to release it first deadlocks the stream startup. We restart
+  // the idle preview again in updateStartButton() when active=false.
+  stopIdleCameraPreview()
+
   try {
     const result = await window.api.streamStart({
       resolution,
@@ -388,6 +463,9 @@ async function onStartStopClick(alsoRecord: boolean): Promise<void> {
     if (!result.ok) {
       showError(result.error ?? t('live.connectionFailed', 'Tilkobling feilet'))
       setStatusPill('is-idle', t('live.statusReady', 'Klar'))
+      // Stream-start failed — restart idle preview so the user isn't
+      // staring at a black box wondering what's going on.
+      startIdleCameraPreview()
       return
     }
     // The 'stream-stats' event will flip the pill to live; refresh preview path
@@ -396,6 +474,7 @@ async function onStartStopClick(alsoRecord: boolean): Promise<void> {
   } catch (err) {
     showError((err as Error).message)
     setStatusPill('is-idle', t('live.statusReady', 'Klar'))
+    startIdleCameraPreview()
   } finally {
     btn.disabled = false
     if (streamOnlyBtn) streamOnlyBtn.disabled = false
@@ -407,6 +486,7 @@ function updateStartButton(active: boolean): void {
   const streamOnly   = document.getElementById('btn-live-start-stream-only') as HTMLButtonElement | null
   if (!btn) return
   const span = btn.querySelector('span')
+  const wasActive = btn.classList.contains('is-active')
   if (active) {
     btn.classList.add('is-active')
     if (span) span.textContent = t('live.stopBtn', '■ Stopp')
@@ -417,6 +497,9 @@ function updateStartButton(active: boolean): void {
     btn.classList.remove('is-active')
     if (span) span.textContent = t('live.startBtn', '🔴 Start direktesending + opptak')
     if (streamOnly) streamOnly.style.display = ''
+    // Stream just transitioned active → idle: restart idle camera-preview
+    // so the user sees the camera again instead of a frozen last-snapshot.
+    if (wasActive) startIdleCameraPreview()
   }
   updateStartButtonState()
 }

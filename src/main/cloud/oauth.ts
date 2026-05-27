@@ -110,7 +110,21 @@ async function getFreePort(): Promise<number> {
   })
 }
 
+/**
+ * Run the Google OAuth flow for the default Drive scope. `openGoogleAuthWithScope`
+ * underneath does the actual work — call that directly if you want a different
+ * scope (Gmail send for email notifications, YouTube upload, etc.).
+ */
 export async function openGoogleAuth(): Promise<{ codePromise: Promise<string>; verifier: string; redirectUri: string }> {
+  return openGoogleAuthWithScope(CLOUD_CONFIG.googleDrive.scope)
+}
+
+/**
+ * Same OAuth flow as openGoogleAuth() but takes a custom scope string. Used
+ * for Gmail (mail notification path) so the user gets ONE consent screen
+ * granting only what's needed for that feature.
+ */
+export async function openGoogleAuthWithScope(scope: string): Promise<{ codePromise: Promise<string>; verifier: string; redirectUri: string }> {
   if (!isServiceConfigured('google-drive')) {
     return {
       codePromise: Promise.reject(new Error('OAuth client not configured for google-drive. Set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET in .env and rebuild.')),
@@ -180,7 +194,7 @@ export async function openGoogleAuth(): Promise<{ codePromise: Promise<string>; 
     state,
     code_challenge:        challenge,
     code_challenge_method: 'S256',
-    scope:                 CLOUD_CONFIG.googleDrive.scope,
+    scope,
     access_type:           'offline',
     prompt:                'consent',
   })
