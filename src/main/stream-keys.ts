@@ -36,13 +36,28 @@ export function getStreamKey(destId: string): string | null {
   } catch { return null }
 }
 
-export function setStreamKey(destId: string, key: string): void {
-  if (!key) { store.delete(destId); return }
-  warnIfPlaintext()
-  const enc = safeStorage.isEncryptionAvailable()
-    ? safeStorage.encryptString(key).toString('base64')
-    : key
+/**
+ * Returns true when storing a key right now would be encrypted at rest.
+ * Callers (the IPC handler for `stream-set-key`) can short-circuit and
+ * surface a UI warning rather than silently writing plaintext to disk.
+ */
+export function isEncryptionAvailable(): boolean {
+  return safeStorage.isEncryptionAvailable()
+}
+
+export function setStreamKey(destId: string, key: string): { ok: boolean; error?: string } {
+  if (!key) { store.delete(destId); return { ok: true } }
+  // Refuse to store unencrypted. A shared-account machine could expose the
+  // key via the JSON file on disk to anyone with filesystem access. The
+  // user-facing flow asks the caller to show a "kan ikke lagre — krypteringe
+  // er ikke tilgjengelig på denne maskinen" message rather than save in clear.
+  if (!safeStorage.isEncryptionAvailable()) {
+    warnIfPlaintext()
+    return { ok: false, error: 'safeStorage_unavailable' }
+  }
+  const enc = safeStorage.encryptString(key).toString('base64')
   store.set(destId, enc)
+  return { ok: true }
 }
 
 export function deleteStreamKey(destId: string): void {

@@ -4011,4 +4011,102 @@ button > svg:first-child { flex-shrink: 0; }
   flex-shrink: 0;
 }
 .thumb-card-icon-home { width: 48px; height: 48px; margin-right: 10px; }
+
+/* ─── Live overlay configuration ───────────────────────────────────────── */
+.live-overlay-card { margin-top: 16px; }
+.overlay-list { display: flex; flex-direction: column; gap: 10px; }
+.overlay-empty {
+  font-size: 13px;
+  color: var(--muted, #6e6e76);
+  font-style: italic;
+  padding: 12px 0;
+}
+.overlay-row {
+  border: 1px solid var(--border, #2a2a32);
+  background: var(--bg2, #15151b);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.overlay-row-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.overlay-row-header .ov-name { flex: 1 1 160px; min-width: 120px; }
+.overlay-row-header .ov-type { flex: 0 0 auto; max-width: 220px; }
+.overlay-row-source {
+  font-size: 12px;
+  color: var(--muted, #8a8a92);
+}
+.overlay-row-source .muted { color: var(--muted, #8a8a92); opacity: .8; }
+.overlay-row-warn {
+  font-size: 12px;
+  color: #f5a623;
+  background: rgba(245,166,35,.08);
+  border: 1px solid rgba(245,166,35,.25);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.overlay-row-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px 14px;
+  align-items: center;
+}
+.overlay-ctrl {
+  font-size: 11px;
+  color: var(--muted, #8a8a92);
+  letter-spacing: .3px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.overlay-ctrl input[type="range"] { width: 100%; }
+.overlay-ctrl-chroma {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.overlay-ctrl-chroma input[type="color"] {
+  width: 28px; height: 22px; border: none; padding: 0; background: transparent;
+  cursor: pointer;
+}
+.overlay-num {
+  display: inline-block;
+  min-width: 36px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text, #e7e7ea);
+}
+.overlay-toggle {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 22px;
+  flex: 0 0 auto;
+}
+.overlay-toggle input { opacity: 0; width: 0; height: 0; }
+.overlay-toggle-knob {
+  position: absolute; inset: 0;
+  cursor: pointer;
+  background: #3a3a44;
+  border-radius: 999px;
+  transition: background .15s ease;
+}
+.overlay-toggle-knob::before {
+  content: '';
+  position: absolute;
+  width: 16px; height: 16px;
+  left: 3px; top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform .15s ease;
+}
+.overlay-toggle input:checked + .overlay-toggle-knob { background: #2db66c; }
+.overlay-toggle input:checked + .overlay-toggle-knob::before { transform: translateX(16px); }
 .thumb-card-icon-search { width: 64px; height: 64px; margin-right: 12px; }

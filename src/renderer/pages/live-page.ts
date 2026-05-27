@@ -17,6 +17,7 @@ import { escHtml } from '../helpers'
 import { makeVuState, tickVU, stopVuState } from '../audio/vu'
 import type { VuState } from '../audio/vu'
 import type { StreamDestinationStored } from '../../types'
+import { setupLiveOverlays, reactivateLiveOverlays } from './live-overlays'
 
 // ── State ────────────────────────────────────────────────────────────────
 interface StreamStats {
@@ -70,6 +71,9 @@ export function setupLivePage(): void {
     r.addEventListener('change', () => updateStartButtonState())
   })
   document.getElementById('live-framerate')?.addEventListener('change', () => updateStartButtonState())
+
+  // Overlay configuration UI — separate module so this file doesn't balloon.
+  setupLiveOverlays()
 }
 
 // ── Activation lifecycle ─────────────────────────────────────────────────
@@ -79,6 +83,7 @@ export function reactivateLivePage(): void {
   // added/removed destinations on the settings tab while we were away).
   syncQualityFromSettings()
   renderDestinations()
+  reactivateLiveOverlays()
   refreshPreviewPath()
   // Pick up current stream state from main in case a stream is already alive.
   refreshStatus()

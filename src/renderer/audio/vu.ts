@@ -12,6 +12,10 @@ export interface VuState {
   pkTL: number; pkTR: number
   smL: number; smR: number
   peakL: number; peakR: number
+  /** Pre-allocated read buffers — sized to fftSize once when analyser is set,
+   *  reused every frame so the 60 Hz tick produces zero GC pressure. */
+  bufL: Float32Array | null
+  bufR: Float32Array | null
 }
 
 const SMOOTH    = 0.55
@@ -20,15 +24,23 @@ const PEAK_FALL = 25     // dB/sec
 
 export function makeVuState(): VuState {
   return { animFrame: null, stream: null, ctx: null, analyserL: null, analyserR: null,
-    pkL: -60, pkR: -60, pkTL: 0, pkTR: 0, smL: -60, smR: -60, peakL: -60, peakR: -60 }
+    pkL: -60, pkR: -60, pkTL: 0, pkTR: 0, smL: -60, smR: -60, peakL: -60, peakR: -60,
+    bufL: null, bufR: null }
 }
 
-export function getDbFS(analyser: AnalyserNode): number {
-  const buf = new Float32Array(analyser.fftSize)
-  analyser.getFloatTimeDomainData(buf)
+/**
+ * Computes dBFS from an analyser using a caller-provided buffer. The buffer
+ * MUST be at least `analyser.fftSize` long. Reusing the same buffer per
+ * frame avoids ~4 KB allocation at 60 fps × 2 channels = ~480 KB/sec of GC
+ * pressure that previously surfaced as occasional jank.
+ */
+export function getDbFS(analyser: AnalyserNode, buf?: Float32Array): number {
+  const sampleBuf = buf && buf.length >= analyser.fftSize ? buf : new Float32Array(analyser.fftSize)
+  analyser.getFloatTimeDomainData(sampleBuf)
+  const len = analyser.fftSize
   let sum = 0
-  for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i]
-  const rms = Math.sqrt(sum / buf.length)
+  for (let i = 0; i < len; i++) sum += sampleBuf[i] * sampleBuf[i]
+  const rms = Math.sqrt(sum / len)
   return rms > 0 ? Math.max(-60, 20 * Math.log10(rms)) : -60
 }
 
@@ -78,8 +90,17 @@ export function tickVU(
   onSignal?: (dbL: number, dbR: number, state: VuState) => void
 ): void {
   if (!state.analyserL || !state.analyserR) return
+  // Lazily size the reusable sample buffers to match the analyser fftSize.
+  // analyser.fftSize is constant for the lifetime of the analyser, so this
+  // allocates exactly once per (re)attach.
+  if (!state.bufL || state.bufL.length !== state.analyserL.fftSize) {
+    state.bufL = new Float32Array(state.analyserL.fftSize)
+  }
+  if (!state.bufR || state.bufR.length !== state.analyserR.fftSize) {
+    state.bufR = new Float32Array(state.analyserR.fftSize)
+  }
   const now  = Date.now()
-  const rawL = getDbFS(state.analyserL), rawR = getDbFS(state.analyserR)
+  const rawL = getDbFS(state.analyserL, state.bufL), rawR = getDbFS(state.analyserR, state.bufR)
   state.smL = rawL > state.smL ? rawL : state.smL * SMOOTH + rawL * (1 - SMOOTH)
   state.smR = rawR > state.smR ? rawR : state.smR * SMOOTH + rawR * (1 - SMOOTH)
   const pL = computePeak(state.smL, state.pkL, state.pkTL, now)
@@ -99,6 +120,7 @@ export function stopVuState(state: VuState): void {
   if (state.stream)     { state.stream.getTracks().forEach(t => t.stop()); state.stream = null }
   if (state.ctx)        { state.ctx.close(); state.ctx = null }
   state.analyserL = null; state.analyserR = null
+  state.bufL = null; state.bufR = null
   state.pkL = -60; state.pkR = -60; state.pkTL = 0; state.pkTR = 0
   state.smL = -60; state.smR = -60; state.peakL = -60; state.peakR = -60
 }

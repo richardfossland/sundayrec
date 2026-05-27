@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.43.0] — 2026-05-27
+
+### Added
+- **Live overlays — grafikk og presentasjon over direktesendingen.** Du kan
+  nå legge over kirkens logo, lyrics/skriftsteder fra EasyWorship (via
+  skjerm-capture på samme maskin), lower-third-grafikk eller PIP-vinduer
+  oppå kameraet mens du sender direkte. Hver overlay konfigureres på
+  Direktesending-fanen med kilde (bilde / skjerm / vindusregion), 9-grid +
+  fullskjerm + tilpasset posisjon, størrelse, gjennomsiktighet og valgfri
+  chroma key (for grønnskjerm-output fra EW). Overlays påvirker bare
+  direktesendingen — selve opptaket lagres rent, så editor + podcast
+  fortsatt jobber med uberørt video. *NDI-nettverkskilde kommer i v4.44.*
+
+### Fixed
+- **Recorder: kunne sjeldent henge i 'finalizing'-fasen.** Hvis
+  finishSessionAsync kastet en feil (f.eks. mid-prepEpisode), ble
+  phase-machine stående i 'finalizing' og blokkerte alle neste opptak.
+  Nå returneres tilstanden alltid til 'idle' på error-banen.
+- **Recorder: hindrer overlappende start-kall.** En andre startSession-kall
+  i preflight-vinduet (typisk scheduler.triggerStart som race-r med en
+  manuell start) kunne tidligere få AVFoundation-konflikt fordi det første
+  kallet ennå ikke hadde låst enheten. La til 'starting' i guard-en.
+- **Streamer: overlay-pipeline ble bygget to ganger.** Hvis en overlay-fil
+  ble slettet mellom de to kallene (sjelden, men mulig på lokalt nettverk)
+  kastet den andre buildOverlayPipeline en feil uten å bli fanget, og
+  prosessen krasjet stille. Nå bygges pipelinen én gang og resultatet
+  trådes til output-byggingen.
+- **Stream-keys nektes lagret i klartekst.** På maskiner uten tilgjengelig
+  Mac Keychain / Windows Credential Manager (sjelden, men kan skje på
+  delte konti) ble RTMP-nøklene tidligere lagret som klartekst i en
+  JSON-fil. Nå avvises lagringen og bruker får en tydelig melding heller
+  enn å havne i en lekkasje-bane.
+- **Editor: forrige fils peaks-ekstraksjon kanselleres nå.** Hvis bruker
+  åpnet en ny opptaksfil før den forrige hadde ekstrahert peaks ferdig,
+  fortsatte gammel ffmpeg-prosess å bruke CPU helt til 120 s-timeout
+  utløp. Nå dreper editor-extract-audio-peaks alle gamle jobber først.
+- **Editor: export-progress IPC-lytter stacket ved re-setup.** Etter en
+  renderer-reload (eller dev-HMR) ble lytteren registrert på nytt uten å
+  fjerne den gamle, så hver progress-event førte til N DOM-writes.
+
+### Performance
+- **VU-meteret allokerer ikke lenger en Float32Array per frame.** Tidligere
+  ble en ny buffer (≈4 KB ved fftSize=2048) opprettet 60×/sek × 2 kanaler
+  = ~480 KB/sek GC-press. Nå brukes én forhåndsallokert buffer per kanal,
+  satt opp én gang når analyseren attaches.
+
+### Testing
+- **27 nye tester for overlay-pipeline.** Dekker filter-graf-bygging,
+  chroma key, opacity, crop, posisjons-mapping (9-grid + fullskjerm +
+  custom), multi-overlay-chaining, platform-spesifikk input (avfoundation
+  vs gdigrab), og throw-baner. Totalt: 1078 tester.
+
+---
+
 ## [4.42.0] — 2026-05-27
 
 ### Changed

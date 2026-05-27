@@ -147,8 +147,12 @@ declare global {
       streamStart:        (params: { resolution?: string; framerate?: number; videoBitrateKbps?: number; destinations: Array<{ id: string; name: string; rtmpUrl: string; enabled: boolean }> }) => Promise<{ ok: boolean; error?: string }>
       streamStop:         () => Promise<boolean>
       streamPreviewPath:  () => Promise<string>
-      streamSetKey:       (destId: string, key: string) => Promise<boolean>
+      streamSetKey:       (destId: string, key: string) => Promise<{ ok: boolean; error?: string }>
       streamDeleteKey:    (destId: string) => Promise<boolean>
+
+      overlayListScreens:     () => Promise<Array<{ id: string; label: string; bounds: { x: number; y: number; w: number; h: number }; isPrimary: boolean }>>
+      overlayListNdiSources:  () => Promise<{ available: boolean; reason?: string; sources: Array<{ name: string; url: string }> }>
+      overlayPickImage:       () => Promise<{ path: string; name: string } | null>
 
       transcriptListAll:       () => Promise<Array<{ filePath: string; transcript: import('../types').TranscriptData }>>
       transcriptResolveSource: (basePath: string) => Promise<string | null>

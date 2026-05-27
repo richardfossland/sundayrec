@@ -519,6 +519,26 @@ export interface ExtractAudioResult {
   duration: number
 }
 
+// Active peaks-extraction jobs — keyed by file path. Loading a new file
+// kills any in-flight extraction for an OLD file via cancelActivePeakJobs(),
+// preventing zombie ffmpeg processes when the user rapidly opens recordings
+// in the editor before extraction finishes.
+const activePeakJobs = new Map<string, ChildProcess>()
+
+/** Cancel any in-flight peaks extraction. Called by index.ts when the editor
+ *  loads a new file so the previous file's ffmpeg doesn't keep running until
+ *  its 120 s timeout. */
+export function cancelActivePeakJobs(exceptFilePath?: string): number {
+  let killed = 0
+  for (const [key, proc] of activePeakJobs) {
+    if (exceptFilePath && key === exceptFilePath) continue
+    try { proc.kill('SIGTERM') } catch {}
+    activePeakJobs.delete(key)
+    killed++
+  }
+  return killed
+}
+
 export async function extractAudioForPeaks(filePath: string): Promise<ExtractAudioResult | null> {
   if (!fs.existsSync(filePath)) return null
 
@@ -536,6 +556,11 @@ export async function extractAudioForPeaks(filePath: string): Promise<ExtractAud
   // no fragmentation.
   const tempPath = path.join(os.tmpdir(), `sundayrec-peaks-${Date.now()}-${Math.random().toString(36).slice(2)}.wav`)
 
+  // If a job for this same file is already running (user clicked twice),
+  // kill the older one and start fresh — the latest call wins.
+  const existing = activePeakJobs.get(filePath)
+  if (existing) { try { existing.kill('SIGTERM') } catch {} }
+
   return new Promise(resolve => {
     let stderr = ''
 
@@ -549,12 +574,17 @@ export async function extractAudioForPeaks(filePath: string): Promise<ExtractAud
       '-y',    tempPath,
     ], { stdio: ['ignore', 'ignore', 'pipe'] })
 
+    activePeakJobs.set(filePath, proc)
+
     proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-8192) })
 
     const killTimer = setTimeout(() => { try { proc.kill('SIGTERM') } catch { /* already dead */ } }, 120_000)
 
     proc.on('close', async code => {
       clearTimeout(killTimer)
+      // Remove from active map BEFORE awaiting readFile so a cancel call
+      // during the read phase doesn't try to SIGTERM an already-dead proc.
+      if (activePeakJobs.get(filePath) === proc) activePeakJobs.delete(filePath)
 
       if (code !== 0) {
         fs.promises.unlink(tempPath).catch(() => {})

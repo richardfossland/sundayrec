@@ -574,9 +574,22 @@ async function saveStreamDestinations(): Promise<void> {
   for (const d of valid) {
     if (d.pendingKey && d.pendingKey.length > 0) {
       try {
-        await window.api.streamSetKey(d.id, d.pendingKey)
-        d.hasKey = true
-        d.pendingKey = ''
+        const r = await window.api.streamSetKey(d.id, d.pendingKey)
+        if (r.ok) {
+          d.hasKey = true
+          d.pendingKey = ''
+        } else if (r.error === 'safeStorage_unavailable') {
+          // Refuse to silently lose the key — surface to user so they can
+          // decide (use a different machine, or accept the risk on a personal box).
+          alert(
+            'Stream-key kunne ikke lagres sikkert på denne maskinen.\n\n' +
+            'Mac Keychain / Windows Credential Manager er ikke tilgjengelig. ' +
+            'Stream-keys lagres derfor IKKE for å unngå at de havner som ' +
+            'klartekst på disk. Logg inn på en bruker med systemnøkkelring og prøv igjen.'
+          )
+        } else {
+          console.error('[publish] streamSetKey failed', d.id, r.error)
+        }
       } catch (err) {
         console.error('[publish] streamSetKey failed for', d.id, err)
       }

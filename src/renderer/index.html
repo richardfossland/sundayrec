@@ -714,6 +714,22 @@
       </div>
     </div>
 
+    <!-- ─── Overlays ─────────────────────────────────────────────── -->
+    <div class="card live-overlay-card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span data-i18n="live.overlays">Overlays — grafikk og presentasjon</span>
+        <button class="btn-secondary btn-sm" id="btn-add-overlay" type="button" data-i18n="live.addOverlay">+ Legg til overlay</button>
+      </div>
+      <p class="card-desc" data-i18n="live.overlaysDesc">
+        Legg over kirkens logo, lyrics fra EasyWorship (via skjerm-capture på samme maskin), eller
+        annen grafikk på det som sendes ut. Overlays påvirker bare direktesendingen — opptak gjøres rent.
+      </p>
+      <div id="overlay-list" class="overlay-list"></div>
+      <div id="overlay-empty" class="overlay-empty">
+        Ingen overlays. Klikk «+ Legg til overlay» for å begynne.
+      </div>
+    </div>
+
     <!-- Start/Stop bar -->
     <div class="live-action-bar">
       <button class="live-start-btn" id="btn-live-start" type="button">

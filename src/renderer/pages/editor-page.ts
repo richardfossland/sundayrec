@@ -38,6 +38,11 @@ let lastAnalyzedAt = 0  // epoch ms; 0 = never analyzed for current file
 // Cleared on file load and on export complete. Surfaced in the header
 // as a small bullet next to the filename.
 let editorDirty = false
+
+// Holds the unsubscribe fn returned by window.api.on('editor-export-progress', …)
+// so a re-setup of the editor page doesn't keep stacking IPC listeners that
+// each write to the same DOM nodes.
+let exportProgressUnsub: (() => void) | null | undefined = null
 function markDirty(): void {
   if (editorDirty) return
   editorDirty = true
@@ -382,8 +387,11 @@ export function setupEditorPage(): void {
     drawWaveform()
   })
 
-  // Export progress listener
-  window.api.on('editor-export-progress', (data: unknown) => {
+  // Export progress listener — drop any previous registration first so
+  // setupEditorPage() called twice (renderer reload, tab swap, dev HMR)
+  // doesn't stack listeners that each fire a DOM write per progress event.
+  if (exportProgressUnsub) { try { exportProgressUnsub() } catch {} }
+  exportProgressUnsub = window.api.on('editor-export-progress', (data: unknown) => {
     const { percent } = data as { percent: number }
     const bar   = $('editor-export-progress-bar')
     const label = $('editor-export-progress-label')

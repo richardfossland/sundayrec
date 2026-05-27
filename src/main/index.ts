@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Notification, dialog, shell, systemPreferences, powerMonitor, protocol, net } from 'electron'
+import { app, BrowserWindow, ipcMain, Notification, dialog, shell, systemPreferences, powerMonitor, protocol, net, screen } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import * as logger from './logger'
@@ -1054,7 +1054,10 @@ function setupIPC(): void {
 
   ipcMain.handle('editor-extract-audio-peaks', async (_, filePath: string) => {
     if (typeof filePath !== 'string' || !isAllowedMediaPath(filePath)) return null
-    const { extractAudioForPeaks } = await import('./editor')
+    const { extractAudioForPeaks, cancelActivePeakJobs } = await import('./editor')
+    // User opened a new file — kill any peaks-extraction from the previous
+    // file so its ffmpeg doesn't keep running on CPU for the 120 s timeout.
+    cancelActivePeakJobs(filePath)
     return extractAudioForPeaks(filePath)
   })
 
@@ -1373,6 +1376,7 @@ function setupIPC(): void {
       framerate:        (p.framerate as 25 | 30) ?? settings.streamFramerate ?? 30,
       videoBitrateKbps: p.videoBitrateKbps,
       destinations:     fullDests,
+      overlays:         settings.streamOverlays ?? [],
     })
   })
 
@@ -1387,11 +1391,10 @@ function setupIPC(): void {
   })
 
   ipcMain.handle('stream-set-key', async (_, destId: string, key: string) => {
-    if (typeof destId !== 'string' || !destId) return false
-    if (typeof key !== 'string') return false
+    if (typeof destId !== 'string' || !destId) return { ok: false, error: 'invalid_dest_id' }
+    if (typeof key !== 'string') return { ok: false, error: 'invalid_key' }
     const { setStreamKey } = await import('./stream-keys')
-    setStreamKey(destId, key)
-    return true
+    return setStreamKey(destId, key)
   })
 
   ipcMain.handle('stream-delete-key', async (_, destId: string) => {
@@ -1399,6 +1402,69 @@ function setupIPC(): void {
     const { deleteStreamKey } = await import('./stream-keys')
     deleteStreamKey(destId)
     return true
+  })
+
+  // ─── Overlay sources (live streaming) ────────────────────────────────────
+
+  // List available screens that the user can pick as an overlay source.
+  // Returned shape mirrors what the renderer needs to populate a dropdown:
+  // an id ffmpeg understands + a human label (bounds + scale factor) so the
+  // user can tell two identical 27" monitors apart.
+  ipcMain.handle('overlay-list-screens', async () => {
+    try {
+      const displays = screen.getAllDisplays()
+      const primary  = screen.getPrimaryDisplay().id
+      return displays.map((d, idx) => ({
+        // On macOS avfoundation, screen indices come after the camera list —
+        // we'd need to query ffmpeg device list to map exactly. For now we
+        // expose the OS-display index and let the user adjust if their setup
+        // doesn't match (rare for the typical 1–2 display church setup).
+        id:       String(idx),
+        label:    `${d.label || `Skjerm ${idx + 1}`} (${d.size.width}×${d.size.height})${d.id === primary ? ' — primær' : ''}`,
+        bounds:   { x: d.bounds.x, y: d.bounds.y, w: d.size.width, h: d.size.height },
+        isPrimary: d.id === primary,
+      }))
+    } catch (e) {
+      console.warn('[overlay] list-screens failed', e)
+      return []
+    }
+  })
+
+  // NDI source discovery is stubbed until v4.44. Returning a structured
+  // response (available=false) lets the UI render a friendly notice instead
+  // of guessing what went wrong.
+  ipcMain.handle('overlay-list-ndi-sources', async () => {
+    return {
+      available: false,
+      reason:    'NDI-mottaker er under utvikling. Bruk skjerm-capture med EasyWorship på samme maskin inntil videre.',
+      sources:   [] as Array<{ name: string; url: string }>,
+    }
+  })
+
+  // File picker for image overlay sources. Copies the chosen file into
+  // userData/overlays so the path is stable across moves/renames of the
+  // original (mirrors how thumbnails are imported).
+  ipcMain.handle('overlay-pick-image', async () => {
+    const win = mainWindow ?? BrowserWindow.getFocusedWindow()
+    if (!win) return null
+    const r = await dialog.showOpenDialog(win, {
+      title:       'Velg overlay-bilde',
+      properties:  ['openFile'],
+      filters:     [{ name: 'Bilder', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+    })
+    if (r.canceled || !r.filePaths[0]) return null
+    try {
+      const srcPath = r.filePaths[0]
+      const overlayDir = path.join(app.getPath('userData'), 'overlays')
+      fs.mkdirSync(overlayDir, { recursive: true })
+      const ext = path.extname(srcPath).toLowerCase() || '.png'
+      const destPath = path.join(overlayDir, `overlay-${Date.now()}${ext}`)
+      await fs.promises.copyFile(srcPath, destPath)
+      return { path: destPath, name: path.basename(srcPath) }
+    } catch (e) {
+      console.warn('[overlay] pick-image failed', e)
+      return null
+    }
   })
 
   // ─── Transcript archive index ────────────────────────────────────────────

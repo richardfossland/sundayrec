@@ -443,7 +443,12 @@ export async function startSession(
   win: BrowserWindow,
   prerollData?: { rawPath: string; trimMs: number } | null
 ): Promise<{ ok: true } | { error: string }> {
-  if (activeSession || _phase === 'stopping' || _phase === 'finalizing') return { error: 'already_recording' }
+  // Reject overlapping starts: 'starting' also blocks because preflight runs
+  // concurrently with teardown and a second caller during that window would
+  // hit AVFoundation while the first session is still claiming the device.
+  if (activeSession || _phase === 'starting' || _phase === 'stopping' || _phase === 'finalizing') {
+    return { error: 'already_recording' }
+  }
   _phase = 'starting'
 
   const s = settings as Settings
@@ -703,9 +708,17 @@ function finishSession(session: Session): void {
 
   tray.setRecording(false)
 
-  finishSessionAsync(session, durationSec, recDate).catch(err =>
+  // If finishSessionAsync throws, the phase machine would stay in
+  // 'finalizing' and block all future recordings. Guarantee a return to
+  // 'idle' so the next scheduled service can still start.
+  finishSessionAsync(session, durationSec, recDate).catch(err => {
     logger.error('recorder', 'finishSessionAsync error', { msg: String(err) })
-  )
+    if (_phase === 'finalizing') {
+      _phase = 'idle'
+      notifyIdle()
+      sessionEndCallback?.()
+    }
+  })
 }
 
 async function finishSessionAsync(session: Session, durationSec: number, recDate: Date): Promise<void> {

@@ -22,6 +22,8 @@ import { spawn, type ChildProcess } from 'child_process'
 import path from 'path'
 import fs from 'fs'
 import { ffmpegBin, resolveVideoInput, listFfmpegDevices, findBestDeviceMatch } from './native-recorder'
+import { buildOverlayPipeline } from './overlay'
+import type { OverlayConfig } from '../types'
 
 /** Find AVFoundation audio device index by name. Returns null when no
  *  match. Caller uses ":none" or "none" in the input string. */
@@ -63,6 +65,9 @@ export interface StreamOptions {
   audioBitrateKbps?: number
   /** Destinations to push to. Disabled ones are skipped. */
   destinations: StreamDestination[]
+  /** Optional overlays composited on top of the camera before encoding.
+   *  Disabled overlays are skipped. Empty/undefined = clean stream. */
+  overlays?: OverlayConfig[]
 }
 
 export interface StreamStats {
@@ -130,7 +135,15 @@ const RES_MAP: Record<StreamOptions['resolution'], { w: number; h: number; auto_
   '1080p': { w: 1920, h: 1080, auto_kbps: 6000 },
 }
 
-async function buildInputArgs(opts: StreamOptions): Promise<string[] | null> {
+/**
+ * Build the camera (and on Mac, mic) input arguments. Audio map on Mac stays
+ * at `0:a?` because avfoundation bundles video+audio in a single input.
+ *
+ * On Windows the audio is a SEPARATE input — we return it from a sibling
+ * `buildAudioOnlyInputArgs` so overlay inputs can slot between video and
+ * audio (overlay indices start at 1, audio index = 1 + overlayCount).
+ */
+async function buildVideoInputArgs(opts: StreamOptions): Promise<string[] | null> {
   const res = RES_MAP[opts.resolution]
   if (process.platform === 'darwin') {
     const video = await resolveVideoInput({ videoDeviceName: opts.videoDeviceName })
@@ -147,39 +160,68 @@ async function buildInputArgs(opts: StreamOptions): Promise<string[] | null> {
   if (process.platform === 'win32') {
     const video = await resolveVideoInput({ videoDeviceName: opts.videoDeviceName })
     if (!video) return null
-    // dshow with two -i is fine on Windows
-    const args = [
+    return [
       '-f', 'dshow',
       '-framerate', String(opts.framerate),
       '-video_size', `${res.w}x${res.h}`,
       '-i', `video=${stripQuotes(opts.videoDeviceName ?? '')}`,
     ]
-    if (opts.audioDeviceName) {
-      args.push('-f', 'dshow', '-i', `audio=${stripQuotes(opts.audioDeviceName)}`)
-    }
-    return args
   }
   return null
 }
 
+/** Windows-only: separate dshow audio input. Mac bundles audio in the
+ *  camera input. Returns empty array when no separate audio input needed. */
+function buildAudioOnlyInputArgs(opts: StreamOptions): string[] {
+  if (process.platform === 'win32' && opts.audioDeviceName) {
+    return ['-f', 'dshow', '-i', `audio=${stripQuotes(opts.audioDeviceName)}`]
+  }
+  return []
+}
+
 function stripQuotes(s: string): string { return s.replace(/^"|"$/g, '') }
 
-function buildOutputArgs(opts: StreamOptions, snapshotPath: string): string[] {
+/**
+ * Compose the full filter_complex string. When overlays are active, the
+ * camera's video stream first runs through the overlay pipeline producing a
+ * composed label, which is then split into the main encode + the preview
+ * snapshot branch. The audio map adjusts depending on overlay-input count
+ * (Windows) — Mac always uses `0:a?` because avfoundation bundles audio.
+ */
+function buildOutputArgs(
+  opts:           StreamOptions,
+  snapshotPath:   string,
+  overlayCount:   number,
+  overlayLabel:   string,
+  overlayChain:   string,
+): string[] {
   const res = RES_MAP[opts.resolution]
   const vBitrate = opts.videoBitrateKbps ?? res.auto_kbps
   const aBitrate = opts.audioBitrateKbps ?? 128
 
-  // Filter graph: split video into [stream] and [thumb] @ 0.5 fps, scaled to 320x180
-  const filter = '[0:v]split=2[v_stream][v_pre];[v_pre]fps=1/2,scale=320:-1[v_thumb]'
+  // Stream branch starts from either the camera (no overlays) or the composed
+  // overlay output (already computed once in launchFfmpeg — no second call so
+  // a transient file-delete between the two calls can't crash this path).
+  const filterParts: string[] = []
+  if (overlayChain) filterParts.push(overlayChain)
+  filterParts.push(`[${overlayLabel}]split=2[v_stream][v_pre]`)
+  filterParts.push(`[v_pre]fps=1/2,scale=320:-1[v_thumb]`)
 
   const args: string[] = [
-    '-filter_complex', filter,
+    '-filter_complex', filterParts.join(';'),
   ]
+
+  // Audio input index — see buildVideoInputArgs / buildAudioOnlyInputArgs.
+  // Mac: audio rides on input 0. Windows: audio is the input AFTER all
+  // overlays. Linux is a no-op (no audio input today).
+  const audioMap = process.platform === 'darwin'
+    ? '0:a?'
+    : `${1 + overlayCount}:a?`
 
   // Main encoded stream output
   args.push(
     '-map', '[v_stream]',
-    '-map', process.platform === 'darwin' ? '0:a?' : '1:a?',
+    '-map', audioMap,
     '-c:v', 'libx264',
     '-preset', 'veryfast',
     '-tune', 'zerolatency',
@@ -249,8 +291,32 @@ export async function startStream(opts: StreamOptions): Promise<{ ok: boolean; e
  *  and by the auto-recovery handler after a crash. */
 async function launchFfmpeg(opts: StreamOptions): Promise<{ ok: boolean; error?: string }> {
 
-  const input = await buildInputArgs(opts)
-  if (!input) return { ok: false, error: 'Kunne ikke finne kamera/lydenhet. Sjekk innstillinger.' }
+  const videoInput = await buildVideoInputArgs(opts)
+  if (!videoInput) return { ok: false, error: 'Kunne ikke finne kamera/lydenhet. Sjekk innstillinger.' }
+
+  // Build overlay inputs up-front so we know the count for audio mapping.
+  // Errors here (missing image, bad screen id) are surfaced to the caller
+  // before we spawn ffmpeg, which would otherwise fail with a cryptic
+  // "Invalid argument" deep in the avfoundation/dshow layer.
+  // Build overlay pipeline ONCE. If a source file is deleted between two
+  // calls, only this single throw-site needs to be caught — the result is
+  // threaded through to buildOutputArgs so it doesn't rebuild and risk a
+  // second, uncaught throw.
+  const res = RES_MAP[opts.resolution]
+  let overlay: ReturnType<typeof buildOverlayPipeline>
+  try {
+    overlay = buildOverlayPipeline(opts.overlays ?? [], {
+      outputW:   res.w,
+      outputH:   res.h,
+      baseLabel: '0:v',
+      framerate: opts.framerate,
+    })
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return { ok: false, error: `Overlay-feil: ${msg}` }
+  }
+
+  const audioInput = buildAudioOnlyInputArgs(opts)
 
   // Preview snapshot lives in userData so renderer can read via file://
   const previewDir = path.join(app.getPath('userData'), 'live-preview')
@@ -261,8 +327,10 @@ async function launchFfmpeg(opts: StreamOptions): Promise<{ ok: boolean; error?:
     '-hide_banner',
     '-loglevel', 'info',
     '-nostdin',
-    ...input,
-    ...buildOutputArgs(opts, previewFile),
+    ...videoInput,
+    ...overlay.inputArgs,
+    ...audioInput,
+    ...buildOutputArgs(opts, previewFile, overlay.extraInputCount, overlay.outputLabel, overlay.filterChain),
   ]
 
   console.log('[streamer] starting ffmpeg:', args.join(' '))
