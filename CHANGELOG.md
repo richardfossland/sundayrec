@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.47.1] — 2026-05-27
+
+### Fixed
+- **Native NDI fungerer nå på Intel-Mac.** v4.44.0 bygget grandiose-
+  native modulen kun for current arch på CI-runneren (arm64), så
+  Intel-Mac-installasjoner fikk arch-mismatch ved første NDI-overlay.
+  `scripts/build-grandiose.sh` bygger nå arm64 + x86_64 separat og
+  lipo-kombinerer til en universal `.node`. libndi.dylib har vært
+  universal hele tiden — bare bindingen manglet x86_64-slicen.
+
+### Internt
+- Bekreftet via `lipo -info`: `grandiose.node` rapporterer nå
+  `x86_64 arm64` (fat). Loader klare på begge Mac-arkitekturer.
+
+---
+
 ## [4.47.0] — 2026-05-27
 
 ### Sikkerhet
