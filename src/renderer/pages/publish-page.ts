@@ -245,9 +245,13 @@ function ensureCancelButton(connectBtn: HTMLElement, service: CloudServiceId): H
   if (cancel) return cancel
   cancel = document.createElement('button')
   cancel.dataset.cloudCancel = service
-  cancel.className = 'btn'
+  // btn-ghost = transparent bg + subtle border, fits the dark theme much
+  // better than the unstyled .btn (which renders as a bright white block
+  // and visually competes with the active connect button above it).
+  // cloud-card-cancel narrows + centers it so it reads as a secondary action.
+  cancel.className = 'btn-ghost btn-sm cloud-card-cancel'
   cancel.textContent = 'Avbryt'
-  cancel.style.cssText = 'margin-left:6px;display:none'
+  cancel.style.display = 'none'
   cancel.addEventListener('click', async () => {
     await window.api.cloudCancelConnect(service)
   })

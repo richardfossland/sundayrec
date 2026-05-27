@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.47.2] — 2026-05-27
+
+### Changed
+- **Pen Avbryt-knapp i sky-tilkobling-flyten.** Den hvite, full-bredde
+  Avbryt-knappen som dukket opp under «Kobler til…» kontrastert stygt
+  mot den mørke layouten. Erstattet med en sentrert, smalere
+  transparent-med-border-knapp som matcher resten av designet.
+
+### Docs
+- **`docs/USER-TASKS.md`** — ny fil som dokumenterer alt jeg ikke kan
+  fikse fra koden, med konkrete steg-for-steg-instruksjoner for å få
+  full produksjons-API hos Google, Dropbox og OneDrive. Bekreftet at
+  Google og Dropbox blokker innlogging i dag pga Testing/Development
+  status — denne fila har både kjapp-fiks og permanent App Review-
+  prosess for hver tjeneste.
+
+---
+
 ## [4.47.1] — 2026-05-27
 
 ### Fixed

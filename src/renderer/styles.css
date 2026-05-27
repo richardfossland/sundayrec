@@ -2767,6 +2767,25 @@ body.platform-win32  #wake-instructions-win { display: block; }
 .cloud-info-value { color: var(--text); font-weight: 500; }
 .cloud-actions-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .cloud-card .cloud-disconnected button { width: 100%; justify-content: center; padding: 10px 14px; font-weight: 600; }
+/* Inline-Avbryt under "Kobler til…" — overrides the .cloud-disconnected
+   button rule above so it doesn't render as a full-width white block. */
+.cloud-card-cancel {
+  width: auto !important;
+  align-self: center;
+  margin-top: 8px;
+  padding: 6px 18px !important;
+  font-weight: 500 !important;
+  font-size: 12px !important;
+  background: transparent !important;
+  color: var(--text3) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--rsm) !important;
+}
+.cloud-card-cancel:hover {
+  color: var(--text2) !important;
+  border-color: var(--border2) !important;
+  background: var(--surface2) !important;
+}
 .cloud-not-configured { font-size: 12px; line-height: 1.4; }
 .cloud-grid { gap: 10px !important; }
 .cloud-account-name, .cloud-folder-name { word-break: break-word; }
