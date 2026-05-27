@@ -127,15 +127,40 @@ function renderRecentList(entries: IndexEntry[]): void {
   for (const entry of entries) {
     const card = document.createElement('div')
     card.className = 'search-recent-card'
+    card.style.display = 'flex'
+    card.style.alignItems = 'center'
     card.innerHTML = `
-      <div class="search-recent-name">${escHtml(entry.displayName)}</div>
-      <div class="search-recent-meta">
-        ${formatDate(entry.meta.createdAt)} · ${entry.meta.segments?.length ?? 0} ${t('search.segments', 'segmenter')} · ${entry.meta.language ?? '—'}
+      <div class="search-card-thumb-slot"></div>
+      <div>
+        <div class="search-recent-name">${escHtml(entry.displayName)}</div>
+        <div class="search-recent-meta">
+          ${formatDate(entry.meta.createdAt)} · ${entry.meta.segments?.length ?? 0} ${t('search.segments', 'segmenter')} · ${entry.meta.language ?? '—'}
+        </div>
       </div>
     `
     card.addEventListener('click', () => openRecording(entry, 0))
     el.appendChild(card)
+    attachThumbnail(card.querySelector('.search-card-thumb-slot') as HTMLElement, entry)
   }
+}
+
+/**
+ * Resolve and attach a 64-px thumbnail to a search-result/recent card. Both
+ * IPC calls (transcript-resolve-source + thumbnail:resolve) run after the
+ * card is rendered so the list never blocks on cover-art lookups.
+ */
+function attachThumbnail(slot: HTMLElement | null, entry: IndexEntry): void {
+  if (!slot) return
+  void window.api.transcriptResolveSource(entry.basePath).then(async fp => {
+    if (!fp) return
+    const r = await window.api.thumbnailResolve(fp)
+    if (!r) return
+    const img = document.createElement('img')
+    img.className = 'thumb-card-icon thumb-card-icon-search'
+    img.src = r.dataUrl
+    img.alt = ''
+    slot.appendChild(img)
+  }).catch(() => { /* swallow — thumbnail is decorative */ })
 }
 
 function renderResults(hits: SearchHit[], query: string): void {
@@ -164,13 +189,19 @@ function renderResults(hits: SearchHit[], query: string): void {
 
     const header = document.createElement('div')
     header.className = 'search-result-header'
+    header.style.display = 'flex'
+    header.style.alignItems = 'center'
     header.innerHTML = `
-      <div class="search-result-name">${escHtml(entry.displayName)}</div>
-      <div class="search-result-meta">
-        ${formatDate(entry.meta.createdAt)} · ${groupHits.length} ${t('search.matches', 'treff')}
+      <div class="search-card-thumb-slot"></div>
+      <div>
+        <div class="search-result-name">${escHtml(entry.displayName)}</div>
+        <div class="search-result-meta">
+          ${formatDate(entry.meta.createdAt)} · ${groupHits.length} ${t('search.matches', 'treff')}
+        </div>
       </div>
     `
     card.appendChild(header)
+    attachThumbnail(header.querySelector('.search-card-thumb-slot') as HTMLElement, entry)
 
     // Show up to 3 hits per recording — user can open to see the rest.
     const shownHits = groupHits.slice(0, 3)

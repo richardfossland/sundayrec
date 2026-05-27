@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.40.0] — 2026-05-27
+
+### Added
+- **Episode-bilde (cover art) for podkast-publisering.** To-nivå modell:
+  - **Standard episodebilde** settes én gang i `Innstillinger → Publisering`
+    og brukes som cover art for alle prekener. Bildet kopieres inn til
+    `userData/thumbnails/` slik at det overlever om kildefilen senere flyttes.
+  - **Egendefinert per episode** kan settes i editoren — en drag/drop-panel
+    mellom mastering- og lagre-seksjonen — og overstyrer standardbildet bare
+    for det opptaket. Lagres som `[opptaksnavn].thumb.{ext}` ved siden av
+    lydfilen.
+- **Auto-embed under mastering.** Når en MP3 eksporteres, kjører en ekstra
+  ffmpeg-pass som legger bildet inn som ID3v2 `attached_pic` (det
+  Apple Podcasts, Spotify og de fleste podcast-spillere leser). For WAV/FLAC/
+  AAC hopper vi over embed (filformatene støtter ikke det skikkelig) men
+  skriver fortsatt bildet som en sidecar-fil.
+- **Sidecar-fil ved siden av output.** Uansett format kopieres bildet som
+  `[opptak].jpg` (eller .png/.webp) ved siden av den ferdige filen — slik at
+  du har en separat URL å peke RSS-feeden din til.
+- **Visning i listene.** 48 px-ikon i review-køen på startsiden, 64 px-ikon
+  i søkesiden — slik at du gjenkjenner serien visuelt.
+- **Innebygd format-validering.** JPG / PNG / WebP detekteres via magiske
+  bytes (ikke filendelse), dimensjoner leses direkte fra header'en uten
+  noen ny npm-avhengighet, og vi advarer ved < 1400×1400 eller ikke-kvadratisk
+  bilde (men resizer ikke automatisk — du bestemmer selv).
+- 17 nye i18n-nøkler i alle 7 språk. **821 nøkler per språk** (opp fra 804).
+
+---
+
 ## [4.39.1] — 2026-05-27
 
 ### Fixed

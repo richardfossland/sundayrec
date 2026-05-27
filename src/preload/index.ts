@@ -103,6 +103,15 @@ contextBridge.exposeInMainWorld('api', {
 
   pickAudioFile: () => ipcRenderer.invoke('pick-audio-file'),
 
+  // Thumbnail (podcast cover art)
+  thumbnailSetDefault:    (sourcePath?: string)               => ipcRenderer.invoke('thumbnail:set-default', sourcePath),
+  thumbnailClearDefault:  ()                                  => ipcRenderer.invoke('thumbnail:clear-default'),
+  thumbnailSetEpisode:    (recordingPath: string, sourcePath?: string) =>
+                                                                ipcRenderer.invoke('thumbnail:set-episode', recordingPath, sourcePath),
+  thumbnailClearEpisode:  (recordingPath: string)             => ipcRenderer.invoke('thumbnail:clear-episode', recordingPath),
+  thumbnailResolve:       (recordingPath: string)             => ipcRenderer.invoke('thumbnail:resolve', recordingPath),
+  thumbnailGetDefaultInfo:()                                  => ipcRenderer.invoke('thumbnail:get-default-info'),
+
   listAsioDrivers: () => ipcRenderer.invoke('list-asio-drivers'),
   listFfmpegAudioDevices: () => ipcRenderer.invoke('list-ffmpeg-audio-devices'),
   diagnoseAudio: (): Promise<{ dshow: string[]; wasapi: string[]; wasapiAvailable: boolean }> => ipcRenderer.invoke('diagnose-audio'),

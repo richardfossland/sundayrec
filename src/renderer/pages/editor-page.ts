@@ -3,6 +3,7 @@ import { settings, patchSettings } from '../state'
 import { escHtml as escapeHtml } from '../helpers'
 import type { RecordingMetadata } from '../../types'
 import { setupTranscriptPanel, loadTranscriptForFile, clearTranscript, setCurrentTranscriptTime } from './editor-transcript'
+import { setupThumbPanel, refresh as refreshThumbPanel, panelElementsByPrefix } from './thumbnail-panel'
 
 interface Cut { start: number; end: number }
 interface Suggestion { start: number; end: number; duration: number; label: string; type: string }
@@ -432,6 +433,13 @@ export function setupEditorPage(): void {
 
   showState('empty')
   updateEditorIntroOutroDisplay()
+
+  // Wire the per-episode thumbnail panel. Hidden until a file is loaded
+  // (see loadFile completion). Reads window state via getRecordingPath().
+  const thumbEls = panelElementsByPrefix('editor')
+  if (thumbEls) {
+    setupThumbPanel(thumbEls, { kind: 'episode', getRecordingPath: () => filePath })
+  }
 }
 
 let resizeObserver: ResizeObserver | null = null
@@ -963,6 +971,15 @@ async function loadFile(fp: string): Promise<void> {
   // touch the video stream and would just re-encode the audio track).
   const masterSection = $('editor-master-section')
   if (masterSection) masterSection.style.display = isVideoFile ? 'none' : ''
+
+  // Thumbnail panel — show for audio files; embedding only works for MP3 but
+  // the panel still lets the user attach a sidecar image for RSS-feed hosts.
+  const thumbSection = $('editor-thumb-section')
+  if (thumbSection) thumbSection.style.display = isVideoFile ? 'none' : ''
+  if (!isVideoFile) {
+    const els = panelElementsByPrefix('editor')
+    if (els) void refreshThumbPanel(els, { kind: 'episode', getRecordingPath: () => filePath })
+  }
 
   // Auto-run segment analysis. Runs in the background so the editor is
   // immediately interactive — when analysis completes we surface the

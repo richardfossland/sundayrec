@@ -355,7 +355,10 @@ export async function applyMastering(
         // Final progress nudge so UI hits 100% even if last out_time line
         // arrived before the close event.
         if (onProgress && totalSec > 0) onProgress(totalSec, totalSec)
-        resolve()
+        // Best-effort cover-art embed + sidecar. Never fails the export.
+        embedAndSidecarThumbnail(inputPath, outputPath).catch(err =>
+          console.warn('[mastering] thumbnail embed failed:', (err as Error).message)
+        ).finally(() => resolve())
       } else {
         const tail = stderr.slice(-500)
         if (/sigterm|killed|terminat/i.test(tail)) reject(new Error('cancelled'))
@@ -366,6 +369,89 @@ export async function applyMastering(
     // If the caller cancels via cancelMastering, the SIGTERM-induced close
     // arrives with code !== 0 — the regex above maps that to 'cancelled'.
     proc.once('exit', (_code, signal) => { if (signal === 'SIGTERM') cancelled = true })
+  })
+}
+
+// ── Thumbnail embed + sidecar (post-mastering) ─────────────────────────────
+
+const EMBED_TIMEOUT_MS = 60_000
+
+/**
+ * After mastering produces `outputPath`, look up a thumbnail for the source
+ * recording. If one exists:
+ *   1. Always copy it next to the output as `<base>.{jpg|png|webp}` — RSS-feed
+ *      hosts need the image as a separate URL even when it's also embedded.
+ *   2. For MP3 outputs, run an in-place ffmpeg pass that embeds the image as
+ *      ID3v2 attached_pic. WAV / FLAC / AAC are skipped (poor player support).
+ *
+ * Failures are logged and swallowed — the user's export already succeeded;
+ * we don't want a cover-art problem to surface as "mastering failed".
+ */
+export async function embedAndSidecarThumbnail(recordingPath: string, outputPath: string): Promise<void> {
+  const { resolveThumbnail } = await import('./thumbnail')
+  const thumb = await resolveThumbnail(recordingPath)
+  if (!thumb) return  // nothing configured — silently skip
+
+  const outExt = path.extname(outputPath).slice(1).toLowerCase()
+  const sourceExt = thumb.path.split('.').pop()?.toLowerCase() ?? 'jpg'
+
+  // Sidecar copy — runs even when embed is skipped (WAV/FLAC/AAC) so RSS
+  // hosts can grab the image from the output folder.
+  try {
+    const outBase = outputPath.replace(/\.[^.]+$/, '')
+    const sidecarOut = `${outBase}.${sourceExt}`
+    if (path.resolve(thumb.path) !== path.resolve(sidecarOut)) {
+      await fs.promises.copyFile(thumb.path, sidecarOut)
+    }
+  } catch (err) {
+    console.warn('[mastering] thumbnail sidecar copy failed:', (err as Error).message)
+  }
+
+  if (outExt !== 'mp3') {
+    console.log(`[mastering] thumbnail embed skipped for .${outExt} (only MP3 is widely supported)`)
+    return
+  }
+
+  // Embed pass — copy streams, attach image as second stream, mark as cover.
+  // Write to a sibling temp file then atomically replace the output.
+  const tmpPath = outputPath + '.embed.tmp.mp3'
+  const args = [
+    '-nostdin', '-hide_banner',
+    '-i', outputPath,
+    '-i', thumb.path,
+    '-map', '0:a',
+    '-map', '1:v',
+    '-c:a', 'copy',
+    '-c:v', 'copy',
+    '-id3v2_version', '3',
+    '-metadata:s:v', 'title=Album cover',
+    '-metadata:s:v', 'comment=Cover (front)',
+    '-disposition:v:1', 'attached_pic',
+    '-y', tmpPath,
+  ]
+
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn(ffmpegBin, args, { stdio: ['ignore', 'ignore', 'pipe'] })
+    let stderr = ''
+    const killTimer = setTimeout(() => { try { proc.kill('SIGTERM') } catch {} }, EMBED_TIMEOUT_MS)
+    proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-2048) })
+    proc.on('error', err => { clearTimeout(killTimer); reject(err) })
+    proc.on('close', code => {
+      clearTimeout(killTimer)
+      if (code === 0) resolve()
+      else reject(new Error(`embed_failed: ${stderr.slice(-300)}`))
+    })
+  }).then(async () => {
+    // Replace the original with the embedded copy. On Windows, rename across
+    // the same file can race — unlink-then-rename is the portable pattern.
+    try {
+      await fs.promises.unlink(outputPath)
+    } catch { /* may not exist yet on weird filesystems */ }
+    await fs.promises.rename(tmpPath, outputPath)
+  }).catch(async err => {
+    // Clean up temp file on failure
+    try { await fs.promises.unlink(tmpPath) } catch {}
+    throw err
   })
 }
 

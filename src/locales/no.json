@@ -926,5 +926,36 @@
     "noTranscriptsDesc": "Åpne et opptak i Rediger og klikk Transkriber for å bygge opp et søkbart arkiv. Når du har én eller flere transkripsjoner, vises de her.",
     "indexFailed": "Klarte ikke laste indeks",
     "fileNotFound": "Originalfilen ble ikke funnet. Den kan ha blitt flyttet eller slettet."
+  },
+  "thumbnail": {
+    "section": {
+      "title": "Episodebilde"
+    },
+    "default": {
+      "title": "Standard episodebilde",
+      "subtitle": "Brukes som cover art for alle prekener med mindre du overstyrer per episode."
+    },
+    "pick": "Velg bilde",
+    "replace": "Bytt bilde",
+    "clear": "Fjern",
+    "resetToDefault": "Tilbakestill til standard",
+    "dropHint": "Slipp et bilde her, eller klikk for å velge",
+    "using": {
+      "default": "Bruker standardbilde",
+      "override": "Egendefinert for denne episoden",
+      "none": "Ingen cover art valgt"
+    },
+    "warning": {
+      "tooSmall": "Anbefalt størrelse er minst 1400×1400 piksler",
+      "notSquare": "Cover art bør være kvadratisk (1:1)",
+      "tooLarge": "Filstørrelse over 5 MB kan gjøre opptak/last opp tregt"
+    },
+    "error": {
+      "unsupported": "Ikke-støttet bildeformat. Bruk JPG, PNG eller WebP.",
+      "tooLarge": "Filen er for stor (over 20 MB)"
+    },
+    "info": {
+      "size": "{w}×{h} px · {size}"
+    }
   }
 }

@@ -262,6 +262,12 @@ export interface Settings {
   editorIntroPath?: string
   editorOutroPath?: string
 
+  // Episode thumbnail (cover art) — default applies to every published
+  // episode unless overridden by a per-recording sidecar (<name>.thumb.{ext}).
+  // Absolute path under app.getPath('userData')/thumbnails/default.{jpg|png|webp}.
+  // The image is copied here on pick so the source can be moved/deleted later.
+  defaultThumbnailPath?: string | null
+
   // Cloud backup
   cloudGoogleDrive?: CloudServiceSettings
   cloudDropbox?: CloudServiceSettings

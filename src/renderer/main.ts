@@ -17,6 +17,21 @@ import { setupPublishPage, applyPublishSettingsToUI } from './pages/publish-page
 import { setupLivePage, deactivateLivePage, reactivateLivePage } from './pages/live-page'
 import { setupSearchPage, activateSearchPage } from './pages/search-page'
 
+// Shared thumbnail IPC result shapes
+export interface ThumbnailInfo {
+  width:    number
+  height:   number
+  byteSize: number
+  format:   'jpeg' | 'png' | 'webp'
+}
+export type ThumbnailResult = { path: string; info: ThumbnailInfo; dataUrl: string } | { error: string }
+export interface ThumbnailResolved {
+  path:    string
+  info:    ThumbnailInfo
+  dataUrl: string
+  kind?:   'episode' | 'default'   // present on resolve, absent on getDefaultInfo
+}
+
 // Expose globals that sub-modules need
 declare global {
   interface Window {
@@ -176,6 +191,14 @@ declare global {
       getLogs:                 ()                 => Promise<unknown[]>
       getLogFilePath:          ()                 => Promise<string | null>
       diagnoseAudio?:          () => Promise<{ dshow: string[]; wasapi: string[]; wasapiAvailable: boolean }>
+
+      // Thumbnail (podcast cover art)
+      thumbnailSetDefault:     (sourcePath?: string) => Promise<ThumbnailResult | null>
+      thumbnailClearDefault:   () => Promise<boolean>
+      thumbnailSetEpisode:     (recordingPath: string, sourcePath?: string) => Promise<ThumbnailResult | null>
+      thumbnailClearEpisode:   (recordingPath: string) => Promise<boolean>
+      thumbnailResolve:        (recordingPath: string) => Promise<ThumbnailResolved | null>
+      thumbnailGetDefaultInfo: () => Promise<ThumbnailResolved | null>
     }
     appVersion?: string
   }

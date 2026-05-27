@@ -926,5 +926,36 @@
     "noTranscriptsDesc": "Öppna en inspelning i redigeraren och klicka på Transkribera för att bygga ett sökbart arkiv.",
     "indexFailed": "Kunde inte ladda index",
     "fileNotFound": "Källfilen hittades inte. Den kan ha flyttats eller raderats."
+  },
+  "thumbnail": {
+    "section": {
+      "title": "Avsnittsbild"
+    },
+    "default": {
+      "title": "Standardbild för avsnitt",
+      "subtitle": "Används som omslag för alla predikningar om du inte väljer en egen per avsnitt."
+    },
+    "pick": "Välj bild",
+    "replace": "Byt bild",
+    "clear": "Ta bort",
+    "resetToDefault": "Återställ till standard",
+    "dropHint": "Släpp en bild här, eller klicka för att välja",
+    "using": {
+      "default": "Använder standardbild",
+      "override": "Egen bild för detta avsnitt",
+      "none": "Inget omslag valt"
+    },
+    "warning": {
+      "tooSmall": "Rekommenderad storlek är minst 1400×1400 pixlar",
+      "notSquare": "Omslaget bör vara kvadratiskt (1:1)",
+      "tooLarge": "Filer över 5 MB kan göra inspelning/uppladdning långsam"
+    },
+    "error": {
+      "unsupported": "Bildformatet stöds inte. Använd JPG, PNG eller WebP.",
+      "tooLarge": "Filen är för stor (över 20 MB)"
+    },
+    "info": {
+      "size": "{w}×{h} px · {size}"
+    }
   }
 }

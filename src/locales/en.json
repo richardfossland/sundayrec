@@ -926,5 +926,36 @@
     "noTranscriptsDesc": "Open a recording in the Editor and click Transcribe to build a searchable archive. Once you have one or more transcripts they will appear here.",
     "indexFailed": "Could not load index",
     "fileNotFound": "Source file not found. It may have been moved or deleted."
+  },
+  "thumbnail": {
+    "section": {
+      "title": "Episode artwork"
+    },
+    "default": {
+      "title": "Default episode artwork",
+      "subtitle": "Used as cover art for every sermon unless you override it per episode."
+    },
+    "pick": "Choose image",
+    "replace": "Replace image",
+    "clear": "Remove",
+    "resetToDefault": "Reset to default",
+    "dropHint": "Drop an image here, or click to choose",
+    "using": {
+      "default": "Using default image",
+      "override": "Custom image for this episode",
+      "none": "No cover art selected"
+    },
+    "warning": {
+      "tooSmall": "Recommended size is at least 1400×1400 pixels",
+      "notSquare": "Cover art should be square (1:1)",
+      "tooLarge": "Files over 5 MB may slow recording and upload"
+    },
+    "error": {
+      "unsupported": "Unsupported image format. Use JPG, PNG or WebP.",
+      "tooLarge": "File is too large (over 20 MB)"
+    },
+    "info": {
+      "size": "{w}×{h} px · {size}"
+    }
   }
 }

@@ -2,6 +2,7 @@ import { settings, patchSettings } from '../state'
 import { flashSaved, escHtml } from '../helpers'
 import { t } from '../i18n'
 import { notifyLivePageDestinationsChanged } from './live-page'
+import { setupThumbPanel, refresh as refreshThumbPanel, panelElementsByPrefix } from './thumbnail-panel'
 import type { CloudServiceId, CloudServiceSettings, CloudStatus, CloudQueueStatus, StreamDestinationStored } from '../../types'
 
 type ServiceStatus = Record<CloudServiceId, CloudStatus>
@@ -29,6 +30,14 @@ export function setupPublishPage(): void {
   refreshConfigured()
   refreshQueue()
   setupStreamDestinations()
+
+  // Default-thumbnail panel ("Standard episodebilde") — sits at the top of
+  // the publish settings tab.
+  const thumbEls = panelElementsByPrefix('publish')
+  if (thumbEls) {
+    setupThumbPanel(thumbEls, { kind: 'default' })
+    void refreshThumbPanel(thumbEls, { kind: 'default' })
+  }
 
   // Connect/disconnect buttons
   document.querySelectorAll<HTMLElement>('[data-cloud-connect]').forEach(btn => {
@@ -407,6 +416,8 @@ export function applyPublishSettingsToUI(): void {
   refreshStatus()
   refreshQueue()
   applyStreamSettingsToUI()
+  const thumbEls = panelElementsByPrefix('publish')
+  if (thumbEls) void refreshThumbPanel(thumbEls, { kind: 'default' })
 }
 
 // ─── Live-stream destinations ───────────────────────────────────────────

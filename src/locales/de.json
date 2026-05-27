@@ -926,5 +926,36 @@
     "noTranscriptsDesc": "Öffnen Sie eine Aufnahme im Editor und klicken Sie auf Transkribieren, um ein durchsuchbares Archiv aufzubauen.",
     "indexFailed": "Index konnte nicht geladen werden",
     "fileNotFound": "Quelldatei nicht gefunden. Möglicherweise wurde sie verschoben oder gelöscht."
+  },
+  "thumbnail": {
+    "section": {
+      "title": "Episodenbild"
+    },
+    "default": {
+      "title": "Standard-Episodenbild",
+      "subtitle": "Wird als Coverbild für alle Predigten verwendet, sofern Sie es nicht pro Episode überschreiben."
+    },
+    "pick": "Bild auswählen",
+    "replace": "Bild ersetzen",
+    "clear": "Entfernen",
+    "resetToDefault": "Auf Standard zurücksetzen",
+    "dropHint": "Bild hier ablegen oder klicken zum Auswählen",
+    "using": {
+      "default": "Standardbild wird verwendet",
+      "override": "Eigenes Bild für diese Episode",
+      "none": "Kein Coverbild ausgewählt"
+    },
+    "warning": {
+      "tooSmall": "Empfohlene Größe ist mindestens 1400×1400 Pixel",
+      "notSquare": "Coverbild sollte quadratisch sein (1:1)",
+      "tooLarge": "Dateien über 5 MB können Aufnahme und Upload verlangsamen"
+    },
+    "error": {
+      "unsupported": "Bildformat nicht unterstützt. Verwenden Sie JPG, PNG oder WebP.",
+      "tooLarge": "Datei ist zu groß (über 20 MB)"
+    },
+    "info": {
+      "size": "{w}×{h} px · {size}"
+    }
   }
 }

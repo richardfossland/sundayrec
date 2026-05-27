@@ -3937,3 +3937,69 @@ button > svg:first-child { flex-shrink: 0; }
 .stream-destination-enabled .toggle { width: 36px; height: 20px; }
 .stream-destination-enabled .toggle-track::after { width: 14px; height: 14px; }
 .stream-destination-enabled input:checked + .toggle-track::after { transform: translateX(16px); }
+
+/* ── Episode thumbnail / cover art ─────────────────────────────────────── */
+.editor-thumb-section {
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: var(--bg2, #15151b);
+  border: 1px solid var(--border, #2a2a35);
+  border-radius: 10px;
+}
+.thumb-panel {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.thumb-preview {
+  width: 200px; height: 200px; min-width: 200px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg1, #0d0d11);
+  border: 2px dashed var(--border, #2a2a35);
+  border-radius: 8px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color .15s ease, background .15s ease;
+}
+.thumb-preview:hover { border-color: var(--accent, #4a86ff); }
+.thumb-preview.drop-target { border-color: var(--accent, #4a86ff); background: rgba(74,134,255,.05); }
+.thumb-preview img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.thumb-placeholder {
+  font-size: 12px; color: var(--text3, #888);
+  text-align: center; padding: 0 16px; line-height: 1.4;
+}
+.thumb-side {
+  flex: 1; min-width: 220px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.thumb-using {
+  font-size: 13px; color: var(--text2, #ccc); font-weight: 500;
+}
+.thumb-info {
+  font-size: 12px; color: var(--text3, #888);
+}
+.thumb-warning {
+  font-size: 12px; color: #f5a623;
+  background: rgba(245,166,35,.08);
+  border: 1px solid rgba(245,166,35,.25);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.thumb-button-row {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin-top: 4px;
+}
+.thumb-card-icon {
+  display: inline-block;
+  border-radius: 4px;
+  background: var(--bg2, #15151b);
+  object-fit: cover;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.thumb-card-icon-home { width: 48px; height: 48px; margin-right: 10px; }
+.thumb-card-icon-search { width: 64px; height: 64px; margin-right: 12px; }

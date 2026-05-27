@@ -99,6 +99,19 @@ function renderEntry(entry: ReviewQueueEntry): HTMLElement {
   item.className = 'review-queue-item'
   item.dataset.id = entry.id
 
+  // Thumbnail (optional) — appended lazily so we don't block layout on IPC.
+  const thumbSlot = document.createElement('div')
+  thumbSlot.className = 'review-queue-item-thumb-slot'
+  item.appendChild(thumbSlot)
+  void window.api.thumbnailResolve(entry.prep.recordingPath).then(t => {
+    if (!t) return
+    const img = document.createElement('img')
+    img.className = 'thumb-card-icon thumb-card-icon-home'
+    img.src = t.dataUrl
+    img.alt = ''
+    thumbSlot.appendChild(img)
+  }).catch(() => { /* never block UI for cover-art lookups */ })
+
   // Left: metadata
   const meta = document.createElement('div')
   meta.className = 'review-queue-item-meta'

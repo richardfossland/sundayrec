@@ -1028,6 +1028,27 @@
         <div class="card-title" data-i18n="publish.intro">Del opptakene utenfor kirken</div>
         <p class="card-desc" data-i18n="publish.introDesc">Her setter du opp automatisk sky-backup og — hvis dere ønsker — en podcast som gjør gudstjenestene tilgjengelige i Spotify og Apple Podcasts. Alt er valgfritt.</p>
       </div>
+
+      <!-- ── Standard episodebilde (cover art) ──────────────────── -->
+      <div class="card">
+        <div class="card-title" data-i18n="thumbnail.default.title">Standard episodebilde</div>
+        <p class="card-desc" data-i18n="thumbnail.default.subtitle">Brukes som cover art for alle prekener med mindre du overstyrer per episode.</p>
+        <div class="thumb-panel">
+          <div class="thumb-preview" id="publish-thumb-preview" data-i18n-title="thumbnail.dropHint" title="Slipp et bilde her, eller klikk for å velge">
+            <span class="thumb-placeholder" data-i18n="thumbnail.dropHint">Slipp et bilde her, eller klikk for å velge</span>
+          </div>
+          <div class="thumb-side">
+            <div class="thumb-using" id="publish-thumb-using" data-i18n="thumbnail.using.none">Ingen cover art valgt</div>
+            <div class="thumb-info" id="publish-thumb-info"></div>
+            <div class="thumb-warning" id="publish-thumb-warning" style="display:none"></div>
+            <div class="thumb-button-row">
+              <button class="btn-secondary btn-sm" id="btn-publish-thumb-pick" data-i18n="thumbnail.pick">Velg bilde</button>
+              <button class="btn-ghost btn-sm" id="btn-publish-thumb-clear" data-i18n="thumbnail.clear" style="display:none">Fjern</button>
+            </div>
+          </div>
+        </div>
+        <input type="file" id="publish-thumb-file-input" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" style="display:none">
+      </div>
       <!-- ── Sky-backup (Google Drive / Dropbox / OneDrive) ──────── -->
       <div class="card">
         <div class="card-title" data-i18n="publish.title">Sky-backup</div>
@@ -2069,6 +2090,30 @@
         </div>
 
         <audio id="master-preview-audio" style="display:none" controls></audio>
+      </div>
+
+      <!-- Episode-bilde (cover art) — between mastering and save bar -->
+      <div id="editor-thumb-section" class="editor-thumb-section" style="display:none">
+        <div class="editor-master-header">
+          <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="opacity:.7"><path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l3-4 2 3 3-5 4 6z"/></svg>
+          <span class="editor-master-title" data-i18n="thumbnail.section.title">Episodebilde</span>
+        </div>
+        <div class="thumb-panel">
+          <div class="thumb-preview" id="editor-thumb-preview" data-i18n-title="thumbnail.dropHint" title="Slipp et bilde her, eller klikk for å velge">
+            <span class="thumb-placeholder" data-i18n="thumbnail.dropHint">Slipp et bilde her, eller klikk for å velge</span>
+          </div>
+          <div class="thumb-side">
+            <div class="thumb-using" id="editor-thumb-using" data-i18n="thumbnail.using.none">Ingen cover art valgt</div>
+            <div class="thumb-info" id="editor-thumb-info"></div>
+            <div class="thumb-warning" id="editor-thumb-warning" style="display:none"></div>
+            <div class="thumb-button-row">
+              <button class="btn-secondary btn-sm" id="btn-editor-thumb-pick" data-i18n="thumbnail.pick">Velg bilde</button>
+              <button class="btn-ghost btn-sm" id="btn-editor-thumb-reset" data-i18n="thumbnail.resetToDefault" style="display:none">Tilbakestill til standard</button>
+              <button class="btn-ghost btn-sm" id="btn-editor-thumb-clear" data-i18n="thumbnail.clear" style="display:none">Fjern</button>
+            </div>
+          </div>
+        </div>
+        <input type="file" id="editor-thumb-file-input" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" style="display:none">
       </div>
 
       <!-- Save bar -->

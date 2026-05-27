@@ -926,5 +926,36 @@
     "noTranscriptsDesc": "Ouvrez un enregistrement dans l’éditeur et cliquez sur Transcrire pour construire une archive consultable.",
     "indexFailed": "Impossible de charger l’index",
     "fileNotFound": "Fichier source introuvable. Il a peut-être été déplacé ou supprimé."
+  },
+  "thumbnail": {
+    "section": {
+      "title": "Image de l’épisode"
+    },
+    "default": {
+      "title": "Image par défaut des épisodes",
+      "subtitle": "Utilisée comme illustration pour toutes les prédications, sauf si vous la remplacez par épisode."
+    },
+    "pick": "Choisir une image",
+    "replace": "Remplacer l’image",
+    "clear": "Supprimer",
+    "resetToDefault": "Rétablir la valeur par défaut",
+    "dropHint": "Déposez une image ici, ou cliquez pour choisir",
+    "using": {
+      "default": "Image par défaut utilisée",
+      "override": "Image personnalisée pour cet épisode",
+      "none": "Aucune illustration choisie"
+    },
+    "warning": {
+      "tooSmall": "Taille recommandée : au moins 1400×1400 pixels",
+      "notSquare": "L’illustration doit être carrée (1:1)",
+      "tooLarge": "Les fichiers de plus de 5 Mo peuvent ralentir l’enregistrement et l’envoi"
+    },
+    "error": {
+      "unsupported": "Format d’image non pris en charge. Utilisez JPG, PNG ou WebP.",
+      "tooLarge": "Fichier trop volumineux (plus de 20 Mo)"
+    },
+    "info": {
+      "size": "{w}×{h} px · {size}"
+    }
   }
 }

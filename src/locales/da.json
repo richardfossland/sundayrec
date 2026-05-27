@@ -926,5 +926,36 @@
     "noTranscriptsDesc": "Åbn en optagelse i editoren og klik Transskribér for at bygge et søgbart arkiv.",
     "indexFailed": "Kunne ikke indlæse indeks",
     "fileNotFound": "Kildefilen blev ikke fundet. Den kan være flyttet eller slettet."
+  },
+  "thumbnail": {
+    "section": {
+      "title": "Episodebillede"
+    },
+    "default": {
+      "title": "Standard episodebillede",
+      "subtitle": "Bruges som omslag for alle prædikener, medmindre du tilsidesætter pr. episode."
+    },
+    "pick": "Vælg billede",
+    "replace": "Skift billede",
+    "clear": "Fjern",
+    "resetToDefault": "Nulstil til standard",
+    "dropHint": "Slip et billede her, eller klik for at vælge",
+    "using": {
+      "default": "Bruger standardbillede",
+      "override": "Tilpasset til denne episode",
+      "none": "Intet omslag valgt"
+    },
+    "warning": {
+      "tooSmall": "Anbefalet størrelse er mindst 1400×1400 pixels",
+      "notSquare": "Omslag bør være kvadratisk (1:1)",
+      "tooLarge": "Filer over 5 MB kan gøre optagelse/upload langsom"
+    },
+    "error": {
+      "unsupported": "Billedformat understøttes ikke. Brug JPG, PNG eller WebP.",
+      "tooLarge": "Filen er for stor (over 20 MB)"
+    },
+    "info": {
+      "size": "{w}×{h} px · {size}"
+    }
   }
 }

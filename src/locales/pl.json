@@ -926,5 +926,36 @@
     "noTranscriptsDesc": "Otwórz nagranie w edytorze i kliknij Transkrybuj, aby zbudować przeszukiwalne archiwum.",
     "indexFailed": "Nie można załadować indeksu",
     "fileNotFound": "Plik źródłowy nie znaleziony. Mógł zostać przeniesiony lub usunięty."
+  },
+  "thumbnail": {
+    "section": {
+      "title": "Okładka odcinka"
+    },
+    "default": {
+      "title": "Domyślna okładka odcinka",
+      "subtitle": "Używana jako okładka dla wszystkich kazań, chyba że zostanie nadpisana dla danego odcinka."
+    },
+    "pick": "Wybierz obraz",
+    "replace": "Zmień obraz",
+    "clear": "Usuń",
+    "resetToDefault": "Przywróć domyślny",
+    "dropHint": "Upuść obraz tutaj lub kliknij, aby wybrać",
+    "using": {
+      "default": "Używa domyślnego obrazu",
+      "override": "Własny obraz dla tego odcinka",
+      "none": "Nie wybrano okładki"
+    },
+    "warning": {
+      "tooSmall": "Zalecany rozmiar to co najmniej 1400×1400 pikseli",
+      "notSquare": "Okładka powinna być kwadratowa (1:1)",
+      "tooLarge": "Pliki powyżej 5 MB mogą spowolnić nagrywanie i wysyłanie"
+    },
+    "error": {
+      "unsupported": "Nieobsługiwany format obrazu. Użyj JPG, PNG lub WebP.",
+      "tooLarge": "Plik jest za duży (powyżej 20 MB)"
+    },
+    "info": {
+      "size": "{w}×{h} px · {size}"
+    }
   }
 }
