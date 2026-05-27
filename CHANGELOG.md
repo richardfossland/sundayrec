@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.42.0] — 2026-05-27
+
+### Changed
+- **Hjem-side i video-modus: UV-meteret er nå horisontalt under preview.**
+  Det vertikale UV-meteret fra v4.41.0 ble litt urolig fordi peak-teksten
+  ("Maks: -15.9 dBFS") endret bredde på hver frame i en flex-wrap-container,
+  og fikk hele kolonnen til å skjelve. Den horisontale UV-en under preview
+  er pixel-stabil og bruker eksakt samme markup/CSS som lyd-modus — vi får
+  én konsistent visuell identitet på tvers av begge moduser. Innstillingskort
+  stables fortsatt vertikalt til høyre for previewet, og previewet har
+  fortsatt 16:9 aspect-ratio uten svarte sidefelter.
+- **Direktesending-fanen har fått samme UV-design** som resten av appen —
+  full 5-segment-gradient (grønn → gul → orange → rød), tick marks ved
+  -24/-12/-6 dBFS, peak-hold, klipp-LED, dBFS-utlesning og «Stille / Maks»-
+  skala. Erstatter den tynne lineære peak-stripa som var der før. Samme
+  RMS+peak-engine som driver hjem-VU-en, så meterene er numerisk identiske
+  på tvers av sidene.
+
+---
+
 ## [4.41.0] — 2026-05-27
 
 ### Changed

@@ -309,9 +309,11 @@
          (and back when video is toggled off), so each element keeps its
          existing ID/event handlers and update code Just Works. -->
     <div id="video-mode-layout" class="video-mode-layout" style="display:none">
-      <div class="video-mode-vu-slot"><!-- .vu-section moved here --></div>
-      <div class="video-mode-preview-slot"><!-- #video-preview-section moved here --></div>
-      <div class="info-card-column"><!-- info-cards moved here --></div>
+      <div class="video-mode-top-row">
+        <div class="video-mode-preview-slot"><!-- #video-preview-section moved here --></div>
+        <div class="info-card-column"><!-- info-cards moved here --></div>
+      </div>
+      <div class="video-mode-vu-slot"><!-- .vu-section moved here (horizontal) --></div>
     </div>
 
     <!-- History section -->
@@ -609,9 +611,44 @@
             <span data-i18n="live.statusLive">🔴 Live</span>
           </div>
         </div>
-        <div class="live-preview-vu">
-          <div class="live-vu-bar" id="live-vu-bar-l"><div class="live-vu-fill"></div></div>
-          <div class="live-vu-bar" id="live-vu-bar-r"><div class="live-vu-fill"></div></div>
+        <div class="vu-section live-vu-section">
+          <div class="vu-section-head">
+            <span class="vu-section-label" data-i18n="home.audioLevel">Lydnivå</span>
+            <div class="signal-row">
+              <span class="signal-dot" id="live-signal-dot"></span>
+              <span class="signal-text" id="live-signal-text">—</span>
+              <span class="signal-peak" id="live-signal-peak"></span>
+            </div>
+          </div>
+          <div class="vu-bar-group">
+            <div class="vu-bar-row">
+              <span class="vu-bar-lbl">L</span>
+              <div class="vu-bar-track">
+                <div class="vu-bar-fill" id="live-vu-l"></div>
+                <div class="vu-bar-peak" id="live-vu-peak-l"></div>
+              </div>
+              <div class="vu-bar-clip" id="live-vu-clip-l" title="Clip — klikk for å nullstille" data-i18n-title="tooltip.clipReset"></div>
+              <span class="vu-bar-val" id="live-vu-db-l">—</span>
+            </div>
+            <div class="vu-bar-row">
+              <span class="vu-bar-lbl">R</span>
+              <div class="vu-bar-track">
+                <div class="vu-bar-fill" id="live-vu-r"></div>
+                <div class="vu-bar-peak" id="live-vu-peak-r"></div>
+              </div>
+              <div class="vu-bar-clip" id="live-vu-clip-r" title="Clip — klikk for å nullstille" data-i18n-title="tooltip.clipReset"></div>
+              <span class="vu-bar-val" id="live-vu-db-r">—</span>
+            </div>
+            <div class="vu-bar-scale-row">
+              <span class="vu-bar-lbl"></span>
+              <div class="vu-bar-scale">
+                <span style="left:0%">Stille</span>
+                <span style="left:100%">Maks</span>
+              </div>
+              <div class="vu-bar-clip-spacer"></div>
+              <span class="vu-bar-val-spacer"></span>
+            </div>
+          </div>
         </div>
       </div>
 

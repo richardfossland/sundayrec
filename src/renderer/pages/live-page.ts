@@ -14,6 +14,8 @@
 import { t } from '../i18n'
 import { settings } from '../state'
 import { escHtml } from '../helpers'
+import { makeVuState, tickVU, stopVuState } from '../audio/vu'
+import type { VuState } from '../audio/vu'
 import type { StreamDestinationStored } from '../../types'
 
 // ── State ────────────────────────────────────────────────────────────────
@@ -93,25 +95,18 @@ export function deactivateLivePage(): void {
   stopVuMeter()
 }
 
-// ── VU meter (audio pre-stream confidence check) ─────────────────────────
+// ── VU meter (pre-stream audio confidence check) ─────────────────────────
 //
-// The agent left the VU bars as static placeholders. We hook a lightweight
-// MediaStream + AnalyserNode chain so the user can SEE that the configured
-// microphone is producing signal before they click Start. Stops cleanly on
-// page leave to release the device.
+// Re-uses the same RMS dB / peak-hold engine that powers the home-page VU,
+// so the meter on the live tab is visually + numerically identical to the
+// one on Hjem (and the recording overlay). Stops cleanly on page leave to
+// release the microphone.
 
-interface VuState {
-  ctx:    AudioContext | null
-  stream: MediaStream  | null
-  raf:    number
-}
-const liveVu: VuState = { ctx: null, stream: null, raf: 0 }
+const liveVu = makeVuState()
 
 function startVuMeter(): void {
   if (liveVu.stream) return  // already running
-  const fillL = document.querySelector<HTMLElement>('#live-vu-bar-l .live-vu-fill')
-  const fillR = document.querySelector<HTMLElement>('#live-vu-bar-r .live-vu-fill')
-  if (!fillL || !fillR) return
+  if (!document.getElementById('live-vu-l')) return
 
   const devId = settings.deviceId && settings.deviceId !== 'default' ? settings.deviceId : null
   navigator.mediaDevices.getUserMedia({
@@ -128,54 +123,67 @@ function startVuMeter(): void {
     liveVu.ctx    = new AudioContext()
     const src   = liveVu.ctx.createMediaStreamSource(stream)
     const split = liveVu.ctx.createChannelSplitter(2)
-    const aL    = liveVu.ctx.createAnalyser()
-    const aR    = liveVu.ctx.createAnalyser()
-    aL.fftSize = 512
-    aR.fftSize = 512
+    liveVu.analyserL = liveVu.ctx.createAnalyser(); liveVu.analyserL.fftSize = 1024
+    liveVu.analyserR = liveVu.ctx.createAnalyser(); liveVu.analyserR.fftSize = 1024
     src.connect(split)
-    split.connect(aL, 0)
-    split.connect(aR, 1)
-    const bufL = new Uint8Array(aL.fftSize)
-    const bufR = new Uint8Array(aR.fftSize)
+    split.connect(liveVu.analyserL, 0)
+    split.connect(liveVu.analyserR, 1)
 
-    const tick = (): void => {
-      if (!liveVu.stream) return
-      // @ts-expect-error: getByteTimeDomainData accepts Uint8Array
-      aL.getByteTimeDomainData(bufL)
-      // @ts-expect-error: getByteTimeDomainData accepts Uint8Array
-      aR.getByteTimeDomainData(bufR)
-      const lvlL = peakLevel(bufL)
-      const lvlR = peakLevel(bufR)
-      fillL.style.width = `${Math.min(100, lvlL * 100)}%`
-      fillR.style.width = `${Math.min(100, lvlR * 100)}%`
-      liveVu.raf = requestAnimationFrame(tick)
-    }
-    tick()
+    const fillL = document.getElementById('live-vu-l')
+    const pkL   = document.getElementById('live-vu-peak-l')
+    const dbL   = document.getElementById('live-vu-db-l')
+    const fillR = document.getElementById('live-vu-r')
+    const pkR   = document.getElementById('live-vu-peak-r')
+    const dbR   = document.getElementById('live-vu-db-r')
+    const clipL = document.getElementById('live-vu-clip-l')
+    const clipR = document.getElementById('live-vu-clip-r')
+
+    tickVU(liveVu, fillL, pkL, dbL, fillR, pkR, dbR, (dL, dR, state) => {
+      updateLiveSignalStatus(dL, dR, state)
+      if (clipL && state.smL > -0.5) clipL.classList.add('clip')
+      if (clipR && state.smR > -0.5) clipR.classList.add('clip')
+    })
   }).catch(err => {
     console.warn('[live-page] VU mic access failed', err)
   })
 }
 
 function stopVuMeter(): void {
-  if (liveVu.raf) { cancelAnimationFrame(liveVu.raf); liveVu.raf = 0 }
-  if (liveVu.stream) {
-    for (const t of liveVu.stream.getTracks()) t.stop()
-    liveVu.stream = null
-  }
-  if (liveVu.ctx) { void liveVu.ctx.close(); liveVu.ctx = null }
-  const fillL = document.querySelector<HTMLElement>('#live-vu-bar-l .live-vu-fill')
-  const fillR = document.querySelector<HTMLElement>('#live-vu-bar-r .live-vu-fill')
-  if (fillL) fillL.style.width = '0%'
-  if (fillR) fillR.style.width = '0%'
+  stopVuState(liveVu)
+  const fills = ['live-vu-l', 'live-vu-r'].map(id => document.getElementById(id))
+  const peaks = ['live-vu-peak-l', 'live-vu-peak-r'].map(id => document.getElementById(id))
+  const dbs   = ['live-vu-db-l', 'live-vu-db-r'].map(id => document.getElementById(id))
+  fills.forEach(el => { if (el) el.style.width = '100%' })
+  peaks.forEach(el => { if (el) el.style.opacity = '0' })
+  dbs.forEach(el   => { if (el) el.textContent = '—' })
+  resetLiveSignalStatus()
 }
 
-function peakLevel(buf: Uint8Array): number {
-  let max = 0
-  for (let i = 0; i < buf.length; i++) {
-    const v = Math.abs(buf[i] - 128) / 128
-    if (v > max) max = v
-  }
-  return max
+function resetLiveSignalStatus(): void {
+  const dot  = document.getElementById('live-signal-dot')
+  const text = document.getElementById('live-signal-text')
+  const peak = document.getElementById('live-signal-peak')
+  if (dot)  dot.className = 'signal-dot'
+  if (text) { text.className = 'signal-text'; text.textContent = '—' }
+  if (peak) peak.textContent = ''
+}
+
+function updateLiveSignalStatus(dbL: number, dbR: number, state: VuState): void {
+  const db   = Math.max(dbL, dbR)
+  const dot  = document.getElementById('live-signal-dot')
+  const text = document.getElementById('live-signal-text')
+  const peak = document.getElementById('live-signal-peak')
+  if (!dot || !text) return
+  let cls = '', label = '—'
+  if      (db >= -3)  { cls = 'klipping'; label = t('home.signalClipping', 'Klipper!') }
+  else if (db >= -12) { cls = 'hoyt';     label = t('home.signalLoud',     'Høyt')     }
+  else if (db >= -40) { cls = 'god';      label = t('home.signalGood',     'Bra')      }
+  else if (db > -55)  { cls = 'svak';     label = t('home.signalWeak',     'Svakt')    }
+  dot.className  = 'signal-dot'  + (cls ? ' ' + cls : '')
+  text.className = 'signal-text' + (cls ? ' ' + cls : '')
+  text.textContent = label
+  const pkMax = Math.max(state.peakL, state.peakR)
+  if (peak) peak.textContent = pkMax > -59 ? `Maks: ${pkMax.toFixed(1)} dBFS` : ''
 }
 
 // ── Stats subscription ───────────────────────────────────────────────────

@@ -3294,14 +3294,18 @@ body.platform-win32  #wake-instructions-win { display: block; }
   margin-bottom: 0;
 }
 
-/* ── Three-column video-mode layout ──────────────────────────────── */
+/* ── Video-mode layout: preview+cards over horizontal VU ──────────── */
 .video-mode-layout {
-  display: grid;
-  grid-template-columns: auto 1fr 260px;
+  display: flex; flex-direction: column;
   gap: 14px;
   margin-bottom: 22px;
-  align-items: start;
   order: 35;             /* slot between quick-row and history */
+}
+.video-mode-top-row {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 14px;
+  align-items: start;
 }
 .video-mode-vu-slot { min-width: 0; }
 .video-mode-preview-slot { min-width: 0; }
@@ -3334,117 +3338,13 @@ body.platform-win32  #wake-instructions-win { display: block; }
   width: 100%; box-sizing: border-box;
 }
 
-/* ── Vertical VU ─────────────────────────────────────────────────── */
-.vu-section-vertical {
-  width: auto;
-  margin-bottom: 0;
-  padding: 14px;
-  display: flex; flex-direction: column; gap: 6px;
-  min-width: 110px;
-  box-sizing: border-box;
-}
-.vu-section-vertical .vu-section-head {
-  flex-direction: column; align-items: center; gap: 4px;
-  margin-bottom: 6px; text-align: center;
-}
-.vu-section-vertical .vu-section-label { text-align: center; }
-.vu-section-vertical .signal-row { font-size: 10px; flex-wrap: wrap; justify-content: center; }
-.vu-section-vertical .signal-peak { width: 100%; text-align: center; font-size: 9px; }
+/* VU lives below in its own row — gets the full width of both columns */
+.video-mode-layout .vu-section { margin-bottom: 0; }
 
-/* "Maks" marker above the bars */
-.vu-section-vertical .vu-section-head::after {
-  content: 'Maks';
-  display: block;
-  font-size: 9px; color: var(--text4);
-  letter-spacing: .5px; text-align: center;
-  margin-top: 2px;
-}
-
-/* L+R bars side-by-side, growing UP from the bottom */
-.vu-section-vertical .vu-bar-group {
-  flex-direction: row;
-  gap: 12px;
-  height: 320px;
-  align-items: stretch;
-  justify-content: center;
-}
-.vu-section-vertical .vu-bar-row {
-  flex-direction: column-reverse;
-  align-items: center;
-  height: 100%;
-  gap: 4px;
-  flex: 0 0 auto;
-}
-.vu-section-vertical .vu-bar-lbl {
-  width: auto; text-align: center;
-  font-size: 10px;
-}
-.vu-section-vertical .vu-bar-track {
-  width: 22px;
-  height: 100%;
-  flex: 1 1 auto;
-  border-radius: 4px;
-  /* Gradient runs bottom→top now: green low, red top */
-  background: linear-gradient(0deg,
-    #16a34a 0%, #16a34a 80%,
-    #ca8a04 80%, #ca8a04 90%,
-    #ea580c 90%, #ea580c 95%,
-    #dc2626 95%, #dc2626 100%);
-}
-/* Tick marks at -24/-12/-6 dBFS, drawn horizontally */
-.vu-section-vertical .vu-bar-track::after {
-  background-image:
-    linear-gradient(0deg, transparent 59.5%, rgba(0,0,0,.35) 59.5%, rgba(0,0,0,.35) 60.5%, transparent 60.5%),
-    linear-gradient(0deg, transparent 79.5%, rgba(0,0,0,.35) 79.5%, rgba(0,0,0,.35) 80.5%, transparent 80.5%),
-    linear-gradient(0deg, transparent 89.5%, rgba(0,0,0,.35) 89.5%, rgba(0,0,0,.35) 90.5%, transparent 90.5%);
-}
-/* Fill mask: covers the TOP --vu-mask% of the gradient, revealing the
-   audio level from the bottom. JS sets --vu-mask alongside the horizontal
-   `width:` so the same element supports both rendering modes. */
-.vu-section-vertical .vu-bar-fill {
-  width: 100% !important;
-  right: auto; left: 0; top: 0; bottom: auto;
-  height: var(--vu-mask, 100%);
-  border-radius: 4px 4px 0 0;
-}
-.vu-section-vertical .vu-bar-peak {
-  top: auto; left: 0; right: 0;
-  height: 2px; width: auto;
-  bottom: var(--vu-peak-pos, 0%);
-}
-.vu-section-vertical .vu-bar-clip {
-  width: 22px; height: 10px;
-  margin-top: 2px;
-}
-.vu-section-vertical .vu-bar-val {
-  width: auto; text-align: center; font-size: 10px;
-}
-.vu-section-vertical .vu-bar-scale-row,
-.vu-section-vertical .vu-bar-clip-spacer,
-.vu-section-vertical .vu-bar-val-spacer { display: none; }
-
-/* "Stille" marker below the bars (after the bar group) */
-.vu-section-vertical .vu-bar-group::after {
-  content: '';
-}
-.vu-section-vertical::after {
-  content: 'Stille';
-  display: block;
-  font-size: 9px; color: var(--text4);
-  letter-spacing: .5px; text-align: center;
-  margin-top: 2px;
-}
-
-/* Hide the "Test og sjekk system →" link inside vertical VU — the user can
-   still reach the system check from Settings → Lyd. Reduces clutter. */
-.vu-section-vertical .health-row { display: none; }
-
-/* Responsive collapse: on narrow windows, drop the right-column under the
-   preview and let the info-cards flow horizontally. Vertical VU stays. */
-@media (max-width: 1100px) {
-  .video-mode-layout { grid-template-columns: auto 1fr; }
+/* Responsive: under 900px the side-column collapses below the preview */
+@media (max-width: 900px) {
+  .video-mode-top-row { grid-template-columns: 1fr; }
   .video-mode-layout .info-card-column {
-    grid-column: 1 / -1;
     flex-direction: row; flex-wrap: wrap;
   }
   .video-mode-layout .info-card-column .info-card { flex: 1 1 240px; }
@@ -3875,23 +3775,18 @@ button > svg:first-child { flex-shrink: 0; }
   background: var(--red);
   animation: pdot 1.1s ease-in-out infinite;
 }
-.live-preview-vu {
-  display: flex; flex-direction: column; gap: 4px;
-  padding: 10px 14px;
+/* Live-page VU re-uses .vu-section markup but lives as the bottom strip of
+   the preview card — drop the section's own border + outer margin and let
+   the card frame it instead. */
+.live-vu-section {
   background: var(--surface);
+  border: 0;
   border-top: 1px solid var(--border);
+  border-radius: 0;
+  padding: 12px 14px;
+  margin-bottom: 0;
 }
-.live-vu-bar {
-  position: relative;
-  height: 6px; border-radius: 3px;
-  background: var(--surface3);
-  overflow: hidden;
-}
-.live-vu-fill {
-  position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
-  background: linear-gradient(90deg, #22c55e 0%, #f0bb47 70%, #ef4444 100%);
-  transition: width 80ms linear;
-}
+.live-vu-section .vu-section-head { margin-bottom: 10px; }
 
 /* Stats grid */
 .live-stats-grid {

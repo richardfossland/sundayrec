@@ -111,7 +111,7 @@ function updateSignalStatus(dbL: number, dbR: number, state: VuState): void {
 
 // Click clip indicators to reset
 export function setupClipReset(): void {
-  ;['vu-clip-l', 'vu-clip-r', 'rec-vu-clip-l', 'rec-vu-clip-r'].forEach(id =>
+  ;['vu-clip-l', 'vu-clip-r', 'rec-vu-clip-l', 'rec-vu-clip-r', 'live-vu-clip-l', 'live-vu-clip-r'].forEach(id =>
     document.getElementById(id)?.addEventListener('click', () =>
       document.getElementById(id)?.classList.remove('clip'))
   )

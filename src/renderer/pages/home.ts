@@ -62,12 +62,9 @@ function relocateVuForVideoMode(enabled: boolean): void {
       target.appendChild(el)
     }
 
-    // VU — gets a modifier class so it renders vertically
+    // VU — stays horizontal, just moved below the preview/info grid
     const vu = document.querySelector<HTMLElement>('#page-home > .vu-section')
-    if (vu) {
-      vu.classList.add('vu-section-vertical')
-      move(vu, vuSlot)
-    }
+    if (vu) move(vu, vuSlot)
 
     // Video preview section — stays as one block (preview + source bar)
     const preview = document.getElementById('video-preview-section') as HTMLElement | null
@@ -101,8 +98,6 @@ function relocateVuForVideoMode(enabled: boolean): void {
     }
     _videoLayoutMoves = []
     layout.style.display = 'none'
-    const vu = document.querySelector<HTMLElement>('#page-home .vu-section')
-    vu?.classList.remove('vu-section-vertical')
   }
 }
 
