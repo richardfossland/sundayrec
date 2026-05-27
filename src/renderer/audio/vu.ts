@@ -49,9 +49,23 @@ export function setVUBar(
   dbEl:   HTMLElement | null,
   db: number, peakDb: number
 ): void {
-  if (fillEl) fillEl.style.width = (100 - dbToHeight(db)) + '%'
+  // Horizontal-mode encoding: .vu-bar-fill is a *mask* that covers the right
+  // side of the gradient track. Width X% = "X% of the gradient is hidden",
+  // leaving (100 - X)% of audio visible from the left.
+  //
+  // Vertical-mode encoding (used when parent has .vu-section-vertical): the
+  // mask covers the top X% of the gradient instead. Same X% — the CSS for
+  // each mode picks the property it cares about and ignores the other.
+  const audioPct = dbToHeight(db)           // 0..100, 100 = loudest
+  const maskPct  = 100 - audioPct           // 0..100, 0 = fully unmasked
+  const peakPct  = dbToHeight(peakDb)       // 0..100
+  if (fillEl) {
+    fillEl.style.width = maskPct + '%'
+    fillEl.style.setProperty('--vu-mask', maskPct + '%')
+  }
   if (peakEl) {
-    peakEl.style.left    = dbToHeight(peakDb) + '%'
+    peakEl.style.left    = peakPct + '%'
+    peakEl.style.setProperty('--vu-peak-pos', peakPct + '%')
     peakEl.style.opacity = peakDb > -59 ? '1' : '0'
   }
   if (dbEl) dbEl.textContent = db > -59 ? db.toFixed(1) : '—'

@@ -10,8 +10,9 @@ let countdownTimer: ReturnType<typeof setInterval> | null = null
 
 export function deactivateHome(): void {
   if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null }
-  // Bug 3: restore VU section to original DOM position when navigating away
-  setVuOverlay(false)
+  // Bug 3: restore VU section + info-cards to original DOM positions when
+  // navigating away from home (so the page stays clean if returned to).
+  relocateVuForVideoMode(false)
 }
 let fullHistory: RecordingEntry[] = []
 
@@ -26,24 +27,82 @@ let previewNoFrameTimer:  ReturnType<typeof setTimeout> | null = null
 let lastFrameTs           = 0
 let lastFrameBlobUrl:     string | null = null
 
-// ── VU overlay (inside video wrap when video-mode is on) ─────────────────────
-let _vuOrigParent:      Element | null = null
-let _vuOrigNextSibling: Node    | null = null
+// ── Video-mode layout: relocate VU, preview section and info cards ──────────
+//
+// In audio-only mode the page is a vertical stack: hero → quick-row →
+// horizontal VU → info-strip (3 cards) → history. When video is toggled on
+// we physically move those elements into a 3-column grid (#video-mode-layout):
+// left = vertical VU, middle = video preview, right = info-card column. When
+// video is toggled off we move every element back to its original position
+// so audio-only mode remains pixel-identical to v4.40.0.
+//
+// Doing this by DOM-relocation (rather than duplicating elements) means every
+// existing event handler / live-update / ID reference keeps working without
+// modification. The function is idempotent — safe to call repeatedly.
+interface MoveRecord { el: HTMLElement; parent: Element; next: Node | null }
+let _videoLayoutMoves: MoveRecord[] = []
+let _videoLayoutActive = false
 
-function setVuOverlay(enabled: boolean): void {
-  const vu   = document.querySelector<HTMLElement>('#page-home .vu-section')
-  const wrap = document.querySelector<HTMLElement>('.video-preview-wrap')
-  if (!vu || !wrap) return
+function relocateVuForVideoMode(enabled: boolean): void {
+  const layout = document.getElementById('video-mode-layout')
+  if (!layout) return
+  const vuSlot      = layout.querySelector<HTMLElement>('.video-mode-vu-slot')
+  const previewSlot = layout.querySelector<HTMLElement>('.video-mode-preview-slot')
+  const cardSlot    = layout.querySelector<HTMLElement>('.info-card-column')
+  if (!vuSlot || !previewSlot || !cardSlot) return
+
   if (enabled) {
-    if (vu.parentElement !== wrap) {
-      _vuOrigParent      = vu.parentElement
-      _vuOrigNextSibling = vu.nextSibling
-      wrap.appendChild(vu)
+    if (_videoLayoutActive) return
+    _videoLayoutActive = true
+    layout.style.display = 'grid'
+
+    const move = (el: HTMLElement | null, target: HTMLElement): void => {
+      if (!el || !el.parentElement) return
+      _videoLayoutMoves.push({ el, parent: el.parentElement, next: el.nextSibling })
+      target.appendChild(el)
+    }
+
+    // VU — gets a modifier class so it renders vertically
+    const vu = document.querySelector<HTMLElement>('#page-home > .vu-section')
+    if (vu) {
+      vu.classList.add('vu-section-vertical')
+      move(vu, vuSlot)
+    }
+
+    // Video preview section — stays as one block (preview + source bar)
+    const preview = document.getElementById('video-preview-section') as HTMLElement | null
+    move(preview, previewSlot)
+
+    // Three audio info-cards from the horizontal strip — pull them OUT of
+    // .info-strip and stack them in the right column. Keep the empty
+    // .info-strip in place so move-back logic is symmetric.
+    const audioStrip = document.querySelector<HTMLElement>('#page-home > .info-strip:not(.video-info-strip)')
+    if (audioStrip) {
+      Array.from(audioStrip.children).forEach(child => {
+        if (child instanceof HTMLElement) move(child, cardSlot)
+      })
+    }
+
+    // Two video info-cards (KAMERA + VIDEOKVALITET) — move out of their strip
+    const videoStrip = document.getElementById('video-info-strip') as HTMLElement | null
+    if (videoStrip) {
+      Array.from(videoStrip.children).forEach(child => {
+        if (child instanceof HTMLElement) move(child, cardSlot)
+      })
     }
   } else {
-    if (vu.parentElement === wrap && _vuOrigParent) {
-      _vuOrigParent.insertBefore(vu, _vuOrigNextSibling)
+    if (!_videoLayoutActive) return
+    _videoLayoutActive = false
+    // Move everything back in reverse order so insertBefore(nextSibling)
+    // targets are valid even when we re-insert into a now-empty parent.
+    for (let i = _videoLayoutMoves.length - 1; i >= 0; i--) {
+      const { el, parent, next } = _videoLayoutMoves[i]
+      try { parent.insertBefore(el, next) } catch { parent.appendChild(el) }
     }
+    _videoLayoutMoves = []
+    layout.style.display = 'none'
+    const vu = document.querySelector<HTMLElement>('#page-home .vu-section')
+    vu?.classList.remove('vu-section-vertical')
   }
 }
 
@@ -603,12 +662,12 @@ export function setupHome(): void {
       pageHome?.classList.add('video-mode')
       const section = document.getElementById('video-preview-section')
       if (section) section.style.display = ''
-      setVuOverlay(true)
+      relocateVuForVideoMode(true)
       await refreshHomeVideoDevices()
       if (settings.videoDeviceName && !window.__isRecording) startVideoPreview()
     } else {
       pageHome?.classList.remove('video-mode')
-      setVuOverlay(false)
+      relocateVuForVideoMode(false)
       stopVideoPreview()
       const section = document.getElementById('video-preview-section')
       if (section) section.style.display = 'none'
@@ -813,7 +872,7 @@ export async function refreshHome(): Promise<void> {
     pageHome?.classList.add('video-mode')
     const section = document.getElementById('video-preview-section')
     if (section) section.style.display = ''
-    setVuOverlay(true)
+    relocateVuForVideoMode(true)
     refreshHomeVideoDevices().then(() => {
       if (settings.videoDeviceName && !window.__isRecording) startVideoPreview()
     }).catch((err) => {
@@ -825,7 +884,7 @@ export async function refreshHome(): Promise<void> {
     })
   } else {
     pageHome?.classList.remove('video-mode')
-    setVuOverlay(false)
+    relocateVuForVideoMode(false)
     stopVideoPreview()
     const section = document.getElementById('video-preview-section')
     if (section) section.style.display = 'none'

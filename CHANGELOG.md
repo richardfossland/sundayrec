@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.41.0] — 2026-05-27
+
+### Changed
+- **Hjem-siden i video-modus** er bygget om fra grunnen av:
+  - **UV-meter er nå vertikalt** på siden av video-preview, med eksakt samme
+    visuelle design som det horisontale UV-meteret i lyd-modus — samme
+    fargegradient (grønn → gul → orange → rød), samme tick marks ved
+    -24/-12/-6 dBFS, samme peak-indikatorer, samme "Stille"/"Maks"-etiketter,
+    samme status-pille ("• Bra | Maks: -15.9 dBFS"). Bare orientert vertikalt.
+  - **Ingen svarte sidefelter rundt video-preview** lenger. Containeren bruker
+    nå `aspect-ratio: 16/9` og `object-fit: contain`, så previewet fyller
+    plassen naturlig — kameraet styrer aspect-ratio, ikke en fast bredde.
+  - **Innstillingskort omorganisert** rundt previewet: KAMERA, VIDEOKVALITET,
+    LYDKILDE, FORMAT og LAGRING stables nå i en kolonne til høyre for
+    previewet, ikke i to flate striper under.
+  - **3-kolonne grid** (vertikal UV | preview | info-kolonne) som kollapser
+    pent på smale vinduer (<1100 px): info-kortene flyter da i en rad under
+    previewet, mens UV holder seg vertikal på venstre side.
+- **Lyd-modus uendret** — pixel-for-pixel som i v4.40.0.
+
+Alle 1051 tester passerer.
+
+---
+
 ## [4.40.0] — 2026-05-27
 
 ### Added

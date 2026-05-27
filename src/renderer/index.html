@@ -303,6 +303,17 @@
       </div>
     </div>
 
+    <!-- Video-mode 3-column layout — populated by relocateVuForVideoMode()
+         in home.ts when video is toggled on. The VU section, video preview
+         section and info cards are physically moved into the slots below
+         (and back when video is toggled off), so each element keeps its
+         existing ID/event handlers and update code Just Works. -->
+    <div id="video-mode-layout" class="video-mode-layout" style="display:none">
+      <div class="video-mode-vu-slot"><!-- .vu-section moved here --></div>
+      <div class="video-mode-preview-slot"><!-- #video-preview-section moved here --></div>
+      <div class="info-card-column"><!-- info-cards moved here --></div>
+    </div>
+
     <!-- History section -->
     <div id="home-lower">
     <div class="section-header">
