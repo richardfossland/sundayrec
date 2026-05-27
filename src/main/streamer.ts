@@ -70,6 +70,17 @@ export interface StreamOptions {
   /** Optional overlays composited on top of the camera before encoding.
    *  Disabled overlays are skipped. Empty/undefined = clean stream. */
   overlays?: OverlayConfig[]
+  /** When set, the same ffmpeg pipeline also writes a higher-bitrate copy
+   *  to a local MP4 — solves "Stream + opptak"-bruksmønsteret uten å spawn
+   *  en parallell recorder-prosess (avfoundation låser kameraet). The
+   *  output file is registered in recording history after the stream
+   *  stops so the user can find it in Siste opptak. */
+  alsoRecord?: {
+    outputPath: string
+    /** Optional override of recorder bitrate. Default = videoBitrate × 1.6
+     *  for a noticeably higher-quality local file than the livestream. */
+    bitrateKbps?: number
+  }
 }
 
 export interface StreamStats {
@@ -247,6 +258,52 @@ async function stopActiveNdiReceivers(): Promise<void> {
 }
 
 /**
+ * After "Start direktesending + opptak" finishes, append the resulting MP4
+ * to the recording history so it shows up in Siste opptak just like a
+ * regular recorder.ts file. Best-effort — a missing/zero-byte file (very
+ * early ffmpeg crash) is silently skipped instead of polluting history
+ * with a broken row.
+ */
+async function registerAlsoRecordInHistory(filePath: string, startedAt: number): Promise<void> {
+  try {
+    const stat = await fs.promises.stat(filePath)
+    if (!stat.isFile() || stat.size < 1024) {
+      console.warn('[streamer] alsoRecord file missing or too small — skipping history', filePath)
+      return
+    }
+    const durationMs = Math.max(0, Date.now() - startedAt)
+    const durationSec = Math.round(durationMs / 1000)
+    const startDate = new Date(startedAt)
+    const date      = startDate.toLocaleDateString('nb-NO')
+    const startTime = startDate.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })
+    const duration  = formatDurationHms(durationSec)
+
+    const store = await import('./store')
+    store.addHistory({
+      date,
+      startTime,
+      duration,
+      filename:      path.basename(filePath),
+      path:          filePath,
+      status:        'ok',
+      fileSizeBytes: stat.size,
+      durationSec,
+    })
+    console.log(`[streamer] registered alsoRecord file in history: ${path.basename(filePath)} (${(stat.size/1024/1024).toFixed(1)} MB, ${durationSec}s)`)
+  } catch (e) {
+    console.warn('[streamer] failed to register alsoRecord in history:', e instanceof Error ? e.message : String(e))
+  }
+}
+
+function formatDurationHms(totalSec: number): string {
+  const h = Math.floor(totalSec / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
+  const s = totalSec % 60
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
+/**
  * Compose the full filter_complex string. When overlays are active, the
  * camera's video stream first runs through the overlay pipeline producing a
  * composed label, which is then split into the main encode + the preview
@@ -267,9 +324,16 @@ function buildOutputArgs(
   // Stream branch starts from either the camera (no overlays) or the composed
   // overlay output (already computed once in launchFfmpeg — no second call so
   // a transient file-delete between the two calls can't crash this path).
+  // When `alsoRecord` is requested we split into 3 branches instead of 2 so a
+  // separate higher-bitrate encoder can write a local MP4 alongside the live
+  // stream — same ffmpeg, no extra device handle.
   const filterParts: string[] = []
   if (overlayChain) filterParts.push(overlayChain)
-  filterParts.push(`[${overlayLabel}]split=2[v_stream][v_pre]`)
+  if (opts.alsoRecord) {
+    filterParts.push(`[${overlayLabel}]split=3[v_stream][v_rec][v_pre]`)
+  } else {
+    filterParts.push(`[${overlayLabel}]split=2[v_stream][v_pre]`)
+  }
   filterParts.push(`[v_pre]fps=1/2,scale=320:-1[v_thumb]`)
 
   const args: string[] = [
@@ -319,6 +383,32 @@ function buildOutputArgs(
     args.push('-f', 'flv', joinRtmpUrl(enabledDests[0].rtmpUrl, enabledDests[0].streamKey))
   } else {
     args.push('-f', 'tee', teeArg)
+  }
+
+  // Optional local recording output — higher bitrate than the livestream so
+  // post-production (podcast, editor) has more headroom. Uses the same audio
+  // source as the stream branch. faststart writes the moov atom at the
+  // beginning of the file so partial files remain playable if the stream
+  // gets killed before clean shutdown.
+  if (opts.alsoRecord) {
+    const recBitrate = opts.alsoRecord.bitrateKbps ?? Math.round(vBitrate * 1.6)
+    args.push(
+      '-map', '[v_rec]',
+      '-map', audioMap,
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      '-pix_fmt', 'yuv420p',
+      '-b:v', `${recBitrate}k`,
+      '-maxrate', `${recBitrate}k`,
+      '-bufsize', `${recBitrate * 2}k`,
+      '-g', String(opts.framerate * 2),
+      '-c:a', 'aac',
+      '-b:a', '192k',
+      '-ar', '48000',
+      '-ac', '2',
+      '-movflags', '+faststart',
+      '-y', opts.alsoRecord.outputPath,
+    )
   }
 
   // Preview snapshot output (overwrites same file every 2 sec)
@@ -492,6 +582,7 @@ async function launchFfmpeg(opts: StreamOptions): Promise<{ ok: boolean; error?:
     }
 
     // Final teardown — either user stopped, or we exhausted retries
+    const finalAlsoRecord = activeOpts?.alsoRecord ?? null
     activeOpts = null
     lastStats = {
       ...lastStats,
@@ -503,6 +594,12 @@ async function launchFfmpeg(opts: StreamOptions): Promise<{ ok: boolean; error?:
       if (code !== 0 && code !== null && signal !== 'SIGTERM' && signal !== 'SIGKILL') {
         console.warn('[streamer] last stderr:', stderrBuf.slice(-500))
       }
+    }
+    // Register the local "Start direktesending + opptak" file in history so
+    // the user can find it under Siste opptak. Fire-and-forget — stat/IO
+    // failures are logged but don't block the close path.
+    if (finalAlsoRecord && wasActive) {
+      void registerAlsoRecordInHistory(finalAlsoRecord.outputPath, streamStartedAt)
     }
   })
 

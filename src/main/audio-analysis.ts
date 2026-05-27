@@ -633,17 +633,29 @@ export async function analyzeAudio(
     // ── PCM buffering ──
     // Float32 = 4 bytes/sample. We accumulate raw bytes and slice off
     // whole frames; the tail (partial frame) stays buffered for next chunk.
+    //
+    // The old implementation did `Buffer.concat([pending, chunk])` on every
+    // stdout event — that allocates a fresh buffer and copies the entire
+    // pending tail per chunk. For a 3-hour service that's millions of small
+    // allocations and visible GC pressure. We now keep a fixed-size
+    // pending buffer with a write offset and process frames in place — no
+    // allocation in the hot path.
     const BYTES_PER_FRAME = FRAME_SAMPLES * 4
-    let pending: Buffer = Buffer.alloc(0)
+    // Capacity = a handful of frames so a single ffmpeg chunk never
+    // overflows. ffmpeg emits 4–64 KB chunks; 8× a frame is plenty.
+    const PENDING_CAPACITY = Math.max(BYTES_PER_FRAME * 8, 64 * 1024)
+    const pending = Buffer.allocUnsafe(PENDING_CAPACITY)
+    let pendingLen = 0
     const frames: AnalysisFrame[] = []
     let prevMag: Float64Array | null = null
     let frameIndex = 0
 
-    const processFrame = (buf: Buffer) => {
-      // Reinterpret bytes as float32. Buffer offsets must be 4-aligned —
-      // we slice on frame boundaries so this is always true.
+    const processFrameAt = (offset: number) => {
+      // Float32Array view onto the buffer — no copy. We never write into
+      // [offset, offset+BYTES_PER_FRAME) until processFrameAt returns, so
+      // the view is stable for the duration of the analysis call.
       const samples = new Float32Array(
-        buf.buffer, buf.byteOffset, FRAME_SAMPLES,
+        pending.buffer, pending.byteOffset + offset, FRAME_SAMPLES,
       )
       const startSec = (frameIndex * FRAME_SAMPLES) / SAMPLE_RATE
       const r = rmsDb(samples)
@@ -662,15 +674,27 @@ export async function analyzeAudio(
     }
 
     proc.stdout?.on('data', (chunk: Buffer) => {
-      pending = pending.length === 0 ? chunk : Buffer.concat([pending, chunk])
-      while (pending.length >= BYTES_PER_FRAME) {
-        const frameBytes = pending.subarray(0, BYTES_PER_FRAME)
-        // Copy into a fresh Buffer so the Float32Array view is stable
-        // (subarray shares the underlying buffer which we're about to
-        // realloc on the next concat).
-        const stable = Buffer.from(frameBytes)
-        processFrame(stable)
-        pending = pending.subarray(BYTES_PER_FRAME)
+      let chunkOffset = 0
+      while (chunkOffset < chunk.length) {
+        // Copy as much of the chunk as fits into the pending buffer.
+        const space  = PENDING_CAPACITY - pendingLen
+        const toCopy = Math.min(space, chunk.length - chunkOffset)
+        chunk.copy(pending, pendingLen, chunkOffset, chunkOffset + toCopy)
+        pendingLen  += toCopy
+        chunkOffset += toCopy
+
+        // Drain all complete frames from the buffer.
+        let readOffset = 0
+        while (pendingLen - readOffset >= BYTES_PER_FRAME) {
+          processFrameAt(readOffset)
+          readOffset += BYTES_PER_FRAME
+        }
+        // Shift any leftover tail (partial frame) to the front so the
+        // next chunk has room. copyWithin is in-place and fast.
+        if (readOffset > 0) {
+          pending.copyWithin(0, readOffset, pendingLen)
+          pendingLen -= readOffset
+        }
       }
     })
 

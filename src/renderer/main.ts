@@ -144,7 +144,7 @@ declare global {
       podcastRegenerate:   (service: string) => Promise<{ ok: boolean; feedUrl?: string; episodeCount: number; error?: string }>
       registerTrustedPath: (filePath: string) => Promise<boolean>
       streamStatus:       () => Promise<{ active: boolean; startedAt: number | null; bitrateKbps: number; fps: number; dropped: number; lastLine: string; destinations: Array<{ id: string; state: string }> }>
-      streamStart:        (params: { resolution?: string; framerate?: number; videoBitrateKbps?: number; destinations: Array<{ id: string; name: string; rtmpUrl: string; enabled: boolean }> }) => Promise<{ ok: boolean; error?: string }>
+      streamStart:        (params: { resolution?: string; framerate?: number; videoBitrateKbps?: number; destinations: Array<{ id: string; name: string; rtmpUrl: string; enabled: boolean }>; alsoRecord?: boolean }) => Promise<{ ok: boolean; error?: string }>
       streamStop:         () => Promise<boolean>
       streamPreviewPath:  () => Promise<string>
       streamSetKey:       (destId: string, key: string) => Promise<{ ok: boolean; error?: string }>

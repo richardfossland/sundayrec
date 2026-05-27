@@ -277,32 +277,68 @@ export async function uploadVideo(
 
     // 2. Stream the file in 8 MB chunks. Resumable PUTs return 308 mid-upload
     //    and 200/201 on completion with the final video resource as JSON.
+    //    Each chunk PUT goes through withRetry so a transient network blip
+    //    or 5xx doesn't abort the whole upload — the loop continues from
+    //    wherever the server confirmed the bytes landed.
+    const { withRetry } = await import('./http-util')
     const CHUNK = 8 * 1024 * 1024
     let uploaded = 0
     while (uploaded < totalBytes) {
       const chunkEnd  = Math.min(uploaded + CHUNK, totalBytes) - 1
       const chunkLen  = chunkEnd - uploaded + 1
-      const chunk     = await readChunk(filePath, uploaded, chunkLen)
 
-      const res = await fetchWithTimeout(location, {
-        method: 'PUT',
-        headers: {
-          'Content-Length': String(chunkLen),
-          'Content-Range':  `bytes ${uploaded}-${chunkEnd}/${totalBytes}`,
-        },
-        body: chunk,
-      }, 5 * 60_000)  // 5 min per chunk — generous for slow uplinks
+      const res = await withRetry(async () => {
+        // Re-read the chunk each attempt — the file may have been edited
+        // between retries (very unlikely for sermons, but cheaper than
+        // pinning the buffer in RAM for the whole upload).
+        const chunk = await readChunk(filePath, uploaded, chunkLen)
+        const r = await fetchWithTimeout(location, {
+          method: 'PUT',
+          headers: {
+            'Content-Length': String(chunkLen),
+            'Content-Range':  `bytes ${uploaded}-${chunkEnd}/${totalBytes}`,
+          },
+          body: chunk,
+        }, 5 * 60_000)  // 5 min per chunk — generous for slow uplinks
+        // 5xx / 429 / network failures bubble up as transient so withRetry
+        // can back off. Treat 308 and 2xx as final responses to be handled
+        // by the outer loop below.
+        if (r.status >= 500 && r.status < 600) {
+          const e = new Error(`YouTube ${r.status}`) as Error & { status: number }
+          e.status = r.status
+          throw e
+        }
+        if (r.status === 429) {
+          const e = new Error('YouTube rate limited') as Error & {
+            status: number; retryAfterMs: number
+          }
+          e.status = 429
+          const ra = r.headers.get('retry-after')
+          e.retryAfterMs = ra ? parseInt(ra, 10) * 1000 : 0
+          throw e
+        }
+        return r
+      }, { maxAttempts: 5, baseDelayMs: 2000 })
 
       if (res.status === 308) {
-        // Continue. The Range header tells us how many bytes the server got.
+        // The Range header tells us the highest byte the server confirmed.
+        // YouTube documents `bytes=0-N`, but be lenient about formatting —
+        // we walk numeric pairs and pick the highest end byte rather than
+        // trusting the first match, mirroring how the OneDrive client
+        // handles its nextExpectedRanges array.
         const range = res.headers.get('range')
+        let nextOffset = chunkEnd + 1   // fallback: assume server got our chunk
         if (range) {
-          const m = /bytes=0-(\d+)/.exec(range)
-          if (m) uploaded = parseInt(m[1], 10) + 1
-          else   uploaded = chunkEnd + 1
-        } else {
-          uploaded = chunkEnd + 1
+          let highestEnd = -1
+          const re = /(\d+)\s*-\s*(\d+)/g
+          let m: RegExpExecArray | null
+          while ((m = re.exec(range)) !== null) {
+            const end = parseInt(m[2], 10)
+            if (Number.isFinite(end) && end > highestEnd) highestEnd = end
+          }
+          if (highestEnd >= 0) nextOffset = highestEnd + 1
         }
+        uploaded = nextOffset
         onProgress?.(uploaded, totalBytes)
         continue
       }

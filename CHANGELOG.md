@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.46.0] — 2026-05-27
+
+### Added
+- **Direktesending lagrer nå lokalt opptak samtidig.** Hovedknappen på
+  Direktesending-fanen er nå «🔴 Start direktesending + opptak» — den
+  pumper samme ffmpeg-pipeline både til RTMP-destinasjonene OG en
+  lokal MP4-fil med høyere bitrate (~60 % over livestream-bitraten).
+  Lokal fil havner i Siste opptak når strømmen stopper, klar for
+  redigering eller podkast-publisering. Sekundær-knapp «Bare
+  direktesending (uten lokal opptak)» for de få tilfellene man
+  bare vil streame.
+
+### Cloud / sky-robustifisering
+- **OneDrive**: forbedret parsing av `nextExpectedRanges` ved retry.
+  Walker nå hele arrayet og velger laveste start-byte (i stedet for
+  første). Støtter også åpne ranges (`START-`) per Graph API-spec.
+- **YouTube**: hver chunk-PUT går nå gjennom `withRetry` med
+  exponential backoff. 5xx-feil og 429 (rate limit, med
+  Retry-After) prøves automatisk på nytt opptil 5 ganger uten å
+  avbryte hele opplastingen.
+
+### Performance
+- **audio-analysis.ts**: bytte unbounded `Buffer.concat` til fast
+  pre-allokert pending-buffer med write-offset. Sermon-analyse av
+  3-timers gudstjeneste sparer millioner av små Buffer-allokeringer
+  og merkbart GC-press.
+
+---
+
 ## [4.45.0] — 2026-05-27
 
 ### Changed

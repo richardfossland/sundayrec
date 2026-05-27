@@ -55,7 +55,8 @@ function emptyStats(): StreamStats {
 // ── Setup ────────────────────────────────────────────────────────────────
 
 export function setupLivePage(): void {
-  document.getElementById('btn-live-start')?.addEventListener('click', onStartStopClick)
+  document.getElementById('btn-live-start')?.addEventListener('click', () => onStartStopClick(true))
+  document.getElementById('btn-live-start-stream-only')?.addEventListener('click', () => onStartStopClick(false))
 
   document.getElementById('live-config-link')?.addEventListener('click', e => {
     e.preventDefault()
@@ -346,14 +347,19 @@ function renderStats(s: StreamStats): void {
 
 // ── Start / stop ─────────────────────────────────────────────────────────
 
-async function onStartStopClick(): Promise<void> {
-  const btn = document.getElementById('btn-live-start') as HTMLButtonElement | null
+async function onStartStopClick(alsoRecord: boolean): Promise<void> {
+  const btn          = document.getElementById('btn-live-start') as HTMLButtonElement | null
+  const streamOnlyBtn = document.getElementById('btn-live-start-stream-only') as HTMLButtonElement | null
   if (!btn) return
   hideError()
   if (lastStats.active) {
     btn.disabled = true
+    if (streamOnlyBtn) streamOnlyBtn.disabled = true
     try { await window.api.streamStop() }
-    finally { btn.disabled = false }
+    finally {
+      btn.disabled = false
+      if (streamOnlyBtn) streamOnlyBtn.disabled = false
+    }
     return
   }
 
@@ -370,12 +376,14 @@ async function onStartStopClick(): Promise<void> {
 
   setStatusPill('is-preparing', t('live.statusPreparing', 'Forbereder…'))
   btn.disabled = true
+  if (streamOnlyBtn) streamOnlyBtn.disabled = true
   try {
     const result = await window.api.streamStart({
       resolution,
       framerate,
       videoBitrateKbps: settings.streamVideoBitrate ?? undefined,
       destinations: dests.map(d => ({ id: d.id, name: d.name, rtmpUrl: d.rtmpUrl, enabled: true })),
+      alsoRecord,
     })
     if (!result.ok) {
       showError(result.error ?? t('live.connectionFailed', 'Tilkobling feilet'))
@@ -390,19 +398,25 @@ async function onStartStopClick(): Promise<void> {
     setStatusPill('is-idle', t('live.statusReady', 'Klar'))
   } finally {
     btn.disabled = false
+    if (streamOnlyBtn) streamOnlyBtn.disabled = false
   }
 }
 
 function updateStartButton(active: boolean): void {
-  const btn = document.getElementById('btn-live-start') as HTMLButtonElement | null
+  const btn          = document.getElementById('btn-live-start') as HTMLButtonElement | null
+  const streamOnly   = document.getElementById('btn-live-start-stream-only') as HTMLButtonElement | null
   if (!btn) return
   const span = btn.querySelector('span')
   if (active) {
     btn.classList.add('is-active')
     if (span) span.textContent = t('live.stopBtn', '■ Stopp')
+    // While streaming, hide the secondary "stream-only" CTA — it would be
+    // confusing to show a "start" button alongside an active stream.
+    if (streamOnly) streamOnly.style.display = 'none'
   } else {
     btn.classList.remove('is-active')
-    if (span) span.textContent = t('live.startBtn', '▶ Start direktesending')
+    if (span) span.textContent = t('live.startBtn', '🔴 Start direktesending + opptak')
+    if (streamOnly) streamOnly.style.display = ''
   }
   updateStartButtonState()
 }

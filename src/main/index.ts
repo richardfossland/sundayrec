@@ -1350,6 +1350,9 @@ function setupIPC(): void {
       framerate?: number
       videoBitrateKbps?: number
       destinations?: Array<{ id: string; name: string; rtmpUrl: string; enabled: boolean }>
+      /** When true, also write a higher-bitrate local MP4 alongside the
+       *  RTMP push so the user gets a master file for editing/podcast. */
+      alsoRecord?: boolean
     }
     if (!Array.isArray(p.destinations) || p.destinations.length === 0) {
       return { ok: false, error: 'Ingen destinasjoner valgt.' }
@@ -1365,6 +1368,22 @@ function setupIPC(): void {
       enabled:   d.enabled,
     }))
 
+    // Build an optional local-record outputPath when alsoRecord is requested.
+    // Mirrors recorder.ts naming (saveFolder + buildFilename) so the file
+    // looks at home next to regular recordings in Siste opptak.
+    let alsoRecord: { outputPath: string } | undefined
+    if (p.alsoRecord) {
+      const { buildFilename } = await import('./recorder-utils')
+      const baseFolder = settings.saveFolder ?? path.join(app.getPath('music'), 'SundayRec')
+      try { fs.mkdirSync(baseFolder, { recursive: true }) } catch {}
+      // Force MP4 since the streamer's local-record encoder writes H.264/AAC.
+      // We strip whatever extension buildFilename produced (which depends on
+      // audio-format settings) and append .mp4 so the file is playable.
+      const baseName = buildFilename(settings as import('../types').RecordingOpts).replace(/\.[^.]+$/, '')
+      const filename = `${baseName}_live.mp4`
+      alsoRecord = { outputPath: path.join(baseFolder, filename) }
+    }
+
     const { startStream, setStatsListener } = await import('./streamer')
     setStatsListener(stats => {
       try { mainWindow?.webContents.send('stream-stats', stats) } catch {}
@@ -1377,6 +1396,7 @@ function setupIPC(): void {
       videoBitrateKbps: p.videoBitrateKbps,
       destinations:     fullDests,
       overlays:         settings.streamOverlays ?? [],
+      alsoRecord,
     })
   })
 

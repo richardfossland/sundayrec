@@ -105,15 +105,27 @@ export async function uploadFile(token: string, filePath: string, folderId?: str
       throw e
     }, {
       beforeRetry: async () => {
-        // GET on uploadUrl returns nextExpectedRanges — resync offset
+        // GET on uploadUrl returns nextExpectedRanges — resync offset.
+        // Range strings come in the form "START-END" per Graph API spec;
+        // some upload sessions also accept "START-" (open-ended). Walk
+        // the full array (not just the first) and pick the LOWEST
+        // start-byte so retries don't skip over a gap the server is
+        // waiting for. If parsing fails we keep the local offset and let
+        // the next chunk attempt resend.
         const probe = await fetch(session.uploadUrl).catch(() => null)
         if (probe && probe.ok) {
           const j = await probe.json().catch(() => null) as { nextExpectedRanges?: string[] } | null
-          const next = j?.nextExpectedRanges?.[0]
-          if (next) {
-            const m = /^(\d+)-/.exec(next)
-            if (m) offset = parseInt(m[1], 10)
+          const ranges = j?.nextExpectedRanges ?? []
+          let bestStart: number | null = null
+          for (const r of ranges) {
+            // Accept "START-END" and "START-" (open-ended).
+            const m = /^(\d+)-(\d*)$/.exec(r.trim())
+            if (!m) continue
+            const start = parseInt(m[1], 10)
+            if (!Number.isFinite(start)) continue
+            if (bestStart === null || start < bestStart) bestStart = start
           }
+          if (bestStart !== null) offset = bestStart
         }
       },
     })

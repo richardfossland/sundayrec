@@ -778,12 +778,22 @@
       </div>
     </div>
 
-    <!-- Start/Stop bar -->
+    <!-- Start/Stop bar — primary button starts BOTH stream + local
+         recording (most users want a master file for editing). The
+         secondary button under is for the rare case where only the
+         livestream is needed. -->
     <div class="live-action-bar">
-      <button class="live-start-btn" id="btn-live-start" type="button">
-        <span data-i18n="live.startBtn">▶ Start direktesending</span>
+      <button class="live-start-btn" id="btn-live-start" type="button" data-also-record="true">
+        <span data-i18n="live.startBtn">🔴 Start direktesending + opptak</span>
+      </button>
+      <button class="live-start-btn-secondary" id="btn-live-start-stream-only" type="button">
+        <span data-i18n="live.startStreamOnly">Bare direktesending (uten lokal opptak)</span>
       </button>
       <div class="live-error" id="live-error" style="display:none"></div>
+      <div class="live-action-hint" data-i18n="live.alsoRecordHint">
+        Lokal opptaksfil havner i Siste opptak når strømmen stopper —
+        høyere bitrate enn livestreamen, klar for redigering eller podkast.
+      </div>
     </div>
 
   </section>
