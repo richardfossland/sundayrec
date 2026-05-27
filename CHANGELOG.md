@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.53.5] — 2026-05-27
+
+### Refactored — IPC-splitting fase 5 (recording + audio-devices)
+
+**Nye filer:**
+- `ipc/recording.ts` — 6 handlers (start/stop-recording-now,
+  run-test-recording, run-preflight, get-next-recording, get-disk-space)
+- `ipc/audio-devices.ts` — 3 handlers (list-asio-drivers,
+  list-ffmpeg-audio-devices, diagnose-audio)
+
+**Resultat:**
+- index.ts: **1246 → 1148 linjer** (kumulativ fra v4.53.0:
+  2045 → 1148 = **−44 %**)
+- 99 handlers flyttet ut totalt (av ~127)
+- 1080 tester fortsatt grønne
+
+---
+
 ## [4.53.4] — 2026-05-27
 
 ### Refactored — IPC-splitting fase 4 (wake + history)

@@ -23,6 +23,8 @@ import { registerReviewQueueIpc } from './ipc/review-queue'
 import { registerEditorIpc } from './ipc/editor'
 import { registerWakeIpc } from './ipc/wake'
 import { registerHistoryIpc } from './ipc/history'
+import { registerRecordingIpc } from './ipc/recording'
+import { registerAudioDevicesIpc } from './ipc/audio-devices'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 
@@ -691,89 +693,9 @@ function setupIPC(): void {
   // History IPC — moved to ipc/history.ts (get/delete/clear/prune + note)
   registerHistoryIpc(ipcCtx)
 
-  ipcMain.handle('get-next-recording', () => {
-    const next = scheduler.getNextRecording()
-    return next ? { date: next.date.toISOString() } : null
-  })
-
-  ipcMain.handle('get-disk-space', async () => {
-    try {
-      let folder = store.get('saveFolder') ?? app.getPath('documents')
-      if (!fs.existsSync(folder)) folder = app.getPath('documents')
-      if (process.platform === 'darwin' || process.platform === 'linux') {
-        const { stdout } = await execFileAsync('df', ['-Pk', folder], { timeout: 5000 })
-        const cols = stdout.trim().split('\n')[1]?.trim().split(/\s+/)
-        const free = cols ? parseInt(cols[3]) : NaN
-        if (!isNaN(free)) return { freeBytes: free * 1024 }
-      }
-      if (process.platform === 'win32') {
-        // Use WMI to get free bytes by path — works for drive letters and UNC paths
-        const escapedFolder = folder.replace(/'/g, "''")
-        const { stdout } = await execFileAsync('powershell', [
-          '-NoProfile', '-Command',
-          `(Get-Item -LiteralPath '${escapedFolder}' -ErrorAction SilentlyContinue | ` +
-          `Select-Object -ExpandProperty PSDrive -ErrorAction SilentlyContinue).Free`
-        ], { timeout: 5000 })
-        const free = parseInt(stdout.trim())
-        if (!isNaN(free) && free >= 0) return { freeBytes: free }
-        // Fallback: parse drive letter for local drives
-        const m = folder.match(/^([A-Za-z]):/)
-        if (m) {
-          const { stdout: fb } = await execFileAsync('powershell', [
-            '-NoProfile', '-Command', `(Get-PSDrive -Name '${m[1]}').Free`
-          ], { timeout: 5000 })
-          const free2 = parseInt(fb.trim())
-          if (!isNaN(free2) && free2 >= 0) return { freeBytes: free2 }
-        }
-      }
-    } catch {}
-    return { freeBytes: null }
-  })
-
-  ipcMain.handle('start-recording-now', async (_, opts) => {
-    if (opts !== undefined && opts !== null && (typeof opts !== 'object' || Array.isArray(opts))) {
-      return { error: 'invalid_opts' }
-    }
-    // Sanitise numeric fields to prevent out-of-range values from crashing ffmpeg
-    if (opts && typeof opts === 'object') {
-      const o = opts as Record<string, unknown>
-      if (o['maxMinutes'] !== undefined) {
-        const v = Number(o['maxMinutes'])
-        if (!Number.isFinite(v) || v < 1 || v > 1440) o['maxMinutes'] = undefined
-      }
-      if (o['splitMinutes'] !== undefined) {
-        const v = Number(o['splitMinutes'])
-        if (!Number.isFinite(v) || v < 1 || v > 480) o['splitMinutes'] = undefined
-      }
-    }
-    const settings = { ...store.getAll(), ...(opts ?? {}) }
-    // Map manualMaxMinutes → maxMinutes so the auto-stop timer actually fires
-    if (!(settings as import('../types').RecordingOpts).maxMinutes && settings.manualMaxMinutes) {
-      (settings as import('../types').RecordingOpts).maxMinutes = settings.manualMaxMinutes
-    }
-    const preRollSec = settings.preRollSeconds ?? 0
-
-    // Harvest pre-roll buffer for manual recordings when enabled
-    let prerollData: { rawPath: string; trimMs: number } | null = null
-    if (preRollSec > 0 && preroll.isRunning()) {
-      prerollData = await preroll.harvest(preRollSec)
-      if (prerollData && process.platform === 'darwin') {
-        await new Promise<void>(resolve => setTimeout(resolve, 300))
-      }
-    }
-
-    return recorder.startSession(settings, mainWindow, prerollData)
-  })
-  ipcMain.handle('stop-recording-now', () => { recorder.stopSession(); return true })
-
-  ipcMain.handle('run-test-recording', async () => {
-    const { runTestRecording } = await import('./test-recorder')
-    return runTestRecording(store.getAll())
-  })
-
-  ipcMain.handle('run-preflight', async () => {
-    return scheduler.runManualPreflight()
-  })
+  // Recording IPC — moved to ipc/recording.ts (start/stop-now, test,
+  // preflight, get-next, get-disk-space)
+  registerRecordingIpc(ipcCtx)
 
   ipcMain.handle('test-webhook', async () => {
     const s = store.getAll()
@@ -906,28 +828,8 @@ function setupIPC(): void {
   // Thumbnail (podcast cover art) — moved to ipc/thumbnail.ts
   registerThumbnailIpc({ ...ipcCtx, isAllowedMediaPath })
 
-  ipcMain.handle('list-asio-drivers', async () => {
-    const { listAsioDrivers } = await import('./native-recorder')
-    return listAsioDrivers()
-  })
-
-  ipcMain.handle('list-ffmpeg-audio-devices', async () => {
-    const { listFfmpegDevices } = await import('./native-recorder')
-    return listFfmpegDevices()
-  })
-
-  ipcMain.handle('diagnose-audio', async () => {
-    const { listFfmpegDevices, listWasapiDevices, probeWasapiAvailable } = await import('./native-recorder')
-    const [dshowDevices, wasapiDevices] = await Promise.all([
-      listFfmpegDevices().catch(() => []),
-      listWasapiDevices().catch(() => [])
-    ])
-    return {
-      dshow: dshowDevices.map(d => d.name),
-      wasapi: wasapiDevices.map(d => d.name),
-      wasapiAvailable: await probeWasapiAvailable().catch(() => false)
-    }
-  })
+  // Audio devices (ASIO, ffmpeg, WASAPI) — moved to ipc/audio-devices.ts
+  registerAudioDevicesIpc(ipcCtx)
 
   // Cloud-backup handlers — moved to ipc/cloud.ts. Passes isAllowedMediaPath
   // via the extended context so the path-traversal guard stays inline.
