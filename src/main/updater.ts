@@ -16,13 +16,8 @@ function send(channel: string, payload?: unknown): void {
 export function init(mainWindow: BrowserWindow): void {
   win = mainWindow
   const shouldAuto = store.get('autoUpdate') !== false
-  // On macOS the app is not signed with an Apple Developer ID, so in-place ZIP
-  // updates via quitAndInstall fail silently — the old version keeps running and
-  // the updater loops forever. Disable auto-download on macOS; the UI instead
-  // shows a "Download" button that opens the GitHub releases page in the browser.
-  const isMac = process.platform === 'darwin'
-  autoUpdater.autoDownload = isMac ? false : shouldAuto
-  autoUpdater.autoInstallOnAppQuit = isMac ? false : shouldAuto
+  autoUpdater.autoDownload = shouldAuto
+  autoUpdater.autoInstallOnAppQuit = shouldAuto
 
   autoUpdater.on('checking-for-update',  ()     => send('update-checking'))
   autoUpdater.on('update-available',     (info) => send('update-available', info))

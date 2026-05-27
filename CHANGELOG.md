@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.54.1] — 2026-05-27
+
+### Fixed — In-app oppdatering på macOS
+
+Brukerne klaget på at "Start på nytt og installer"-knappen åpnet
+GitHub Releases-siden i nettleseren i stedet for å oppdatere appen
+inline. Dette var en utdatert kodebane fra før appen ble signert.
+
+**Roten av problemet:**
+- `src/main/updater.ts` deaktiverte `autoDownload` og
+  `autoInstallOnAppQuit` på macOS med kommentaren
+  "the app is not signed with an Apple Developer ID, so in-place ZIP
+  updates via quitAndInstall fail silently"
+- `src/main/ipc/lifecycle.ts` returnerte tidlig på Darwin og åpnet
+  GitHub i ekstern nettleser
+- Appen har vært **fullt signert + notarisert** siden v4.x —
+  `package.json` viser `hardenedRuntime: true`, `notarize: true`, og
+  CI bygger både `.dmg` og `.zip` (sistnevnte er det electron-updater
+  trenger for in-place oppdateringer)
+
+**Fiksen:**
+- Fjernet macOS-spesifikk override i `updater.ts` — begge plattformer
+  respekterer nå brukerens `autoUpdate`-innstilling likt
+- Fjernet GitHub-redirect i `lifecycle.ts` — `install-update`-handler
+  kaller nå `electron-updater.quitAndInstall()` på begge plattformer
+- Test oppdatert til å speile faktisk oppførsel (signert macOS = full
+  auto-update støtte)
+
+**Forventet brukeropplevelse etter v4.54.1:**
+- Mac: klikk "Start på nytt og installer" → app lukkes → nytt program
+  startes med oppdatert versjon
+- Windows: uendret (fungerte allerede)
+
+1081 tester grønne (én ny test for macOS auto-update). Bare denne
+endringen siden v4.54.0.
+
+---
+
 ## [4.54.0] — 2026-05-27
 
 ### Improved — UX-audit (kirke-volontør først)

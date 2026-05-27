@@ -95,9 +95,21 @@ afterAll(() => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('updater.init — autoDownload gating', () => {
-  it('disables autoDownload + autoInstallOnAppQuit on macOS (unsigned ZIP fails silently)', () => {
+  // Note: the app is signed + notarized on macOS, so the legacy
+  // "disable auto-update on darwin" override has been removed.
+  // Both platforms now respect the user's autoUpdate setting equally.
+  it('respects user autoUpdate setting on macOS (signed + notarized — in-place updates work)', () => {
     setPlatform('darwin')
-    storeData['autoUpdate'] = true  // user wants auto, but mac override wins
+    storeData['autoUpdate'] = true
+    const win = makeWindow() as unknown as Electron.BrowserWindow
+    updater.init(win)
+    expect(fakeAutoUpdater.autoDownload).toBe(true)
+    expect(fakeAutoUpdater.autoInstallOnAppQuit).toBe(true)
+  })
+
+  it('disables autoDownload on macOS when user opts out via store.autoUpdate=false', () => {
+    setPlatform('darwin')
+    storeData['autoUpdate'] = false
     const win = makeWindow() as unknown as Electron.BrowserWindow
     updater.init(win)
     expect(fakeAutoUpdater.autoDownload).toBe(false)
