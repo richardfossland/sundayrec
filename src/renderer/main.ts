@@ -304,6 +304,28 @@ function verifyBlobUrlsAllowed(): void {
   img.src = url
 }
 
+// Esc closes the topmost visible modal. Modals that shouldn't be Esc-closable
+// (transcribe progress, export progress) opt out with data-no-escape on the
+// backdrop. Cancel-buttons are found via [data-modal-cancel] or, as a fallback,
+// the well-known IDs we already use (btn-*-cancel).
+function setupGlobalEscape(): void {
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return
+    const backdrops = Array.from(document.querySelectorAll<HTMLElement>('.modal-backdrop'))
+      .filter(el => el.style.display !== 'none' && !el.hasAttribute('data-no-escape'))
+    if (!backdrops.length) return
+    // Topmost = last in DOM order (modals are appended sequentially)
+    const top = backdrops[backdrops.length - 1]
+    const cancel = top.querySelector<HTMLButtonElement>(
+      '[data-modal-cancel], [id$="-cancel"], [id^="btn-cancel-"], .modal-close',
+    )
+    if (cancel) cancel.click()
+    else top.style.display = 'none'
+    e.preventDefault()
+    e.stopPropagation()
+  })
+}
+
 async function init(): Promise<void> {
   // Set globals consumed by sub-modules
   window.showPage       = showPage
@@ -351,6 +373,7 @@ async function init(): Promise<void> {
   setupSearchPage()
   setupClipReset()
   setupSettingsTabs()
+  setupGlobalEscape()
 
   window.openEditorWithFile = openEditorWithFile
   window.openEditorReviewMode = openEditorReviewMode

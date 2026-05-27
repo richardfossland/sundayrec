@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.54.0] — 2026-05-27
+
+### Improved — UX-audit (kirke-volontør først)
+
+Gjennomgang av hele UI med fokus på kirke-volontører som verken er
+IT-folk eller designere. Programmet må være ENKELT å bruke uten
+opplæring.
+
+#### 🛡 Stopp-modal kan ikke trigge ved uhell
+- **Forrige oppførsel:** "Ja, stopp" sto til venstre som default
+  (farlig: et utilsiktet Enter-trykk midt i gudstjenesten stoppet
+  opptaket umiddelbart).
+- **Ny oppførsel:** "Fortsett opptak" er nå primær-handlingen og får
+  autofocus så snart modalen åpner. Et utilsiktet Enter beskytter
+  opptaket i stedet for å stoppe det.
+
+#### ⌨️ Escape-tast lukker modaler
+Globalt Esc-håndterer fanger den øverste synlige modalen og kaller
+dens cancel-knapp (`[data-modal-cancel]`, `[id$="-cancel"]`,
+`[id^="btn-cancel-"]`, eller `.modal-close`). Progress-modaler
+(transcribe, eksport) opt-er ut med `data-no-escape`.
+
+For stop-modal: Esc fortsetter opptaket (samme som å trykke
+"Fortsett opptak"). Sikkert by default.
+
+#### 💬 Bedre feilmeldinger
+- Ukjente feilkoder fra main-prosessen viste tidligere bare den rå
+  maskinkoden (f.eks. "ENOENT" eller "EBUSY") til brukeren.
+- Nå returnerer `translateNativeError()` en generisk norsk melding for
+  ukjente koder ("Noe gikk galt under opptak — sjekk at lydenhet og
+  lagringsmappe er klare"), og den tekniske detaljen logges for
+  diagnostikk.
+- Lagt til to nye spesifikke meldinger: `invalid_opts` og
+  `no_save_folder`.
+
+#### ♿ Tilgjengelighet
+- Alle 8 modaler har nå `role="dialog"` + `aria-modal="true"` så
+  skjermlesere kjenner igjen dem.
+- Stop-modal har `aria-labelledby` som peker til tittelen.
+
+### Bevisste valg som IKKE ble gjort
+- **Hjem-side reorganisering** (VU lavere på siden): For lite konkret
+  data om hva volontører faktisk ser først. Trenger A/B før vi
+  flytter prominent element.
+- **CSS-cleanup**: 4262 linjer styles — uten kjøretid-coverage er det
+  for risikabelt å fjerne klasser uten hver sin scan. Egen sesjon.
+- **Hero-budskap-omformulering**: Eksisterende tekster er allerede
+  enkle ("Alt er klart", "Krever handling"). Ikke noe å forbedre.
+
+### Resultat
+- 1080 tester grønne, typecheck ren
+- Mindre risiko for utilsiktet stopp under gudstjeneste
+- Esc-tast funker overalt (forutsigbar UI)
+- Ukjente feil oversettes til norsk i stedet for å vise maskinkode
+
+---
+
 ## [4.53.8] — 2026-05-27
 
 ### Refactored — IPC-splitting fase 8 (siste handlers, index.ts handler-fri!)

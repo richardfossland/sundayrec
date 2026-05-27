@@ -70,24 +70,30 @@ const recVu = makeVuState()
 // ── Setup ────────────────────────────────────────────────────────────────────
 
 export function setupRecording(): void {
+  // Opening the stop-confirm modal also focuses the SAFE cancel button so
+  // an accidental Enter keeps the recording going.
+  function openStopConfirm(): void {
+    const m = document.getElementById('modal-confirm-stop')
+    if (!m) return
+    m.style.display = 'flex'
+    // Defer focus to next tick so the browser has rendered the modal
+    setTimeout(() => {
+      (document.getElementById('btn-confirm-cancel') as HTMLButtonElement | null)?.focus()
+    }, 0)
+  }
+
   document.getElementById('btn-start-recording')?.addEventListener('click', () => {
     if (isRecording) {
-      if (settings.protectRecording !== false) {
-        const m = document.getElementById('modal-confirm-stop'); if (m) m.style.display = 'flex'
-      } else {
-        doStopRecording()
-      }
+      if (settings.protectRecording !== false) openStopConfirm()
+      else doStopRecording()
     } else {
       openManualModal()
     }
   })
 
   document.getElementById('btn-stop-overlay')?.addEventListener('click', () => {
-    if (settings.protectRecording !== false) {
-      const m = document.getElementById('modal-confirm-stop'); if (m) m.style.display = 'flex'
-    } else {
-      doStopRecording()
-    }
+    if (settings.protectRecording !== false) openStopConfirm()
+    else doStopRecording()
   })
 
   document.getElementById('btn-confirm-stop')?.addEventListener('click', () => {
@@ -366,7 +372,13 @@ export function translateNativeError(code: string): string {
     case 'disk_full':              return t('recording.errorDiskFull',           'Disken er full — frigjør plass og prøv igjen')
     case 'ffmpeg_missing':         return t('recording.errorFfmpegMissing',      'Intern feil: opptaksbinær mangler — reinstaller appen')
     case 'stuck_recording':        return t('recording.errorStuck',              'Opptaket stoppet — ingen lyd fra enheten i 60 sekunder')
-    default:                       return code
+    case 'invalid_opts':           return t('recording.errorInvalidOpts',        'Ugyldige opptaksinnstillinger — start på nytt og prøv igjen')
+    case 'no_save_folder':         return t('recording.errorNoSaveFolder',       'Lagringsmappen er ikke valgt — gå til Innstillinger → Lagring')
+    default:
+      // Unknown error code — show a generic message instead of raw machine code.
+      // The technical detail is still logged for diagnostics.
+      console.warn('[recording] unknown native error code:', code)
+      return t('recording.errorUnknown', 'Noe gikk galt under opptak — sjekk at lydenhet og lagringsmappe er klare')
   }
 }
 

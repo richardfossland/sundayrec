@@ -2168,7 +2168,7 @@
       </div>
 
       <!-- Transcribe modal: choose model + language -->
-      <div id="transcribe-modal" class="modal-backdrop" style="display:none">
+      <div id="transcribe-modal" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true">
         <div class="modal modal-sm transcribe-modal">
           <h2 data-i18n="transcript.modalTitle">Transkriber tale til tekst</h2>
           <p class="modal-desc" data-i18n="transcript.modalDesc">Bruker lokal AI (whisper.cpp) — ingen data sendes til skyen. Velg modell og språk.</p>
@@ -2202,7 +2202,7 @@
       </div>
 
       <!-- Transcribe progress modal -->
-      <div id="transcribe-progress-modal" class="modal-backdrop" style="display:none">
+      <div id="transcribe-progress-modal" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true" data-no-escape>
         <div class="modal modal-sm transcribe-progress-modal">
           <h2 id="transcribe-progress-title" data-i18n="transcript.progressTitle">Transkriberer…</h2>
           <div class="transcribe-progress-bar-wrap">
@@ -2311,7 +2311,7 @@
 </div>
 
 <!-- Editor export modal -->
-<div id="editor-export-modal" class="modal-backdrop" style="display:none">
+<div id="editor-export-modal" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true" data-no-escape>
   <div class="modal export-modal">
     <h2 data-i18n="editor.exportTitle">Eksporter lydfil</h2>
 
@@ -2396,7 +2396,7 @@
 <!-- ══ MODALS ════════════════════════════════════════════════════ -->
 
 <!-- Manual recording modal -->
-<div id="modal-manual" class="modal-backdrop" style="display:none">
+<div id="modal-manual" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true">
   <div class="modal">
     <h2 data-i18n="manual.title">Start opptak</h2>
     <p data-i18n="manual.subtitle">Opptaket starter med en gang og du stopper det selv når du er ferdig.</p>
@@ -2538,14 +2538,14 @@
   </div>
 </div>
 
-<!-- Stop confirm -->
-<div id="modal-confirm-stop" class="modal-backdrop" style="display:none">
+<!-- Stop confirm — primary action is "continue" so an accidental Enter doesn't stop -->
+<div id="modal-confirm-stop" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true" aria-labelledby="modal-confirm-stop-title">
   <div class="modal modal-sm">
-    <h2 data-i18n="recording.confirmTitle">Stopp opptak?</h2>
+    <h2 id="modal-confirm-stop-title" data-i18n="recording.confirmTitle">Stopp opptak?</h2>
     <p data-i18n="recording.confirmBody">Opptaket vil bli lagret frem til nå.</p>
     <div class="btn-row mt">
+      <button class="btn-primary" id="btn-confirm-cancel" data-i18n="recording.confirmCancel" autofocus>Fortsett opptak</button>
       <button class="btn-danger" id="btn-confirm-stop" data-i18n="recording.confirmStop">Ja, stopp</button>
-      <button class="btn-ghost" id="btn-confirm-cancel" data-i18n="recording.confirmCancel">Fortsett opptak</button>
     </div>
   </div>
 </div>
@@ -2562,7 +2562,7 @@
 </div>
 
 <!-- Audio diagnostic modal -->
-<div id="audio-diagnose-modal" class="modal-backdrop" style="display:none">
+<div id="audio-diagnose-modal" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true">
   <div class="modal">
     <div class="modal-header">
       <span class="modal-title">Lydenhetsdiagnose</span>
@@ -2574,7 +2574,7 @@
 </div>
 
 <!-- Note modal -->
-<div id="modal-note" class="modal-backdrop" style="display:none">
+<div id="modal-note" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true">
   <div class="modal modal-sm">
     <h2 data-i18n="history.noteTitle">Notat</h2>
     <p data-i18n="history.noteDesc">Skriv et notat til dette opptaket (valgfritt)</p>
@@ -2590,7 +2590,7 @@
 </div>
 
 <!-- Cloud folder picker modal -->
-<div id="cloud-folder-modal" class="modal-backdrop cloud-folder-backdrop" style="display:none">
+<div id="cloud-folder-modal" class="modal-backdrop cloud-folder-backdrop" style="display:none" role="dialog" aria-modal="true">
   <div class="modal modal-sm cloud-folder-modal">
     <div class="cloud-folder-modal-header">
       <h2 id="cloud-folder-modal-title">Velg mappe…</h2>
