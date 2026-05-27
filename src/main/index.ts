@@ -11,6 +11,10 @@ import * as tray from './tray'
 import * as updater from './updater'
 import * as mailer from './mailer'
 import * as wake from './wake'
+import { registerGmailIpc } from './ipc/gmail'
+import { registerYouTubeIpc } from './ipc/youtube'
+import { registerStreamIpc } from './ipc/stream'
+import { registerCloudIpc } from './ipc/cloud'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 
@@ -595,6 +599,15 @@ let ipcSetup = false
 function setupIPC(): void {
   if (ipcSetup) return
   ipcSetup = true
+
+  // Shared context for the per-domain IPC modules in src/main/ipc/. As we
+  // split handlers out of this file (was a ~1200-line monolith), each
+  // domain takes a snapshot of the same set of main-process services.
+  // mainWindow is exposed via getter because crash-recovery reassigns it.
+  const ipcCtx: import('./ipc/types').IpcContext = {
+    get mainWindow() { return mainWindow ?? null },
+    sendBackendWarning,
+  }
 
   ipcMain.handle('install-update', () => {
     if (process.platform === 'darwin') {
@@ -1244,286 +1257,21 @@ function setupIPC(): void {
     }
   })
 
-  // ── Cloud backup ──────────────────────────────────────────────────────────
-  ipcMain.handle('cloud-connect', async (_, service: string) => {
-    const cloud = await import('./cloud')
-    return cloud.connectService(service as import('../types').CloudServiceId)
-  })
+  // Cloud-backup handlers — moved to ipc/cloud.ts. Passes isAllowedMediaPath
+  // via the extended context so the path-traversal guard stays inline.
+  registerCloudIpc({ ...ipcCtx, isAllowedMediaPath })
 
-  ipcMain.handle('cloud-cancel-connect', async (_, service: string) => {
-    const cloud = await import('./cloud')
-    return cloud.cancelPending(service as import('../types').CloudServiceId)
-  })
+  // YouTube connect/disconnect/status — moved to ipc/youtube.ts.
+  // (youtube-upload still lives below because it depends on
+  // isAllowedMediaPath which is local to this file.)
+  registerYouTubeIpc(ipcCtx)
 
-  ipcMain.handle('cloud-disconnect', async (_, service: string) => {
-    const cloud = await import('./cloud')
-    return cloud.disconnectService(service as import('../types').CloudServiceId)
-  })
-
-  ipcMain.handle('cloud-status', async () => {
-    const cloud = await import('./cloud')
-    return cloud.getStatus()
-  })
-
-  ipcMain.handle('cloud-upload-file', async (_, service: string, filePath: string, metadata?: unknown) => {
-    if (typeof filePath !== 'string' || !isAllowedMediaPath(filePath)) return { ok: false, error: 'invalid_path' }
-    try {
-      const cloud = await import('./cloud')
-      // Manual upload goes via the queue too so it gets retry semantics
-      const { enqueueUpload } = await import('./cloud/upload-queue')
-      enqueueUpload({ service: service as import('../types').CloudServiceId, filePath })
-      void cloud.flushQueue(mainWindow)
-      return { ok: true }
-    } catch (err) {
-      return { ok: false, error: (err as Error).message }
-    }
-  })
-
-  ipcMain.handle('cloud-list-folders', async (_, service: string, parentId?: string) => {
-    try {
-      const cloud = await import('./cloud')
-      return cloud.listFolders(service as import('../types').CloudServiceId, parentId)
-    } catch { return [] }
-  })
-
-  ipcMain.handle('cloud-set-folder', async (_, service: string, folderId: string, folderName: string, folderPath?: string) => {
-    const cloud = await import('./cloud')
-    return cloud.setFolder(service as import('../types').CloudServiceId, folderId, folderName, folderPath)
-  })
-
-  ipcMain.handle('cloud-queue-status', async () => {
-    const q = await import('./cloud/upload-queue')
-    return q.getQueueStatus()
-  })
-
-  ipcMain.handle('cloud-queue-retry', async (_, id: string) => {
-    if (typeof id !== 'string') return false
-    const q = await import('./cloud/upload-queue')
-    const ok = q.retryNow(id)
-    if (ok) {
-      const cloud = await import('./cloud')
-      void cloud.flushQueue(mainWindow)
-    }
-    return ok
-  })
-
-  ipcMain.handle('cloud-queue-remove', async (_, id: string) => {
-    if (typeof id !== 'string') return false
-    const q = await import('./cloud/upload-queue')
-    return q.removeFromQueue(id)
-  })
-
-  ipcMain.handle('cloud-queue-flush', async () => {
-    const cloud = await import('./cloud')
-    void cloud.flushQueue(mainWindow)
-    return true
-  })
-
-  // ─── YouTube publish target ──────────────────────────────────────────────
-  // YouTube is separate from the cloud-backup queue — exposed only in the
-  // editor's export modal for video files. Token is stored under its own key
-  // in the token-store so users can connect to Drive without YouTube and
-  // vice-versa.
-  ipcMain.handle('youtube-connect', async () => {
-    const yt = await import('./cloud/youtube')
-    return yt.connect()
-  })
-  ipcMain.handle('youtube-disconnect', async () => {
-    const yt = await import('./cloud/youtube')
-    yt.disconnect()
-    return { ok: true }
-  })
-  ipcMain.handle('youtube-status', async () => {
-    const yt = await import('./cloud/youtube')
-    return { connected: yt.isConnected() }
-  })
-
-  // ─── Gmail (OAuth-based email notifications) ───────────────────────────
-  // When connected, mailer.ts prefers sending via the Gmail API over SMTP —
-  // gives users a one-click alternative to app-passwords + smtp.gmail.com.
-  ipcMain.handle('gmail-connect', async () => {
-    const g = await import('./cloud/gmail-auth')
-    return g.connectGmail()
-  })
-  ipcMain.handle('gmail-disconnect', async () => {
-    const g = await import('./cloud/gmail-auth')
-    g.disconnectGmail()
-    return { ok: true }
-  })
-  ipcMain.handle('gmail-status', async () => {
-    const g = await import('./cloud/gmail-auth')
-    return g.getGmailStatus()
-  })
+  // Gmail OAuth — moved to ipc/gmail.ts
+  registerGmailIpc(ipcCtx)
 
   // ─── Live streaming ──────────────────────────────────────────────────────
-  ipcMain.handle('stream-status', async () => {
-    const s = await import('./streamer')
-    return s.getStats()
-  })
-
-  ipcMain.handle('stream-start', async (event, params: unknown) => {
-    if (!params || typeof params !== 'object') return { ok: false, error: 'invalid_params' }
-    const p = params as {
-      resolution?: string
-      framerate?: number
-      videoBitrateKbps?: number
-      destinations?: Array<{ id: string; name: string; rtmpUrl: string; enabled: boolean }>
-      /** When true, also write a higher-bitrate local MP4 alongside the
-       *  RTMP push so the user gets a master file for editing/podcast. */
-      alsoRecord?: boolean
-    }
-    if (!Array.isArray(p.destinations) || p.destinations.length === 0) {
-      return { ok: false, error: 'Ingen destinasjoner valgt.' }
-    }
-
-    const { getStreamKey } = await import('./stream-keys')
-    const settings = store.getAll()
-    const fullDests = p.destinations.map(d => ({
-      id:        d.id,
-      name:      d.name,
-      rtmpUrl:   d.rtmpUrl,
-      streamKey: getStreamKey(d.id) ?? '',
-      enabled:   d.enabled,
-    }))
-
-    // Build an optional local-record outputPath when alsoRecord is requested.
-    // Mirrors recorder.ts naming (saveFolder + buildFilename) so the file
-    // looks at home next to regular recordings in Siste opptak.
-    let alsoRecord: { outputPath: string } | undefined
-    if (p.alsoRecord) {
-      const { buildFilename } = await import('./recorder-utils')
-      const baseFolder = settings.saveFolder ?? path.join(app.getPath('music'), 'SundayRec')
-      try { fs.mkdirSync(baseFolder, { recursive: true }) } catch {}
-      // Force MP4 since the streamer's local-record encoder writes H.264/AAC.
-      // We strip whatever extension buildFilename produced (which depends on
-      // audio-format settings) and append .mp4 so the file is playable.
-      const baseName = buildFilename(settings as import('../types').RecordingOpts).replace(/\.[^.]+$/, '')
-      const filename = `${baseName}_live.mp4`
-      alsoRecord = { outputPath: path.join(baseFolder, filename) }
-    }
-
-    const { startStream, setStatsListener } = await import('./streamer')
-    setStatsListener(stats => {
-      try { mainWindow?.webContents.send('stream-stats', stats) } catch {}
-    })
-    return startStream({
-      audioDeviceName:  settings.deviceName ?? undefined,
-      videoDeviceName:  settings.videoDeviceName ?? undefined,
-      resolution:       (p.resolution as '480p' | '720p' | '1080p') ?? settings.streamResolution ?? '720p',
-      framerate:        (p.framerate as 25 | 30) ?? settings.streamFramerate ?? 30,
-      videoBitrateKbps: p.videoBitrateKbps,
-      destinations:     fullDests,
-      overlays:         settings.streamOverlays ?? [],
-      alsoRecord,
-    })
-  })
-
-  ipcMain.handle('stream-stop', async () => {
-    const s = await import('./streamer')
-    return s.stopStream()
-  })
-
-  ipcMain.handle('stream-preview-path', async () => {
-    const s = await import('./streamer')
-    return s.getPreviewPath()
-  })
-
-  ipcMain.handle('stream-set-key', async (_, destId: string, key: string) => {
-    if (typeof destId !== 'string' || !destId) return { ok: false, error: 'invalid_dest_id' }
-    if (typeof key !== 'string') return { ok: false, error: 'invalid_key' }
-    const { setStreamKey } = await import('./stream-keys')
-    return setStreamKey(destId, key)
-  })
-
-  ipcMain.handle('stream-delete-key', async (_, destId: string) => {
-    if (typeof destId !== 'string' || !destId) return false
-    const { deleteStreamKey } = await import('./stream-keys')
-    deleteStreamKey(destId)
-    return true
-  })
-
-  // ─── Overlay sources (live streaming) ────────────────────────────────────
-
-  // List available screens that the user can pick as an overlay source.
-  // Returned shape mirrors what the renderer needs to populate a dropdown:
-  // an id ffmpeg understands + a human label (bounds + scale factor) so the
-  // user can tell two identical 27" monitors apart.
-  ipcMain.handle('overlay-list-screens', async () => {
-    try {
-      const displays = screen.getAllDisplays()
-      const primary  = screen.getPrimaryDisplay().id
-      return displays.map((d, idx) => ({
-        // On macOS avfoundation, screen indices come after the camera list —
-        // we'd need to query ffmpeg device list to map exactly. For now we
-        // expose the OS-display index and let the user adjust if their setup
-        // doesn't match (rare for the typical 1–2 display church setup).
-        id:       String(idx),
-        label:    `${d.label || `Skjerm ${idx + 1}`} (${d.size.width}×${d.size.height})${d.id === primary ? ' — primær' : ''}`,
-        bounds:   { x: d.bounds.x, y: d.bounds.y, w: d.size.width, h: d.size.height },
-        isPrimary: d.id === primary,
-      }))
-    } catch (e) {
-      console.warn('[overlay] list-screens failed', e)
-      return []
-    }
-  })
-
-  // Native NDI source discovery via vendored grandiose. Returns the same
-  // shape regardless of whether NDI is currently available — the renderer
-  // shows different UI based on the `available` flag.
-  ipcMain.handle('overlay-list-ndi-sources', async () => {
-    const { isNdiAvailable, getNdiLoadError, listNdiSources } = await import('./ndi-receiver')
-    if (!isNdiAvailable()) {
-      return {
-        available: false,
-        reason:    `Native NDI er ikke tilgjengelig (${getNdiLoadError() ?? 'ukjent feil'}). Sjekk at appen ble installert riktig — libndi følger med i .dmg/.exe.`,
-        sources:   [] as Array<{ name: string; url: string }>,
-      }
-    }
-    try {
-      const sources = await listNdiSources(2000)
-      return {
-        available: true,
-        reason:    sources.length > 0
-          ? `Fant ${sources.length} NDI-kilde${sources.length === 1 ? '' : 'r'} på nettverket.`
-          : 'Ingen NDI-kilder oppdaget. Sjekk at EasyWorship/ProPresenter/OBS sender NDI og at maskinene er på samme nettverk.',
-        sources:   sources.map(s => ({ name: s.name, url: s.address })),
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      return {
-        available: true,
-        reason:    `Kunne ikke skanne for NDI-kilder: ${msg}`,
-        sources:   [] as Array<{ name: string; url: string }>,
-      }
-    }
-  })
-
-  // File picker for image overlay sources. Copies the chosen file into
-  // userData/overlays so the path is stable across moves/renames of the
-  // original (mirrors how thumbnails are imported).
-  ipcMain.handle('overlay-pick-image', async () => {
-    const win = mainWindow ?? BrowserWindow.getFocusedWindow()
-    if (!win) return null
-    const r = await dialog.showOpenDialog(win, {
-      title:       'Velg overlay-bilde',
-      properties:  ['openFile'],
-      filters:     [{ name: 'Bilder', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
-    })
-    if (r.canceled || !r.filePaths[0]) return null
-    try {
-      const srcPath = r.filePaths[0]
-      const overlayDir = path.join(app.getPath('userData'), 'overlays')
-      fs.mkdirSync(overlayDir, { recursive: true })
-      const ext = path.extname(srcPath).toLowerCase() || '.png'
-      const destPath = path.join(overlayDir, `overlay-${Date.now()}${ext}`)
-      await fs.promises.copyFile(srcPath, destPath)
-      return { path: destPath, name: path.basename(srcPath) }
-    } catch (e) {
-      console.warn('[overlay] pick-image failed', e)
-      return null
-    }
-  })
+  // Streaming + overlay handlers — moved to ipc/stream.ts
+  registerStreamIpc(ipcCtx)
 
   // ─── Transcript archive index ────────────────────────────────────────────
   // Scans all known recording folders (saveFolder + every dir from

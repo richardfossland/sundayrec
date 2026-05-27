@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.53.1] — 2026-05-27
+
+### Refactored — IPC-handlers begynt å splittes per domene
+
+`src/main/index.ts` var ~2045 linjer med ~127 `ipcMain.handle()`-kall
+i én megafunksjon. Mønster etablert for å splitte etter domene:
+
+- **`src/main/ipc/types.ts`** — felles `IpcContext`-interface med
+  `mainWindow` (via getter for crash-recovery) + `sendBackendWarning`
+- **`src/main/ipc/gmail.ts`** — 3 handlers (connect/disconnect/status)
+- **`src/main/ipc/youtube.ts`** — 3 handlers (connect/disconnect/status)
+- **`src/main/ipc/stream.ts`** — 8 handlers (stream-* + overlay-*)
+- **`src/main/ipc/cloud.ts`** — 11 handlers (cloud-* connect/upload/queue)
+
+Totalt: **25 handlers flyttet ut**, **index.ts redusert fra 2045 til
+1792 linjer** (~12 % mindre). Mønsteret er klart for resten av domener
+(editor, master, thumbnail, whisper, review-queue, etc) — kommer i
+fremtidige sesjoner.
+
+### Internt
+- 1080 tester fortsatt grønne — ingen behavior-change
+- `youtube-upload` beholdt i index.ts foreløpig pga avhengighet av
+  `isAllowedMediaPath`-helperen (sikkerhetsguard); flyttes når den
+  helperen blir delt utility
+- Pattern: `registerXxxIpc(ctx)` tar context, kaller ipcMain.handle
+  direkte — ingen new abstraktion, bare flytting
+
+---
+
 ## [4.53.0] — 2026-05-27
 
 ### Refactored — konsolidert gjeld fra audit-runden
