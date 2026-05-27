@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.39.0] — 2026-05-27
+
+### Added
+- **Search page (`Søk` in sidebar).** Full-text search across every
+  `.transcript.json` sidecar in known recording folders. Click a hit to
+  open the recording in the editor at that timestamp. Default browse view
+  shows the 20 most recently transcribed sermons. Linear-scan implementation
+  (5 ms for 10k segments) — no extra dependency for fancy indexing.
+- **VTT subtitle export** alongside SRT — same panel, separate button.
+  WebVTT is preferred by HTML5 `<track>`, YouTube native captions, Vimeo,
+  and iOS/macOS players. SRT remains for legacy tooling.
+- **Silent preflight banner on Home.** Once per app launch we run the same
+  preflight check the user could trigger from Settings, and surface any
+  findings as a clickable banner above the hero. Surfaces "disk almost full",
+  "mic permission denied", "saved device not found" proactively — the user
+  no longer has to remember to click "Sjekk system".
+- 21 new i18n keys for the search page and home banner, in all 7 languages.
+  **804 keys per language** (up from 782).
+
+### Changed
+- Editor seek-to listener added (`document` event `editor-seek-to`) so other
+  pages can hand off a "open this recording at timestamp" intent without
+  needing a second IPC channel.
+
+---
+
 ## [4.38.2] — 2026-05-26
 
 ### Added

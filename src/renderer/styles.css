@@ -2051,6 +2051,125 @@ body.platform-win32  #wake-instructions-win { display: block; }
 }
 .video-keep-audio-text { padding-left: 16px; }
 
+/* ── Search page (transcript archive) ─────────────────────────────── */
+.page-header { margin-bottom: 18px; }
+.page-header h1 { font-size: 24px; font-weight: 800; color: var(--text); margin: 0 0 4px; letter-spacing: -.3px; }
+.page-subtitle { font-size: 13px; color: var(--text2); margin: 0; }
+
+.search-controls {
+  display: flex; gap: 10px; align-items: center;
+  margin-bottom: 12px;
+}
+.search-query-input {
+  flex: 1; font-size: 15px; padding: 10px 14px;
+}
+.search-index-status {
+  font-size: 12px; color: var(--text3);
+  margin-bottom: 14px;
+  font-style: italic;
+}
+.search-results { display: flex; flex-direction: column; gap: 10px; }
+.search-section-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin: 8px 0 4px;
+}
+.search-recent-card,
+.search-result-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  transition: border-color .12s, background .12s;
+}
+.search-recent-card { cursor: pointer; }
+.search-recent-card:hover,
+.search-result-card:hover { border-color: var(--accent-border, rgba(240,187,71,.35)); }
+.search-recent-name,
+.search-result-name { font-weight: 700; font-size: 14px; color: var(--text); margin-bottom: 3px; }
+.search-recent-meta,
+.search-result-meta { font-size: 12px; color: var(--text3); }
+.search-result-header { margin-bottom: 8px; }
+.search-hit-row {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 6px 8px; margin: 4px 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background .12s;
+}
+.search-hit-row:hover { background: rgba(255,255,255,.04); }
+.search-hit-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px; color: var(--text3);
+  flex-shrink: 0; min-width: 50px; padding-top: 1px;
+}
+.search-hit-text { flex: 1; font-size: 13px; color: var(--text2); line-height: 1.5; }
+.search-hit-text mark {
+  background: rgba(240,187,71,.30); color: var(--text); padding: 0 2px; border-radius: 2px;
+}
+.search-hit-more {
+  font-size: 11px; color: var(--accent);
+  padding: 4px 8px;
+  cursor: pointer;
+  font-style: italic;
+}
+.search-hit-more:hover { text-decoration: underline; }
+.search-no-hits {
+  padding: 30px 20px; text-align: center;
+  color: var(--text3); font-size: 14px;
+}
+.search-empty {
+  text-align: center; padding: 60px 20px;
+  color: var(--text3);
+}
+.search-empty-icon { color: var(--text3); margin-bottom: 16px; display: flex; justify-content: center; }
+.search-empty-icon svg { width: 64px; height: 64px; opacity: .4; }
+.search-empty-title { font-size: 16px; font-weight: 700; color: var(--text2); margin-bottom: 6px; }
+.search-empty-desc { font-size: 13px; max-width: 420px; margin: 0 auto; line-height: 1.5; }
+
+/* ── Home: silent preflight banner ────────────────────────────────── */
+.home-banner {
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 14px;
+  cursor: pointer;
+  transition: transform .12s, box-shadow .12s;
+}
+.home-banner:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0,0,0,.18);
+}
+.home-banner-error {
+  background: rgba(239,68,68,.12);
+  border: 1px solid rgba(239,68,68,.35);
+  color: var(--red);
+}
+.home-banner-warn {
+  background: rgba(255,180,107,.12);
+  border: 1px solid rgba(255,180,107,.35);
+  color: #ffb46b;
+}
+.home-banner-title {
+  font-weight: 700; font-size: 14px;
+  margin-bottom: 6px;
+}
+.home-banner-list {
+  margin: 0; padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.5;
+  list-style: disc;
+}
+.home-banner-list li { color: var(--text2); }
+.home-banner-error .home-banner-list li { color: rgba(255,200,200,.92); }
+.home-banner-warn  .home-banner-list li { color: rgba(255,220,180,.92); }
+.home-banner-list-more {
+  list-style: none !important;
+  font-style: italic;
+  opacity: .8;
+  padding-top: 2px;
+}
+
 /* ── Auto-trim suggestion banner ─────────────────────────────────── */
 .editor-suggestion-banner {
   display: flex; align-items: center; gap: 14px;

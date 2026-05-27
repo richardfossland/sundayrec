@@ -12,7 +12,8 @@
     "files": "Filer",
     "general": "Generelt",
     "editor": "Rediger",
-    "live": "Direkte"
+    "live": "Direkte",
+    "search": "Søk"
   },
   "status": {
     "ready": "Alt er klart",
@@ -68,7 +69,12 @@
     "signalClipping": "Klipper!",
     "signalLoud": "Høyt",
     "signalGood": "Bra",
-    "signalWeak": "Svakt"
+    "signalWeak": "Svakt",
+    "banner": {
+      "errors": "feil oppdaget",
+      "warns": "advarsel",
+      "more": "flere — se Innstillinger → Lyd → Sjekk system"
+    }
   },
   "update": {
     "available": "Ny versjon {v} er tilgjengelig — laster ned…",
@@ -875,7 +881,7 @@
   "transcript": {
     "title": "Transkribering",
     "start": "▶ Transkriber",
-    "export": "↧ Eksporter SRT",
+    "export": "↧ SRT",
     "delete": "Slett",
     "empty": "Ingen transkripsjon ennå. Klikk «Transkriber» for å lage søkbar tekst av talen.",
     "modalTitle": "Transkriber tale til tekst",
@@ -899,6 +905,26 @@
     "errNoBinary": "Whisper er ikke tilgjengelig på denne plattformen. Kontakt support.",
     "errStatusFailed": "Kunne ikke sjekke Whisper-status",
     "errDownload": "Modell-nedlasting feilet",
-    "errFailed": "Transkribering feilet"
+    "errFailed": "Transkribering feilet",
+    "exportVtt": "↧ VTT"
+  },
+  "search": {
+    "title": "Søk i prekener",
+    "subtitle": "Søk på tvers av alle transkriberte opptak. Klikk på et treff for å åpne opptaket på det punktet.",
+    "placeholder": "Søk etter ord eller fraser…",
+    "reindex": "↻ Oppdater indeks",
+    "indexing": "Bygger indeks…",
+    "recent": "Nylig transkribert",
+    "transcriptsLoaded": "transkripsjoner indeksert",
+    "segments": "segmenter",
+    "hitsIn": "treff i",
+    "recordings": "opptak",
+    "matches": "treff",
+    "moreHits": "flere treff i samme opptak",
+    "noHits": "Ingen treff for",
+    "noTranscriptsTitle": "Ingen transkripsjoner ennå",
+    "noTranscriptsDesc": "Åpne et opptak i Rediger og klikk Transkriber for å bygge opp et søkbart arkiv. Når du har én eller flere transkripsjoner, vises de her.",
+    "indexFailed": "Klarte ikke laste indeks",
+    "fileNotFound": "Originalfilen ble ikke funnet. Den kan ha blitt flyttet eller slettet."
   }
 }

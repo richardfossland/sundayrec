@@ -43,6 +43,7 @@ export function setupTranscriptPanel(onSeek: (sec: number) => void): void {
   $('btn-transcribe-start')?.addEventListener('click', startTranscription)
   $('btn-transcribe-progress-cancel')?.addEventListener('click', cancelActiveJob)
   $('btn-transcript-export')?.addEventListener('click', exportSrt)
+  $('btn-transcript-export-vtt')?.addEventListener('click', exportVtt)
   $('btn-transcript-delete')?.addEventListener('click', deleteTranscript)
 
   // Probe availability once at startup so the button can be disabled with
@@ -143,13 +144,15 @@ function highlightSegment(idx: number): void {
 function renderPanel(): void {
   const body = $('editor-transcript-body')
   if (!body) return
-  const exportBtn = $('btn-transcript-export') as HTMLElement | null
-  const deleteBtn = $('btn-transcript-delete') as HTMLElement | null
+  const exportBtn    = $('btn-transcript-export')     as HTMLElement | null
+  const exportVttBtn = $('btn-transcript-export-vtt') as HTMLElement | null
+  const deleteBtn    = $('btn-transcript-delete')     as HTMLElement | null
 
   if (!currentTranscript || currentTranscript.segments.length === 0) {
     body.innerHTML = `<div class="editor-transcript-empty">${t('transcript.empty', 'Ingen transkripsjon ennå. Klikk «Transkriber» for å lage søkbar tekst av talen.')}</div>`
-    if (exportBtn) exportBtn.style.display = 'none'
-    if (deleteBtn) deleteBtn.style.display = 'none'
+    if (exportBtn)    exportBtn.style.display    = 'none'
+    if (exportVttBtn) exportVttBtn.style.display = 'none'
+    if (deleteBtn)    deleteBtn.style.display    = 'none'
     return
   }
 
@@ -181,8 +184,9 @@ function renderPanel(): void {
     container.appendChild(row)
   }
 
-  if (exportBtn) exportBtn.style.display = ''
-  if (deleteBtn) deleteBtn.style.display = ''
+  if (exportBtn)    exportBtn.style.display    = ''
+  if (exportVttBtn) exportVttBtn.style.display = ''
+  if (deleteBtn)    deleteBtn.style.display    = ''
 }
 
 function formatTime(sec: number): string {
@@ -423,25 +427,50 @@ async function deleteTranscript(): Promise<void> {
 }
 
 function exportSrt(): void {
+  exportSubtitleFile('srt')
+}
+
+function exportVtt(): void {
+  exportSubtitleFile('vtt')
+}
+
+/** Single entry-point for both SRT and VTT export. They share the timing
+ *  format up to a single character (`,` vs `.` for milliseconds) and VTT
+ *  needs a header line. */
+function exportSubtitleFile(fmt: 'srt' | 'vtt'): void {
   if (!currentTranscript || !currentFilePath) return
-  const srt = transcriptToSrt(currentTranscript.segments)
+  const body = fmt === 'srt'
+    ? transcriptToSrt(currentTranscript.segments)
+    : transcriptToVtt(currentTranscript.segments)
   const baseName = currentFilePath.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') ?? 'transcript'
-  const blob = new Blob([srt], { type: 'text/plain;charset=utf-8' })
+  const mime = fmt === 'vtt' ? 'text/vtt' : 'text/plain'
+  const blob = new Blob([body], { type: `${mime};charset=utf-8` })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = baseName + '.srt'
+  a.download = `${baseName}.${fmt}`
   a.click()
   URL.revokeObjectURL(url)
 }
 
+function srtTimestamp(sec: number): string {
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  const s = Math.floor(sec % 60)
+  const ms = Math.round((sec - Math.floor(sec)) * 1000)
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')},${String(ms).padStart(3,'0')}`
+}
+
+function vttTimestamp(sec: number): string {
+  return srtTimestamp(sec).replace(',', '.')
+}
+
 function transcriptToSrt(segs: TranscriptSegment[]): string {
-  const fmt = (sec: number): string => {
-    const h = Math.floor(sec / 3600)
-    const m = Math.floor((sec % 3600) / 60)
-    const s = Math.floor(sec % 60)
-    const ms = Math.round((sec - Math.floor(sec)) * 1000)
-    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')},${String(ms).padStart(3,'0')}`
-  }
-  return segs.map((s, i) => `${i + 1}\n${fmt(s.start)} --> ${fmt(s.end)}\n${s.text}\n`).join('\n')
+  return segs.map((s, i) => `${i + 1}\n${srtTimestamp(s.start)} --> ${srtTimestamp(s.end)}\n${s.text}\n`).join('\n')
+}
+
+function transcriptToVtt(segs: TranscriptSegment[]): string {
+  // WebVTT format — supported by HTML5 <track>, YouTube, Vimeo, native iOS/macOS players.
+  const cues = segs.map((s, i) => `${i + 1}\n${vttTimestamp(s.start)} --> ${vttTimestamp(s.end)}\n${s.text}\n`).join('\n')
+  return `WEBVTT\n\n${cues}`
 }

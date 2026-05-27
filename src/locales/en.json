@@ -12,7 +12,8 @@
     "files": "Files",
     "general": "General",
     "editor": "Edit",
-    "live": "Live"
+    "live": "Live",
+    "search": "Search"
   },
   "status": {
     "ready": "Everything is ready",
@@ -68,7 +69,12 @@
     "signalClipping": "Clipping!",
     "signalLoud": "Loud",
     "signalGood": "Good",
-    "signalWeak": "Weak"
+    "signalWeak": "Weak",
+    "banner": {
+      "errors": "errors detected",
+      "warns": "warnings",
+      "more": "more — see Settings → Audio → Run system check"
+    }
   },
   "update": {
     "available": "New version {v} available — downloading…",
@@ -875,7 +881,7 @@
   "transcript": {
     "title": "Transcription",
     "start": "▶ Transcribe",
-    "export": "↧ Export SRT",
+    "export": "↧ SRT",
     "delete": "Delete",
     "empty": "No transcription yet. Click \"Transcribe\" to create searchable text from the speech.",
     "modalTitle": "Transcribe speech to text",
@@ -899,6 +905,26 @@
     "errNoBinary": "Whisper is not available on this platform. Contact support.",
     "errStatusFailed": "Could not check Whisper status",
     "errDownload": "Model download failed",
-    "errFailed": "Transcription failed"
+    "errFailed": "Transcription failed",
+    "exportVtt": "↧ VTT"
+  },
+  "search": {
+    "title": "Search sermons",
+    "subtitle": "Search across all transcribed recordings. Click a hit to open the recording at that point.",
+    "placeholder": "Search for words or phrases…",
+    "reindex": "↻ Refresh index",
+    "indexing": "Building index…",
+    "recent": "Recently transcribed",
+    "transcriptsLoaded": "transcripts indexed",
+    "segments": "segments",
+    "hitsIn": "hits in",
+    "recordings": "recordings",
+    "matches": "matches",
+    "moreHits": "more hits in this recording",
+    "noHits": "No matches for",
+    "noTranscriptsTitle": "No transcripts yet",
+    "noTranscriptsDesc": "Open a recording in the Editor and click Transcribe to build a searchable archive. Once you have one or more transcripts they will appear here.",
+    "indexFailed": "Could not load index",
+    "fileNotFound": "Source file not found. It may have been moved or deleted."
   }
 }

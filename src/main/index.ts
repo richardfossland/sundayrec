@@ -1338,6 +1338,74 @@ function setupIPC(): void {
     return true
   })
 
+  // ─── Transcript archive index ────────────────────────────────────────────
+  // Scans all known recording folders (saveFolder + every dir from
+  // recordingHistory) for .transcript.json sidecars and returns a flat list
+  // for the renderer to search through.
+  ipcMain.handle('transcript-list-all', async () => {
+    const settings = store.getAll()
+    const folders = new Set<string>()
+    if (settings.saveFolder) folders.add(settings.saveFolder)
+    for (const entry of store.getHistory()) {
+      if (entry.path) folders.add(path.dirname(entry.path))
+    }
+
+    const results: Array<{
+      filePath:    string         // path to source recording (no extension match)
+      transcript:  unknown        // parsed TranscriptData
+    }> = []
+
+    for (const dir of folders) {
+      try {
+        if (!fs.existsSync(dir)) continue
+        const entries = await fs.promises.readdir(dir)
+        for (const name of entries) {
+          if (!name.endsWith('.transcript.json')) continue
+          try {
+            const sidecarPath = path.join(dir, name)
+            const raw = await fs.promises.readFile(sidecarPath, 'utf8')
+            const transcript = JSON.parse(raw)
+            // The source filename is the sidecar name minus '.transcript.json'.
+            // We don't know the exact extension — surface the basename and let
+            // the renderer find the matching file when the user clicks.
+            const baseName = name.slice(0, -'.transcript.json'.length)
+            results.push({
+              filePath: path.join(dir, baseName),  // missing extension; renderer probes
+              transcript,
+            })
+          } catch {
+            // Malformed sidecar — skip silently
+          }
+        }
+      } catch {
+        // Folder unreadable — skip
+      }
+    }
+
+    return results
+  })
+
+  // Resolves the actual recording file (with extension) for a transcript
+  // base-path. Used when the user clicks a search result to open the
+  // recording in the editor.
+  ipcMain.handle('transcript-resolve-source', async (_, basePath: string) => {
+    if (typeof basePath !== 'string' || !basePath) return null
+    const dir = path.dirname(basePath)
+    const base = path.basename(basePath)
+    try {
+      if (!fs.existsSync(dir)) return null
+      const entries = await fs.promises.readdir(dir)
+      for (const name of entries) {
+        if (name === base + '.transcript.json') continue
+        const nameNoExt = name.replace(/\.[^.]+$/, '')
+        if (nameNoExt === base) {
+          return path.join(dir, name)
+        }
+      }
+    } catch {}
+    return null
+  })
+
   // ─── Transcript sidecar (per-file .transcript.json) ─────────────────────
   ipcMain.handle('editor-read-transcript', async (_, filePath: string) => {
     if (typeof filePath !== 'string' || !isAllowedMediaPath(filePath)) return null

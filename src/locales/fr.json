@@ -12,7 +12,8 @@
     "files": "Fichiers",
     "general": "Général",
     "editor": "Éditeur",
-    "live": "Direct"
+    "live": "Direct",
+    "search": "Recherche"
   },
   "status": {
     "ready": "Tout est prêt",
@@ -68,7 +69,12 @@
     "signalClipping": "Saturation !",
     "signalLoud": "Fort",
     "signalGood": "Bon",
-    "signalWeak": "Faible"
+    "signalWeak": "Faible",
+    "banner": {
+      "errors": "erreurs détectées",
+      "warns": "avertissements",
+      "more": "autres — voir Paramètres → Audio → Vérifier le système"
+    }
   },
   "update": {
     "available": "Nouvelle version {v} disponible — téléchargement en cours…",
@@ -875,7 +881,7 @@
   "transcript": {
     "title": "Transcription",
     "start": "▶ Transcrire",
-    "export": "↧ Exporter SRT",
+    "export": "↧ SRT",
     "delete": "Supprimer",
     "empty": "Aucune transcription. Cliquez sur « Transcrire » pour créer un texte consultable.",
     "modalTitle": "Transcrire la parole en texte",
@@ -899,6 +905,26 @@
     "errNoBinary": "Whisper n’est pas disponible sur cette plateforme.",
     "errStatusFailed": "Impossible de vérifier l’état de Whisper",
     "errDownload": "Échec du téléchargement du modèle",
-    "errFailed": "Transcription échouée"
+    "errFailed": "Transcription échouée",
+    "exportVtt": "↧ VTT"
+  },
+  "search": {
+    "title": "Rechercher dans les sermons",
+    "subtitle": "Recherchez dans tous les enregistrements transcrits. Cliquez sur un résultat pour ouvrir l’enregistrement à ce point.",
+    "placeholder": "Rechercher des mots ou phrases…",
+    "reindex": "↻ Actualiser l’index",
+    "indexing": "Construction de l’index…",
+    "recent": "Récemment transcrit",
+    "transcriptsLoaded": "transcriptions indexées",
+    "segments": "segments",
+    "hitsIn": "résultats dans",
+    "recordings": "enregistrements",
+    "matches": "résultats",
+    "moreHits": "autres résultats dans cet enregistrement",
+    "noHits": "Aucun résultat pour",
+    "noTranscriptsTitle": "Aucune transcription",
+    "noTranscriptsDesc": "Ouvrez un enregistrement dans l’éditeur et cliquez sur Transcrire pour construire une archive consultable.",
+    "indexFailed": "Impossible de charger l’index",
+    "fileNotFound": "Fichier source introuvable. Il a peut-être été déplacé ou supprimé."
   }
 }

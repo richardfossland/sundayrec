@@ -412,11 +412,19 @@ export function setupEditorPage(): void {
 
   setupMinimapInteraction()
   setupKeyboardShortcuts()
-  setupTranscriptPanel((sec: number) => {
+  const seekToSec = (sec: number): void => {
     playStartSec = clampPlayable(snapOutOfCut(sec))
     updateTimecode(playStartSec)
     if (isVideoFile && videoEl) videoEl.currentTime = clampMain(playStartSec)
     drawWaveform()
+  }
+  setupTranscriptPanel(seekToSec)
+  // Listen for cross-page seek requests (e.g. from the Search page when the
+  // user clicks a transcript hit — that fires `editor-seek-to` after opening
+  // the file via window.openEditorWithFile).
+  document.addEventListener('editor-seek-to', (e: Event) => {
+    const detail = (e as CustomEvent<{ sec: number }>).detail
+    if (detail && typeof detail.sec === 'number') seekToSec(detail.sec)
   })
   setupDragDrop()
   setupReviewBanner()

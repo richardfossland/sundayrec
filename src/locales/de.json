@@ -12,7 +12,8 @@
     "files": "Dateien",
     "general": "Allgemein",
     "editor": "Bearbeiten",
-    "live": "Live"
+    "live": "Live",
+    "search": "Suche"
   },
   "status": {
     "ready": "Alles bereit",
@@ -68,7 +69,12 @@
     "signalClipping": "Übersteuert!",
     "signalLoud": "Laut",
     "signalGood": "Gut",
-    "signalWeak": "Schwach"
+    "signalWeak": "Schwach",
+    "banner": {
+      "errors": "Fehler erkannt",
+      "warns": "Warnungen",
+      "more": "mehr — siehe Einstellungen → Audio → Systemprüfung"
+    }
   },
   "update": {
     "available": "Neue Version {v} verfügbar — wird heruntergeladen…",
@@ -875,7 +881,7 @@
   "transcript": {
     "title": "Transkription",
     "start": "▶ Transkribieren",
-    "export": "↧ SRT exportieren",
+    "export": "↧ SRT",
     "delete": "Löschen",
     "empty": "Noch keine Transkription. Klicken Sie \"Transkribieren\", um durchsuchbaren Text zu erstellen.",
     "modalTitle": "Sprache zu Text transkribieren",
@@ -899,6 +905,26 @@
     "errNoBinary": "Whisper ist auf dieser Plattform nicht verfügbar.",
     "errStatusFailed": "Konnte Whisper-Status nicht prüfen",
     "errDownload": "Modell-Download fehlgeschlagen",
-    "errFailed": "Transkription fehlgeschlagen"
+    "errFailed": "Transkription fehlgeschlagen",
+    "exportVtt": "↧ VTT"
+  },
+  "search": {
+    "title": "In Predigten suchen",
+    "subtitle": "In allen transkribierten Aufnahmen suchen. Klicken Sie auf einen Treffer, um die Aufnahme dort zu öffnen.",
+    "placeholder": "Nach Wörtern oder Phrasen suchen…",
+    "reindex": "↻ Index aktualisieren",
+    "indexing": "Index wird erstellt…",
+    "recent": "Kürzlich transkribiert",
+    "transcriptsLoaded": "Transkriptionen indiziert",
+    "segments": "Segmente",
+    "hitsIn": "Treffer in",
+    "recordings": "Aufnahmen",
+    "matches": "Treffer",
+    "moreHits": "weitere Treffer in dieser Aufnahme",
+    "noHits": "Keine Treffer für",
+    "noTranscriptsTitle": "Noch keine Transkriptionen",
+    "noTranscriptsDesc": "Öffnen Sie eine Aufnahme im Editor und klicken Sie auf Transkribieren, um ein durchsuchbares Archiv aufzubauen.",
+    "indexFailed": "Index konnte nicht geladen werden",
+    "fileNotFound": "Quelldatei nicht gefunden. Möglicherweise wurde sie verschoben oder gelöscht."
   }
 }

@@ -130,6 +130,9 @@ contextBridge.exposeInMainWorld('api', {
   streamSetKey:        (destId: string, key: string)  => ipcRenderer.invoke('stream-set-key', destId, key),
   streamDeleteKey:     (destId: string)               => ipcRenderer.invoke('stream-delete-key', destId),
 
+  transcriptListAll:       ()                       => ipcRenderer.invoke('transcript-list-all'),
+  transcriptResolveSource: (basePath: string)       => ipcRenderer.invoke('transcript-resolve-source', basePath),
+
   editorReadTranscript:    (filePath: string)       => ipcRenderer.invoke('editor-read-transcript', filePath),
   editorWriteTranscript:   (filePath: string, t: unknown) => ipcRenderer.invoke('editor-write-transcript', filePath, t),
   editorDeleteTranscript:  (filePath: string)       => ipcRenderer.invoke('editor-delete-transcript', filePath),

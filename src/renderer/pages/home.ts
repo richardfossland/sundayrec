@@ -80,6 +80,82 @@ export function updateAudioSeparateButton(): void {
   card?.classList.toggle('format-inactive', videoOn && !keepAudio)
 }
 
+// ── Silent preflight (proactive issue surfacing) ─────────────────────────
+//
+// We run the same preflight check the user can trigger manually from the
+// Lyd settings page, but silently in the background after home loads. Any
+// findings — typically "disk almost full", "mic permission denied", "saved
+// device not found" — are shown as a non-dismissable banner above the hero.
+// Runs ONCE per app launch (not per home-tab visit) to avoid pestering the
+// user with stale issues they've already seen.
+
+let silentPreflightHasRun = false
+
+async function runSilentPreflightOnce(): Promise<void> {
+  if (silentPreflightHasRun) return
+  silentPreflightHasRun = true
+  try {
+    const r = await window.api.runPreflight() as {
+      findings: Array<{ severity: 'warn' | 'error'; category: string; message: string }>
+    }
+    renderSilentPreflightBanner(r.findings ?? [])
+  } catch {
+    // Preflight unavailable — silently ignore (not user-facing failure)
+  }
+}
+
+function renderSilentPreflightBanner(findings: Array<{ severity: 'warn' | 'error'; category: string; message: string }>): void {
+  // Remove any prior banner first so we don't stack.
+  document.getElementById('silent-preflight-banner')?.remove()
+  if (findings.length === 0) return
+
+  const errors = findings.filter(f => f.severity === 'error')
+  const warns  = findings.filter(f => f.severity === 'warn')
+
+  const banner = document.createElement('div')
+  banner.id = 'silent-preflight-banner'
+  banner.className = errors.length > 0 ? 'home-banner home-banner-error' : 'home-banner home-banner-warn'
+
+  const titleEl = document.createElement('div')
+  titleEl.className = 'home-banner-title'
+  titleEl.textContent = errors.length > 0
+    ? `❌ ${errors.length} ${t('home.banner.errors', 'feil oppdaget')} — klikk for å fikse`
+    : `⚠️ ${warns.length} ${t('home.banner.warns', 'advarsel')} — klikk for detaljer`
+  banner.appendChild(titleEl)
+
+  // Show first 2 messages inline; rest are visible in Lyd → Sjekk system
+  const list = document.createElement('ul')
+  list.className = 'home-banner-list'
+  for (const f of [...errors, ...warns].slice(0, 2)) {
+    const li = document.createElement('li')
+    li.textContent = f.message
+    list.appendChild(li)
+  }
+  if (findings.length > 2) {
+    const li = document.createElement('li')
+    li.textContent = `+ ${findings.length - 2} ${t('home.banner.more', 'flere — se Innstillinger → Lyd → Sjekk system')}`
+    li.className = 'home-banner-list-more'
+    list.appendChild(li)
+  }
+  banner.appendChild(list)
+
+  banner.addEventListener('click', () => {
+    window.showPage('settings')
+    document.querySelector<HTMLElement>('.inner-tab[data-tab="settings-audio"]')?.click()
+  })
+
+  // Insert at the very top of page-home, above the hero
+  const pageHome = document.getElementById('page-home')
+  const reviewCard = document.getElementById('review-queue-card')
+  if (pageHome) {
+    if (reviewCard && reviewCard.parentNode === pageHome) {
+      pageHome.insertBefore(banner, reviewCard)
+    } else {
+      pageHome.insertBefore(banner, pageHome.firstChild)
+    }
+  }
+}
+
 export async function refreshHomeVideoDevices(): Promise<void> {
   const sel   = document.getElementById('home-video-device-select') as HTMLSelectElement | null
   if (!sel) return
@@ -717,6 +793,12 @@ export async function refreshHome(): Promise<void> {
     refreshReviewQueue(),
   ])
   startVU()
+
+  // Once-per-session silent preflight. Surfaces critical issues (disk full,
+  // mic permission denied, device missing) on home as a banner *without*
+  // requiring the user to click "Sjekk system". This is the "proactive
+  // disk-space warning" requested by the external review.
+  void runSilentPreflightOnce()
 
   // Hide video progress row (only shown during active recording)
   const progressRow = document.getElementById('video-progress-row')

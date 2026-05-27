@@ -42,6 +42,10 @@
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 10h14M3 6h3m11 0h-3M3 14h3m11 0h-3" stroke-linecap="round"/><circle cx="7.5" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="12.5" cy="14" r="1.5" fill="currentColor" stroke="none"/></svg>
       <span data-i18n="nav.editor">Rediger</span>
     </a></li>
+    <li><a href="#" class="nav-link" data-page="search">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd"/></svg>
+      <span data-i18n="nav.search">Søk</span>
+    </a></li>
   </ul>
   <div class="sidebar-bottom">
     <a href="#" class="nav-link" data-page="settings">
@@ -1602,6 +1606,44 @@
   </section>
 
   <!-- ══ REDIGER ═════════════════════════════════════════════════ -->
+  <!-- ──────────────────────────────────────────────────────────────────
+       SEARCH — full-text search across all transcripts
+       ────────────────────────────────────────────────────────────────── -->
+  <section id="page-search" class="page">
+    <div class="page-header">
+      <h1 data-i18n="search.title">Søk i prekener</h1>
+      <p class="page-subtitle" data-i18n="search.subtitle">Søk på tvers av alle transkriberte opptak. Klikk på et treff for å åpne opptaket på det punktet.</p>
+    </div>
+
+    <div class="search-controls">
+      <input
+        type="search"
+        id="search-query"
+        class="form-input search-query-input"
+        placeholder="Søk etter ord eller fraser…"
+        data-i18n-placeholder="search.placeholder"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button class="btn-secondary btn-sm" id="btn-search-reindex" data-i18n="search.reindex">↻ Oppdater indeks</button>
+    </div>
+
+    <div id="search-index-status" class="search-index-status" data-i18n="search.indexing">Bygger indeks…</div>
+
+    <div id="search-results" class="search-results"></div>
+
+    <div id="search-empty" class="search-empty" style="display:none">
+      <div class="search-empty-icon">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="21" cy="21" r="12"/>
+          <path d="M30 30l9 9" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="search-empty-title" data-i18n="search.noTranscriptsTitle">Ingen transkripsjoner ennå</div>
+      <div class="search-empty-desc" data-i18n="search.noTranscriptsDesc">Åpne et opptak i Rediger og klikk Transkriber for å bygge opp et søkbart arkiv. Når du har én eller flere transkripsjoner, vises de her.</div>
+    </div>
+  </section>
+
   <section id="page-editor" class="page">
 
     <!-- Drag-and-drop file overlay -->
@@ -1934,7 +1976,8 @@
           <span class="editor-transcript-title" data-i18n="transcript.title">Transkribering</span>
           <span style="flex:1"></span>
           <button class="btn-primary btn-sm" id="btn-transcribe" data-i18n="transcript.start">▶ Transkriber</button>
-          <button class="btn-ghost btn-sm" id="btn-transcript-export" style="display:none" data-i18n="transcript.export">↧ Eksporter SRT</button>
+          <button class="btn-ghost btn-sm" id="btn-transcript-export" style="display:none" data-i18n="transcript.export">↧ SRT</button>
+          <button class="btn-ghost btn-sm" id="btn-transcript-export-vtt" style="display:none" data-i18n="transcript.exportVtt">↧ VTT</button>
           <button class="btn-ghost btn-sm" id="btn-transcript-delete" style="display:none" data-i18n="transcript.delete">Slett</button>
         </div>
         <div id="editor-transcript-body" class="editor-transcript-body">

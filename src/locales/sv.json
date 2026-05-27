@@ -12,7 +12,8 @@
     "files": "Filer",
     "general": "Allmänt",
     "editor": "Redigera",
-    "live": "Live"
+    "live": "Live",
+    "search": "Sök"
   },
   "status": {
     "ready": "Allt är klart",
@@ -68,7 +69,12 @@
     "signalClipping": "Klipper!",
     "signalLoud": "Högt",
     "signalGood": "Bra",
-    "signalWeak": "Svagt"
+    "signalWeak": "Svagt",
+    "banner": {
+      "errors": "fel upptäckta",
+      "warns": "varningar",
+      "more": "fler — se Inställningar → Ljud → Kör systemkontroll"
+    }
   },
   "update": {
     "available": "Ny version {v} tillgänglig — laddar ner…",
@@ -875,7 +881,7 @@
   "transcript": {
     "title": "Transkribering",
     "start": "▶ Transkribera",
-    "export": "↧ Exportera SRT",
+    "export": "↧ SRT",
     "delete": "Radera",
     "empty": "Ingen transkribering ännu. Klicka \"Transkribera\" för att skapa sökbar text.",
     "modalTitle": "Transkribera tal till text",
@@ -899,6 +905,26 @@
     "errNoBinary": "Whisper är inte tillgänglig på denna plattform.",
     "errStatusFailed": "Kunde inte kontrollera Whisper-status",
     "errDownload": "Modellnedladdning misslyckades",
-    "errFailed": "Transkribering misslyckades"
+    "errFailed": "Transkribering misslyckades",
+    "exportVtt": "↧ VTT"
+  },
+  "search": {
+    "title": "Sök i predikningar",
+    "subtitle": "Sök i alla transkriberade inspelningar. Klicka på en träff för att öppna inspelningen där.",
+    "placeholder": "Sök efter ord eller fraser…",
+    "reindex": "↻ Uppdatera index",
+    "indexing": "Bygger index…",
+    "recent": "Nyligen transkriberat",
+    "transcriptsLoaded": "transkriberingar indexerade",
+    "segments": "segment",
+    "hitsIn": "träffar i",
+    "recordings": "inspelningar",
+    "matches": "träffar",
+    "moreHits": "fler träffar i samma inspelning",
+    "noHits": "Inga träffar för",
+    "noTranscriptsTitle": "Inga transkriberingar ännu",
+    "noTranscriptsDesc": "Öppna en inspelning i redigeraren och klicka på Transkribera för att bygga ett sökbart arkiv.",
+    "indexFailed": "Kunde inte ladda index",
+    "fileNotFound": "Källfilen hittades inte. Den kan ha flyttats eller raderats."
   }
 }

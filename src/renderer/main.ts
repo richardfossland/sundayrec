@@ -15,6 +15,7 @@ import { checkAndShowOnboarding, showOnboarding } from './pages/onboarding'
 import { setupVideoPage, applyVideoSettingsToUI, refreshVideoDevices } from './pages/video-page'
 import { setupPublishPage, applyPublishSettingsToUI } from './pages/publish-page'
 import { setupLivePage, deactivateLivePage, reactivateLivePage } from './pages/live-page'
+import { setupSearchPage, activateSearchPage } from './pages/search-page'
 
 // Expose globals that sub-modules need
 declare global {
@@ -134,6 +135,9 @@ declare global {
       streamSetKey:       (destId: string, key: string) => Promise<boolean>
       streamDeleteKey:    (destId: string) => Promise<boolean>
 
+      transcriptListAll:       () => Promise<Array<{ filePath: string; transcript: import('../types').TranscriptData }>>
+      transcriptResolveSource: (basePath: string) => Promise<string | null>
+
       editorReadTranscript:    (filePath: string) => Promise<import('../types').TranscriptData | null>
       editorWriteTranscript:   (filePath: string, t: unknown) => Promise<boolean>
       editorDeleteTranscript:  (filePath: string) => Promise<boolean>
@@ -211,6 +215,7 @@ function showPage(id: string): void {
   if (id === 'schedule') renderCalendar()
   if (id === 'editor')   reactivateEditor()
   if (id === 'live')     reactivateLivePage()
+  if (id === 'search')   activateSearchPage()
   if (id === 'settings') {
     const activeTab = document.querySelector<HTMLElement>('#settings-tabs .inner-tab.active')?.dataset.tab
     if (!activeTab || activeTab === 'settings-audio') renderDeviceList('device-list')
@@ -312,6 +317,7 @@ async function init(): Promise<void> {
   setupEditorPage()
   setupPublishPage()
   setupLivePage()
+  setupSearchPage()
   setupClipReset()
   setupSettingsTabs()
 

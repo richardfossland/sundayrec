@@ -12,7 +12,8 @@
     "files": "Pliki",
     "general": "Ogólne",
     "editor": "Edycja",
-    "live": "Na żywo"
+    "live": "Na żywo",
+    "search": "Szukaj"
   },
   "status": {
     "ready": "Wszystko gotowe",
@@ -68,7 +69,12 @@
     "signalClipping": "Przesterowanie!",
     "signalLoud": "Głośno",
     "signalGood": "Dobrze",
-    "signalWeak": "Słabo"
+    "signalWeak": "Słabo",
+    "banner": {
+      "errors": "błędów wykrytych",
+      "warns": "ostrzeżeń",
+      "more": "więcej — zobacz Ustawienia → Dźwięk → Sprawdź system"
+    }
   },
   "update": {
     "available": "Dostępna nowa wersja {v} — pobieranie…",
@@ -875,7 +881,7 @@
   "transcript": {
     "title": "Transkrypcja",
     "start": "▶ Transkrybuj",
-    "export": "↧ Eksportuj SRT",
+    "export": "↧ SRT",
     "delete": "Usuń",
     "empty": "Brak transkrypcji. Kliknij \"Transkrybuj\", aby utworzyć tekst do wyszukiwania.",
     "modalTitle": "Transkrybuj mowę na tekst",
@@ -899,6 +905,26 @@
     "errNoBinary": "Whisper niedostępny na tej platformie.",
     "errStatusFailed": "Nie można sprawdzić statusu Whisper",
     "errDownload": "Pobieranie modelu nie powiodło się",
-    "errFailed": "Transkrypcja nie powiodła się"
+    "errFailed": "Transkrypcja nie powiodła się",
+    "exportVtt": "↧ VTT"
+  },
+  "search": {
+    "title": "Szukaj w kazaniach",
+    "subtitle": "Szukaj we wszystkich transkrybowanych nagraniach. Kliknij wynik, aby otworzyć nagranie w tym punkcie.",
+    "placeholder": "Szukaj słów lub fraz…",
+    "reindex": "↻ Odśwież indeks",
+    "indexing": "Budowanie indeksu…",
+    "recent": "Niedawno transkrybowane",
+    "transcriptsLoaded": "transkrypcji zindeksowanych",
+    "segments": "segmentów",
+    "hitsIn": "trafień w",
+    "recordings": "nagraniach",
+    "matches": "trafień",
+    "moreHits": "więcej trafień w tym nagraniu",
+    "noHits": "Brak trafień dla",
+    "noTranscriptsTitle": "Brak transkrypcji",
+    "noTranscriptsDesc": "Otwórz nagranie w edytorze i kliknij Transkrybuj, aby zbudować przeszukiwalne archiwum.",
+    "indexFailed": "Nie można załadować indeksu",
+    "fileNotFound": "Plik źródłowy nie znaleziony. Mógł zostać przeniesiony lub usunięty."
   }
 }

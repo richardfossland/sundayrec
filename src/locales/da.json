@@ -12,7 +12,8 @@
     "files": "Filer",
     "general": "Generelt",
     "editor": "Rediger",
-    "live": "Live"
+    "live": "Live",
+    "search": "Søg"
   },
   "status": {
     "ready": "Alt er klar",
@@ -68,7 +69,12 @@
     "signalClipping": "Klipper!",
     "signalLoud": "Højt",
     "signalGood": "Godt",
-    "signalWeak": "Svagt"
+    "signalWeak": "Svagt",
+    "banner": {
+      "errors": "fejl fundet",
+      "warns": "advarsler",
+      "more": "flere — se Indstillinger → Lyd → Kør systemtjek"
+    }
   },
   "update": {
     "available": "Ny version {v} tilgængelig — henter…",
@@ -875,7 +881,7 @@
   "transcript": {
     "title": "Transskribering",
     "start": "▶ Transskribér",
-    "export": "↧ Eksportér SRT",
+    "export": "↧ SRT",
     "delete": "Slet",
     "empty": "Ingen transskribering endnu. Klik \"Transskribér\" for at lave søgbar tekst.",
     "modalTitle": "Transskribér tale til tekst",
@@ -899,6 +905,26 @@
     "errNoBinary": "Whisper er ikke tilgængelig på denne platform.",
     "errStatusFailed": "Kunne ikke tjekke Whisper-status",
     "errDownload": "Model-download mislykkedes",
-    "errFailed": "Transskribering mislykkedes"
+    "errFailed": "Transskribering mislykkedes",
+    "exportVtt": "↧ VTT"
+  },
+  "search": {
+    "title": "Søg i prædikener",
+    "subtitle": "Søg i alle transskriberede optagelser. Klik på et hit for at åbne optagelsen dér.",
+    "placeholder": "Søg efter ord eller fraser…",
+    "reindex": "↻ Opdater indeks",
+    "indexing": "Bygger indeks…",
+    "recent": "Nyligt transskriberet",
+    "transcriptsLoaded": "transskriberinger indekseret",
+    "segments": "segmenter",
+    "hitsIn": "hits i",
+    "recordings": "optagelser",
+    "matches": "hits",
+    "moreHits": "flere hits i samme optagelse",
+    "noHits": "Ingen hits for",
+    "noTranscriptsTitle": "Ingen transskriberinger endnu",
+    "noTranscriptsDesc": "Åbn en optagelse i editoren og klik Transskribér for at bygge et søgbart arkiv.",
+    "indexFailed": "Kunne ikke indlæse indeks",
+    "fileNotFound": "Kildefilen blev ikke fundet. Den kan være flyttet eller slettet."
   }
 }
