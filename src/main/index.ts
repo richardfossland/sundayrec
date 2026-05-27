@@ -21,6 +21,8 @@ import { registerMasterIpc } from './ipc/master'
 import { registerVideoPreviewIpc } from './ipc/video-preview'
 import { registerReviewQueueIpc } from './ipc/review-queue'
 import { registerEditorIpc } from './ipc/editor'
+import { registerWakeIpc } from './ipc/wake'
+import { registerHistoryIpc } from './ipc/history'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 
@@ -665,48 +667,9 @@ function setupIPC(): void {
     return true
   })
 
-  ipcMain.handle('schedule-os-wakes',       () => wake.reschedule(scheduler.getUpcomingDates(), mainWindow, false))
-  ipcMain.handle('schedule-os-wakes-admin', () => wake.reschedule(scheduler.getUpcomingDates(), mainWindow, true))
-  ipcMain.handle('get-sleep-config',        () => wake.getSleepConfig())
-  ipcMain.handle('fix-mac-sleep',           () => wake.fixMacSleep())
-  ipcMain.handle('fix-win-wake-timers',     () => wake.fixWinWakeTimers())
-
-  // ── Wake verification & test-wake ─────────────────────────────────────────
-  ipcMain.handle('wake-detect-capabilities', async () => {
-    const wv = await import('./wake-verification')
-    return wv.detectCapabilities()
-  })
-  ipcMain.handle('wake-verify-scheduled', async () => {
-    const wv = await import('./wake-verification')
-    // Mirror what scheduleOsWakes scheduled: lead-time-shifted upcoming dates.
-    const LEAD_MIN = 10
-    const expected = scheduler.getUpcomingDates().map(d => new Date(d.getTime() - LEAD_MIN * 60_000))
-    const status = await wv.verifyScheduledWakes(expected)
-    // Serialise Date instances for the renderer
-    return {
-      ...status,
-      expectedWakes: status.expectedWakes.map(d => d.toISOString()),
-      observedWakes: status.observedWakes.map(o => ({
-        scheduledAt: o.scheduledAt.toISOString(),
-        ownerLabel:  o.ownerLabel,
-      })),
-    }
-  })
-  ipcMain.handle('wake-check-power', async () => {
-    const wv = await import('./wake-verification')
-    return wv.checkPowerSource()
-  })
-  ipcMain.handle('wake-check-standby', async () => {
-    const wv = await import('./wake-verification')
-    return wv.checkStandbyEnabled()
-  })
-  ipcMain.handle('wake-test', async (_, secondsAhead?: number) => {
-    const sec = typeof secondsAhead === 'number' && secondsAhead > 0 ? secondsAhead : 60
-    return wake.testWake(sec, mainWindow)
-  })
-  ipcMain.handle('wake-cancel-test', () => wake.cancelTestWake())
-  ipcMain.handle('wake-failure-history', () => store.getWakeFailureHistory())
-  ipcMain.handle('wake-clear-failure-history', () => { store.clearWakeFailureHistory(); return true })
+  // Wake/schedule IPC — moved to ipc/wake.ts (schedule-os-wakes,
+  // wake-detect-capabilities, wake-test, etc.)
+  registerWakeIpc(ipcCtx)
 
   ipcMain.handle('export-profile', () => store.exportProfile())
   ipcMain.handle('import-profile', (_, json: string) => {
@@ -725,10 +688,8 @@ function setupIPC(): void {
     return true
   })
 
-  ipcMain.handle('get-history', () => store.getHistory())
-  ipcMain.handle('delete-history-entry', (_, ts: number) => store.deleteHistoryEntry(ts))
-  ipcMain.handle('clear-history', () => store.clearHistory())
-  ipcMain.handle('prune-history', () => store.pruneHistory())
+  // History IPC — moved to ipc/history.ts (get/delete/clear/prune + note)
+  registerHistoryIpc(ipcCtx)
 
   ipcMain.handle('get-next-recording', () => {
     const next = scheduler.getNextRecording()
@@ -898,15 +859,6 @@ function setupIPC(): void {
       mainWindow.webContents.send('email-test-status', { status: 'error', message })
       return { ok: false, error: message }
     }
-  })
-
-  ipcMain.handle('update-history-note', (_, ts: number, note: string) => {
-    if (typeof ts !== 'number' || typeof note !== 'string') return
-    // Cap note length — without this a compromised renderer could write
-    // arbitrarily large strings into the settings file and bloat startup time.
-    // 4 KB is plenty for a free-form human note.
-    if (note.length > 4096) note = note.slice(0, 4096)
-    store.updateHistoryNote(ts, note)
   })
 
   // Editor IPC — moved to ipc/editor.ts (read/save/pick/export/peaks/probe,

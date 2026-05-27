@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.53.4] — 2026-05-27
+
+### Refactored — IPC-splitting fase 4 (wake + history)
+
+Flyttet to mindre domener ut av `src/main/index.ts`.
+
+**Nye filer:**
+- `ipc/wake.ts` — 12 handlers (schedule-os-wakes + fix-mac-sleep +
+  wake-detect-capabilities + wake-test + wake-failure-history mfl.)
+- `ipc/history.ts` — 5 handlers (get/delete/clear/prune + update-note)
+
+**Resultat:**
+- index.ts: **1294 → 1246 linjer** (kumulativ fra v4.53.0:
+  2045 → 1246 = **−39 %**)
+- 90 handlers flyttet ut totalt (av ~127)
+- 1080 tester fortsatt grønne
+
+---
+
 ## [4.53.3] — 2026-05-27
 
 ### Refactored — IPC-splitting fase 3 (editor)
