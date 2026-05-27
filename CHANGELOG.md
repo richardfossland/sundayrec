@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.53.7] — 2026-05-27
+
+### Refactored — IPC-splitting fase 7 (app-system + files)
+
+**Nye filer:**
+- `ipc/app-system.ts` — 6 handlers (get-platform, get-app-version,
+  get-settings, get-logs, get-log-file-path, run-diagnostics)
+- `ipc/files.ts` — 5 handlers (pick-folder, open-folder, reveal-file,
+  pick-audio-file, register-trusted-path)
+
+**Resultat:** index.ts under 1000 linjer!
+- index.ts: **1042 → 996 linjer** (kumulativ fra v4.53.0:
+  2045 → 996 = **−51 %**, mer enn halvert)
+- 115 handlers flyttet ut totalt (av ~127)
+- Bare 8 handlers igjen i index.ts: install-update, save-settings,
+  export/import/reset-profile, youtube-upload, podcast-regenerate,
+  cloud-is-configured. Disse har for tette closure-koblinger til
+  modul-state for å flyttes uten å eksponere mange setters.
+- 1080 tester fortsatt grønne
+
+### IPC-arkitektur (oversikt)
+```
+src/main/ipc/
+├── types.ts              IpcContext (mainWindow getter + sendBackendWarning)
+├── gmail.ts              3 handlers
+├── youtube.ts            3 handlers
+├── stream.ts             8 handlers
+├── cloud.ts              11 handlers
+├── thumbnail.ts          6 handlers
+├── whisper.ts            6 handlers
+├── master.ts             5 handlers
+├── video-preview.ts      3 handlers
+├── review-queue.ts       7 handlers
+├── editor.ts             21 handlers
+├── wake.ts               12 handlers
+├── history.ts            5 handlers
+├── recording.ts          6 handlers
+├── audio-devices.ts      3 handlers
+├── transcript.ts         2 handlers
+├── email-webhook.ts      3 handlers
+├── app-system.ts         6 handlers
+└── files.ts              5 handlers
+                          ─────────
+                          115 handlers (av ~127 totalt)
+```
+
+---
+
 ## [4.53.6] — 2026-05-27
 
 ### Refactored — IPC-splitting fase 6 (transcript + email)

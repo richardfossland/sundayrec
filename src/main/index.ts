@@ -27,6 +27,8 @@ import { registerRecordingIpc } from './ipc/recording'
 import { registerAudioDevicesIpc } from './ipc/audio-devices'
 import { registerTranscriptIpc } from './ipc/transcript'
 import { registerEmailWebhookIpc } from './ipc/email-webhook'
+import { registerAppSystemIpc } from './ipc/app-system'
+import { registerFilesIpc } from './ipc/files'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 
@@ -636,11 +638,8 @@ function setupIPC(): void {
     })
   })
 
-  ipcMain.handle('get-platform', () => process.platform)
-
-  ipcMain.handle('get-app-version', () => app.getVersion())
-
-  ipcMain.handle('get-settings', () => store.getAll())
+  // App/system info + run-diagnostics + log read — moved to ipc/app-system.ts
+  registerAppSystemIpc(ipcCtx)
 
   ipcMain.handle('save-settings', (_, settings) => {
     if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return false
@@ -702,21 +701,8 @@ function setupIPC(): void {
   // Email + webhook test handlers — moved to ipc/email-webhook.ts
   registerEmailWebhookIpc(ipcCtx)
 
-  ipcMain.handle('pick-folder', async () => {
-    if (!mainWindow.isVisible()) mainWindow.show()
-    mainWindow.focus()
-    const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory', 'createDirectory'] })
-    return result.canceled ? null : result.filePaths[0]
-  })
-
-  ipcMain.handle('open-folder', (_, p: string) => {
-    if (typeof p !== 'string' || !fs.existsSync(p)) return
-    return shell.openPath(p)
-  })
-  ipcMain.handle('reveal-file', (_, p: string) => {
-    if (typeof p !== 'string' || !fs.existsSync(p)) return
-    shell.showItemInFolder(p)
-  })
+  // File dialogs + open/reveal + trusted-path — moved to ipc/files.ts
+  registerFilesIpc({ ...ipcCtx, trustFolder })
 
   ipcMain.on('recording-error', (_, data: { error: string }) => {
     tray.setRecording(false)
@@ -754,32 +740,7 @@ function setupIPC(): void {
   })
 
   // Pick an audio file (for intro/outro in settings)
-  ipcMain.handle('pick-audio-file', async (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender) ?? mainWindow
-    const r = await dialog.showOpenDialog(win!, {
-      properties: ['openFile'],
-      filters: [{ name: 'Audio', extensions: ['mp3', 'wav', 'flac', 'aac', 'm4a'] }]
-    })
-    if (r.canceled) return null
-    trustFolder(r.filePaths[0])
-    return r.filePaths[0]
-  })
-
-  // Drag-drop and explicit user file-picks trust the folder for this session.
-  // Used by the editor when a user drops a recording from outside the standard
-  // user folders — defense in depth still applies to renderer-fabricated paths.
-  ipcMain.handle('register-trusted-path', (_, filePath: string) => {
-    if (typeof filePath !== 'string' || !filePath) return false
-    // Sanity: only honour paths to files that actually exist on disk. A
-    // malicious renderer can't fabricate a /etc/passwd existence — Electron
-    // runs as user, not root, and the user would have had to drag-drop
-    // /etc/passwd themselves.
-    try {
-      if (!fs.existsSync(filePath)) return false
-      trustFolder(filePath)
-      return true
-    } catch { return false }
-  })
+  // pick-audio-file + register-trusted-path — moved to ipc/files.ts (above)
 
   // Mastering (publish-ready audio) — moved to ipc/master.ts
   registerMasterIpc({ ...ipcCtx, isAllowedMediaPath })
@@ -871,14 +832,7 @@ function setupIPC(): void {
   // Video preview — moved to ipc/video-preview.ts
   registerVideoPreviewIpc(ipcCtx)
 
-  ipcMain.handle('run-diagnostics', async () => {
-    const settings = store.getAll()
-    const { runDiagnostics } = await import('./diagnostics')
-    return runDiagnostics(settings, mainWindow)
-  })
-
-  ipcMain.handle('get-logs',          () => logger.getRecentLogs(200))
-  ipcMain.handle('get-log-file-path', () => logger.getLogFilePath())
+  // run-diagnostics + get-logs + get-log-file-path — moved to ipc/app-system.ts
 
 }
 
