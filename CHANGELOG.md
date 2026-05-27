@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.48.1] — 2026-05-27
+
+### Fixed — A/V-sync i opptak
+
+Brukeren rapporterte at lyd og bilde ikke var helt synket i video-opptak.
+Sync-korreksjonen i mux-stepet er nå langt mer robust:
+
+- **Håndterer offset i BEGGE retninger.** Tidligere ble bare «audio
+  startet før video» (vanlig fordi kamera er treigere å varme opp)
+  korrigert. Hvis en USB-mikser var tregere enn kameraet (motsatt
+  retning), ble offsetten ignorert. Nå brukes `-itsoffset` for å
+  forsinke audio når video led.
+- **Drift over tid korrigeres med `aresample=async=1000`.** Audio-
+  klokka og video-klokka kan drifte fra hverandre med en del
+  millisekunder per minutt — over en 90-min-gudstjeneste blir det
+  hørbart. aresample setter inn / fjerner inntil 1000 samples per
+  sekund inkrementelt for å holde tidsbasen stabil. Uhørbart ved
+  normale snakke-volum.
+- **`-shortest` så audio ikke henger ut.** Tidligere kunne audio-
+  ffmpeg fortsette et øyeblikk etter video-ffmpeg var ferdig, og
+  outputten viste frosset siste-frame mens lyden fortsatte. Nå
+  stopper muxeren i det den korteste streamen slutter.
+- **`-fflags +genpts` regenererer PTS uniformt** — beskytter mot
+  PTS-hull etter en reconnect midt i opptak.
+- **Robustere start-time-deteksjon.** Når container-level
+  `start_time` mangler (sjelden men forekommer på enkelte
+  AVFoundation-konfigurasjoner), faller vi nå tilbake til
+  `first_dts` på stream 0.
+
+Roadmap: full unified-ffmpeg-pipeline (én ffmpeg som åpner BÅDE
+kamera og mikser via AVFoundation `videoIdx:audioIdx`) er den
+endelige løsningen — den eliminerer alle to-prosess-sync-issuer
+ved roten. Egen sesjon med fokus på refaktor av recorder-pipelinen.
+
+---
+
 ## [4.48.0] — 2026-05-27
 
 ### Added

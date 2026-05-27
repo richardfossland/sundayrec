@@ -296,20 +296,32 @@ export async function stopVideoCapture(handle: VideoHandle): Promise<void> {
 async function probeStartTimeSec(filePath: string): Promise<number | null> {
   return new Promise(resolve => {
     // ffmpeg -i without an output prints container info then exits with code 1.
-    // That's expected — we only need the stderr header dump.
-    const proc = spawn(ffmpegBin, ['-v', 'info', '-i', filePath], {
+    // That's expected — we only need the stderr header dump. `-v verbose`
+    // ensures per-stream metadata (including first_dts on each stream) lands
+    // in the output so we can fall back when the container-level start_time
+    // is missing or wrong.
+    const proc = spawn(ffmpegBin, ['-v', 'verbose', '-i', filePath], {
       stdio: ['ignore', 'ignore', 'pipe']
     })
     let stderr = ''
-    proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-4096) })
+    proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-8192) })
     const timeout = setTimeout(() => { try { proc.kill() } catch {}; resolve(null) }, 5000)
     proc.on('close', () => {
       clearTimeout(timeout)
+      // Primary: container-level "start:" in the Duration line.
       const m = stderr.match(/Duration:.*?start:\s*([\d.]+)/)
-      if (!m) { resolve(null); return }
-      const t = parseFloat(m[1])
-      // Only treat as a wall-clock timestamp (Unix epoch seconds, year 2001+)
-      resolve(!isNaN(t) && t > 1_000_000_000 ? t : null)
+      if (m) {
+        const t = parseFloat(m[1])
+        if (!isNaN(t) && t > 1_000_000_000) { resolve(t); return }
+      }
+      // Fallback: first_dts on stream 0 (some containers don't propagate
+      // start_time to the metadata header but do tag the first packet).
+      const m2 = stderr.match(/first_dts\s*[:=]\s*([\d.]+)/)
+      if (m2) {
+        const t = parseFloat(m2[1])
+        if (!isNaN(t) && t > 1_000_000_000) { resolve(t); return }
+      }
+      resolve(null)
     })
   })
 }
@@ -328,39 +340,83 @@ export async function muxAudioVideo(
   videoPath: string,
   outputPath: string
 ): Promise<boolean> {
-  // Probe both files to detect camera warm-up offset. If probing fails or the
-  // offset is implausibly large (> 60 s), fall back to no trim.
+  // ── A/V sync strategy (in order of effectiveness) ──────────────────────
+  //
+  // 1. Detect start-offset between the two files via container start_time
+  //    (both captures use -use_wallclock_as_timestamps, so start_time is a
+  //    Unix epoch in seconds). Handle BOTH directions:
+  //       videoStart > audioStart → audio led, trim audio's head
+  //       audioStart > videoStart → video led, offset audio with -itsoffset
+  //    Earlier code only handled the first direction; if a slow audio device
+  //    (USB mixer warmup) opened after the camera, the offset was ignored.
+  //
+  // 2. `aresample=async=1000` on the audio filter: any residual drift over
+  //    the recording (audio clock vs video clock differing by parts per
+  //    million) is corrected by inserting / dropping samples up to 1000
+  //    per second. Inaudible at normal-speech volumes but eliminates the
+  //    "lips slowly drift out of sync over 90 minutes" failure mode.
+  //
+  // 3. `-shortest`: stops the muxer when the shorter input ends, so a
+  //    longer audio tail doesn't leave video frozen on the last frame for
+  //    seconds after the camera stopped (typical when the audio ffmpeg
+  //    closes a few seconds after the video ffmpeg).
+  //
+  // 4. `-fflags +genpts`: regenerate presentation timestamps uniformly so
+  //    any container-level PTS gap (rare but possible after reconnects)
+  //    doesn't propagate into the muxed file.
+  //
+  // Full unified-ffmpeg-pipeline (single ffmpeg opening BOTH camera and
+  // mixer via AVFoundation `videoIdx:audioIdx`) is the ideal long-term
+  // fix — see docs/USER-TASKS.md for the roadmap. The above gets us
+  // close in the meantime.
   const [audioStart, videoStart] = await Promise.all([
     probeStartTimeSec(audioPath),
     probeStartTimeSec(videoPath),
   ])
 
-  let audioTrimSec = 0
+  let audioTrimSec = 0       // audio started earlier → strip the head
+  let audioOffsetSec = 0     // video started earlier → push audio later
+
   if (audioStart !== null && videoStart !== null) {
-    const raw = videoStart - audioStart
+    const raw = videoStart - audioStart  // positive ⇒ video lagged audio
     if (raw > 0.05 && raw < 60) {
       audioTrimSec = raw
-      console.log(`[video-recorder] A/V offset detected: ${raw.toFixed(3)} s — trimming audio start`)
+      console.log(`[video-recorder] A/V offset detected (audio led ${raw.toFixed(3)} s) — trimming audio head`)
+    } else if (raw < -0.05 && raw > -60) {
+      audioOffsetSec = -raw
+      console.log(`[video-recorder] A/V offset detected (video led ${(-raw).toFixed(3)} s) — offsetting audio start`)
     }
+  } else {
+    console.log('[video-recorder] could not probe start_time on one/both inputs — skipping head-alignment, relying on aresample for drift')
   }
 
   return new Promise(resolve => {
-    const proc = spawn(ffmpegBin, [
-      '-nostdin', '-hide_banner',
-      // Trim audio by the measured offset so both streams start at the same
-      // wall-clock moment (the instant the first video frame was captured).
-      ...(audioTrimSec > 0 ? ['-ss', audioTrimSec.toFixed(3)] : []),
-      '-i', audioPath,
-      '-i', videoPath,
+    const args = ['-nostdin', '-hide_banner', '-fflags', '+genpts']
+
+    // Audio input — optionally trimmed (audio-led case) or offset (video-led case)
+    if (audioTrimSec > 0) args.push('-ss', audioTrimSec.toFixed(3))
+    if (audioOffsetSec > 0) args.push('-itsoffset', audioOffsetSec.toFixed(3))
+    args.push('-i', audioPath)
+
+    args.push('-i', videoPath,
       '-map', '0:a',
       '-map', '1:v',
       '-c:v', 'copy',
+      // aresample=async=1000 corrects sample-rate drift incrementally so
+      // long recordings stay in sync from start to finish, not just the
+      // first frame.
+      '-af', 'aresample=async=1000:first_pts=0',
       '-c:a', 'aac', '-b:a', '192k',
-      // Normalize the earliest PTS to zero after trimming.
+      // Earliest PTS normalised to zero after trim/offset.
       '-avoid_negative_ts', 'make_zero',
+      // Stop the muxer the instant the shorter input ends — no trailing
+      // audio over a frozen last frame.
+      '-shortest',
       '-movflags', '+faststart',
       '-y', outputPath,
-    ], { stdio: ['ignore', 'ignore', 'pipe'] })
+    )
+
+    const proc = spawn(ffmpegBin, args, { stdio: ['ignore', 'ignore', 'pipe'] })
     let stderr = ''
     proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-65536) })
     const timeout = setTimeout(() => {
