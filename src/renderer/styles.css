@@ -3338,8 +3338,24 @@ body.platform-win32  #wake-instructions-win { display: block; }
   width: 100%; box-sizing: border-box;
 }
 
-/* VU lives below in its own row — gets the full width of both columns */
-.video-mode-layout .vu-section { margin-bottom: 0; }
+/* VU is now appended INSIDE the .video-preview-card by home.ts, so the
+   bottom of the preview card holds the Lydnivå strip — visually identical
+   to the Direktesending design (preview frame + VU in a single card).
+   The standalone .video-mode-vu-slot is kept in the markup as a fallback
+   container but stays empty in video-mode and is hidden via display:none. */
+.video-mode-vu-slot:empty { display: none; }
+
+/* Re-skin the VU inside the preview card: drop its own border/background
+   and align padding with .live-vu-section so the two pages look identical. */
+.video-preview-card > .vu-section {
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  padding: 12px 14px;
+  margin: 0;
+}
+.video-preview-card > .vu-section .vu-section-head { margin-bottom: 10px; }
 
 /* Responsive: under 900px the side-column collapses below the preview */
 @media (max-width: 900px) {

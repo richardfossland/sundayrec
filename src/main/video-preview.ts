@@ -72,6 +72,25 @@ interface ResolvedInput {
 
 let active: PreviewHandle | null = null
 let _workingMacConfigIdx = 0
+
+/**
+ * Auto-restart bookkeeping for the "another app stole the camera" recovery
+ * path (FaceTime call, Photo Booth, Zoom etc.). Cap restarts within a short
+ * window so we don't burn cycles in a restart loop when the camera is
+ * genuinely gone (unplugged USB, denied permission).
+ */
+const RESTART_WINDOW_MS = 30_000
+const MAX_RESTARTS_PER_WINDOW = 4
+let restartTimestamps: number[] = []
+function noteRestartAttempt(): boolean {
+  const now = Date.now()
+  restartTimestamps = restartTimestamps.filter(t => now - t < RESTART_WINDOW_MS)
+  if (restartTimestamps.length >= MAX_RESTARTS_PER_WINDOW) return false
+  restartTimestamps.push(now)
+  return true
+}
+function resetRestartCounter(): void { restartTimestamps = [] }
+
 /**
  * Monotonically-incrementing generation token. Each startPreview() call captures
  * the current value; if stopPreview() bumps it during an in-flight retry
@@ -378,6 +397,51 @@ export async function startPreview(
     void retryWithNext('no frame in 10 s')
   }, 10000)
 
+  // Stale-frame watchdog: once frames have started flowing, if the stream goes
+  // quiet for >3 s the camera was almost certainly stolen by another app
+  // (FaceTime, Photo Booth, Zoom). When that other app releases the device,
+  // AVFoundation does NOT automatically resume our stream — and any partial
+  // frames already in our parse buffer corrupt the next decode (we've seen
+  // the renderer paint a duplicated/interlaced rosy frame in this state).
+  // Killing + relaunching ffmpeg is the only reliable recovery.
+  let lastFrameAt = 0
+  const STALE_FRAME_MS = 3000
+  const staleWatchdog = setInterval(() => {
+    if (handle.stopped) { clearInterval(staleWatchdog); return }
+    if (!firstFrameReceived) return  // first-frame-timer covers this
+    const stale = Date.now() - lastFrameAt
+    if (stale < STALE_FRAME_MS) return
+    if (!noteRestartAttempt()) {
+      console.warn('[video-preview] stale-frame watchdog: too many restarts — giving up. Camera may be unavailable.')
+      handle.stopped = true
+      clearInterval(staleWatchdog)
+      try { proc.kill('SIGTERM') } catch {}
+      if (!win.isDestroyed()) {
+        try { win.webContents.send('video-preview-stopped') } catch {}
+      }
+      return
+    }
+    console.warn(`[video-preview] stale-frame watchdog: ${stale} ms since last frame — restarting (likely camera was stolen by another app)`)
+    handle.stopped = true
+    clearInterval(staleWatchdog)
+    active = null
+    // Capture closure refs we need post-kill before they go stale.
+    const restartOpts  = opts
+    const restartWin   = win
+    const restartIdx   = cfgIdx
+    const restartOrder = order
+    const restartInput = input
+    void killAndWaitForExit(proc, 1500).then(async () => {
+      // Brief grace for AVFoundation to fully release the device handle.
+      await new Promise<void>(r => setTimeout(r, 250))
+      if (myGeneration !== _generation) return
+      if (restartWin.isDestroyed()) return
+      startPreview(restartOpts, restartWin, restartIdx, restartOrder, restartInput).catch(err => {
+        console.warn('[video-preview] watchdog restart failed:', err)
+      })
+    })
+  }, 1000)
+
   proc.stdout?.on('data', (chunk: Buffer) => {
     buf = Buffer.concat([buf, chunk])
     if (buf.length > 4 * 1024 * 1024) buf = buf.slice(-2 * 1024 * 1024)
@@ -392,6 +456,7 @@ export async function startPreview(
 
       const frame = buf.slice(0, eoi + 2)
       buf = buf.slice(eoi + 2)
+      lastFrameAt = Date.now()
 
       if (!firstFrameReceived) {
         firstFrameReceived = true
@@ -431,6 +496,7 @@ export async function startPreview(
 
   proc.on('close', code => {
     clearTimeout(firstFrameTimer)
+    clearInterval(staleWatchdog)
     if (active === handle) active = null
 
     const elapsed = Date.now() - startMs
@@ -477,6 +543,11 @@ export async function stopPreview(): Promise<void> {
   // Bump the generation FIRST — any in-flight retries that are currently
   // awaiting kill/close will see the mismatch and bail out.
   _generation++
+  // Reset the watchdog restart counter so a fresh user-initiated start gets
+  // its full quota — otherwise rapid stop/start cycles during testing or
+  // device swaps would consume the per-window budget set aside for the real
+  // "camera was stolen" recovery case.
+  resetRestartCounter()
   if (!active) return
   const handle = active
   handle.stopped = true

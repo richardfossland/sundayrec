@@ -1,6 +1,6 @@
 {
   "name": "sundayrec",
-  "version": "4.43.0",
+  "version": "4.43.1",
   "author": "Richard Fossland",
   "description": "Automatic church service recorder for Windows and Mac",
   "repository": {
@@ -43,7 +43,7 @@
   "build": {
     "appId": "no.sundayrec.app",
     "productName": "SundayRec",
-    "copyright": "Copyright \u00a9 2025",
+    "copyright": "Copyright © 2025",
     "asarUnpack": [
       "node_modules/ffmpeg-static/**"
     ],

@@ -1430,13 +1430,13 @@ function setupIPC(): void {
     }
   })
 
-  // NDI source discovery is stubbed until v4.44. Returning a structured
-  // response (available=false) lets the UI render a friendly notice instead
-  // of guessing what went wrong.
+  // Native NDI receiver is on the roadmap for v4.44 (vendored grandiose +
+  // libndi bundling + electron-rebuild in CI). Until that ships, we surface
+  // a clear notice so the UI doesn't pretend NDI is available.
   ipcMain.handle('overlay-list-ndi-sources', async () => {
     return {
       available: false,
-      reason:    'NDI-mottaker er under utvikling. Bruk skjerm-capture med EasyWorship på samme maskin inntil videre.',
+      reason:    'Native NDI-mottaker kommer i v4.44 (skal fungere som i OBS). Bruk skjerm-capture med EasyWorship på samme maskin inntil videre.',
       sources:   [] as Array<{ name: string; url: string }>,
     }
   })

@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.43.1] — 2026-05-27
+
+### Fixed
+- **Korrupt kamera-preview etter at et annet program tar over kameraet.**
+  Når FaceTime / Photo Booth / Zoom griper kameraet og deretter slipper
+  det, returnerte AVFoundation IKKE en frisk videostrøm — vi fikk en
+  korrupt frame (duplisert horisontalt, interlaced, rosa tint).
+  En ny **frame-stale-watchdog** detekterer nå at frames slutter å komme
+  i mer enn 3 sekunder, dreper ffmpeg-prosessen og restarter
+  preview-en automatisk når kameraet er ledig igjen. Begrenset til
+  4 restarter per 30 sek vindu så vi ikke ender i en restart-loop
+  hvis kameraet er ekte borte (USB frakoblet, tillatelser nektet).
+
+### Changed
+- **Hjem-skjerm: preview-vindu og Lydnivå nå i ett samlet kort.**
+  Designet matcher Direktesending-fanen — preview-vinduet sitter oppå
+  og Lydnivå-VU er strippe-stilt i bunnen av samme kort. Gir bedre
+  visuell helhet mellom video og lyd. Innstillingskortene står
+  fortsatt vertikalt på siden.
+
+---
+
 ## [4.43.0] — 2026-05-27
 
 ### Added

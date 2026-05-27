@@ -46,10 +46,9 @@ let _videoLayoutActive = false
 function relocateVuForVideoMode(enabled: boolean): void {
   const layout = document.getElementById('video-mode-layout')
   if (!layout) return
-  const vuSlot      = layout.querySelector<HTMLElement>('.video-mode-vu-slot')
   const previewSlot = layout.querySelector<HTMLElement>('.video-mode-preview-slot')
   const cardSlot    = layout.querySelector<HTMLElement>('.info-card-column')
-  if (!vuSlot || !previewSlot || !cardSlot) return
+  if (!previewSlot || !cardSlot) return
 
   if (enabled) {
     if (_videoLayoutActive) return
@@ -62,13 +61,19 @@ function relocateVuForVideoMode(enabled: boolean): void {
       target.appendChild(el)
     }
 
-    // VU — stays horizontal, just moved below the preview/info grid
-    const vu = document.querySelector<HTMLElement>('#page-home > .vu-section')
-    if (vu) move(vu, vuSlot)
-
-    // Video preview section — stays as one block (preview + source bar)
+    // Video preview section first — so the VU can be appended into the same
+    // card right after, giving the user the one-card "video + lyd-helhet"
+    // look that the Direktesending page has.
     const preview = document.getElementById('video-preview-section') as HTMLElement | null
     move(preview, previewSlot)
+
+    // VU goes INSIDE the .video-preview-card so preview and Lydnivå appear
+    // as a single unified card (matching the Direktesending design). CSS
+    // targets `.video-preview-card .vu-section` to re-skin it as a flat
+    // bottom-strip like .live-vu-section.
+    const vu = document.querySelector<HTMLElement>('#page-home > .vu-section')
+    const previewCard = preview?.querySelector<HTMLElement>('.video-preview-card')
+    if (vu && previewCard) move(vu, previewCard)
 
     // Three audio info-cards from the horizontal strip — pull them OUT of
     // .info-strip and stack them in the right column. Keep the empty
