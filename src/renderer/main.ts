@@ -24,7 +24,7 @@ declare global {
     loadSettings: () => Promise<void>
     showOnboarding: () => void
     __isRecording: boolean
-    openEditorWithFile: (filePath: string) => void
+    openEditorWithFile: (filePath: string, seekToSec?: number) => void
     openEditorReviewMode?: (prepId: string, filePath: string) => void
     api: {
       getSettings:         () => Promise<Settings>

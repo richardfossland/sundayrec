@@ -236,15 +236,10 @@ async function openRecording(entry: IndexEntry, atSec: number): Promise<void> {
     alert(t('search.fileNotFound', 'Originalfilen ble ikke funnet. Den kan ha blitt flyttet eller slettet.'))
     return
   }
-  // Hand off to the editor with a "seek to time" intent. Editor reads
-  // the transcript sidecar itself on load.
-  window.openEditorWithFile?.(fp)
-  // Wait a beat for the editor to load, then seek. The editor exposes a
-  // simple "seek" via the transcript-segment click path; we trigger it
-  // with a custom event so we don't have to wire a second IPC channel.
-  setTimeout(() => {
-    document.dispatchEvent(new CustomEvent('editor-seek-to', { detail: { sec: atSec } }))
-  }, 350)
+  // Hand off to the editor with a "seek to time" intent. The editor applies
+  // the seek as the final step of loadFile() so we don't race against
+  // peak-decode or transcript-load — see openEditorWithFile signature.
+  window.openEditorWithFile?.(fp, atSec)
 }
 
 function setStatus(s: string): void {

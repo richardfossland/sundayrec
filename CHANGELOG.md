@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.39.1] — 2026-05-27
+
+### Fixed
+- Search → Editor seek-to was racy: the previous CustomEvent fired 350 ms
+  after `openEditorWithFile`, but `loadFile` zeroes `playStartSec` mid-flight
+  and audio decode can take longer than 350 ms, so the jump-to-time often
+  landed at 0 instead of the intended segment. `openEditorWithFile` now takes
+  an optional `seekToSec` parameter and the editor applies it as the final
+  step of `loadFile()` — deterministic, no setTimeout race.
+
+---
+
 ## [4.39.0] — 2026-05-27
 
 ### Added

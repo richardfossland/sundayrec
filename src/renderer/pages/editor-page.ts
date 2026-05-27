@@ -419,13 +419,6 @@ export function setupEditorPage(): void {
     drawWaveform()
   }
   setupTranscriptPanel(seekToSec)
-  // Listen for cross-page seek requests (e.g. from the Search page when the
-  // user clicks a transcript hit — that fires `editor-seek-to` after opening
-  // the file via window.openEditorWithFile).
-  document.addEventListener('editor-seek-to', (e: Event) => {
-    const detail = (e as CustomEvent<{ sec: number }>).detail
-    if (detail && typeof detail.sec === 'number') seekToSec(detail.sec)
-  })
   setupDragDrop()
   setupReviewBanner()
 
@@ -443,12 +436,19 @@ export function setupEditorPage(): void {
 
 let resizeObserver: ResizeObserver | null = null
 
-export function openEditorWithFile(fp: string): void {
+export function openEditorWithFile(fp: string, seekToSec?: number): void {
   reviewPrepId = null
   loadAndUpdateReviewBanner()
   window.showPage('editor')
+  pendingSeekSec = typeof seekToSec === 'number' ? seekToSec : null
   loadFile(fp)
 }
+
+// Set by openEditorWithFile when the caller wants the editor to jump to a
+// specific timestamp once the file finishes loading. Consumed at the tail of
+// loadFile(). The CustomEvent path was racy because loadFile zeroes
+// playStartSec mid-flight; this gives us a deterministic "apply once decoded".
+let pendingSeekSec: number | null = null
 
 // ── Review mode state (prep-and-review v5.0) ──────────────────────────────
 // When non-null, the editor is in "review mode" — it pre-applies suggested
@@ -948,6 +948,15 @@ async function loadFile(fp: string): Promise<void> {
     drawMinimap()
     updateMinimapViewport()
   })
+
+  if (pendingSeekSec != null) {
+    const target = pendingSeekSec
+    pendingSeekSec = null
+    playStartSec = clampPlayable(snapOutOfCut(target))
+    updateTimecode(playStartSec)
+    if (isVideoFile && videoEl) videoEl.currentTime = clampMain(playStartSec)
+    drawWaveform()
+  }
 
   // Mastering section is only meaningful for audio files (the entire ffmpeg
   // pipeline + LUFS measurement is audio-only; mastering a video would not
