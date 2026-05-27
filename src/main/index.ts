@@ -25,6 +25,8 @@ import { registerWakeIpc } from './ipc/wake'
 import { registerHistoryIpc } from './ipc/history'
 import { registerRecordingIpc } from './ipc/recording'
 import { registerAudioDevicesIpc } from './ipc/audio-devices'
+import { registerTranscriptIpc } from './ipc/transcript'
+import { registerEmailWebhookIpc } from './ipc/email-webhook'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 
@@ -697,24 +699,8 @@ function setupIPC(): void {
   // preflight, get-next, get-disk-space)
   registerRecordingIpc(ipcCtx)
 
-  ipcMain.handle('test-webhook', async () => {
-    const s = store.getAll()
-    if (!s.webhookUrl) return { ok: false, error: 'no_url' }
-    try {
-      const { sendWebhook } = await import('./webhook')
-      const ok = await sendWebhook(s.webhookUrl, {
-        app:       'SundayRec',
-        church:    s.churchName || 'untitled',
-        severity:  'warn',
-        category:  'device',
-        message:   'Test fra SundayRec — webhook fungerer.',
-        timestamp: new Date().toISOString(),
-      })
-      return { ok }
-    } catch (err) {
-      return { ok: false, error: (err as Error).message }
-    }
-  })
+  // Email + webhook test handlers — moved to ipc/email-webhook.ts
+  registerEmailWebhookIpc(ipcCtx)
 
   ipcMain.handle('pick-folder', async () => {
     if (!mainWindow.isVisible()) mainWindow.show()
@@ -754,33 +740,6 @@ function setupIPC(): void {
   ipcMain.on('weak-signal', () => {
     const lang = store.get('language') ?? 'no'
     notify('SundayRec', WEAK_SIGNAL_LABELS[lang] ?? WEAK_SIGNAL_LABELS.no)
-  })
-
-  ipcMain.handle('clear-smtp-password', () => {
-    store.setSmtpPassword('')
-    return true
-  })
-
-  ipcMain.handle('test-email', async () => {
-    const s = store.getAll()
-    mainWindow.webContents.send('email-test-status', { status: 'sending' })
-    try {
-      const result = await Promise.race([
-        mailer.sendTest(s, store.getSmtpPassword()).then(() => ({ ok: true as const })),
-        new Promise<{ ok: false; error: string }>(resolve =>
-          setTimeout(() => resolve({ ok: false, error: 'Email test timed out after 15 seconds' }), 15000)
-        )
-      ])
-      mainWindow.webContents.send('email-test-status', {
-        status: result.ok ? 'ok' : 'error',
-        message: result.ok ? undefined : result.error
-      })
-      return result
-    } catch (err) {
-      const message = (err as Error).message
-      mainWindow.webContents.send('email-test-status', { status: 'error', message })
-      return { ok: false, error: message }
-    }
   })
 
   // Editor IPC — moved to ipc/editor.ts (read/save/pick/export/peaks/probe,
@@ -847,73 +806,8 @@ function setupIPC(): void {
   // Streaming + overlay handlers — moved to ipc/stream.ts
   registerStreamIpc(ipcCtx)
 
-  // ─── Transcript archive index ────────────────────────────────────────────
-  // Scans all known recording folders (saveFolder + every dir from
-  // recordingHistory) for .transcript.json sidecars and returns a flat list
-  // for the renderer to search through.
-  ipcMain.handle('transcript-list-all', async () => {
-    const settings = store.getAll()
-    const folders = new Set<string>()
-    if (settings.saveFolder) folders.add(settings.saveFolder)
-    for (const entry of store.getHistory()) {
-      if (entry.path) folders.add(path.dirname(entry.path))
-    }
-
-    const results: Array<{
-      filePath:    string         // path to source recording (no extension match)
-      transcript:  unknown        // parsed TranscriptData
-    }> = []
-
-    for (const dir of folders) {
-      try {
-        if (!fs.existsSync(dir)) continue
-        const entries = await fs.promises.readdir(dir)
-        for (const name of entries) {
-          if (!name.endsWith('.transcript.json')) continue
-          try {
-            const sidecarPath = path.join(dir, name)
-            const raw = await fs.promises.readFile(sidecarPath, 'utf8')
-            const transcript = JSON.parse(raw)
-            // The source filename is the sidecar name minus '.transcript.json'.
-            // We don't know the exact extension — surface the basename and let
-            // the renderer find the matching file when the user clicks.
-            const baseName = name.slice(0, -'.transcript.json'.length)
-            results.push({
-              filePath: path.join(dir, baseName),  // missing extension; renderer probes
-              transcript,
-            })
-          } catch {
-            // Malformed sidecar — skip silently
-          }
-        }
-      } catch {
-        // Folder unreadable — skip
-      }
-    }
-
-    return results
-  })
-
-  // Resolves the actual recording file (with extension) for a transcript
-  // base-path. Used when the user clicks a search result to open the
-  // recording in the editor.
-  ipcMain.handle('transcript-resolve-source', async (_, basePath: string) => {
-    if (typeof basePath !== 'string' || !basePath) return null
-    const dir = path.dirname(basePath)
-    const base = path.basename(basePath)
-    try {
-      if (!fs.existsSync(dir)) return null
-      const entries = await fs.promises.readdir(dir)
-      for (const name of entries) {
-        if (name === base + '.transcript.json') continue
-        const nameNoExt = name.replace(/\.[^.]+$/, '')
-        if (nameNoExt === base) {
-          return path.join(dir, name)
-        }
-      }
-    } catch {}
-    return null
-  })
+  // Transcript archive search — moved to ipc/transcript.ts
+  registerTranscriptIpc(ipcCtx)
 
   // Whisper transcription — moved to ipc/whisper.ts
   registerWhisperIpc({ ...ipcCtx, isAllowedMediaPath })

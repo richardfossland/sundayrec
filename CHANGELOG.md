@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.53.6] — 2026-05-27
+
+### Refactored — IPC-splitting fase 6 (transcript + email)
+
+**Nye filer:**
+- `ipc/transcript.ts` — 2 handlers (transcript-list-all,
+  transcript-resolve-source — søkearkivet)
+- `ipc/email-webhook.ts` — 3 handlers (test-webhook, test-email,
+  clear-smtp-password — varsel-test fra innstillinger)
+
+**Resultat:**
+- index.ts: **1148 → 1042 linjer** (kumulativ fra v4.53.0:
+  2045 → 1042 = **−49 %**, halvert!)
+- 104 handlers flyttet ut totalt (av ~127)
+- Bare 19 handlers igjen i index.ts (system/app, files, et par cloud)
+- 1080 tester fortsatt grønne
+
+---
+
 ## [4.53.5] — 2026-05-27
 
 ### Refactored — IPC-splitting fase 5 (recording + audio-devices)
