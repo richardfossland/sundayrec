@@ -2407,7 +2407,16 @@ interface LayoutGeom {
   effOutroDur: number  // outro duration in seconds, or 0 if not displayed
 }
 
+// One-slot cache for getLayoutGeom(): mousemove handlers call this twice
+// per event (xToSec + xToMainSec) and the inputs only change when the user
+// zooms, scrolls or toggles intro/outro. Caching turns thousands of pure-
+// math executions per drag into single-digit cache hits.
+let _layoutGeomCache: { key: string; geom: LayoutGeom } | null = null
+
 function getLayoutGeom(W: number): LayoutGeom {
+  const key = `${W}|${vpStart}|${vpEnd}|${includeIntroOutro?1:0}|${introBuffer?1:0}|${outroBuffer?1:0}|${duration}|${introDuration}|${outroDuration}`
+  if (_layoutGeomCache && _layoutGeomCache.key === key) return _layoutGeomCache.geom
+
   // Only show intro/outro slots when the corresponding edge of the file is
   // visible. If the user has zoomed past the start, hide the intro slot.
   const showIntro = includeIntroOutro && !!introBuffer && vpStart <= 0.001
@@ -2418,7 +2427,7 @@ function getLayoutGeom(W: number): LayoutGeom {
   const total = effIntroDur + mainVpDur + effOutroDur
   const introPx = (effIntroDur / total) * W
   const outroPx = (effOutroDur / total) * W
-  return {
+  const geom: LayoutGeom = {
     introPx,
     outroPx,
     mainPxStart: introPx,
@@ -2426,6 +2435,8 @@ function getLayoutGeom(W: number): LayoutGeom {
     effIntroDur,
     effOutroDur,
   }
+  _layoutGeomCache = { key, geom }
+  return geom
 }
 
 // Extended-timeline helpers: `playStartSec` runs on an extended timeline so the

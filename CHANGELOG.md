@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.47.0] — 2026-05-27
+
+### Sikkerhet
+- **OAuth state-replay-vern.** Hver state-verdi kan nå konsumeres maks
+  én gang per app-sesjon. Defensive depth — selv om state-match-sjekken
+  i sin tid skulle bli omgått, ville en replay nå bli avvist eksplisitt.
+  TTL 10 min, capped på 256 state-verdier i minnet.
+
+### Performance
+- **editor-page: `getLayoutGeom`-cache.** Funksjonen ble kalt to ganger
+  per mousemove-event (én gang i `xToSec`, én gang i `xToMainSec`) over
+  hele drag-paths. One-slot cache med stable key betyr at kun den
+  første kallet i et rAF-vindu faktisk regner geometrien — resten er
+  rene cache-hits.
+- **prep-episode: sermon-only deteksjon i ett pass.** Refaktorerte
+  «sermon-only»-saken fra 5 separate iterasjoner (filter + 3 reduce +
+  findIndex) til én walk gjennom segmentene. Samme resultat, en
+  fjerdedel av jobben.
+
+### Bug-fixes
+- **Streamer race-condition i auto-recover.** `streamStartedAt` ble
+  brukt i close-handler for å beregne lokal-opptak-varigheten — men
+  modul-nivå-variabelen kunne bli overskrevet av en auto-restart før
+  close-handleren rakk å kjøre. Nå brukes en closure-fanget kopi per
+  ffmpeg-prosess.
+
+### Internt
+- **Dokumentert atomic upload-queue-writes.** electron-store 11 → conf 15
+  bruker `atomically`-pakken under hetten (tmp-skriving + fsync +
+  rename), så hard crash midt i `save()` etterlater aldri queue-fila
+  korrupt. Lagt til kommentar slik at framtidige auditer ikke flagger
+  det igjen som «mulig korrupsjon ved crash».
+- **18 OAuth-tester** (+1 ny for replay-vernet).
+
+---
+
 ## [4.46.0] — 2026-05-27
 
 ### Added

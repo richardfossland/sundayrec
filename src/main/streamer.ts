@@ -510,7 +510,10 @@ async function launchFfmpeg(opts: StreamOptions): Promise<{ ok: boolean; error?:
   const proc = spawn(ffmpegBin, args, { stdio: ['ignore', 'pipe', 'pipe'] })
 
   streamProc = proc
-  streamStartedAt = Date.now()
+  // Capture per-process startedAt so the close-handler isn't racing the
+  // module-level streamStartedAt that auto-recover bumps on restart.
+  const procStartedAt = Date.now()
+  streamStartedAt = procStartedAt
   lastStats = {
     active:      true,
     startedAt:   streamStartedAt,
@@ -597,9 +600,12 @@ async function launchFfmpeg(opts: StreamOptions): Promise<{ ok: boolean; error?:
     }
     // Register the local "Start direktesending + opptak" file in history so
     // the user can find it under Siste opptak. Fire-and-forget — stat/IO
-    // failures are logged but don't block the close path.
+    // failures are logged but don't block the close path. We use the
+    // closure-captured `procStartedAt` rather than the module-level
+    // `streamStartedAt` so a rapid restart can't overwrite the timestamp
+    // before this handler runs.
     if (finalAlsoRecord && wasActive) {
-      void registerAlsoRecordInHistory(finalAlsoRecord.outputPath, streamStartedAt)
+      void registerAlsoRecordInHistory(finalAlsoRecord.outputPath, procStartedAt)
     }
   })
 

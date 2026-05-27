@@ -107,26 +107,41 @@ export function findSermonSegment(
   // Some churches record only the sermon, not the full service. If ≥80%
   // of the file is speech and there's essentially no music (<5%), treat
   // the entire file as sermon and return bounds covering all speech.
+  //
+  // Single O(n) pass — earlier implementation did 5 separate iterations
+  // (filter, reduce ×3, findIndex). Same result, one walk.
   if (durationSec > 60) {
-    const speeches = segments.filter(s => s.type === 'speech')
-    const speechDur = speeches.reduce((sum, s) => sum + s.durationSec, 0)
-    const musicDur  = segments
-      .filter(s => s.type === 'music')
-      .reduce((sum, s) => sum + s.durationSec, 0)
+    let speechCount  = 0
+    let speechDur    = 0
+    let musicDur     = 0
+    let confSum      = 0
+    let firstSpeechIdx = -1
+    let firstSpeechStart = Infinity
+    let lastSpeechEnd    = -Infinity
+    for (let i = 0; i < segments.length; i++) {
+      const s = segments[i]
+      if (s.type === 'speech') {
+        speechCount++
+        speechDur += s.durationSec
+        confSum   += s.confidence
+        if (s.startSec < firstSpeechStart) {
+          firstSpeechStart = s.startSec
+          firstSpeechIdx   = i
+        }
+        if (s.endSec > lastSpeechEnd) lastSpeechEnd = s.endSec
+      } else if (s.type === 'music') {
+        musicDur += s.durationSec
+      }
+    }
     const speechRatio = speechDur / durationSec
-    const musicRatio  = musicDur / durationSec
+    const musicRatio  = musicDur  / durationSec
 
-    if (speeches.length > 0 && speechRatio >= 0.80 && musicRatio < 0.05) {
-      const first = speeches.reduce((a, b) => (a.startSec < b.startSec ? a : b))
-      const last  = speeches.reduce((a, b) => (a.endSec   > b.endSec   ? a : b))
-      const segIndex = segments.findIndex(s => s === first)
-      // Average confidence across all speech segments
-      const avgConf = speeches.reduce((sum, s) => sum + s.confidence, 0) / speeches.length
+    if (speechCount > 0 && speechRatio >= 0.80 && musicRatio < 0.05) {
       return {
-        startSec:  first.startSec,
-        endSec:    Math.min(last.endSec, durationSec),
-        confidence: avgConf,
-        segIndex:  Math.max(0, segIndex),
+        startSec:   firstSpeechStart,
+        endSec:     Math.min(lastSpeechEnd, durationSec),
+        confidence: confSum / speechCount,
+        segIndex:   Math.max(0, firstSpeechIdx),
       }
     }
   }

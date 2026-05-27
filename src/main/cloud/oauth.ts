@@ -23,6 +23,45 @@ function generateState(): string {
   return base64url(crypto.randomBytes(16))
 }
 
+// ─── Replay protection for OAuth state values ──────────────────────────────
+//
+// Each state is generated for one OAuth flow and lives only as long as that
+// flow is pending. If an attacker manages to capture a state value (e.g. via
+// log scraping) and tries to feed it back through a manipulated callback,
+// we reject it here even if the flow is still nominally pending.
+//
+// The set is bounded — entries auto-expire after STATE_TTL_MS and the size
+// is capped so a flood of OAuth attempts can't grow the map unboundedly.
+
+const STATE_TTL_MS = 10 * 60_000   // 10 min — matches PENDING_TIMEOUT_MS
+const MAX_USED_STATES = 256
+const usedStates = new Map<string, number>()   // state → expiresAt ms
+
+function markStateUsed(state: string): void {
+  // Light-weight GC: drop expired entries on every insert. Cheap because
+  // OAuth flows are rare (a few per session at most).
+  const now = Date.now()
+  for (const [s, exp] of usedStates) {
+    if (exp < now) usedStates.delete(s)
+  }
+  // Cap the map size — drop oldest if we somehow exceed it (defensive).
+  if (usedStates.size >= MAX_USED_STATES) {
+    const first = usedStates.keys().next().value
+    if (first) usedStates.delete(first)
+  }
+  usedStates.set(state, now + STATE_TTL_MS)
+}
+
+function isStateReplayed(state: string): boolean {
+  const exp = usedStates.get(state)
+  if (exp === undefined) return false
+  if (exp < Date.now()) {
+    usedStates.delete(state)
+    return false
+  }
+  return true
+}
+
 /** Fetch with hard timeout — aborts the request after `timeoutMs` so a
  *  hanging OAuth endpoint can't block the upload queue indefinitely. */
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
@@ -107,7 +146,16 @@ export async function openGoogleAuth(): Promise<{ codePromise: Promise<string>; 
 
       const error = url.searchParams.get('error')
       if (error) { reject(new Error(`OAuth nektet: ${url.searchParams.get('error_description') ?? error}`)); return }
-      if (url.searchParams.get('state') !== state) { reject(new Error('OAuth state mismatch — mulig CSRF-forsøk')); return }
+      const returnedState = url.searchParams.get('state') ?? ''
+      if (returnedState !== state) { reject(new Error('OAuth state mismatch — mulig CSRF-forsøk')); return }
+      // Replay protection: even if state matches what we issued, refuse if
+      // we've already seen this exact state come through. Defense in depth
+      // against very-quick double-callbacks (e.g. browser pre-fetch).
+      if (isStateReplayed(returnedState)) {
+        reject(new Error('OAuth state gjenbrukt — avvist'))
+        return
+      }
+      markStateUsed(returnedState)
       const code = url.searchParams.get('code')
       if (!code) { reject(new Error('OAuth callback manglet code-parameter')); return }
       resolve(code)
@@ -214,6 +262,16 @@ export function handleCallback(service: CloudServiceId, params: URLSearchParams)
     p.reject(new Error('OAuth state mismatch — possible CSRF attempt'))
     return true
   }
+  // Replay protection — see comment on the localhost-callback path. Same
+  // semantics: matching state is necessary but not sufficient; we also
+  // require that the state hasn't already been consumed in this session.
+  if (isStateReplayed(returnedState)) {
+    clearTimeout(p.timer)
+    pending.delete(service)
+    p.reject(new Error('OAuth state replay — rejected'))
+    return true
+  }
+  markStateUsed(returnedState)
 
   const code = params.get('code')
   if (!code) {

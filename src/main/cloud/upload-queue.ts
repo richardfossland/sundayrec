@@ -24,6 +24,12 @@ const BACKOFF_STEPS_MS = [
 interface QueueShape { entries: CloudUploadQueueEntry[] }
 const store = new Store<QueueShape>({ name: 'sundayrec-cloud-queue', defaults: { entries: [] } })
 
+// electron-store 11 → conf 15 → `atomically` package: writes go through
+// write-to-tmp + fsync + rename. A hard process crash mid-save() therefore
+// never leaves the queue file in a half-written state — either the new
+// snapshot is fully there or the previous one is intact. We rely on that
+// guarantee rather than rolling our own WAL.
+
 function load(): CloudUploadQueueEntry[] {
   return store.get('entries') ?? []
 }

@@ -145,6 +145,25 @@ describe('openAuthBrowser + handleCallback (dropbox / onedrive)', () => {
     await expect(promise).rejects.toThrow(/state mismatch/i)
   })
 
+  it('a consumed state can only resolve once (replay protection)', async () => {
+    // First successful flow consumes the state via handleCallback.
+    const { promise: first } = openAuthBrowser('dropbox')
+    const state = new URL(
+      mockOpen.mock.calls[mockOpen.mock.calls.length - 1][0] as string,
+    ).searchParams.get('state')!
+    handleCallback('dropbox', new URLSearchParams({ code: 'first-code', state }))
+    await expect(first).resolves.toBe('first-code')
+
+    // Calling handleCallback a second time with the same (state, code)
+    // returns false because no pending entry matches — the replay can't
+    // hijack a flow that's already finished. Cleanest observable invariant.
+    const handled = handleCallback(
+      'dropbox',
+      new URLSearchParams({ code: 'replay-code', state }),
+    )
+    expect(handled).toBe(false)
+  })
+
   it('rejects when callback contains error=access_denied', async () => {
     const { promise } = openAuthBrowser('dropbox')
     promise.catch(() => {})
