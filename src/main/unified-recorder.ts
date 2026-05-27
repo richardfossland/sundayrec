@@ -189,8 +189,12 @@ function spawnUnified(
   // by the muxer — but we hand the raw stamps to ffmpeg's container, then
   // normalize to zero on output so the resulting file plays at t=0 in
   // every player. avoid_negative_ts handles any leading offset cleanly.
+  // No `-nostdin` here — we WANT ffmpeg to listen on stdin so stopCapture
+  // can send 'q' for graceful shutdown (flushes codec + finalises container
+  // before process exit). Critical for split-recording so the rotation
+  // doesn't pause 10 s waiting for the SIGTERM fallback.
   const args: string[] = [
-    '-nostdin', '-hide_banner',
+    '-hide_banner',
     '-use_wallclock_as_timestamps', '1',
     ...inArgs,
     '-filter_complex', filter,
@@ -236,8 +240,12 @@ function spawnUnified(
 
   console.log('[unified-recorder] start:', ffmpegBin, args.map(a => a.includes(' ') ? `"${a}"` : a).join(' '))
 
+  // stdin = pipe so the legacy stopCapture() path can send 'q' for graceful
+  // shutdown (flushes codec + finalises container BEFORE the process exits).
+  // Without an open stdin the wait was 10 s before falling through to SIGTERM,
+  // which made split-recording feel sluggish.
   const proc = spawn(ffmpegBin, args, {
-    stdio: ['ignore', 'pipe', 'pipe'],   // stdout = MJPEG preview, stderr = progress
+    stdio: ['pipe', 'pipe', 'pipe'],     // stdin = 'q' command, stdout = MJPEG preview, stderr = progress
     detached: false,
   })
 

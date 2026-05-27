@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.50.1] — 2026-05-27
+
+### Added — Split-recording i unified-modus
+Auto-restart hver N minutter fungerer nå når «Perfekt A/V-synk» er på.
+Hvert segment er en ferdig kombinert MP4 — ingen mux-step trengs.
+
+**Hvordan det virker:**
+- Når split-timer fyrer: graceful 'q' sendes til unified-ffmpeg via
+  stdin (samme stop-path som dagens recorder)
+- finishSessionAsync ser session.unified=true → skipper mux-step
+- splitAutoRestart kaller startSession på nytt — den nye sesjonen
+  bruker også unified siden settings.useUnifiedRecorder bevares
+- Hvert segment lagres som egen kombinert MP4 i samme mappe
+
+### Fixed
+- **Stop-flyt for unified-ffmpeg gjorde 10 sek venting i split-restart.**
+  Tidligere spawnet unified-recorder med `stdio: ['ignore', ...]` + ffmpeg
+  `-nostdin`, så stopCapture's graceful 'q' via stdin var no-op og falt
+  tilbake til SIGTERM etter 10 sek timeout. Endret til `stdio: ['pipe',
+  ...]` uten `-nostdin` så 'q' funker → split-rotasjon er nå nesten
+  øyeblikkelig.
+- **Cloud-auto-upload for unified+keepAudio=false** lastet opp en
+  ikke-eksisterende audio-fil. Sender nå den kombinerte MP4-en i stedet.
+
+---
+
 ## [4.50.0] — 2026-05-27
 
 ### Added — «Logg inn med Google» for e-postvarsel

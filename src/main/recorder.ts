@@ -957,7 +957,15 @@ async function finishSessionAsync(session: Session, durationSec: number, recDate
 
   // Cloud auto-upload — enqueues per configured service; the queue handles
   // retries, backoff, and pausing during the next recording.
-  import('./cloud').then(c => c.autoUploadAfterRecording(session.outputPath, session.win)).catch(err =>
+  //
+  // For unified+keepAudio=false: the separate audio file was never written
+  // (the ffmpeg only emits a combined MP4 in that config), so upload the
+  // combined MP4 instead — otherwise we'd queue a non-existent file and
+  // every retry would no-op.
+  const cloudUploadPath = (session.unified && (session.settings as Settings).videoKeepAudio === false && videoFinalPath)
+    ? videoFinalPath
+    : session.outputPath
+  import('./cloud').then(c => c.autoUploadAfterRecording(cloudUploadPath, session.win)).catch(err =>
     logger.error('recorder', 'cloud upload error', { msg: String(err) })
   )
 
