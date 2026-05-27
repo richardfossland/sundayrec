@@ -303,6 +303,54 @@
       </div>
     </div>
 
+    <!-- ─── Publisering / sky-info strip ──────────────────────────
+         Smart-vis: hvert kort har display:none som default; home.ts
+         setter display='' kun når innstillingen faktisk er konfigurert.
+         Holder hjem ryddig for brukere som ikke har satt opp sky/cover. -->
+    <div id="publish-info-strip" class="info-strip publish-info-strip" style="display:none">
+
+      <!-- Sky-backup-status -->
+      <div class="info-card info-card-publish" id="home-cloud-card" style="display:none">
+        <div class="info-card-icon">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor"><path d="M5.5 16a4.5 4.5 0 01-.853-8.92A5 5 0 0114 8a4.5 4.5 0 11-1 8.94l-7.5.06z"/></svg>
+        </div>
+        <div class="info-card-body">
+          <div class="info-card-label" data-i18n="home.cloudLabel">SKY-BACKUP</div>
+          <div class="info-card-value" id="home-cloud-services">—</div>
+          <div class="info-card-sub" id="home-cloud-status"></div>
+        </div>
+        <a href="#" class="info-card-action" id="btn-go-cloud" data-i18n="home.changeSettings">Endre</a>
+      </div>
+
+      <!-- Episodebilde / cover art -->
+      <div class="info-card info-card-publish" id="home-thumb-card" style="display:none">
+        <div class="info-card-icon home-thumb-icon-slot">
+          <!-- Replaced with actual <img> by home.ts when thumbnail exists -->
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor"><path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z"/></svg>
+        </div>
+        <div class="info-card-body">
+          <div class="info-card-label" data-i18n="home.thumbLabel">EPISODEBILDE</div>
+          <div class="info-card-value" id="home-thumb-name">—</div>
+          <div class="info-card-sub" id="home-thumb-sub"></div>
+        </div>
+        <a href="#" class="info-card-action" id="btn-go-thumb" data-i18n="home.changeSettings">Endre</a>
+      </div>
+
+      <!-- Transkripsjon (Whisper) -->
+      <div class="info-card info-card-publish" id="home-whisper-card" style="display:none">
+        <div class="info-card-icon">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor"><path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z"/><path d="M5.5 9.5a.5.5 0 011 0 3.5 3.5 0 007 0 .5.5 0 011 0 4.5 4.5 0 01-4 4.474V16h2a.5.5 0 010 1h-5a.5.5 0 010-1h2v-2.026a4.5 4.5 0 01-4-4.474z"/></svg>
+        </div>
+        <div class="info-card-body">
+          <div class="info-card-label" data-i18n="home.whisperLabel">TRANSKRIPSJON</div>
+          <div class="info-card-value" id="home-whisper-model">—</div>
+          <div class="info-card-sub" id="home-whisper-status"></div>
+        </div>
+        <a href="#" class="info-card-action" id="btn-go-whisper" data-i18n="home.changeSettings">Endre</a>
+      </div>
+
+    </div>
+
     <!-- Video-mode 3-column layout — populated by relocateVuForVideoMode()
          in home.ts when video is toggled on. The VU section, video preview
          section and info cards are physically moved into the slots below

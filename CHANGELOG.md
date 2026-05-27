@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.45.0] — 2026-05-27
+
+### Changed
+- **Kamera-velger flyttet til toppen av video-feeden** på hjem-skjermen.
+  Pener visuell hierarki: «velg kilde» → preview → Lydnivå.
+
+### Added
+- **Tre nye smart-synlige kort på hjem-skjermen** — vises kun når
+  innstillingen faktisk er konfigurert, så ferske brukere får ikke en
+  vegg av tomme kort:
+  - **Sky-backup** — viser hvilke tjenester (Drive/Dropbox/OneDrive)
+    som er aktive, og kø-status («Alle synkronisert», «X i kø»,
+    «X feilet»). Klikk → Publisering.
+  - **Episodebilde** — viser miniatyrbilde av default cover art som
+    brennes inn i podcast-MP3. Klikk → Publisering.
+  - **Transkripsjon** — viser installert Whisper-modell og kvalitet.
+    Klikk → Publisering.
+
+---
+
 ## [4.44.0] — 2026-05-27
 
 ### Added

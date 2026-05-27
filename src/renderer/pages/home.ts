@@ -737,6 +737,22 @@ export function setupHome(): void {
     requestAnimationFrame(() =>
       highlightCard(document.querySelector('#settings-files .card')))
   })
+
+  // Publish-strip cards — all three currently route to the Publisering tab
+  // (cloud + thumbnail UI lives there; Whisper has no dedicated settings
+  // tab yet, so we land users on Publisering and they can browse from
+  // there until we promote Whisper config out of the editor).
+  const goPublish = (highlightSel?: string) => (e: Event) => {
+    e.preventDefault()
+    window.showPage('settings')
+    document.querySelector<HTMLElement>('#settings-tabs .inner-tab[data-tab="settings-publish"]')?.click()
+    if (highlightSel) {
+      requestAnimationFrame(() => highlightCard(document.querySelector(highlightSel)))
+    }
+  }
+  document.getElementById('btn-go-cloud')?.addEventListener('click',   goPublish('#settings-publish .cloud-grid'))
+  document.getElementById('btn-go-thumb')?.addEventListener('click',   goPublish('#publish-thumb-preview'))
+  document.getElementById('btn-go-whisper')?.addEventListener('click', goPublish())
   document.getElementById('btn-how-to-fix')?.addEventListener('click', () => {
     window.showPage('settings')
     document.querySelector<HTMLElement>('#settings-tabs .inner-tab[data-tab="settings-audio"]')?.click()
@@ -1300,6 +1316,136 @@ async function loadHomeInfoStrip(): Promise<void> {
   const fmtSub  = document.getElementById('home-format-sub')
   if (fmtEl) fmtEl.textContent = br ? `${fmt} · ${br}` : fmt
   if (fmtSub) fmtSub.textContent = `${ch} · ${srLabel}`
+
+  // Refresh the publish/cloud/transcript strip — each card decides whether
+  // to show itself based on settings + actual disk/network state. Smart
+  // visibility: nothing is rendered when none of the three are configured,
+  // keeping the home page short for fresh users.
+  void loadPublishInfoStrip()
+}
+
+/**
+ * Loads the bottom info-strip with: sky-backup status, episodebilde
+ * (cover art) and transkripsjon (Whisper). Each card individually toggles
+ * its own display — the parent strip is hidden when all three are off.
+ */
+async function loadPublishInfoStrip(): Promise<void> {
+  const strip = document.getElementById('publish-info-strip')
+  if (!strip) return
+
+  const cloudShown   = renderCloudCard()
+  const thumbShown   = renderThumbCard()
+  // Whisper status is async (queries main for installed models) — we run
+  // it without awaiting so the synchronous cards above don't block on it.
+  const whisperShownPromise = renderWhisperCard()
+
+  // Show the strip as soon as ONE card decided it has something to render.
+  // Without this the strip would briefly flash on every load while we wait
+  // on whisper-status.
+  if (cloudShown || thumbShown) {
+    strip.style.display = ''
+  }
+  const whisperShown = await whisperShownPromise
+  strip.style.display = (cloudShown || thumbShown || whisperShown) ? '' : 'none'
+}
+
+/** @returns true when the cloud card was rendered visible. */
+function renderCloudCard(): boolean {
+  const card = document.getElementById('home-cloud-card')
+  if (!card) return false
+  const services: Array<{ key: 'cloudGoogleDrive' | 'cloudDropbox' | 'cloudOneDrive'; label: string }> = [
+    { key: 'cloudGoogleDrive', label: 'Drive' },
+    { key: 'cloudDropbox',     label: 'Dropbox' },
+    { key: 'cloudOneDrive',    label: 'OneDrive' },
+  ]
+  const active = services.filter(s => settings[s.key]?.enabled)
+  if (active.length === 0) {
+    card.style.display = 'none'
+    return false
+  }
+  card.style.display = ''
+  const valEl = document.getElementById('home-cloud-services')
+  const subEl = document.getElementById('home-cloud-status')
+  if (valEl) valEl.textContent = active.map(a => a.label).join(' · ')
+
+  // Show queue length if any cloud uploads are pending — this is the most
+  // useful runtime info: "1 venter på opplasting" vs "Alle synkronisert".
+  if (subEl) {
+    subEl.textContent = 'Aktiv'
+    subEl.style.color = ''
+    void (async () => {
+      try {
+        const q = await window.api.cloudQueueStatus()
+        const pending = q.entries?.filter(e => e.status === 'pending' || e.status === 'retrying').length ?? 0
+        const failed  = q.entries?.filter(e => e.status === 'failed').length ?? 0
+        if (failed > 0)       { subEl.textContent = `${failed} feilet`;   subEl.style.color = 'var(--red)' }
+        else if (pending > 0) { subEl.textContent = `${pending} i kø`;    subEl.style.color = 'var(--text2)' }
+        else                  { subEl.textContent = 'Alle synkronisert';   subEl.style.color = 'var(--green)' }
+      } catch {
+        // Queue status unavailable — leave the static "Aktiv" label.
+      }
+    })()
+  }
+  return true
+}
+
+/** @returns true when the thumbnail card was rendered visible. */
+function renderThumbCard(): boolean {
+  const card = document.getElementById('home-thumb-card')
+  if (!card) return false
+  const path = settings.defaultThumbnailPath
+  if (!path) {
+    card.style.display = 'none'
+    return false
+  }
+  card.style.display = ''
+  const nameEl = document.getElementById('home-thumb-name')
+  const subEl  = document.getElementById('home-thumb-sub')
+  const iconSlot = card.querySelector<HTMLElement>('.home-thumb-icon-slot')
+  if (nameEl) {
+    const base = path.split('/').pop() ?? path
+    nameEl.textContent = base
+  }
+  if (subEl) {
+    subEl.textContent = 'Brennes inn i podcast-MP3'
+    subEl.style.color = 'var(--green)'
+  }
+  // Swap the placeholder SVG for an actual <img> preview. file:// works in
+  // the renderer because registerTrustedPath was set on app start; falling
+  // back to the icon keeps the slot from collapsing if the file disappeared.
+  if (iconSlot) {
+    iconSlot.innerHTML = `<img class="thumb-card-icon thumb-card-icon-home" src="file://${encodeURI(path)}" alt="" onerror="this.style.display='none'" />`
+  }
+  return true
+}
+
+/** @returns true when the transkripsjon card was rendered visible. */
+async function renderWhisperCard(): Promise<boolean> {
+  const card = document.getElementById('home-whisper-card')
+  if (!card) return false
+  let installedModel: { label: string; quality?: string } | null = null
+  try {
+    const status = await window.api.whisperStatus()
+    const installed = status.models?.find(m => (m as { installed?: boolean }).installed) as
+      | { id: string; label: string; quality?: string }
+      | undefined
+    if (status.binaryAvailable && installed) installedModel = installed
+  } catch {
+    // Whisper IPC unavailable — skip card.
+  }
+  if (!installedModel) {
+    card.style.display = 'none'
+    return false
+  }
+  card.style.display = ''
+  const valEl = document.getElementById('home-whisper-model')
+  const subEl = document.getElementById('home-whisper-status')
+  if (valEl) valEl.textContent = installedModel.label
+  if (subEl) {
+    subEl.textContent = installedModel.quality ?? 'Klar'
+    subEl.style.color = 'var(--green)'
+  }
+  return true
 }
 
 function showNoteModal(currentNote: string, onSave: (note: string) => void): void {

@@ -3093,11 +3093,23 @@ body.platform-win32  #wake-instructions-win { display: block; }
   border-radius: var(--r);
   overflow: hidden;
   margin: 0 0 12px;
+  /* Visually move the camera-source bar to the TOP of the card without
+     re-ordering markup (existing event handlers + screen reader DOM stay
+     untouched). column-reverse + putting VU back to natural last position
+     via :nth-child rules below. */
+  display: flex;
+  flex-direction: column;
 }
+.video-preview-card > .video-source-bar { order: 1; }
+.video-preview-card > .video-preview-wrap { order: 2; }
+.video-preview-card > .vu-section { order: 3; }
 .video-source-bar {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 10px;
-  border-top: 1px solid var(--border);
+  /* Sitter på TOPPEN av video-preview-kortet — separator-linjen går mot
+     preview-vinduet under. (Original `border-top` ble fjernet da vi flippet
+     rekkefølgen via flex order.) */
+  border-bottom: 1px solid var(--border);
   background: var(--surface2);
   flex-wrap: wrap;
 }
@@ -3313,7 +3325,8 @@ body.platform-win32  #wake-instructions-win { display: block; }
 
 /* Preview that doesn't add letterboxing on the sides — the container itself
    adopts a 16:9 aspect ratio so the black background is the box, not bars
-   around a small image. */
+   around a small image. Border-radius cleared since source-bar now sits
+   on top (the card frame supplies the rounded corners). */
 .video-mode-layout .video-preview-wrap {
   aspect-ratio: 16 / 9;
   width: 100%;
@@ -3322,7 +3335,7 @@ body.platform-win32  #wake-instructions-win { display: block; }
   background: #000;
   display: flex; align-items: center; justify-content: center;
   overflow: hidden;
-  border-radius: 10px 10px 0 0;
+  border-radius: 0;
 }
 .video-mode-layout .video-preview-img {
   width: 100%; height: 100%;
