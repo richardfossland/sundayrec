@@ -8,6 +8,8 @@ import { E, $, cssVar, VIDEO_EXTS, PROBE_EXTS, WEB_AUDIO_EXTS, type Cut, type Su
 import { formatTime, formatDuration } from './editor/format'
 import { computePeaks, computeJinglePeaks, computePeakGain, gainFactor, getExportFilters, setNormalizeUI } from './editor/peaks'
 import { getLayoutGeom, effIntroDur, effOutroDur, minPlayableSec, maxPlayableSec, clampPlayable, clampMain, secToX, xToSec, xToMainSec, getRegionAtX } from './editor/geometry'
+import { isInCut, isInDrag } from './editor/cuts'
+import { shouldShowSegment } from './editor/detection'
 
 function markDirty(): void {
   if (E.editorDirty) return
@@ -1068,15 +1070,6 @@ function renderChapterList(): void {
 /** Per-type visibility filter for segments. Sermon (the highlighted
  *  suggested-keep range) is always visible — it's the most actionable
  *  outcome of analysis. Speech / music / silence honour the user's toggles. */
-function shouldShowSegment(type: string): boolean {
-  if (type === 'sermon') return true
-  if (type === 'speech') return E.showSpeechSegments
-  if (type === 'music')  return E.showMusicSegments
-  if (type === 'silence') return E.showSilenceSegments
-  // mixed / unknown → render only if speech is on (closest match)
-  return E.showSpeechSegments
-}
-
 /** Runs segment detection. `auto` = true skips the button-disabled UI dance
  *  (used for auto-run after file load — we don't want to spook the user with
  *  a disabled button they didn't click). */
@@ -2156,17 +2149,6 @@ function autoScrollToPlayhead(curSec: number): void {
 }
 
 // ── Cut helpers ───────────────────────────────────────────────────────────
-function isInCut(sec: number): boolean {
-  return E.cuts.some(c => sec >= c.start && sec <= c.end)
-}
-
-function isInDrag(sec: number): boolean {
-  if (!E.isDragging) return false
-  const s = Math.min(E.dragStartSec, E.dragEndSec)
-  const e = Math.max(E.dragStartSec, E.dragEndSec)
-  return sec >= s && sec <= e
-}
-
 // Undo/redo: history stores snapshots; cutHistoryIdx points to the current
 // live state. Index -1 means "no history yet" (initial empty state).
 // pushCutHistory() is called AFTER a mutation to record the new state.
