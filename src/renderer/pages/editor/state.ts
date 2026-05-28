@@ -82,6 +82,7 @@ export const E = {
   isPreview: false,
   rafId: 0,
   loadSeq: 0,
+  pendingSeekSec: null as number | null,  // seek target applied once the file finishes loading
 
   // Interaction state
   dragStartSec: -1,
