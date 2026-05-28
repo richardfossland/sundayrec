@@ -5,6 +5,7 @@ import type { RecordingMetadata } from '../../types'
 import { setupTranscriptPanel, loadTranscriptForFile, clearTranscript, setCurrentTranscriptTime } from './editor-transcript'
 import { setupThumbPanel, refresh as refreshThumbPanel, panelElementsByPrefix } from './thumbnail-panel'
 import { E, $, cssVar, VIDEO_EXTS, PROBE_EXTS, WEB_AUDIO_EXTS, type Cut, type Suggestion, type HandleDrag } from './editor/state'
+import { formatTime, formatDuration } from './editor/format'
 
 function markDirty(): void {
   if (E.editorDirty) return
@@ -3771,22 +3772,6 @@ function showEditorError(msg: string): void {
 }
 
 // ── Time formatting ───────────────────────────────────────────────────────
-function formatTime(s: number): string {
-  const h   = Math.floor(s / 3600)
-  const m   = Math.floor((s % 3600) / 60)
-  const sec = Math.floor(s % 60)
-  return h > 0
-    ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
-    : `${m}:${String(sec).padStart(2,'0')}`
-}
-
-function formatDuration(s: number): string {
-  if (s < 1)   return `${(s * 1000).toFixed(0)}ms`
-  if (s < 60)  return `${s.toFixed(1)}s`
-  if (s < 3600) return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`
-  return `${Math.floor(s / 3600)}t ${Math.floor((s % 3600) / 60)}m`
-}
-
 function updateTimecode(sec: number): void {
   const el = $('editor-time-cur')
   if (!el) return
