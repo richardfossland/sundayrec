@@ -4,133 +4,24 @@ import { escHtml as escapeHtml } from '../helpers'
 import type { RecordingMetadata } from '../../types'
 import { setupTranscriptPanel, loadTranscriptForFile, clearTranscript, setCurrentTranscriptTime } from './editor-transcript'
 import { setupThumbPanel, refresh as refreshThumbPanel, panelElementsByPrefix } from './thumbnail-panel'
+import { E, $, cssVar, VIDEO_EXTS, PROBE_EXTS, WEB_AUDIO_EXTS, type Cut, type Suggestion, type HandleDrag } from './editor/state'
 
-interface Cut { start: number; end: number }
-interface Suggestion { start: number; end: number; duration: number; label: string; type: string }
-
-// ── State ─────────────────────────────────────────────────────────────────
-let filePath  = ''
-let duration  = 0
-let peaks: Float32Array | null = null
-let cuts: Cut[] = []
-let cutHistory: Cut[][] = []   // undo/redo stack
-let cutHistoryIdx = -1         // pointer into cutHistory (-1 = no history yet)
-let suggestions: Suggestion[] = []
-
-// Intro/Outro
-let introBuffer: AudioBuffer | null = null
-let outroBuffer: AudioBuffer | null = null
-let introDuration = 0
-let outroDuration = 0
-let includeIntroOutro = false
-// Cached peak arrays for intro/outro (rendered as dimmed waveform on timeline)
-let introPeaks: Float32Array | null = null
-let outroPeaks: Float32Array | null = null
-
-// Analyze panel display toggles
-let showSpeechSegments  = true
-let showMusicSegments   = true
-let showSilenceSegments = false
-let lastAnalyzedAt = 0  // epoch ms; 0 = never analyzed for current file
-
-// Dirty state — tracks whether the editor has unsaved changes (cuts,
-// normalize, intro/outro swap, mastering preset, metadata edits, …).
-// Cleared on file load and on export complete. Surfaced in the header
-// as a small bullet next to the filename.
-let editorDirty = false
-
-// Holds the unsubscribe fn returned by window.api.on('editor-export-progress', …)
-// so a re-setup of the editor page doesn't keep stacking IPC listeners that
-// each write to the same DOM nodes.
-let exportProgressUnsub: (() => void) | null | undefined = null
 function markDirty(): void {
-  if (editorDirty) return
-  editorDirty = true
+  if (E.editorDirty) return
+  E.editorDirty = true
   updateHeaderSummary()
 }
 function clearDirty(): void {
-  editorDirty = false
+  E.editorDirty = false
   updateHeaderSummary()
-}
-
-// Formats always routed to the video editor path (HTML video element + ffmpeg peaks)
-const VIDEO_EXTS = new Set(['.mp4', '.mov', '.m4v', '.avi', '.wmv', '.ts', '.mts', '.m2ts', '.flv', '.3gp', '.asf', '.f4v'])
-// Ambiguous containers (can be video or audio) — probe to decide
-const PROBE_EXTS = new Set(['.mkv', '.webm', '.mka'])
-// Audio formats the browser (Web Audio API) can decode natively
-const WEB_AUDIO_EXTS = new Set(['.mp3', '.wav', '.flac', '.aac', '.m4a', '.m4b', '.m4r', '.ogg', '.oga', '.opus', '.webm'])
-let isVideoFile      = false
-let videoEl: HTMLVideoElement | null = null
-let videoIntroPath   = ''
-let videoOutroPath   = ''
-
-// Metadata + chapters
-let meta: RecordingMetadata = { title: '', speaker: '', description: '', chapters: [] }
-let metaDirty = false
-
-// Viewport (seconds visible in main canvas)
-let vpStart = 0
-let vpEnd   = 0
-
-// Playback
-let audioCtx: AudioContext | null = null
-let sourceNodes: AudioBufferSourceNode[] = []
-let audioBuffer: AudioBuffer | null = null
-let playStartCtxTime = 0
-let playStartSec     = 0
-let isPlaying        = false
-let isPreview        = false
-let rafId            = 0
-let loadSeq          = 0
-
-// Interaction state
-let dragStartSec     = -1
-let dragEndSec       = -1
-let isDragging       = false
-let hoverSec         = -99999    // ghost cursor position (extended timeline coords; -99999 = no hover)
-let minimapDragging  = false
-
-// Export state
-let exportOutputFolder = ''
-let publishAfterExport = false  // set by "Eksporter og publiser" button — runs publishing after export completes
-
-// Clipping detection
-let clipTimes: number[] = []
-
-// Peak normalization gain (applied to playback + waveform render + export).
-// 0 = no normalization. Positive values amplify, negative attenuate.
-// Lives in memory only — not persisted across editor sessions (the cuts
-// draft sidecar tracks cuts; this gain is recomputed on demand).
-let audioGainDb = 0
-
-// Loop playback
-let isLooping    = false
-let loopStartSec = 0
-
-// Cut handle dragging
-interface HandleDrag { cutIdx: number; side: 'start' | 'end' }
-let handleDrag: HandleDrag | null = null
-
-// Playhead dragging (drag the playhead triangle)
-let playheadDragging = false
-
-// ── DOM refs ──────────────────────────────────────────────────────────────
-const $ = (id: string) => document.getElementById(id)
-let canvas:    HTMLCanvasElement
-let minimap:   HTMLCanvasElement
-let minimapVp: HTMLElement
-
-// ── Colours (read from CSS variables once) ───────────────────────────────
-function cssVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────
 export function setupEditorPage(): void {
-  canvas    = $('editor-canvas')  as HTMLCanvasElement
-  minimap   = $('editor-minimap') as HTMLCanvasElement
-  minimapVp = $('editor-minimap-vp') as HTMLElement
-  videoEl   = $('editor-video') as HTMLVideoElement | null
+  E.canvas    = $('editor-canvas')  as HTMLCanvasElement
+  E.minimap   = $('editor-minimap') as HTMLCanvasElement
+  E.minimapVp = $('editor-minimap-vp') as HTMLElement
+  E.videoEl   = $('editor-video') as HTMLVideoElement | null
 
   $('btn-editor-open')?.addEventListener('click',    () => pickAndLoad())
   $('btn-editor-change')?.addEventListener('click',  () => {
@@ -165,8 +56,8 @@ export function setupEditorPage(): void {
   $('btn-zoom-out')?.addEventListener('click',  () => zoomBy(2))
   $('btn-zoom-fit')?.addEventListener('click',  () => fitAll())
   $('btn-editor-undo-all')?.addEventListener('click', () => {
-    if (cuts.length === 0) return
-    cuts = []
+    if (E.cuts.length === 0) return
+    E.cuts = []
     pushCutHistory()
     renderCutList()
     updateRemainingDisplay()
@@ -176,8 +67,8 @@ export function setupEditorPage(): void {
 
   $('btn-editor-save')?.addEventListener('click',    () => openExportModal())
   $('btn-export-cancel')?.addEventListener('click',  () => closeExportModal())
-  $('btn-export-confirm')?.addEventListener('click', () => { publishAfterExport = false; runExport() })
-  $('btn-export-and-publish')?.addEventListener('click', () => { publishAfterExport = true; runExport() })
+  $('btn-export-confirm')?.addEventListener('click', () => { E.publishAfterExport = false; runExport() })
+  $('btn-export-and-publish')?.addEventListener('click', () => { E.publishAfterExport = true; runExport() })
   $('export-publish-configure')?.addEventListener('click', (e) => {
     e.preventDefault()
     closeExportModal()
@@ -205,7 +96,7 @@ export function setupEditorPage(): void {
         const folder = await window.api.editorPickOutputFolder()
         if (folder) {
           ($('export-folder-path') as HTMLElement).textContent = folder
-          exportOutputFolder = folder
+          E.exportOutputFolder = folder
         } else {
           // Revert to same if cancelled
           document.querySelectorAll('.export-dest-btn').forEach(b => b.classList.remove('active'))
@@ -221,15 +112,15 @@ export function setupEditorPage(): void {
   // export pipeline accordingly. Idempotent — clicking when already
   // normalized is a no-op.
   $('btn-normalize-peak')?.addEventListener('click', () => {
-    if (!peaks || peaks.length === 0) return
-    if (audioGainDb !== 0) return     // already normalized — idempotent
-    const gain = computePeakGain(peaks)
+    if (!E.peaks || E.peaks.length === 0) return
+    if (E.audioGainDb !== 0) return     // already normalized — idempotent
+    const gain = computePeakGain(E.peaks)
     if (!isFinite(gain) || Math.abs(gain) < 0.05) {
       // Already at (or above) target — show that explicitly
       setNormalizeUI(0, /*alreadyAtTarget*/ true)
       return
     }
-    audioGainDb = gain
+    E.audioGainDb = gain
     setNormalizeUI(gain, false)
     markDirty()
     updateHeaderSummary()
@@ -238,8 +129,8 @@ export function setupEditorPage(): void {
   })
 
   $('btn-normalize-reset')?.addEventListener('click', () => {
-    if (audioGainDb === 0) return
-    audioGainDb = 0
+    if (E.audioGainDb === 0) return
+    E.audioGainDb = 0
     setNormalizeUI(0, false)
     markDirty()
     updateHeaderSummary()
@@ -258,7 +149,7 @@ export function setupEditorPage(): void {
   const ioChk = $('editor-include-io') as HTMLInputElement | null
   if (ioChk) {
     ioChk.addEventListener('change', () => {
-      includeIntroOutro = ioChk.checked
+      E.includeIntroOutro = ioChk.checked
       markDirty()
       drawWaveform()
     })
@@ -297,21 +188,21 @@ export function setupEditorPage(): void {
   $('btn-editor-pick-video-intro')?.addEventListener('click', async () => {
     const fp = await window.api.editorPickVideoFile()
     if (!fp) return
-    videoIntroPath = fp
+    E.videoIntroPath = fp
     updateVideoIntroOutroDisplay()
   })
   $('btn-editor-clear-video-intro')?.addEventListener('click', () => {
-    videoIntroPath = ''
+    E.videoIntroPath = ''
     updateVideoIntroOutroDisplay()
   })
   $('btn-editor-pick-video-outro')?.addEventListener('click', async () => {
     const fp = await window.api.editorPickVideoFile()
     if (!fp) return
-    videoOutroPath = fp
+    E.videoOutroPath = fp
     updateVideoIntroOutroDisplay()
   })
   $('btn-editor-clear-video-outro')?.addEventListener('click', () => {
-    videoOutroPath = ''
+    E.videoOutroPath = ''
     updateVideoIntroOutroDisplay()
   })
 
@@ -331,8 +222,8 @@ export function setupEditorPage(): void {
   for (const [id, field] of metaFields) {
     $(id)?.addEventListener('input', () => {
       const el = $(id) as HTMLInputElement | HTMLTextAreaElement | null
-      if (el) (meta as unknown as Record<string, unknown>)[field] = el.value
-      metaDirty = true
+      if (el) (E.meta as unknown as Record<string, unknown>)[field] = el.value
+      E.metaDirty = true
       markDirty()
     })
   }
@@ -342,15 +233,15 @@ export function setupEditorPage(): void {
 
   // Analyse panel: segment-type toggles
   $('editor-show-speech')?.addEventListener('change', () => {
-    showSpeechSegments = ($('editor-show-speech') as HTMLInputElement).checked
+    E.showSpeechSegments = ($('editor-show-speech') as HTMLInputElement).checked
     drawWaveform()
   })
   $('editor-show-music')?.addEventListener('change', () => {
-    showMusicSegments = ($('editor-show-music') as HTMLInputElement).checked
+    E.showMusicSegments = ($('editor-show-music') as HTMLInputElement).checked
     drawWaveform()
   })
   $('editor-show-silence')?.addEventListener('change', () => {
-    showSilenceSegments = ($('editor-show-silence') as HTMLInputElement).checked
+    E.showSilenceSegments = ($('editor-show-silence') as HTMLInputElement).checked
     drawWaveform()
   })
 
@@ -371,18 +262,18 @@ export function setupEditorPage(): void {
 
   // Loop toggle
   $('btn-editor-loop')?.addEventListener('click', () => {
-    isLooping = !isLooping
-    $('btn-editor-loop')?.classList.toggle('active', isLooping)
+    E.isLooping = !E.isLooping
+    $('btn-editor-loop')?.classList.toggle('active', E.isLooping)
   })
 
   // Clip badge — jump to first clip
   $('editor-clip-badge')?.addEventListener('click', () => {
-    if (clipTimes.length === 0) return
-    playStartSec = Math.max(0, clipTimes[0] - 1)
-    updateTimecode(playStartSec)
-    const half = (vpEnd - vpStart) / 2
-    vpStart = Math.max(0, playStartSec - half * 0.3)
-    vpEnd   = Math.min(duration, vpStart + half * 2)
+    if (E.clipTimes.length === 0) return
+    E.playStartSec = Math.max(0, E.clipTimes[0] - 1)
+    updateTimecode(E.playStartSec)
+    const half = (E.vpEnd - E.vpStart) / 2
+    E.vpStart = Math.max(0, E.playStartSec - half * 0.3)
+    E.vpEnd   = Math.min(E.duration, E.vpStart + half * 2)
     updateMinimapViewport()
     drawWaveform()
   })
@@ -390,8 +281,8 @@ export function setupEditorPage(): void {
   // Export progress listener — drop any previous registration first so
   // setupEditorPage() called twice (renderer reload, tab swap, dev HMR)
   // doesn't stack listeners that each fire a DOM write per progress event.
-  if (exportProgressUnsub) { try { exportProgressUnsub() } catch {} }
-  exportProgressUnsub = window.api.on('editor-export-progress', (data: unknown) => {
+  if (E.exportProgressUnsub) { try { E.exportProgressUnsub() } catch {} }
+  E.exportProgressUnsub = window.api.on('editor-export-progress', (data: unknown) => {
     const { percent } = data as { percent: number }
     const bar   = $('editor-export-progress-bar')
     const label = $('editor-export-progress-label')
@@ -403,40 +294,40 @@ export function setupEditorPage(): void {
   setupMasteringPanel()
 
   // Canvas interactions
-  canvas?.addEventListener('mousedown',   onCanvasDown)
-  canvas?.addEventListener('mousemove',   onCanvasMove)
-  canvas?.addEventListener('mouseup',     onCanvasUp)
-  canvas?.addEventListener('mouseleave',  onCanvasLeave)
-  canvas?.addEventListener('contextmenu', onCanvasContextMenu)
-  canvas?.addEventListener('wheel',       onCanvasWheel, { passive: false })
+  E.canvas?.addEventListener('mousedown',   onCanvasDown)
+  E.canvas?.addEventListener('mousemove',   onCanvasMove)
+  E.canvas?.addEventListener('mouseup',     onCanvasUp)
+  E.canvas?.addEventListener('mouseleave',  onCanvasLeave)
+  E.canvas?.addEventListener('contextmenu', onCanvasContextMenu)
+  E.canvas?.addEventListener('wheel',       onCanvasWheel, { passive: false })
   // Double-click on the sermon segment → trim around the sermon. Forces a
   // deliberate double-tap so single-click stays as non-destructive tap-to-seek.
-  canvas?.addEventListener('dblclick', (e: MouseEvent) => {
-    if (!peaks) return
-    const rect = canvas.getBoundingClientRect()
+  E.canvas?.addEventListener('dblclick', (e: MouseEvent) => {
+    if (!E.peaks) return
+    const rect = E.canvas.getBoundingClientRect()
     const sec = xToSec(e.clientX - rect.left, rect.width)
-    const sermon = suggestions.find(s => s.type === 'sermon' && sec >= s.start && sec <= s.end)
+    const sermon = E.suggestions.find(s => s.type === 'sermon' && sec >= s.start && sec <= s.end)
     if (sermon) applySermonTrim()
   })
 
   setupMinimapInteraction()
   setupKeyboardShortcuts()
   const seekToSec = (sec: number): void => {
-    playStartSec = clampPlayable(snapOutOfCut(sec))
-    updateTimecode(playStartSec)
-    if (isVideoFile && videoEl) videoEl.currentTime = clampMain(playStartSec)
+    E.playStartSec = clampPlayable(snapOutOfCut(sec))
+    updateTimecode(E.playStartSec)
+    if (E.isVideoFile && E.videoEl) E.videoEl.currentTime = clampMain(E.playStartSec)
     drawWaveform()
   }
   setupTranscriptPanel(seekToSec)
   setupDragDrop()
   setupReviewBanner()
 
-  if (canvas && canvas.parentElement) {
+  if (E.canvas && E.canvas.parentElement) {
     // Track the observer so repeated setupEditorPage() calls (after a renderer
     // reload, for example) don't leak observers. Single observer for app life.
     if (resizeObserver) resizeObserver.disconnect()
     resizeObserver = new ResizeObserver(() => { syncCanvasSize(); drawWaveform() })
-    resizeObserver.observe(canvas.parentElement)
+    resizeObserver.observe(E.canvas.parentElement)
   }
 
   showState('empty')
@@ -446,7 +337,7 @@ export function setupEditorPage(): void {
   // (see loadFile completion). Reads window state via getRecordingPath().
   const thumbEls = panelElementsByPrefix('editor')
   if (thumbEls) {
-    setupThumbPanel(thumbEls, { kind: 'episode', getRecordingPath: () => filePath })
+    setupThumbPanel(thumbEls, { kind: 'episode', getRecordingPath: () => E.filePath })
   }
 }
 
@@ -496,16 +387,16 @@ export async function openEditorReviewMode(prepId: string, filePath: string): Pr
 }
 
 function applyReviewModeDefaults(): void {
-  if (!reviewPrep || !duration) return
+  if (!reviewPrep || !E.duration) return
   const trim = reviewPrep.suggestedTrim
   // Pre-apply the suggested trim as cuts (everything before + after).
   if (trim && trim.endSec > trim.startSec) {
-    cuts = []
+    E.cuts = []
     if (trim.startSec > 0.5) {
-      cuts.push({ start: 0, end: Math.min(trim.startSec, duration) })
+      E.cuts.push({ start: 0, end: Math.min(trim.startSec, E.duration) })
     }
-    if (trim.endSec < duration - 0.5) {
-      cuts.push({ start: Math.max(0, trim.endSec), end: duration })
+    if (trim.endSec < E.duration - 0.5) {
+      E.cuts.push({ start: Math.max(0, trim.endSec), end: E.duration })
     }
     pushCutHistory()
     renderCutList()
@@ -656,7 +547,7 @@ function setupReviewBanner(): void {
  *  waveform if a file is still loaded — the canvas might have been resized
  *  or had its backing store cleared while away. Cheap no-op if no file. */
 export function reactivateEditor(): void {
-  if (!peaks) return
+  if (!E.peaks) return
   // Re-sync canvas size first (could've changed if window resized while away)
   requestAnimationFrame(() => {
     syncCanvasSize()
@@ -680,8 +571,8 @@ export function deactivateEditor(): void {
   stopPlay()
   // Pause video element to release decode/GPU resources, but keep the src
   // so the frame is still there when the user returns.
-  if (videoEl && !videoEl.paused) {
-    videoEl.pause()
+  if (E.videoEl && !E.videoEl.paused) {
+    E.videoEl.pause()
   }
   // Note: deliberately NOT touching peaks / audioBuffer / audioCtx / cuts /
   // cutHistory / suggestions / clipTimes / meta / isVideoFile / audioGainDb /
@@ -705,7 +596,7 @@ async function pickAndLoad(): Promise<void> {
  */
 async function loadViaFfmpegExtract(fp: string, seq: number): Promise<boolean> {
   const result = await window.api.editorExtractAudioPeaks(fp) as { data: Uint8Array | ArrayBuffer; duration: number } | null
-  if (seq !== loadSeq) return false
+  if (seq !== E.loadSeq) return false
   if (!result) { showState('empty'); return false }
 
   const u8 = result.data instanceof Uint8Array ? result.data : new Uint8Array(result.data as ArrayBuffer)
@@ -715,11 +606,11 @@ async function loadViaFfmpegExtract(fp: string, seq: number): Promise<boolean> {
   try {
     localCtx = new AudioContext()
     const buf = await localCtx.decodeAudioData(ab)
-    if (seq !== loadSeq) { localCtx.close().catch(() => {}); return false }
-    audioCtx    = localCtx
-    audioBuffer = buf
-    duration    = result.duration > 0 ? result.duration : buf.duration
-    peaks       = computePeaks(audioBuffer)
+    if (seq !== E.loadSeq) { localCtx.close().catch(() => {}); return false }
+    E.audioCtx    = localCtx
+    E.audioBuffer = buf
+    E.duration    = result.duration > 0 ? result.duration : buf.duration
+    E.peaks       = computePeaks(E.audioBuffer)
     return true
   } catch {
     localCtx?.close().catch(() => {})
@@ -729,10 +620,10 @@ async function loadViaFfmpegExtract(fp: string, seq: number): Promise<boolean> {
 }
 
 async function loadFile(fp: string): Promise<void> {
-  const seq = ++loadSeq
+  const seq = ++E.loadSeq
   stopPlay()
-  const prevCtx = audioCtx
-  audioCtx = null
+  const prevCtx = E.audioCtx
+  E.audioCtx = null
   // Await the close — fire-and-forget could leave an old context partially
   // alive while a new one is created. The seq-guard further down still
   // catches cases where two loadFile calls overlap, but awaiting close()
@@ -740,23 +631,23 @@ async function loadFile(fp: string): Promise<void> {
   if (prevCtx) {
     try { await prevCtx.close() } catch {}
     // Bail out if a newer load started while we were closing the old context.
-    if (seq !== loadSeq) return
+    if (seq !== E.loadSeq) return
   }
 
-  cuts = []
-  cutHistory = []
-  cutHistoryIdx = -1
-  suggestions = []
-  filePath = fp
-  peaks = null
-  audioBuffer = null
-  playStartSec = 0
-  meta = { title: '', speaker: '', description: '', chapters: [] }
-  metaDirty = false
+  E.cuts = []
+  E.cutHistory = []
+  E.cutHistoryIdx = -1
+  E.suggestions = []
+  E.filePath = fp
+  E.peaks = null
+  E.audioBuffer = null
+  E.playStartSec = 0
+  E.meta = { title: '', speaker: '', description: '', chapters: [] }
+  E.metaDirty = false
   // Fresh file → drop any previous peak-normalize gain and reset the UI.
-  audioGainDb = 0
+  E.audioGainDb = 0
   setNormalizeUI(0, false)
-  lastAnalyzedAt = 0
+  E.lastAnalyzedAt = 0
   renderAnalyzePanel()
   // Fresh file → not dirty
   clearDirty()
@@ -768,32 +659,32 @@ async function loadFile(fp: string): Promise<void> {
   if (PROBE_EXTS.has(ext)) {
     // Ambiguous container: probe for a video stream
     const streams = await window.api.editorProbeStreams(fp)
-    isVideoFile = !streams || streams.hasVideo
+    E.isVideoFile = !streams || streams.hasVideo
   } else {
-    isVideoFile = VIDEO_EXTS.has(ext)
+    E.isVideoFile = VIDEO_EXTS.has(ext)
   }
 
   // Show/hide video panel and video intro/outro section
   const vPanel = $('editor-video-panel')
-  if (vPanel) vPanel.style.display = isVideoFile ? '' : 'none'
+  if (vPanel) vPanel.style.display = E.isVideoFile ? '' : 'none'
 
   const audioIoSection = $('editor-audio-io-section')
   const videoIoSection = $('editor-video-io-section')
-  if (audioIoSection) audioIoSection.style.display = isVideoFile ? 'none' : ''
-  if (videoIoSection) videoIoSection.style.display = isVideoFile ? '' : 'none'
+  if (audioIoSection) audioIoSection.style.display = E.isVideoFile ? 'none' : ''
+  if (videoIoSection) videoIoSection.style.display = E.isVideoFile ? '' : 'none'
 
-  if (isVideoFile) {
+  if (E.isVideoFile) {
     // Set video source via custom protocol (registered with registerSchemesAsPrivileged)
     await window.api.editorSetVideoPath(fp)
-    if (videoEl) {
-      videoEl.src = 'media://current?t=' + Date.now()
-      videoEl.load()
+    if (E.videoEl) {
+      E.videoEl.src = 'media://current?t=' + Date.now()
+      E.videoEl.load()
     }
 
     // Extract audio at low sample rate for waveform display
     const result = await window.api.editorExtractAudioPeaks(fp) as { data: Uint8Array | ArrayBuffer; duration: number } | null
 
-    if (seq !== loadSeq) return
+    if (seq !== E.loadSeq) return
 
     if (result) {
       const u8 = result.data instanceof Uint8Array ? result.data : new Uint8Array(result.data as ArrayBuffer)
@@ -803,11 +694,11 @@ async function loadFile(fp: string): Promise<void> {
       try {
         localCtx = new AudioContext()
         const buf = await localCtx.decodeAudioData(ab)
-        if (seq !== loadSeq) { localCtx.close().catch(() => {}); return }
-        audioCtx    = localCtx
-        audioBuffer = buf
-        duration    = result.duration > 0 ? result.duration : buf.duration
-        peaks       = computePeaks(audioBuffer)
+        if (seq !== E.loadSeq) { localCtx.close().catch(() => {}); return }
+        E.audioCtx    = localCtx
+        E.audioBuffer = buf
+        E.duration    = result.duration > 0 ? result.duration : buf.duration
+        E.peaks       = computePeaks(E.audioBuffer)
       } catch (err) {
         console.warn('[editor] audio decode failed for video file, trying video-only mode', err)
         localCtx?.close().catch(() => {})
@@ -816,27 +707,27 @@ async function loadFile(fp: string): Promise<void> {
     }
 
     // Video-only mode: no audio track (or decode failed) — get duration from video element
-    if (!audioBuffer) {
+    if (!E.audioBuffer) {
       try {
-        duration = await new Promise<number>((resolve, reject) => {
-          if (!videoEl) { reject(new Error('no video element')); return }
-          if (videoEl.readyState >= 1 && isFinite(videoEl.duration)) {
-            resolve(videoEl.duration); return
+        E.duration = await new Promise<number>((resolve, reject) => {
+          if (!E.videoEl) { reject(new Error('no video element')); return }
+          if (E.videoEl.readyState >= 1 && isFinite(E.videoEl.duration)) {
+            resolve(E.videoEl.duration); return
           }
-          const onMeta  = () => { videoEl?.removeEventListener('error', onErr); resolve(videoEl?.duration ?? 0) }
-          const onErr   = () => { videoEl?.removeEventListener('loadedmetadata', onMeta); reject(new Error('video error')) }
-          videoEl.addEventListener('loadedmetadata', onMeta, { once: true })
-          videoEl.addEventListener('error', onErr, { once: true })
+          const onMeta  = () => { E.videoEl?.removeEventListener('error', onErr); resolve(E.videoEl?.duration ?? 0) }
+          const onErr   = () => { E.videoEl?.removeEventListener('loadedmetadata', onMeta); reject(new Error('video error')) }
+          E.videoEl.addEventListener('loadedmetadata', onMeta, { once: true })
+          E.videoEl.addEventListener('error', onErr, { once: true })
           setTimeout(() => {
-            videoEl?.removeEventListener('loadedmetadata', onMeta)
-            videoEl?.removeEventListener('error', onErr)
+            E.videoEl?.removeEventListener('loadedmetadata', onMeta)
+            E.videoEl?.removeEventListener('error', onErr)
             reject(new Error('timeout waiting for video metadata'))
           }, 15000)
         })
-        if (seq !== loadSeq) return
+        if (seq !== E.loadSeq) return
         // Flat/empty peaks — waveform shows as a thin line
-        peaks = new Float32Array(Math.ceil(duration * 100))
-        console.log('[editor] video-only mode, duration:', duration.toFixed(1) + 's')
+        E.peaks = new Float32Array(Math.ceil(E.duration * 100))
+        console.log('[editor] video-only mode, duration:', E.duration.toFixed(1) + 's')
       } catch (err) {
         console.error('[editor] could not determine video duration:', err)
         showEditorError('Kunne ikke laste videofil — filen er kanskje korrupt')
@@ -864,11 +755,11 @@ async function loadFile(fp: string): Promise<void> {
       try {
         localCtx = new AudioContext()
         const buf = await localCtx.decodeAudioData(ab)
-        if (seq !== loadSeq) { localCtx.close().catch(() => {}); return }
-        audioCtx    = localCtx
-        audioBuffer = buf
-        duration    = audioBuffer.duration
-        peaks       = computePeaks(audioBuffer)
+        if (seq !== E.loadSeq) { localCtx.close().catch(() => {}); return }
+        E.audioCtx    = localCtx
+        E.audioBuffer = buf
+        E.duration    = E.audioBuffer.duration
+        E.peaks       = computePeaks(E.audioBuffer)
       } catch {
         localCtx?.close().catch(() => {})
         showState('empty')
@@ -881,7 +772,7 @@ async function loadFile(fp: string): Promise<void> {
     // The resulting WAV is decodable by Web Audio API and serves as both
     // waveform source and playback buffer (phone-call quality, adequate for cut-finding).
     const result = await window.api.editorExtractAudioPeaks(fp) as { data: Uint8Array | ArrayBuffer; duration: number } | null
-    if (seq !== loadSeq) return
+    if (seq !== E.loadSeq) return
     if (!result) { showState('empty'); return }
 
     const u8 = result.data instanceof Uint8Array ? result.data : new Uint8Array(result.data as ArrayBuffer)
@@ -891,11 +782,11 @@ async function loadFile(fp: string): Promise<void> {
     try {
       localCtx = new AudioContext()
       const buf = await localCtx.decodeAudioData(ab)
-      if (seq !== loadSeq) { localCtx.close().catch(() => {}); return }
-      audioCtx    = localCtx
-      audioBuffer = buf
-      duration    = result.duration > 0 ? result.duration : buf.duration
-      peaks       = computePeaks(audioBuffer)
+      if (seq !== E.loadSeq) { localCtx.close().catch(() => {}); return }
+      E.audioCtx    = localCtx
+      E.audioBuffer = buf
+      E.duration    = result.duration > 0 ? result.duration : buf.duration
+      E.peaks       = computePeaks(E.audioBuffer)
     } catch {
       localCtx?.close().catch(() => {})
       showState('empty')
@@ -911,7 +802,7 @@ async function loadFile(fp: string): Promise<void> {
   updateHeaderSummary()
 
   // Load intro/outro buffers from settings (non-blocking, audio only)
-  if (!isVideoFile) loadIntroOutroBuffers(seq)
+  if (!E.isVideoFile) loadIntroOutroBuffers(seq)
 
   // Load metadata sidecar
   loadMetadataSidecar(fp, fname)
@@ -922,15 +813,15 @@ async function loadFile(fp: string): Promise<void> {
   // export — finding one here means we crashed or were closed mid-edit.
   try {
     const draft = await window.api.editorReadCutsDraft(fp) as { cuts?: Array<{ start: number; end: number }>; ts?: number } | null
-    if (draft && Array.isArray(draft.cuts) && draft.cuts.length > 0 && seq === loadSeq) {
+    if (draft && Array.isArray(draft.cuts) && draft.cuts.length > 0 && seq === E.loadSeq) {
       // Only restore if draft is fresher than 7 days (avoid surprising the user
       // with months-old leftover edits).
       const ageMs = draft.ts ? Date.now() - draft.ts : 0
       if (!draft.ts || ageMs < 7 * 86400_000) {
-        cuts = draft.cuts.filter(c => typeof c.start === 'number' && typeof c.end === 'number' && c.end > c.start)
-        cutHistory = [JSON.parse(JSON.stringify(cuts))]
-        cutHistoryIdx = 0
-        console.log('[editor] restored', cuts.length, 'unsaved cut(s) from draft')
+        E.cuts = draft.cuts.filter(c => typeof c.start === 'number' && typeof c.end === 'number' && c.end > c.start)
+        E.cutHistory = [JSON.parse(JSON.stringify(E.cuts))]
+        E.cutHistoryIdx = 0
+        console.log('[editor] restored', E.cuts.length, 'unsaved cut(s) from draft')
       }
     }
   } catch {}
@@ -945,7 +836,7 @@ async function loadFile(fp: string): Promise<void> {
   // included, and showing the dimmed waveform on the timeline is the
   // whole point of the new layout.
   if (settings.editorIntroPath || settings.editorOutroPath) {
-    includeIntroOutro = true
+    E.includeIntroOutro = true
     const chk = $('editor-include-io') as HTMLInputElement | null
     if (chk) chk.checked = true
   }
@@ -953,8 +844,8 @@ async function loadFile(fp: string): Promise<void> {
   // Clipping badge (shown after computePeaks)
   const clipBadge = $('editor-clip-badge')
   if (clipBadge) {
-    clipBadge.style.display = clipTimes.length > 0 ? '' : 'none'
-    if (clipTimes.length > 0) clipBadge.textContent = `⚠ ${clipTimes.length} klipp`
+    clipBadge.style.display = E.clipTimes.length > 0 ? '' : 'none'
+    if (E.clipTimes.length > 0) clipBadge.textContent = `⚠ ${E.clipTimes.length} klipp`
   }
 
   showState('workspace')
@@ -968,9 +859,9 @@ async function loadFile(fp: string): Promise<void> {
   if (pendingSeekSec != null) {
     const target = pendingSeekSec
     pendingSeekSec = null
-    playStartSec = clampPlayable(snapOutOfCut(target))
-    updateTimecode(playStartSec)
-    if (isVideoFile && videoEl) videoEl.currentTime = clampMain(playStartSec)
+    E.playStartSec = clampPlayable(snapOutOfCut(target))
+    updateTimecode(E.playStartSec)
+    if (E.isVideoFile && E.videoEl) E.videoEl.currentTime = clampMain(E.playStartSec)
     drawWaveform()
   }
 
@@ -978,15 +869,15 @@ async function loadFile(fp: string): Promise<void> {
   // pipeline + LUFS measurement is audio-only; mastering a video would not
   // touch the video stream and would just re-encode the audio track).
   const masterSection = $('editor-master-section')
-  if (masterSection) masterSection.style.display = isVideoFile ? 'none' : ''
+  if (masterSection) masterSection.style.display = E.isVideoFile ? 'none' : ''
 
   // Thumbnail panel — show for audio files; embedding only works for MP3 but
   // the panel still lets the user attach a sidecar image for RSS-feed hosts.
   const thumbSection = $('editor-thumb-section')
-  if (thumbSection) thumbSection.style.display = isVideoFile ? 'none' : ''
-  if (!isVideoFile) {
+  if (thumbSection) thumbSection.style.display = E.isVideoFile ? 'none' : ''
+  if (!E.isVideoFile) {
     const els = panelElementsByPrefix('editor')
-    if (els) void refreshThumbPanel(els, { kind: 'episode', getRecordingPath: () => filePath })
+    if (els) void refreshThumbPanel(els, { kind: 'episode', getRecordingPath: () => E.filePath })
   }
 
   // Auto-run segment analysis. Runs in the background so the editor is
@@ -994,21 +885,21 @@ async function loadFile(fp: string): Promise<void> {
   // auto-trim suggestion banner so the user can one-click prep a podcast
   // episode. Skipped if cuts were restored from a draft (they're already
   // editing) or if the user is in review-mode (handled separately).
-  if (!isVideoFile && cuts.length === 0 && !reviewPrepId) {
+  if (!E.isVideoFile && E.cuts.length === 0 && !reviewPrepId) {
     // Defer slightly so the workspace UI paints first.
     setTimeout(() => { void runDetection(true) }, 200)
   }
 }
 
 async function reloadIntroOutro(): Promise<void> {
-  await loadIntroOutroBuffers(loadSeq)
+  await loadIntroOutroBuffers(E.loadSeq)
 }
 
 async function loadIntroOutroBuffers(seq: number): Promise<void> {
   const introPath = settings.editorIntroPath
   const outroPath = settings.editorOutroPath
-  introBuffer = null; introDuration = 0; introPeaks = null
-  outroBuffer = null; outroDuration = 0; outroPeaks = null
+  E.introBuffer = null; E.introDuration = 0; E.introPeaks = null
+  E.outroBuffer = null; E.outroDuration = 0; E.outroPeaks = null
 
   updateEditorIntroOutroDisplay()
 
@@ -1026,23 +917,23 @@ async function loadIntroOutroBuffers(seq: number): Promise<void> {
 
   if (introPath) {
     const buf = await decodeAudio(introPath)
-    if (seq === loadSeq && buf) {
-      introBuffer = buf
-      introDuration = buf.duration
+    if (seq === E.loadSeq && buf) {
+      E.introBuffer = buf
+      E.introDuration = buf.duration
       // Compute peaks via the same routine used for the main file — gives
       // a dimmed waveform on the left slot of the timeline.
-      introPeaks = computeJinglePeaks(buf)
+      E.introPeaks = computeJinglePeaks(buf)
     }
   }
   if (outroPath) {
     const buf = await decodeAudio(outroPath)
-    if (seq === loadSeq && buf) {
-      outroBuffer = buf
-      outroDuration = buf.duration
-      outroPeaks = computeJinglePeaks(buf)
+    if (seq === E.loadSeq && buf) {
+      E.outroBuffer = buf
+      E.outroDuration = buf.duration
+      E.outroPeaks = computeJinglePeaks(buf)
     }
   }
-  if (seq === loadSeq) drawWaveform()
+  if (seq === E.loadSeq) drawWaveform()
 }
 
 /**
@@ -1078,13 +969,13 @@ function updateVideoIntroOutroDisplay(): void {
   const clrIntro = $('btn-editor-clear-video-intro') as HTMLElement | null
   const clrOutro = $('btn-editor-clear-video-outro') as HTMLElement | null
   if (introEl) {
-    const name = videoIntroPath.split(/[/\\]/).pop() ?? ''
+    const name = E.videoIntroPath.split(/[/\\]/).pop() ?? ''
     introEl.textContent = name || 'Ingen fil valgt'
     introEl.style.color = name ? '' : 'var(--text3)'
     if (clrIntro) clrIntro.style.display = name ? '' : 'none'
   }
   if (outroEl) {
-    const name = videoOutroPath.split(/[/\\]/).pop() ?? ''
+    const name = E.videoOutroPath.split(/[/\\]/).pop() ?? ''
     outroEl.textContent = name || 'Ingen fil valgt'
     outroEl.style.color = name ? '' : 'var(--text3)'
     if (clrOutro) clrOutro.style.display = name ? '' : 'none'
@@ -1115,10 +1006,10 @@ function updateEditorIntroOutroDisplay(): void {
 async function loadMetadataSidecar(fp: string, fname: string): Promise<void> {
   const raw = await window.api.editorReadMeta(fp)
   if (raw && typeof raw === 'object') {
-    meta = raw as RecordingMetadata
+    E.meta = raw as RecordingMetadata
   } else {
     // Auto-fill title from filename (strip extension)
-    meta = {
+    E.meta = {
       title: fname.replace(/\.[^.]+$/, '').replace(/_redigert(_\d+)?$/, '').replace(/_/g, ' '),
       speaker: '',
       description: '',
@@ -1130,9 +1021,9 @@ async function loadMetadataSidecar(fp: string, fname: string): Promise<void> {
 }
 
 async function saveMetadata(): Promise<void> {
-  if (!filePath) return
-  await window.api.editorSaveMeta(filePath, meta)
-  metaDirty = false
+  if (!E.filePath) return
+  await window.api.editorSaveMeta(E.filePath, E.meta)
+  E.metaDirty = false
   const btn = $('btn-meta-save')
   if (btn) { btn.textContent = '✓ Lagret'; setTimeout(() => { btn.textContent = 'Lagre metadata' }, 1500) }
 }
@@ -1141,9 +1032,9 @@ function renderMetaPanel(): void {
   const titleEl = $('meta-title') as HTMLInputElement | null
   const spkEl   = $('meta-speaker') as HTMLInputElement | null
   const descEl  = $('meta-description') as HTMLTextAreaElement | null
-  if (titleEl) titleEl.value = meta.title
-  if (spkEl)   spkEl.value   = meta.speaker
-  if (descEl)  descEl.value  = meta.description
+  if (titleEl) titleEl.value = E.meta.title
+  if (spkEl)   spkEl.value   = E.meta.speaker
+  if (descEl)  descEl.value  = E.meta.description
 }
 
 function renderChapterList(): void {
@@ -1152,15 +1043,15 @@ function renderChapterList(): void {
   list.innerHTML = ''
   const countEl = $('editor-chapter-count')
   if (countEl) {
-    countEl.textContent = String(meta.chapters.length)
-    countEl.style.display = meta.chapters.length ? '' : 'none'
+    countEl.textContent = String(E.meta.chapters.length)
+    countEl.style.display = E.meta.chapters.length ? '' : 'none'
   }
-  if (meta.chapters.length === 0) {
+  if (E.meta.chapters.length === 0) {
     list.innerHTML = `<div class="editor-chapters-empty">${t('editor.chaptersEmpty', 'Ingen kapitler ennå. Klikk «+ Legg til ved playhead» for å starte.')}</div>`
     return
   }
-  for (let i = 0; i < meta.chapters.length; i++) {
-    const ch = meta.chapters[i]
+  for (let i = 0; i < E.meta.chapters.length; i++) {
+    const ch = E.meta.chapters[i]
     const row = document.createElement('div')
     row.className = 'editor-chapter-row'
 
@@ -1168,14 +1059,14 @@ function renderChapterList(): void {
     timeLbl.className = 'editor-chapter-time'
     timeLbl.textContent = formatTime(ch.time)
     timeLbl.title = t('editor.chapterClickSeek', 'Klikk for å søke')
-    timeLbl.addEventListener('click', () => { playStartSec = ch.time; updateTimecode(ch.time); drawWaveform() })
+    timeLbl.addEventListener('click', () => { E.playStartSec = ch.time; updateTimecode(ch.time); drawWaveform() })
 
     const nameInput = document.createElement('input')
     nameInput.className = 'editor-chapter-name'
     nameInput.value = ch.title
     nameInput.addEventListener('input', () => {
-      meta.chapters[i].title = nameInput.value
-      metaDirty = true
+      E.meta.chapters[i].title = nameInput.value
+      E.metaDirty = true
       drawWaveform()
     })
 
@@ -1183,8 +1074,8 @@ function renderChapterList(): void {
     delBtn.className = 'editor-chapter-del'
     delBtn.textContent = '✕'
     delBtn.addEventListener('click', () => {
-      meta.chapters.splice(i, 1)
-      metaDirty = true
+      E.meta.chapters.splice(i, 1)
+      E.metaDirty = true
       renderChapterList()
       drawWaveform()
     })
@@ -1203,40 +1094,40 @@ function renderChapterList(): void {
  *  outcome of analysis. Speech / music / silence honour the user's toggles. */
 function shouldShowSegment(type: string): boolean {
   if (type === 'sermon') return true
-  if (type === 'speech') return showSpeechSegments
-  if (type === 'music')  return showMusicSegments
-  if (type === 'silence') return showSilenceSegments
+  if (type === 'speech') return E.showSpeechSegments
+  if (type === 'music')  return E.showMusicSegments
+  if (type === 'silence') return E.showSilenceSegments
   // mixed / unknown → render only if speech is on (closest match)
-  return showSpeechSegments
+  return E.showSpeechSegments
 }
 
 /** Runs segment detection. `auto` = true skips the button-disabled UI dance
  *  (used for auto-run after file load — we don't want to spook the user with
  *  a disabled button they didn't click). */
 async function runDetection(auto = false): Promise<void> {
-  if (!filePath) return
+  if (!E.filePath) return
   const btn       = $('btn-detect-segments') as HTMLButtonElement | null
   const analyzing = $('editor-segments-analyzing')
   if (!auto && btn) { btn.disabled = true; btn.textContent = t('editor.analyzing', 'Analyserer…') }
   if (analyzing)   analyzing.style.display = ''
 
-  suggestions = []
+  E.suggestions = []
   renderAnalyzePanel()
   hideSuggestionBanner()
 
-  const fpAtStart = filePath
+  const fpAtStart = E.filePath
   let raw: Suggestion[] = []
   try {
-    raw = (await window.api.editorDetectSegments(filePath)) as Suggestion[]
+    raw = (await window.api.editorDetectSegments(E.filePath)) as Suggestion[]
   } catch {
     raw = []
   }
   // Guard against the user closing/swapping the file mid-analysis: drop the
   // result if we're no longer on the same recording.
-  if (fpAtStart !== filePath) return
+  if (fpAtStart !== E.filePath) return
 
-  suggestions = raw
-  lastAnalyzedAt = Date.now()
+  E.suggestions = raw
+  E.lastAnalyzedAt = Date.now()
 
   if (!auto && btn) { btn.disabled = false; btn.textContent = t('editor.analyzeRun', '▶ Analyser opptak') }
   if (analyzing)   analyzing.style.display = 'none'
@@ -1246,7 +1137,7 @@ async function runDetection(auto = false): Promise<void> {
   // Show the auto-trim suggestion banner whenever we have a meaningful trim
   // (silence/music head or tail bigger than 0.5 s). Don't show if the user
   // already has cuts — they're clearly editing manually.
-  if (cuts.length === 0) showSuggestionBanner()
+  if (E.cuts.length === 0) showSuggestionBanner()
 }
 
 /**
@@ -1269,9 +1160,9 @@ function renderAnalyzePanel(): void {
 
   // Render summary line if we've ever analyzed this file.
   if (summary) {
-    if (lastAnalyzedAt > 0) {
-      const speechCount = suggestions.filter(s => s.type === 'speech' || s.type === 'sermon').length
-      const d = new Date(lastAnalyzedAt)
+    if (E.lastAnalyzedAt > 0) {
+      const speechCount = E.suggestions.filter(s => s.type === 'speech' || s.type === 'sermon').length
+      const d = new Date(E.lastAnalyzedAt)
       const date = `${d.getDate()}.${d.getMonth() + 1}`
       const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
       summary.textContent = `${t('editor.analyzedAt', 'Sist analysert')}: ${date} ${time} · ${speechCount} ${t('editor.speechSegments', 'tale-segmenter funnet')}`
@@ -1281,10 +1172,10 @@ function renderAnalyzePanel(): void {
     }
   }
 
-  if (controls) controls.style.display = lastAnalyzedAt > 0 ? '' : 'none'
+  if (controls) controls.style.display = E.lastAnalyzedAt > 0 ? '' : 'none'
 
   // Show "Bruk forslag" / sermon-picker only when we have a sermon detected.
-  const hasSermon = suggestions.some(s => s.type === 'sermon')
+  const hasSermon = E.suggestions.some(s => s.type === 'sermon')
   if (markBtn)  (markBtn as HTMLElement).style.display  = hasSermon ? '' : 'none'
   if (markHint) (markHint as HTMLElement).style.display = hasSermon ? '' : 'none'
   renderSermonPicker()
@@ -1293,14 +1184,14 @@ function renderAnalyzePanel(): void {
 /** Apply trim cuts around the currently-marked sermon segment: drop every-
  *  thing before sermon.start and after sermon.end. */
 function applySermonTrim(): void {
-  const sermon = suggestions.find(s => s.type === 'sermon')
-  if (!sermon || !duration) return
-  cuts = []
+  const sermon = E.suggestions.find(s => s.type === 'sermon')
+  if (!sermon || !E.duration) return
+  E.cuts = []
   if (sermon.start > 0.5) {
-    cuts.push({ start: 0, end: Math.min(sermon.start, duration) })
+    E.cuts.push({ start: 0, end: Math.min(sermon.start, E.duration) })
   }
-  if (sermon.end < duration - 0.5) {
-    cuts.push({ start: Math.max(0, sermon.end), end: duration })
+  if (sermon.end < E.duration - 0.5) {
+    E.cuts.push({ start: Math.max(0, sermon.end), end: E.duration })
   }
   pushCutHistory()
   markDirty()
@@ -1314,11 +1205,11 @@ function applySermonTrim(): void {
  *  auto-detected pick). Demotes the previous sermon back to plain 'speech'. */
 function setSermonSegment(speechIdx: number): void {
   // Reset any current sermon → speech
-  for (const s of suggestions) {
+  for (const s of E.suggestions) {
     if (s.type === 'sermon') { s.type = 'speech'; s.label = t('editor.speechLabel', 'Tale') }
   }
   // Promote the chosen speech segment
-  const speeches = suggestions.filter(s => s.type === 'speech' || s.type === 'sermon')
+  const speeches = E.suggestions.filter(s => s.type === 'speech' || s.type === 'sermon')
   const target = speeches[speechIdx]
   if (!target) return
   target.type = 'sermon'
@@ -1337,7 +1228,7 @@ function renderSermonPicker(): void {
   if (!picker || !wrap) return
 
   // Build list of all speech-like segments (speech + sermon), in time order.
-  const speeches = suggestions
+  const speeches = E.suggestions
     .filter(s => s.type === 'speech' || s.type === 'sermon')
     .filter(s => s.duration >= 60)   // 1-min floor — too-short blocks aren't useful as sermon
     .slice()
@@ -1366,10 +1257,10 @@ function renderSermonPicker(): void {
 function showSuggestionBanner(): void {
   const banner = $('editor-suggestion-banner')
   const detail = $('editor-suggestion-detail')
-  const sermon = suggestions.find(s => s.type === 'sermon')
-  if (!banner || !detail || !sermon || !duration) return
+  const sermon = E.suggestions.find(s => s.type === 'sermon')
+  if (!banner || !detail || !sermon || !E.duration) return
   const headDur = sermon.start
-  const tailDur = duration - sermon.end
+  const tailDur = E.duration - sermon.end
   if (headDur < 0.5 && tailDur < 0.5) { banner.style.display = 'none'; return }
   const parts: string[] = []
   if (headDur > 0.5) parts.push(`${formatDuration(headDur)} ${t('editor.beforeSermon', 'før prekenen')}`)
@@ -1397,7 +1288,7 @@ function computePeaks(buf: AudioBuffer): Float32Array {
   const ch0   = buf.getChannelData(0)
   const ch1   = buf.numberOfChannels > 1 ? buf.getChannelData(1) : ch0
   const spp   = Math.floor(buf.sampleRate / RATE)
-  clipTimes   = []
+  E.clipTimes   = []
 
   for (let i = 0; i < total; i++) {
     const s = i * spp
@@ -1408,7 +1299,7 @@ function computePeaks(buf: AudioBuffer): Float32Array {
       if (v > pk) pk = v
     }
     out[i] = pk
-    if (pk >= 0.99) clipTimes.push(i / RATE)
+    if (pk >= 0.99) E.clipTimes.push(i / RATE)
   }
   return out
 }
@@ -1428,7 +1319,7 @@ async function _computePeaksAsync(buf: AudioBuffer): Promise<Float32Array> {
   const ch0   = buf.getChannelData(0)
   const ch1   = buf.numberOfChannels > 1 ? buf.getChannelData(1) : ch0
   const spp   = Math.floor(buf.sampleRate / RATE)
-  clipTimes   = []
+  E.clipTimes   = []
 
   const CHUNK = 2000  // yield every ~20 s of output (at 100 samples/s)
   for (let i = 0; i < total; i++) {
@@ -1440,7 +1331,7 @@ async function _computePeaksAsync(buf: AudioBuffer): Promise<Float32Array> {
       if (v > pk) pk = v
     }
     out[i] = pk
-    if (pk >= 0.99) clipTimes.push(i / RATE)
+    if (pk >= 0.99) E.clipTimes.push(i / RATE)
     if ((i & (CHUNK - 1)) === 0 && i > 0) {
       // Yield: drains the microtask queue and lets paint events run.
       await new Promise(resolve => setTimeout(resolve, 0))
@@ -1485,7 +1376,7 @@ function computePeakGain(pks: Float32Array): number {
 
 /** Linear gain factor for the current `audioGainDb` (1.0 = no change). */
 function gainFactor(): number {
-  return audioGainDb === 0 ? 1 : Math.pow(10, audioGainDb / 20)
+  return E.audioGainDb === 0 ? 1 : Math.pow(10, E.audioGainDb / 20)
 }
 
 /**
@@ -1495,8 +1386,8 @@ function gainFactor(): number {
  * `src/main/editor.ts` exactly as the previous proc-panel filter list was.
  */
 function getExportFilters(): string[] {
-  if (audioGainDb === 0) return []
-  return [`volume=${audioGainDb.toFixed(2)}dB`]
+  if (E.audioGainDb === 0) return []
+  return [`volume=${E.audioGainDb.toFixed(2)}dB`]
 }
 
 /**
@@ -1534,15 +1425,15 @@ function setNormalizeUI(gainDb: number, alreadyAtTarget: boolean): void {
 
 // ── Drawing ───────────────────────────────────────────────────────────────
 function syncCanvasSize(): void {
-  if (!canvas) return
+  if (!E.canvas) return
   const dpr = window.devicePixelRatio || 1
   const h   = 200
-  canvas.style.height = h + 'px'
+  E.canvas.style.height = h + 'px'
   // Read width from CSS (width: 100%) — never write canvas.style.width
-  const w = canvas.clientWidth || canvas.parentElement?.getBoundingClientRect().width || 0
+  const w = E.canvas.clientWidth || E.canvas.parentElement?.getBoundingClientRect().width || 0
   if (!w) return
-  canvas.width  = Math.round(w * dpr)
-  canvas.height = Math.round(h * dpr)
+  E.canvas.width  = Math.round(w * dpr)
+  E.canvas.height = Math.round(h * dpr)
 }
 
 /** Schedule a draw on next rAF — coalesces multiple sync requests into a
@@ -1559,12 +1450,12 @@ function scheduleDrawWaveform(): void {
 }
 
 function drawWaveform(): void {
-  if (!canvas || !peaks) return
+  if (!E.canvas || !E.peaks) return
   const dpr  = window.devicePixelRatio || 1
-  const ctx  = canvas.getContext('2d')
+  const ctx  = E.canvas.getContext('2d')
   if (!ctx) return
-  const W    = canvas.width  / dpr
-  const H    = canvas.height / dpr
+  const W    = E.canvas.width  / dpr
+  const H    = E.canvas.height / dpr
   ctx.save()
   ctx.scale(dpr, dpr)
 
@@ -1587,17 +1478,17 @@ function drawWaveform(): void {
   ctx.beginPath(); ctx.moveTo(0, midY); ctx.lineTo(W, midY); ctx.stroke()
 
   // Current playhead time (used for "past" shading)
-  const curSec = (isPlaying && isVideoFile && videoEl)
-    ? videoEl.currentTime
-    : (isPlaying && audioCtx)
-    ? playStartSec + (audioCtx.currentTime - playStartCtxTime)
-    : playStartSec
+  const curSec = (E.isPlaying && E.isVideoFile && E.videoEl)
+    ? E.videoEl.currentTime
+    : (E.isPlaying && E.audioCtx)
+    ? E.playStartSec + (E.audioCtx.currentTime - E.playStartCtxTime)
+    : E.playStartSec
 
   // ── Layout: intro / main / outro regions ─────────────────────────
   const geom = getLayoutGeom(W)
 
   // ── Suggested segment backgrounds (only in main region) ───────────
-  for (const seg of suggestions) {
+  for (const seg of E.suggestions) {
     if (!shouldShowSegment(seg.type)) continue
     const x1 = secToX(seg.start, W), x2 = secToX(seg.end, W)
     if (x2 < geom.mainPxStart || x1 > geom.mainPxEnd) continue
@@ -1643,7 +1534,7 @@ function drawWaveform(): void {
   }
 
   // ── Cut region backgrounds (clipped to main region) ───────────────
-  for (const c of cuts) {
+  for (const c of E.cuts) {
     const x1 = secToX(c.start, W), x2 = secToX(c.end, W)
     if (x2 < geom.mainPxStart || x1 > geom.mainPxEnd) continue
     ctx.fillStyle = 'rgba(239,68,68,0.13)'
@@ -1656,9 +1547,9 @@ function drawWaveform(): void {
   }
 
   // ── Active drag region ─────────────────────────────────────────────
-  if (isDragging && dragStartSec >= 0) {
-    const x1 = secToX(Math.min(dragStartSec, dragEndSec), W)
-    const x2 = secToX(Math.max(dragStartSec, dragEndSec), W)
+  if (E.isDragging && E.dragStartSec >= 0) {
+    const x1 = secToX(Math.min(E.dragStartSec, E.dragEndSec), W)
+    const x2 = secToX(Math.max(E.dragStartSec, E.dragEndSec), W)
     ctx.fillStyle = 'rgba(251,146,60,0.18)'
     ctx.fillRect(x1, RULER, x2 - x1, H - RULER)
     ctx.strokeStyle = '#fb923c'
@@ -1667,14 +1558,14 @@ function drawWaveform(): void {
   }
 
   // ── Intro waveform (dimmed, in left slot) ─────────────────────────
-  if (geom.introPx > 0 && introPeaks && introDuration > 0) {
+  if (geom.introPx > 0 && E.introPeaks && E.introDuration > 0) {
     const introBarMax = maxBar
     ctx.fillStyle = '#7AAAFF'
     for (let px = 0; px < geom.introPx; px++) {
-      const sec = (px / geom.introPx) * introDuration
+      const sec = (px / geom.introPx) * E.introDuration
       const pi  = Math.floor(sec * 100)
-      if (pi < 0 || pi >= introPeaks.length) continue
-      const barH = Math.min(introBarMax, introPeaks[pi] * introBarMax)
+      if (pi < 0 || pi >= E.introPeaks.length) continue
+      const barH = Math.min(introBarMax, E.introPeaks[pi] * introBarMax)
       ctx.globalAlpha = 0.55
       ctx.fillRect(px, midY - barH, 1, barH * 2)
     }
@@ -1686,14 +1577,14 @@ function drawWaveform(): void {
   }
 
   // ── Outro waveform (dimmed, in right slot) ────────────────────────
-  if (geom.outroPx > 0 && outroPeaks && outroDuration > 0) {
+  if (geom.outroPx > 0 && E.outroPeaks && E.outroDuration > 0) {
     const outroBarMax = maxBar
     ctx.fillStyle = '#7AAAFF'
     for (let px = 0; px < geom.outroPx; px++) {
-      const sec = (px / geom.outroPx) * outroDuration
+      const sec = (px / geom.outroPx) * E.outroDuration
       const pi  = Math.floor(sec * 100)
-      if (pi < 0 || pi >= outroPeaks.length) continue
-      const barH = Math.min(outroBarMax, outroPeaks[pi] * outroBarMax)
+      if (pi < 0 || pi >= E.outroPeaks.length) continue
+      const barH = Math.min(outroBarMax, E.outroPeaks[pi] * outroBarMax)
       ctx.globalAlpha = 0.55
       ctx.fillRect(geom.mainPxEnd + px, midY - barH, 1, barH * 2)
     }
@@ -1713,13 +1604,13 @@ function drawWaveform(): void {
   const mainPxEnd   = Math.floor(geom.mainPxEnd)
   const mainPxWidth = Math.max(1, mainPxEnd - mainPxStart)
   for (let px = mainPxStart; px < mainPxEnd; px++) {
-    const sec = vpStart + ((px - mainPxStart) / mainPxWidth) * (vpEnd - vpStart)
+    const sec = E.vpStart + ((px - mainPxStart) / mainPxWidth) * (E.vpEnd - E.vpStart)
     const pi  = Math.floor(sec * 100)
-    if (pi < 0 || pi >= peaks.length) continue
+    if (pi < 0 || pi >= E.peaks.length) continue
 
-    const barH  = Math.min(maxBar, peaks[pi] * gFac * maxBar)
-    const inCut = isInCut(sec) || (isDragging && isInDrag(sec))
-    const isPast = sec < curSec && (isPlaying || playStartSec > 0)
+    const barH  = Math.min(maxBar, E.peaks[pi] * gFac * maxBar)
+    const inCut = isInCut(sec) || (E.isDragging && isInDrag(sec))
+    const isPast = sec < curSec && (E.isPlaying || E.playStartSec > 0)
 
     ctx.fillStyle   = inCut ? RED : ACCENT
     ctx.globalAlpha = inCut ? 0.60 : isPast ? 0.30 : 0.82
@@ -1741,7 +1632,7 @@ function drawWaveform(): void {
   ctx.fillRect(0, RULER, W, H - RULER)
 
   // ── Cut boundary lines ─────────────────────────────────────────────
-  for (const c of cuts) {
+  for (const c of E.cuts) {
     for (const s of [c.start, c.end]) {
       const x = secToX(s, W)
       if (x < -2 || x > W + 2) continue
@@ -1756,7 +1647,7 @@ function drawWaveform(): void {
   // ── Cut duration labels inside cut regions ─────────────────────────
   ctx.font = '600 10px system-ui, -apple-system, sans-serif'
   ctx.textBaseline = 'middle'
-  for (const c of cuts) {
+  for (const c of E.cuts) {
     const x1 = secToX(c.start, W), x2 = secToX(c.end, W)
     if (x2 - x1 < 28) continue
     const label = formatDuration(c.end - c.start)
@@ -1775,9 +1666,9 @@ function drawWaveform(): void {
   }
 
   // ── Drag time labels ───────────────────────────────────────────────
-  if (isDragging && dragStartSec >= 0 && Math.abs(dragEndSec - dragStartSec) > 0.05) {
-    const sA = Math.min(dragStartSec, dragEndSec)
-    const sB = Math.max(dragStartSec, dragEndSec)
+  if (E.isDragging && E.dragStartSec >= 0 && Math.abs(E.dragEndSec - E.dragStartSec) > 0.05) {
+    const sA = Math.min(E.dragStartSec, E.dragEndSec)
+    const sB = Math.max(E.dragStartSec, E.dragEndSec)
     ctx.font = '600 11px system-ui, -apple-system, sans-serif'
     ctx.textBaseline = 'alphabetic'
 
@@ -1800,7 +1691,7 @@ function drawWaveform(): void {
 
   // ── Chapter markers ───────────────────────────────────────────────
   const CHAPTER_COLOR = '#06b6d4'
-  for (const ch of meta.chapters) {
+  for (const ch of E.meta.chapters) {
     const x = secToX(ch.time, W)
     if (x < -2 || x > W + 2) continue
     ctx.strokeStyle = CHAPTER_COLOR
@@ -1843,13 +1734,13 @@ function drawWaveform(): void {
     if (geom.introPx > 36) {
       ctx.fillStyle = '#7AAAFF'
       ctx.globalAlpha = 0.9
-      const lbl = `${t('editor.tlIntro', 'Intro')} · ${formatDuration(introDuration)}`
+      const lbl = `${t('editor.tlIntro', 'Intro')} · ${formatDuration(E.introDuration)}`
       ctx.fillText(lbl, geom.introPx / 2, RULER / 2)
     }
     if (geom.outroPx > 36) {
       ctx.fillStyle = '#7AAAFF'
       ctx.globalAlpha = 0.9
-      const lbl = `${t('editor.tlOutro', 'Outro')} · ${formatDuration(outroDuration)}`
+      const lbl = `${t('editor.tlOutro', 'Outro')} · ${formatDuration(E.outroDuration)}`
       ctx.fillText(lbl, geom.mainPxEnd + geom.outroPx / 2, RULER / 2)
     }
     if ((geom.introPx > 36 || geom.outroPx > 36) && geom.mainPxEnd - geom.mainPxStart > 80) {
@@ -1866,8 +1757,8 @@ function drawWaveform(): void {
   // Ghost cursor shows wherever the mouse is on the extended timeline,
   // including intro/outro slots — useful for previewing where a click will
   // place the playhead.
-  const hoverX = secToX(hoverSec, W)
-  if (peaks && !isDragging && hoverSec > -9999 && hoverX >= 0 && hoverX <= W) {
+  const hoverX = secToX(E.hoverSec, W)
+  if (E.peaks && !E.isDragging && E.hoverSec > -9999 && hoverX >= 0 && hoverX <= W) {
     ctx.setLineDash([3, 4])
     ctx.strokeStyle = 'rgba(255,255,255,0.25)'
     ctx.lineWidth = 1
@@ -1877,21 +1768,21 @@ function drawWaveform(): void {
     // Timestamp tooltip at bottom. Shows region-aware label so the user
     // always knows what region they're hovering over.
     let label: string
-    if (hoverSec < 0 && effIntroDur() > 0) {
-      label = `Intro ${formatTime(hoverSec + effIntroDur())}`
-    } else if (hoverSec > duration && effOutroDur() > 0) {
-      label = `Outro ${formatTime(hoverSec - duration)}`
+    if (E.hoverSec < 0 && effIntroDur() > 0) {
+      label = `Intro ${formatTime(E.hoverSec + effIntroDur())}`
+    } else if (E.hoverSec > E.duration && effOutroDur() > 0) {
+      label = `Outro ${formatTime(E.hoverSec - E.duration)}`
     } else {
-      label = formatTime(hoverSec)
+      label = formatTime(E.hoverSec)
     }
-    const hoveredSeg = suggestions.find(s => hoverSec >= s.start && hoverSec <= s.end && shouldShowSegment(s.type))
-    if (hoveredSeg && hoverSec >= 0 && hoverSec <= duration) {
+    const hoveredSeg = E.suggestions.find(s => E.hoverSec >= s.start && E.hoverSec <= s.end && shouldShowSegment(s.type))
+    if (hoveredSeg && E.hoverSec >= 0 && E.hoverSec <= E.duration) {
       const typeLbl = hoveredSeg.type === 'sermon' ? t('editor.tooltipSermon', 'Antatt preken')
         : hoveredSeg.type === 'speech' ? t('editor.tooltipSpeech', 'Tale')
         : hoveredSeg.type === 'music'  ? t('editor.tooltipMusic',  'Musikk')
         : hoveredSeg.type === 'silence'? t('editor.tooltipSilence','Stillhet')
         : t('editor.tooltipMixed', 'Blandet')
-      label = `${typeLbl} · ${formatDuration(hoveredSeg.duration)}  (${formatTime(hoverSec)})`
+      label = `${typeLbl} · ${formatDuration(hoveredSeg.duration)}  (${formatTime(E.hoverSec)})`
     }
     const x = hoverX
     ctx.font = '600 10px system-ui, -apple-system, sans-serif'
@@ -1937,10 +1828,10 @@ function drawWaveform(): void {
   }
 
   // ── Clipping indicators ────────────────────────────────────────
-  if (clipTimes.length > 0) {
+  if (E.clipTimes.length > 0) {
     ctx.fillStyle = '#ef4444'
     ctx.globalAlpha = 0.8
-    for (const t of clipTimes) {
+    for (const t of E.clipTimes) {
       const x = secToX(t, W)
       if (x < 0 || x > W) continue
       ctx.fillRect(x - 0.5, RULER, 1, 5)
@@ -1949,12 +1840,12 @@ function drawWaveform(): void {
   }
 
   // ── Cut handle hover highlights ────────────────────────────────
-  if (hoverSec >= vpStart && hoverSec <= vpEnd && !isDragging && !handleDrag) {
-    const threshold = (vpEnd - vpStart) / W * 10
-    for (const c of cuts) {
+  if (E.hoverSec >= E.vpStart && E.hoverSec <= E.vpEnd && !E.isDragging && !E.handleDrag) {
+    const threshold = (E.vpEnd - E.vpStart) / W * 10
+    for (const c of E.cuts) {
       for (const side of ['start', 'end'] as const) {
         const t = c[side]
-        if (Math.abs(hoverSec - t) < threshold) {
+        if (Math.abs(E.hoverSec - t) < threshold) {
           const x = secToX(t, W)
           ctx.strokeStyle = '#fbbf24'
           ctx.lineWidth = 2
@@ -1986,19 +1877,19 @@ function drawRuler(ctx: CanvasRenderingContext2D, W: number, H: number, RULER: n
   // Use main viewport span for tick density (not the smaller pixel-per-second
   // we'd get if we used W, which would over-tick the main region when intro/outro
   // are eating display space).
-  const rawInterval  = (vpEnd - vpStart) * 80 / mainW
+  const rawInterval  = (E.vpEnd - E.vpStart) * 80 / mainW
   // Note: tick interval ≥ 1 sec so formatTime (which rounds to whole seconds)
   // never produces duplicate labels (would render "0:05 0:05 0:06 0:06" for
   // 0.5-sec ticks on short clips).
   const intervals    = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600]
   const tickInterval = intervals.find(v => v >= rawInterval) ?? 600
-  const firstTick    = Math.ceil(vpStart / tickInterval) * tickInterval
+  const firstTick    = Math.ceil(E.vpStart / tickInterval) * tickInterval
 
   ctx.font        = '500 9px system-ui, -apple-system, sans-serif'
   ctx.textBaseline = 'middle'
   ctx.fillStyle   = 'rgba(255,255,255,0.32)'
 
-  for (let s = firstTick; s <= vpEnd; s += tickInterval) {
+  for (let s = firstTick; s <= E.vpEnd; s += tickInterval) {
     const x = secToX(s, W)
     // Skip ticks that land inside the intro/outro slots — they'd be misleading
     // there (the wall-clock time in those slots is local to the jingle file).
@@ -2015,17 +1906,17 @@ function drawRuler(ctx: CanvasRenderingContext2D, W: number, H: number, RULER: n
 }
 
 function drawMinimap(): void {
-  if (!minimap || !peaks) return
+  if (!E.minimap || !E.peaks) return
   const dpr  = window.devicePixelRatio || 1
-  const W    = minimap.parentElement?.clientWidth ?? 0
+  const W    = E.minimap.parentElement?.clientWidth ?? 0
   if (!W) return
   const H    = 44
-  minimap.style.width  = W + 'px'
-  minimap.style.height = H + 'px'
-  minimap.width  = W * dpr
-  minimap.height = H * dpr
+  E.minimap.style.width  = W + 'px'
+  E.minimap.style.height = H + 'px'
+  E.minimap.width  = W * dpr
+  E.minimap.height = H * dpr
 
-  const ctx  = minimap.getContext('2d')
+  const ctx  = E.minimap.getContext('2d')
   if (!ctx) return
   ctx.save()
   ctx.scale(dpr, dpr)
@@ -2039,10 +1930,10 @@ function drawMinimap(): void {
   const gFac = gainFactor()
   const maxBar = (H - 6) / 2
   for (let px = 0; px < W; px++) {
-    const sec  = (px / W) * duration
+    const sec  = (px / W) * E.duration
     const pi   = Math.floor(sec * 100)
-    if (pi < 0 || pi >= peaks.length) continue
-    const barH = Math.min(maxBar, peaks[pi] * gFac * maxBar)
+    if (pi < 0 || pi >= E.peaks.length) continue
+    const barH = Math.min(maxBar, E.peaks[pi] * gFac * maxBar)
     const inCut = isInCut(sec)
     ctx.fillStyle   = inCut ? '#ef4444' : ACCENT
     ctx.globalAlpha = inCut ? 0.55 : 0.55
@@ -2064,12 +1955,12 @@ function drawMinimap(): void {
 }
 
 function updateMinimapViewport(): void {
-  if (!minimapVp || !duration) return
-  const W  = minimap.parentElement?.clientWidth ?? 0
-  const x1 = (vpStart / duration) * W
-  const x2 = (vpEnd   / duration) * W
-  minimapVp.style.left  = x1 + 'px'
-  minimapVp.style.width = (x2 - x1) + 'px'
+  if (!E.minimapVp || !E.duration) return
+  const W  = E.minimap.parentElement?.clientWidth ?? 0
+  const x1 = (E.vpStart / E.duration) * W
+  const x2 = (E.vpEnd   / E.duration) * W
+  E.minimapVp.style.left  = x1 + 'px'
+  E.minimapVp.style.width = (x2 - x1) + 'px'
 }
 
 // ── Minimap click / drag ──────────────────────────────────────────────────
@@ -2081,28 +1972,28 @@ let minimapWindowMoveHandler: ((e: MouseEvent) => void) | null = null
 let minimapWindowUpHandler:   (() => void) | null = null
 
 function setupMinimapInteraction(): void {
-  minimap?.addEventListener('mousedown', (e: MouseEvent) => {
-    minimapDragging = true
+  E.minimap?.addEventListener('mousedown', (e: MouseEvent) => {
+    E.minimapDragging = true
     jumpViewportToMouse(e)
   })
   if (minimapWindowMoveHandler) window.removeEventListener('mousemove', minimapWindowMoveHandler)
   if (minimapWindowUpHandler)   window.removeEventListener('mouseup',   minimapWindowUpHandler)
   minimapWindowMoveHandler = (e: MouseEvent) => {
-    if (minimapDragging) jumpViewportToMouse(e)
+    if (E.minimapDragging) jumpViewportToMouse(e)
   }
-  minimapWindowUpHandler = () => { minimapDragging = false }
+  minimapWindowUpHandler = () => { E.minimapDragging = false }
   window.addEventListener('mousemove', minimapWindowMoveHandler)
   window.addEventListener('mouseup',   minimapWindowUpHandler)
 }
 
 function jumpViewportToMouse(e: MouseEvent): void {
-  if (!duration || !minimap) return
-  const rect   = minimap.getBoundingClientRect()
+  if (!E.duration || !E.minimap) return
+  const rect   = E.minimap.getBoundingClientRect()
   const frac   = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-  const center = frac * duration
-  const half   = (vpEnd - vpStart) / 2
-  vpStart = Math.max(0, Math.min(duration - half * 2, center - half))
-  vpEnd   = vpStart + half * 2
+  const center = frac * E.duration
+  const half   = (E.vpEnd - E.vpStart) / 2
+  E.vpStart = Math.max(0, Math.min(E.duration - half * 2, center - half))
+  E.vpEnd   = E.vpStart + half * 2
   drawWaveform()
   updateMinimapViewport()
 }
@@ -2129,25 +2020,25 @@ function setupKeyboardShortcuts(): void {
     }
     if (mod && e.code === 'KeyW') {
       e.preventDefault()
-      if (!filePath) return
+      if (!E.filePath) return
       if (!confirmDiscardIfDirty('close')) return
       closeCurrentFile()
       return
     }
     if (mod && (e.code === 'KeyS' || e.code === 'KeyE')) {
       e.preventDefault()
-      if (filePath) openExportModal()
+      if (E.filePath) openExportModal()
       return
     }
 
     // Per-file shortcuts (need an open file)
-    if (!peaks) return
+    if (!E.peaks) return
     if (e.target instanceof HTMLButtonElement) return
 
     switch (e.code) {
       case 'Space':
         e.preventDefault()
-        togglePlay(isPlaying ? isPreview : false)
+        togglePlay(E.isPlaying ? E.isPreview : false)
         break
       case 'ArrowLeft':
         e.preventDefault()
@@ -2174,7 +2065,7 @@ function setupKeyboardShortcuts(): void {
         if (e.metaKey || e.ctrlKey) { e.preventDefault(); redoCut() }
         break
       case 'Escape':
-        if (isPlaying) stopPlay()
+        if (E.isPlaying) stopPlay()
         break
       case 'KeyF':
         e.preventDefault()
@@ -2184,18 +2075,18 @@ function setupKeyboardShortcuts(): void {
         break
       case 'KeyL':
         e.preventDefault()
-        isLooping = !isLooping
-        $('btn-editor-loop')?.classList.toggle('active', isLooping)
+        E.isLooping = !E.isLooping
+        $('btn-editor-loop')?.classList.toggle('active', E.isLooping)
         break
       case 'Delete':
       case 'Backspace': {
         // Delete the cut under the playhead — the closest cut whose range
         // contains playStartSec, falling back to the most recently added.
-        if (cuts.length === 0) break
+        if (E.cuts.length === 0) break
         e.preventDefault()
-        const idx = cuts.findIndex(c => playStartSec >= c.start && playStartSec <= c.end)
+        const idx = E.cuts.findIndex(c => E.playStartSec >= c.start && E.playStartSec <= c.end)
         if (idx >= 0) deleteCut(idx)
-        else deleteCut(cuts.length - 1)
+        else deleteCut(E.cuts.length - 1)
         break
       }
       case 'Home':
@@ -2215,7 +2106,7 @@ function setupKeyboardShortcuts(): void {
         break
       case 'KeyP': {
         // Jump to the detected sermon start
-        const sermon = suggestions.find(s => s.type === 'sermon')
+        const sermon = E.suggestions.find(s => s.type === 'sermon')
         if (sermon) { e.preventDefault(); seekTo(sermon.start) }
         break
       }
@@ -2228,14 +2119,14 @@ function setupKeyboardShortcuts(): void {
  *  Snaps out of cuts so keyboard navigation always lands on playable audio. */
 function seekTo(sec: number): void {
   stopPlay()
-  playStartSec = snapOutOfCut(clampPlayable(sec))
-  updateTimecode(playStartSec)
-  if (isVideoFile && videoEl) videoEl.currentTime = clampMain(playStartSec)
-  const mainPlayhead = clampMain(playStartSec)
-  if (mainPlayhead < vpStart || mainPlayhead > vpEnd) {
-    const span = vpEnd - vpStart
-    vpStart = Math.max(0, mainPlayhead - span * 0.3)
-    vpEnd   = Math.min(duration, vpStart + span)
+  E.playStartSec = snapOutOfCut(clampPlayable(sec))
+  updateTimecode(E.playStartSec)
+  if (E.isVideoFile && E.videoEl) E.videoEl.currentTime = clampMain(E.playStartSec)
+  const mainPlayhead = clampMain(E.playStartSec)
+  if (mainPlayhead < E.vpStart || mainPlayhead > E.vpEnd) {
+    const span = E.vpEnd - E.vpStart
+    E.vpStart = Math.max(0, mainPlayhead - span * 0.3)
+    E.vpEnd   = Math.min(E.duration, E.vpStart + span)
     updateMinimapViewport()
   }
   drawWaveform()
@@ -2245,10 +2136,10 @@ function seekTo(sec: number): void {
  *  -1 backward. Considers both cut start and end so each cut counts as two
  *  navigation stops. */
 function jumpToCutBoundary(dir: 1 | -1): void {
-  if (cuts.length === 0) return
-  const ph = clampMain(playStartSec)
+  if (E.cuts.length === 0) return
+  const ph = clampMain(E.playStartSec)
   const points: number[] = []
-  for (const c of cuts) { points.push(c.start, c.end) }
+  for (const c of E.cuts) { points.push(c.start, c.end) }
   points.sort((a, b) => a - b)
   let target: number | null = null
   if (dir > 0) {
@@ -2364,8 +2255,8 @@ function setupDragDrop(): void {
       }
       await window.api.saveSettings(settings)
       // Also turn on includeIntroOutro so the user immediately sees the result.
-      if (!includeIntroOutro) {
-        includeIntroOutro = true
+      if (!E.includeIntroOutro) {
+        E.includeIntroOutro = true
         const chk = $('editor-include-io') as HTMLInputElement | null
         if (chk) chk.checked = true
       }
@@ -2414,16 +2305,16 @@ interface LayoutGeom {
 let _layoutGeomCache: { key: string; geom: LayoutGeom } | null = null
 
 function getLayoutGeom(W: number): LayoutGeom {
-  const key = `${W}|${vpStart}|${vpEnd}|${includeIntroOutro?1:0}|${introBuffer?1:0}|${outroBuffer?1:0}|${duration}|${introDuration}|${outroDuration}`
+  const key = `${W}|${E.vpStart}|${E.vpEnd}|${E.includeIntroOutro?1:0}|${E.introBuffer?1:0}|${E.outroBuffer?1:0}|${E.duration}|${E.introDuration}|${E.outroDuration}`
   if (_layoutGeomCache && _layoutGeomCache.key === key) return _layoutGeomCache.geom
 
   // Only show intro/outro slots when the corresponding edge of the file is
   // visible. If the user has zoomed past the start, hide the intro slot.
-  const showIntro = includeIntroOutro && !!introBuffer && vpStart <= 0.001
-  const showOutro = includeIntroOutro && !!outroBuffer && vpEnd >= duration - 0.001
-  const effIntroDur = showIntro ? introDuration : 0
-  const effOutroDur = showOutro ? outroDuration : 0
-  const mainVpDur = Math.max(0.001, vpEnd - vpStart)
+  const showIntro = E.includeIntroOutro && !!E.introBuffer && E.vpStart <= 0.001
+  const showOutro = E.includeIntroOutro && !!E.outroBuffer && E.vpEnd >= E.duration - 0.001
+  const effIntroDur = showIntro ? E.introDuration : 0
+  const effOutroDur = showOutro ? E.outroDuration : 0
+  const mainVpDur = Math.max(0.001, E.vpEnd - E.vpStart)
   const total = effIntroDur + mainVpDur + effOutroDur
   const introPx = (effIntroDur / total) * W
   const outroPx = (effOutroDur / total) * W
@@ -2447,22 +2338,22 @@ function getLayoutGeom(W: number): LayoutGeom {
 // Cuts always stay in main coords ([0, duration]); video.currentTime is
 // clamped to main with clampMain().
 function effIntroDur(): number {
-  return (includeIntroOutro && introBuffer) ? introDuration : 0
+  return (E.includeIntroOutro && E.introBuffer) ? E.introDuration : 0
 }
 function effOutroDur(): number {
-  return (includeIntroOutro && outroBuffer) ? outroDuration : 0
+  return (E.includeIntroOutro && E.outroBuffer) ? E.outroDuration : 0
 }
 function minPlayableSec(): number {
   return -effIntroDur()
 }
 function maxPlayableSec(): number {
-  return duration + effOutroDur()
+  return E.duration + effOutroDur()
 }
 function clampPlayable(sec: number): number {
   return Math.max(minPlayableSec(), Math.min(maxPlayableSec(), sec))
 }
 function clampMain(sec: number): number {
-  return Math.max(0, Math.min(duration, sec))
+  return Math.max(0, Math.min(E.duration, sec))
 }
 
 function secToX(sec: number, W: number): number {
@@ -2473,13 +2364,13 @@ function secToX(sec: number, W: number): number {
     return Math.max(0, Math.min(1, frac)) * g.introPx
   }
   // Outro slot — seconds > duration map into [mainPxEnd, W]
-  if (sec > duration && g.outroPx > 0 && g.effOutroDur > 0) {
-    const frac = (sec - duration) / g.effOutroDur
+  if (sec > E.duration && g.outroPx > 0 && g.effOutroDur > 0) {
+    const frac = (sec - E.duration) / g.effOutroDur
     return g.mainPxEnd + Math.max(0, Math.min(1, frac)) * g.outroPx
   }
   const mainW = g.mainPxEnd - g.mainPxStart
   if (mainW <= 0) return g.mainPxStart
-  return g.mainPxStart + ((sec - vpStart) / (vpEnd - vpStart)) * mainW
+  return g.mainPxStart + ((sec - E.vpStart) / (E.vpEnd - E.vpStart)) * mainW
 }
 
 function xToSec(x: number, W: number): number {
@@ -2492,13 +2383,13 @@ function xToSec(x: number, W: number): number {
   // Outro slot: returns seconds in (duration, duration + effOutroDur]
   if (g.outroPx > 0 && g.effOutroDur > 0 && x > g.mainPxEnd) {
     const frac = Math.max(0, Math.min(1, (x - g.mainPxEnd) / g.outroPx))
-    return duration + frac * g.effOutroDur
+    return E.duration + frac * g.effOutroDur
   }
   const mainW = g.mainPxEnd - g.mainPxStart
-  if (mainW <= 0) return vpStart
-  if (x <= g.mainPxStart) return vpStart
-  if (x >= g.mainPxEnd)   return vpEnd
-  return vpStart + ((x - g.mainPxStart) / mainW) * (vpEnd - vpStart)
+  if (mainW <= 0) return E.vpStart
+  if (x <= g.mainPxStart) return E.vpStart
+  if (x >= g.mainPxEnd)   return E.vpEnd
+  return E.vpStart + ((x - g.mainPxStart) / mainW) * (E.vpEnd - E.vpStart)
 }
 
 /** Returns x in main-coords only — used by cut handling which must never
@@ -2506,10 +2397,10 @@ function xToSec(x: number, W: number): number {
 function xToMainSec(x: number, W: number): number {
   const g = getLayoutGeom(W)
   const mainW = g.mainPxEnd - g.mainPxStart
-  if (mainW <= 0) return vpStart
-  if (x <= g.mainPxStart) return vpStart
-  if (x >= g.mainPxEnd)   return vpEnd
-  return vpStart + ((x - g.mainPxStart) / mainW) * (vpEnd - vpStart)
+  if (mainW <= 0) return E.vpStart
+  if (x <= g.mainPxStart) return E.vpStart
+  if (x >= g.mainPxEnd)   return E.vpEnd
+  return E.vpStart + ((x - g.mainPxStart) / mainW) * (E.vpEnd - E.vpStart)
 }
 
 /** Returns 'intro' | 'main' | 'outro' for a given pixel x. Used by drag-and-drop
@@ -2526,46 +2417,46 @@ function getRegionAtX(x: number, W: number): 'intro' | 'main' | 'outro' {
 }
 
 function fitAll(): void {
-  vpStart = 0
-  vpEnd   = duration || 1
+  E.vpStart = 0
+  E.vpEnd   = E.duration || 1
 }
 
 function zoomBy(factor: number): void {
-  const center = (vpStart + vpEnd) / 2
-  const half   = ((vpEnd - vpStart) * factor) / 2
-  vpStart = Math.max(0, center - half)
-  vpEnd   = Math.min(duration, center + half)
+  const center = (E.vpStart + E.vpEnd) / 2
+  const half   = ((E.vpEnd - E.vpStart) * factor) / 2
+  E.vpStart = Math.max(0, center - half)
+  E.vpEnd   = Math.min(E.duration, center + half)
   const minSpan = 0.5
-  if (vpEnd - vpStart < minSpan) {
-    const mid = (vpStart + vpEnd) / 2
-    vpStart = Math.max(0, mid - minSpan / 2)
-    vpEnd   = Math.min(duration, vpStart + minSpan)
+  if (E.vpEnd - E.vpStart < minSpan) {
+    const mid = (E.vpStart + E.vpEnd) / 2
+    E.vpStart = Math.max(0, mid - minSpan / 2)
+    E.vpEnd   = Math.min(E.duration, E.vpStart + minSpan)
   }
   drawWaveform()
   updateMinimapViewport()
 }
 
 function panBy(deltaSecs: number): void {
-  const span = vpEnd - vpStart
-  vpStart = Math.max(0, Math.min(duration - span, vpStart + deltaSecs))
-  vpEnd   = vpStart + span
+  const span = E.vpEnd - E.vpStart
+  E.vpStart = Math.max(0, Math.min(E.duration - span, E.vpStart + deltaSecs))
+  E.vpEnd   = E.vpStart + span
   drawWaveform()
   updateMinimapViewport()
 }
 
 function seekBy(secs: number): void {
   stopPlay()
-  playStartSec = clampPlayable(playStartSec + secs)
-  updateTimecode(playStartSec)
-  if (isVideoFile && videoEl) videoEl.currentTime = clampMain(playStartSec)
+  E.playStartSec = clampPlayable(E.playStartSec + secs)
+  updateTimecode(E.playStartSec)
+  if (E.isVideoFile && E.videoEl) E.videoEl.currentTime = clampMain(E.playStartSec)
   // Pan viewport when playhead drops out of view. Viewport itself stays in
   // main coords — intro/outro live in their own slots and always remain
   // visible when at the recording edge.
-  const mainPlayhead = clampMain(playStartSec)
-  if (mainPlayhead < vpStart || mainPlayhead > vpEnd) {
-    const half = (vpEnd - vpStart) / 2
-    vpStart = Math.max(0, mainPlayhead - half)
-    vpEnd   = Math.min(duration, vpStart + half * 2)
+  const mainPlayhead = clampMain(E.playStartSec)
+  if (mainPlayhead < E.vpStart || mainPlayhead > E.vpEnd) {
+    const half = (E.vpEnd - E.vpStart) / 2
+    E.vpStart = Math.max(0, mainPlayhead - half)
+    E.vpEnd   = Math.min(E.duration, E.vpStart + half * 2)
     updateMinimapViewport()
   }
   drawWaveform()
@@ -2574,25 +2465,25 @@ function seekBy(secs: number): void {
 function autoScrollToPlayhead(curSec: number): void {
   // Auto-scroll only operates inside the main recording. Intro/outro slots
   // are fixed and always visible at their respective edges.
-  if (curSec < 0 || curSec > duration) return
-  const span = vpEnd - vpStart
-  if (curSec > vpEnd - span * 0.1) {
-    vpStart = curSec - span * 0.05
-    vpEnd   = vpStart + span
-    if (vpEnd > duration) { vpEnd = duration; vpStart = Math.max(0, duration - span) }
+  if (curSec < 0 || curSec > E.duration) return
+  const span = E.vpEnd - E.vpStart
+  if (curSec > E.vpEnd - span * 0.1) {
+    E.vpStart = curSec - span * 0.05
+    E.vpEnd   = E.vpStart + span
+    if (E.vpEnd > E.duration) { E.vpEnd = E.duration; E.vpStart = Math.max(0, E.duration - span) }
     updateMinimapViewport()
   }
 }
 
 // ── Cut helpers ───────────────────────────────────────────────────────────
 function isInCut(sec: number): boolean {
-  return cuts.some(c => sec >= c.start && sec <= c.end)
+  return E.cuts.some(c => sec >= c.start && sec <= c.end)
 }
 
 function isInDrag(sec: number): boolean {
-  if (!isDragging) return false
-  const s = Math.min(dragStartSec, dragEndSec)
-  const e = Math.max(dragStartSec, dragEndSec)
+  if (!E.isDragging) return false
+  const s = Math.min(E.dragStartSec, E.dragEndSec)
+  const e = Math.max(E.dragStartSec, E.dragEndSec)
   return sec >= s && sec <= e
 }
 
@@ -2601,31 +2492,31 @@ function isInDrag(sec: number): boolean {
 // pushCutHistory() is called AFTER a mutation to record the new state.
 function pushCutHistory(): void {
   // Discard any redo states ahead of the current pointer
-  cutHistory = cutHistory.slice(0, cutHistoryIdx + 1)
-  cutHistory.push(JSON.parse(JSON.stringify(cuts)))
-  if (cutHistory.length > 50) cutHistory.shift()
-  cutHistoryIdx = cutHistory.length - 1
+  E.cutHistory = E.cutHistory.slice(0, E.cutHistoryIdx + 1)
+  E.cutHistory.push(JSON.parse(JSON.stringify(E.cuts)))
+  if (E.cutHistory.length > 50) E.cutHistory.shift()
+  E.cutHistoryIdx = E.cutHistory.length - 1
   // Persist cuts to a draft sidecar so a crash mid-edit doesn't lose the work
   scheduleDraftSave()
 }
 
 let draftSaveTimer: ReturnType<typeof setTimeout> | null = null
 function scheduleDraftSave(): void {
-  if (!filePath) return
+  if (!E.filePath) return
   if (draftSaveTimer) clearTimeout(draftSaveTimer)
   // Debounce 2 s — avoid IPC spam during rapid drag operations
   draftSaveTimer = setTimeout(() => {
     draftSaveTimer = null
-    const fp = filePath
+    const fp = E.filePath
     if (!fp) return
-    window.api.editorSaveCutsDraft(fp, cuts).catch(() => {})
+    window.api.editorSaveCutsDraft(fp, E.cuts).catch(() => {})
   }, 2000)
 }
 
 /** Called after a successful save/export to remove the draft. */
 export function clearEditorDraft(): void {
   if (draftSaveTimer) { clearTimeout(draftSaveTimer); draftSaveTimer = null }
-  if (filePath) window.api.editorDeleteCutsDraft(filePath).catch(() => {})
+  if (E.filePath) window.api.editorDeleteCutsDraft(E.filePath).catch(() => {})
 }
 
 function addCut(s: number, e: number): void {
@@ -2636,24 +2527,24 @@ function addCut(s: number, e: number): void {
   s = clampMain(s); e = clampMain(e)
   if (e - s < 0.1) return
 
-  cuts.push({ start: s, end: e })
-  cuts.sort((a, b) => a.start - b.start)
+  E.cuts.push({ start: s, end: e })
+  E.cuts.sort((a, b) => a.start - b.start)
 
   // Merge overlapping
   const merged: Cut[] = []
-  for (const c of cuts) {
+  for (const c of E.cuts) {
     const prev = merged[merged.length - 1]
     if (prev && c.start <= prev.end + 0.01) { prev.end = Math.max(prev.end, c.end) }
     else merged.push({ ...c })
   }
-  cuts = merged
+  E.cuts = merged
   pushCutHistory()
   markDirty()
   updateRemainingDisplay()
 }
 
 function deleteCut(i: number): void {
-  cuts.splice(i, 1)
+  E.cuts.splice(i, 1)
   pushCutHistory()
   markDirty()
   renderCutList()
@@ -2663,17 +2554,17 @@ function deleteCut(i: number): void {
 }
 
 function undoCut(): void {
-  if (cutHistoryIdx <= 0) {
+  if (E.cutHistoryIdx <= 0) {
     // Undo back to empty state
-    if (cutHistoryIdx === 0 && cuts.length > 0) {
-      cuts = []
-      cutHistoryIdx = -1
+    if (E.cutHistoryIdx === 0 && E.cuts.length > 0) {
+      E.cuts = []
+      E.cutHistoryIdx = -1
       renderCutList(); updateRemainingDisplay(); drawWaveform(); drawMinimap()
     }
     return
   }
-  cutHistoryIdx--
-  cuts = JSON.parse(JSON.stringify(cutHistory[cutHistoryIdx]))
+  E.cutHistoryIdx--
+  E.cuts = JSON.parse(JSON.stringify(E.cutHistory[E.cutHistoryIdx]))
   renderCutList()
   updateRemainingDisplay()
   drawWaveform()
@@ -2681,9 +2572,9 @@ function undoCut(): void {
 }
 
 function redoCut(): void {
-  if (cutHistoryIdx >= cutHistory.length - 1) return
-  cutHistoryIdx++
-  cuts = JSON.parse(JSON.stringify(cutHistory[cutHistoryIdx]))
+  if (E.cutHistoryIdx >= E.cutHistory.length - 1) return
+  E.cutHistoryIdx++
+  E.cuts = JSON.parse(JSON.stringify(E.cutHistory[E.cutHistoryIdx]))
   renderCutList()
   updateRemainingDisplay()
   drawWaveform()
@@ -2691,14 +2582,14 @@ function redoCut(): void {
 }
 
 function getKeepSegs(): { start: number; end: number }[] {
-  const sorted = [...cuts].sort((a, b) => a.start - b.start)
+  const sorted = [...E.cuts].sort((a, b) => a.start - b.start)
   const keeps: { start: number; end: number }[] = []
   let cursor = 0
   for (const c of sorted) {
     if (c.start > cursor + 0.05) keeps.push({ start: cursor, end: c.start })
     cursor = Math.max(cursor, c.end)
   }
-  if (cursor < duration - 0.05) keeps.push({ start: cursor, end: duration })
+  if (cursor < E.duration - 0.05) keeps.push({ start: cursor, end: E.duration })
   return keeps
 }
 
@@ -2712,17 +2603,17 @@ function updateRemainingDisplay(): void {
   // Update header summary regardless — duration / normalize state may have
   // changed even if no cuts exist yet.
   updateHeaderSummary()
-  if (!el || !duration) return
+  if (!el || !E.duration) return
 
-  if (cuts.length === 0) {
+  if (E.cuts.length === 0) {
     el.style.display = 'none'
     return
   }
 
   const rem = getRemainingDuration()
-  const cut = duration - rem
+  const cut = E.duration - rem
   el.style.display = 'flex'
-  el.classList.toggle('has-cuts', cuts.length > 0)
+  el.classList.toggle('has-cuts', E.cuts.length > 0)
   if (dur) dur.textContent = `${formatDuration(rem)} (fjerner ${formatDuration(cut)})`
 }
 
@@ -2732,7 +2623,7 @@ function renderCutList(): void {
   const undo  = $('btn-editor-undo-all')
   if (!panel || !list || !undo) return
 
-  if (cuts.length === 0) {
+  if (E.cuts.length === 0) {
     panel.style.display = 'none'
     undo.style.display  = 'none'
     return
@@ -2743,7 +2634,7 @@ function renderCutList(): void {
 
   list.innerHTML = ''
 
-  cuts.forEach((c, i) => {
+  E.cuts.forEach((c, i) => {
     const dur = c.end - c.start
     const row = document.createElement('div')
     row.className = 'editor-cut-row'
@@ -2752,7 +2643,7 @@ function renderCutList(): void {
     // Thumbnail
     const thumb = document.createElement('div')
     thumb.className = 'editor-cut-thumb'
-    if (peaks) {
+    if (E.peaks) {
       thumb.innerHTML = makeCutThumbnailSvg(c)
     }
 
@@ -2785,7 +2676,7 @@ function renderCutList(): void {
 }
 
 function makeCutThumbnailSvg(cut: Cut): string {
-  if (!peaks) return ''
+  if (!E.peaks) return ''
   const W = 72, H = 24
   const startIdx = Math.floor(cut.start * 100)
   const endIdx   = Math.ceil(cut.end * 100)
@@ -2796,8 +2687,8 @@ function makeCutThumbnailSvg(cut: Cut): string {
   const rects: string[] = []
   for (let px = 0; px < W; px++) {
     const pi = startIdx + Math.floor(px / W * count)
-    if (pi >= peaks.length) break
-    const h = Math.min(maxH, peaks[pi] * gFac * maxH)
+    if (pi >= E.peaks.length) break
+    const h = Math.min(maxH, E.peaks[pi] * gFac * maxH)
     rects.push(`<rect x="${px}" y="${(midY - h).toFixed(1)}" width="1" height="${(h * 2).toFixed(1)}"/>`)
   }
   return `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="display:block">${rects.join('')}</svg>`
@@ -2806,12 +2697,12 @@ function makeCutThumbnailSvg(cut: Cut): string {
 function previewCut(cut: Cut): void {
   stopPlay()
   const PRE_ROLL = 3
-  playStartSec = Math.max(0, cut.start - PRE_ROLL)
-  updateTimecode(playStartSec)
-  if (playStartSec < vpStart || playStartSec > vpEnd) {
-    const half = (vpEnd - vpStart) / 2
-    vpStart = Math.max(0, playStartSec - half * 0.3)
-    vpEnd   = Math.min(duration, vpStart + half * 2)
+  E.playStartSec = Math.max(0, cut.start - PRE_ROLL)
+  updateTimecode(E.playStartSec)
+  if (E.playStartSec < E.vpStart || E.playStartSec > E.vpEnd) {
+    const half = (E.vpEnd - E.vpStart) / 2
+    E.vpStart = Math.max(0, E.playStartSec - half * 0.3)
+    E.vpEnd   = Math.min(E.duration, E.vpStart + half * 2)
     updateMinimapViewport()
   }
   startPlay(false)
@@ -2819,57 +2710,57 @@ function previewCut(cut: Cut): void {
 
 // ── Canvas mouse events ───────────────────────────────────────────────────
 function onCanvasDown(e: MouseEvent): void {
-  if (!peaks || e.button !== 0) return
-  const rect = canvas.getBoundingClientRect()
+  if (!E.peaks || e.button !== 0) return
+  const rect = E.canvas.getBoundingClientRect()
   const extSec  = xToSec(e.clientX - rect.left, rect.width)
   const mainSec = xToMainSec(e.clientX - rect.left, rect.width)
 
   // Check if clicking near a cut boundary → start handle drag. Cut handles
   // only live in main coords, so this uses mainSec.
-  const threshold = (vpEnd - vpStart) / rect.width * 10
-  for (let i = 0; i < cuts.length; i++) {
-    if (Math.abs(mainSec - cuts[i].start) < threshold) {
-      handleDrag = { cutIdx: i, side: 'start' }
+  const threshold = (E.vpEnd - E.vpStart) / rect.width * 10
+  for (let i = 0; i < E.cuts.length; i++) {
+    if (Math.abs(mainSec - E.cuts[i].start) < threshold) {
+      E.handleDrag = { cutIdx: i, side: 'start' }
       return
     }
-    if (Math.abs(mainSec - cuts[i].end) < threshold) {
-      handleDrag = { cutIdx: i, side: 'end' }
+    if (Math.abs(mainSec - E.cuts[i].end) < threshold) {
+      E.handleDrag = { cutIdx: i, side: 'end' }
       return
     }
   }
 
   // Check if clicking near playhead in the ruler area → playhead drag
   const yInCanvas = e.clientY - rect.top
-  const playX = secToX(playStartSec, rect.width)
+  const playX = secToX(E.playStartSec, rect.width)
   if (Math.abs(e.clientX - rect.left - playX) < 12 && yInCanvas < 28) {
-    playheadDragging = true
+    E.playheadDragging = true
     stopPlay()
     return
   }
 
   // Normal drag to create cut — drag coords are clamped to main, since cuts
   // can only exist inside the recording.
-  dragStartSec = clampMain(extSec)
-  dragEndSec   = dragStartSec
-  isDragging   = true
+  E.dragStartSec = clampMain(extSec)
+  E.dragEndSec   = E.dragStartSec
+  E.isDragging   = true
 }
 
 function onCanvasMove(e: MouseEvent): void {
-  if (!peaks) return
-  const rect = canvas.getBoundingClientRect()
+  if (!E.peaks) return
+  const rect = E.canvas.getBoundingClientRect()
   const extSec  = xToSec(e.clientX - rect.left, rect.width)
   const mainSec = xToMainSec(e.clientX - rect.left, rect.width)
 
   // Handle drag: resize cut boundary. Snap to nearby segment boundaries when
   // shift is NOT held — gives precise lock-in to detected speech/music edges.
   // Repaints are rAF-coalesced so 60+ mousemoves/sec only redraw ~60 times.
-  if (handleDrag) {
-    const c = cuts[handleDrag.cutIdx]
+  if (E.handleDrag) {
+    const c = E.cuts[E.handleDrag.cutIdx]
     const snapped = e.shiftKey ? mainSec : snapToSegmentBoundary(mainSec, rect.width)
-    if (handleDrag.side === 'start') {
+    if (E.handleDrag.side === 'start') {
       c.start = Math.max(0, Math.min(c.end - 0.1, snapped))
     } else {
-      c.end   = Math.min(duration, Math.max(c.start + 0.1, snapped))
+      c.end   = Math.min(E.duration, Math.max(c.start + 0.1, snapped))
     }
     updateRemainingDisplay()
     scheduleDrawWaveform()
@@ -2877,44 +2768,44 @@ function onCanvasMove(e: MouseEvent): void {
   }
 
   // Playhead drag — covers full extended timeline (intro/main/outro)
-  if (playheadDragging) {
-    playStartSec = clampPlayable(extSec)
-    updateTimecode(playStartSec)
-    if (isVideoFile && videoEl) videoEl.currentTime = clampMain(playStartSec)
+  if (E.playheadDragging) {
+    E.playStartSec = clampPlayable(extSec)
+    updateTimecode(E.playStartSec)
+    if (E.isVideoFile && E.videoEl) E.videoEl.currentTime = clampMain(E.playStartSec)
     scheduleDrawWaveform()
     return
   }
 
-  hoverSec = extSec
+  E.hoverSec = extSec
 
   // Cursor feedback
-  const threshold = (vpEnd - vpStart) / rect.width * 10
-  const nearBoundary = cuts.some(c =>
+  const threshold = (E.vpEnd - E.vpStart) / rect.width * 10
+  const nearBoundary = E.cuts.some(c =>
     Math.abs(mainSec - c.start) < threshold || Math.abs(mainSec - c.end) < threshold
   )
-  const overCut = cuts.some(c => mainSec >= c.start && mainSec <= c.end)
-  const nearPlayhead = Math.abs(e.clientX - rect.left - secToX(playStartSec, rect.width)) < 12
+  const overCut = E.cuts.some(c => mainSec >= c.start && mainSec <= c.end)
+  const nearPlayhead = Math.abs(e.clientX - rect.left - secToX(E.playStartSec, rect.width)) < 12
     && (e.clientY - rect.top) < 28
 
-  canvas.style.cursor = nearBoundary ? 'ew-resize'
+  E.canvas.style.cursor = nearBoundary ? 'ew-resize'
     : nearPlayhead    ? 'col-resize'
     : overCut         ? 'pointer'
     : 'crosshair'
 
-  if (isDragging) dragEndSec = clampMain(extSec)
+  if (E.isDragging) E.dragEndSec = clampMain(extSec)
 
   scheduleDrawWaveform()
 }
 
 function onCanvasUp(e: MouseEvent): void {
-  if (!peaks) return
-  const rect  = canvas.getBoundingClientRect()
+  if (!E.peaks) return
+  const rect  = E.canvas.getBoundingClientRect()
   const extSec = xToSec(e.clientX - rect.left, rect.width)
   const upMainSec = xToMainSec(e.clientX - rect.left, rect.width)
 
-  if (handleDrag) {
-    handleDrag = null
-    cuts.sort((a, b) => a.start - b.start)
+  if (E.handleDrag) {
+    E.handleDrag = null
+    E.cuts.sort((a, b) => a.start - b.start)
     pushCutHistory()
     renderCutList()
     updateRemainingDisplay()
@@ -2923,24 +2814,24 @@ function onCanvasUp(e: MouseEvent): void {
     return
   }
 
-  if (playheadDragging) {
-    playheadDragging = false
+  if (E.playheadDragging) {
+    E.playheadDragging = false
     // Snap playhead out of any cut region the user dragged into — cuts are
     // "skip me" zones, so resting the playhead inside one is meaningless.
-    playStartSec = snapOutOfCut(playStartSec)
-    updateTimecode(playStartSec)
-    if (isVideoFile && videoEl) videoEl.currentTime = clampMain(playStartSec)
+    E.playStartSec = snapOutOfCut(E.playStartSec)
+    updateTimecode(E.playStartSec)
+    if (E.isVideoFile && E.videoEl) E.videoEl.currentTime = clampMain(E.playStartSec)
     drawWaveform()
     return
   }
 
-  if (!isDragging) return
-  isDragging = false
+  if (!E.isDragging) return
+  E.isDragging = false
 
   // Cut-creation drag: hold shift to disable snap, otherwise snap both edges
   // to nearby detected segment boundaries.
-  if (Math.abs(upMainSec - dragStartSec) > 0.1) {
-    const s = e.shiftKey ? dragStartSec : snapToSegmentBoundary(dragStartSec, rect.width)
+  if (Math.abs(upMainSec - E.dragStartSec) > 0.1) {
+    const s = e.shiftKey ? E.dragStartSec : snapToSegmentBoundary(E.dragStartSec, rect.width)
     const eSec = e.shiftKey ? upMainSec : snapToSegmentBoundary(upMainSec, rect.width)
     addCut(s, eSec)
     renderCutList()
@@ -2950,23 +2841,23 @@ function onCanvasUp(e: MouseEvent): void {
     // end (the nearest keep-region start) so playback always begins at a
     // position that will actually produce audio.
     stopPlay()
-    playStartSec = snapOutOfCut(clampPlayable(extSec))
-    updateTimecode(playStartSec)
-    if (isVideoFile && videoEl) videoEl.currentTime = clampMain(playStartSec)
+    E.playStartSec = snapOutOfCut(clampPlayable(extSec))
+    updateTimecode(E.playStartSec)
+    if (E.isVideoFile && E.videoEl) E.videoEl.currentTime = clampMain(E.playStartSec)
   }
 
-  dragStartSec = -1
-  dragEndSec   = -1
+  E.dragStartSec = -1
+  E.dragEndSec   = -1
   drawWaveform()
   drawMinimap()
 }
 
 function onCanvasLeave(): void {
-  hoverSec = -99999
+  E.hoverSec = -99999
 
-  if (handleDrag) {
-    handleDrag = null
-    cuts.sort((a, b) => a.start - b.start)
+  if (E.handleDrag) {
+    E.handleDrag = null
+    E.cuts.sort((a, b) => a.start - b.start)
     pushCutHistory()
     renderCutList()
     updateRemainingDisplay()
@@ -2974,19 +2865,19 @@ function onCanvasLeave(): void {
     return
   }
 
-  if (playheadDragging) {
-    playheadDragging = false
+  if (E.playheadDragging) {
+    E.playheadDragging = false
     drawWaveform()
     return
   }
 
-  if (isDragging) {
-    isDragging = false
-    if (Math.abs(dragEndSec - dragStartSec) > 0.1) {
-      addCut(dragStartSec, dragEndSec)
+  if (E.isDragging) {
+    E.isDragging = false
+    if (Math.abs(E.dragEndSec - E.dragStartSec) > 0.1) {
+      addCut(E.dragStartSec, E.dragEndSec)
       renderCutList()
     }
-    dragStartSec = -1; dragEndSec = -1
+    E.dragStartSec = -1; E.dragEndSec = -1
     drawWaveform(); drawMinimap()
   } else {
     drawWaveform()
@@ -2995,10 +2886,10 @@ function onCanvasLeave(): void {
 
 function onCanvasContextMenu(e: MouseEvent): void {
   e.preventDefault()
-  if (!peaks) return
-  const rect = canvas.getBoundingClientRect()
+  if (!E.peaks) return
+  const rect = E.canvas.getBoundingClientRect()
   const mainSec = xToMainSec(e.clientX - rect.left, rect.width)
-  const idx  = cuts.findIndex(c => mainSec >= c.start && mainSec <= c.end)
+  const idx  = E.cuts.findIndex(c => mainSec >= c.start && mainSec <= c.end)
   if (idx >= 0) deleteCut(idx)
 }
 
@@ -3007,18 +2898,18 @@ function onCanvasWheel(e: WheelEvent): void {
   if (e.ctrlKey || e.metaKey) {
     // Zoom centered on mouse position (main coords only — intro/outro slots
     // have their own fixed scale).
-    const rect = canvas.getBoundingClientRect()
+    const rect = E.canvas.getBoundingClientRect()
     const mouseSec = xToMainSec(e.clientX - rect.left, rect.width)
     const factor   = e.deltaY > 0 ? 1.25 : 0.75
-    const span     = (vpEnd - vpStart) * factor
-    const frac     = (mouseSec - vpStart) / (vpEnd - vpStart)
-    vpStart = Math.max(0, mouseSec - frac * span)
-    vpEnd   = Math.min(duration, vpStart + span)
-    if (vpEnd - vpStart < 0.5) { vpEnd = vpStart + 0.5 }
+    const span     = (E.vpEnd - E.vpStart) * factor
+    const frac     = (mouseSec - E.vpStart) / (E.vpEnd - E.vpStart)
+    E.vpStart = Math.max(0, mouseSec - frac * span)
+    E.vpEnd   = Math.min(E.duration, E.vpStart + span)
+    if (E.vpEnd - E.vpStart < 0.5) { E.vpEnd = E.vpStart + 0.5 }
     drawWaveform()
     updateMinimapViewport()
   } else {
-    panBy(e.deltaY * (vpEnd - vpStart) / 800)
+    panBy(e.deltaY * (E.vpEnd - E.vpStart) / 800)
   }
 }
 
@@ -3027,7 +2918,7 @@ function onCanvasWheel(e: WheelEvent): void {
  *  one is meaningless because no audio plays there. Out-of-range or
  *  already-outside-cut input is returned unchanged. */
 function snapOutOfCut(sec: number): number {
-  for (const c of cuts) {
+  for (const c of E.cuts) {
     if (sec >= c.start && sec < c.end) {
       // Snap to the cut's end, clamped to the playable range so we never
       // overshoot duration when a trailing cut runs to the file end.
@@ -3041,13 +2932,13 @@ function snapOutOfCut(sec: number): number {
  *  threshold (default ~0.4 sec). Falls through to input unchanged when no
  *  suggestions are loaded or no boundary is close enough. */
 function snapToSegmentBoundary(sec: number, W: number): number {
-  if (!suggestions.length) return sec
+  if (!E.suggestions.length) return sec
   // Threshold scales with zoom level (~8 px) — tight at high zoom, lenient
   // when zoomed out so coarse drags still find the boundary.
-  const threshold = Math.max(0.15, ((vpEnd - vpStart) / Math.max(1, W)) * 8)
+  const threshold = Math.max(0.15, ((E.vpEnd - E.vpStart) / Math.max(1, W)) * 8)
   let closest = sec
   let minDist = threshold
-  for (const seg of suggestions) {
+  for (const seg of E.suggestions) {
     if (!shouldShowSegment(seg.type)) continue
     for (const t of [seg.start, seg.end]) {
       const d = Math.abs(sec - t)
@@ -3059,7 +2950,7 @@ function snapToSegmentBoundary(sec: number, W: number): number {
 
 // ── Playback ──────────────────────────────────────────────────────────────
 function togglePlay(preview: boolean): void {
-  if (isPlaying && isPreview === preview) { stopPlay(); return }
+  if (E.isPlaying && E.isPreview === preview) { stopPlay(); return }
   stopPlay()
   startPlay(preview)
 }
@@ -3071,59 +2962,59 @@ function togglePlay(preview: boolean): void {
 let videoEndedHandler: (() => void) | null = null
 
 function attachVideoEndedHandler(onEnded: () => void): void {
-  if (!videoEl) return
-  if (videoEndedHandler) videoEl.removeEventListener('ended', videoEndedHandler)
+  if (!E.videoEl) return
+  if (videoEndedHandler) E.videoEl.removeEventListener('ended', videoEndedHandler)
   videoEndedHandler = onEnded
-  videoEl.addEventListener('ended', onEnded, { once: true })
+  E.videoEl.addEventListener('ended', onEnded, { once: true })
 }
 
 function detachVideoEndedHandler(): void {
-  if (videoEl && videoEndedHandler) {
-    videoEl.removeEventListener('ended', videoEndedHandler)
+  if (E.videoEl && videoEndedHandler) {
+    E.videoEl.removeEventListener('ended', videoEndedHandler)
     videoEndedHandler = null
   }
 }
 
 function startPlay(preview: boolean): void {
   // Video-only mode: no audio buffer, but video element can still play
-  if (isVideoFile && videoEl && !audioBuffer) {
-    isPreview    = preview
-    loopStartSec = playStartSec
-    isPlaying    = true
-    videoEl.currentTime = clampMain(playStartSec)
-    videoEl.play().catch(() => {})
+  if (E.isVideoFile && E.videoEl && !E.audioBuffer) {
+    E.isPreview    = preview
+    E.loopStartSec = E.playStartSec
+    E.isPlaying    = true
+    E.videoEl.currentTime = clampMain(E.playStartSec)
+    E.videoEl.play().catch(() => {})
     attachVideoEndedHandler(() => {
       videoEndedHandler = null
-      if (!isPlaying) return
-      if (isLooping) { stopPlay(); playStartSec = loopStartSec; startPlay(isPreview) }
-      else { isPlaying = false; cancelAnimationFrame(rafId); updatePlayIcon(); drawWaveform() }
+      if (!E.isPlaying) return
+      if (E.isLooping) { stopPlay(); E.playStartSec = E.loopStartSec; startPlay(E.isPreview) }
+      else { E.isPlaying = false; cancelAnimationFrame(E.rafId); updatePlayIcon(); drawWaveform() }
     })
     updatePlayIcon()
     animate()
     return
   }
 
-  if (!audioBuffer || !audioCtx) return
+  if (!E.audioBuffer || !E.audioCtx) return
 
   // Video playback: drive the video element, use Web Audio only for gain meter
-  if (isVideoFile && videoEl) {
-    isPreview    = preview
-    loopStartSec = playStartSec
-    isPlaying    = true
-    videoEl.currentTime = clampMain(playStartSec)
-    videoEl.play().catch(() => {})
+  if (E.isVideoFile && E.videoEl) {
+    E.isPreview    = preview
+    E.loopStartSec = E.playStartSec
+    E.isPlaying    = true
+    E.videoEl.currentTime = clampMain(E.playStartSec)
+    E.videoEl.play().catch(() => {})
 
     // On natural end, handle loop / stop
     attachVideoEndedHandler(() => {
       videoEndedHandler = null
-      if (!isPlaying) return
-      if (isLooping) {
+      if (!E.isPlaying) return
+      if (E.isLooping) {
         stopPlay()
-        playStartSec = loopStartSec
-        startPlay(isPreview)
+        E.playStartSec = E.loopStartSec
+        startPlay(E.isPreview)
       } else {
-        isPlaying = false
-        cancelAnimationFrame(rafId)
+        E.isPlaying = false
+        cancelAnimationFrame(E.rafId)
         updatePlayIcon()
         drawWaveform()
       }
@@ -3137,43 +3028,43 @@ function startPlay(preview: boolean): void {
   // If the playhead has somehow ended up inside a cut (e.g. arrow-key seek
   // landed there), snap it to the cut's end before scheduling so audio and
   // playhead stay in sync from the very first frame.
-  playStartSec = snapOutOfCut(playStartSec)
+  E.playStartSec = snapOutOfCut(E.playStartSec)
 
-  isPreview = preview
-  loopStartSec = playStartSec
+  E.isPreview = preview
+  E.loopStartSec = E.playStartSec
 
   // Extended-timeline playback: playStartSec can be inside intro (< 0),
   // main ([0, duration]), or outro (> duration). We schedule each region's
   // buffer at the right offset so audio always matches the playhead.
-  const introOn = includeIntroOutro && !!introBuffer
-  const outroOn = includeIntroOutro && !!outroBuffer
-  const inIntro = playStartSec < 0 && introOn
-  const inOutro = playStartSec > duration && outroOn
-  const mainStartSec = inIntro ? 0 : (inOutro ? duration : Math.max(0, playStartSec))
+  const introOn = E.includeIntroOutro && !!E.introBuffer
+  const outroOn = E.includeIntroOutro && !!E.outroBuffer
+  const inIntro = E.playStartSec < 0 && introOn
+  const inOutro = E.playStartSec > E.duration && outroOn
+  const mainStartSec = inIntro ? 0 : (inOutro ? E.duration : Math.max(0, E.playStartSec))
 
-  isPlaying        = true
-  playStartCtxTime = audioCtx.currentTime
+  E.isPlaying        = true
+  E.playStartCtxTime = E.audioCtx.currentTime
 
-  let when = audioCtx.currentTime
+  let when = E.audioCtx.currentTime
   const nodes: AudioBufferSourceNode[] = []
 
-  const mixGain = audioCtx.createGain()
+  const mixGain = E.audioCtx.createGain()
   // Apply the user-set peak-normalization gain to playback. This mirrors
   // the ffmpeg `volume={gainDb}dB` filter we add at export time so what
   // they hear during preview matches what they'll get in the exported file.
   mixGain.gain.value = gainFactor()
-  mixGain.connect(audioCtx.destination)
+  mixGain.connect(E.audioCtx.destination)
 
   // Schedule intro from the right offset whenever playhead is at-or-before
   // main start. When playhead is inside intro (negative sec) we start the
   // intro from `effIntroDur + playStartSec` so audio matches the playhead.
-  if (introOn && playStartSec < duration) {
-    const iDur = introBuffer!.duration
-    const introOffset = inIntro ? Math.max(0, effIntroDur() + playStartSec) : 0
+  if (introOn && E.playStartSec < E.duration) {
+    const iDur = E.introBuffer!.duration
+    const introOffset = inIntro ? Math.max(0, effIntroDur() + E.playStartSec) : 0
     const playDur = iDur - introOffset
     if (playDur > 0.01) {
-      const introNode = audioCtx.createBufferSource()
-      introNode.buffer = introBuffer
+      const introNode = E.audioCtx.createBufferSource()
+      introNode.buffer = E.introBuffer
       introNode.connect(mixGain)
       introNode.start(when, introOffset, playDur)
       when += playDur
@@ -3182,7 +3073,7 @@ function startPlay(preview: boolean): void {
   }
 
   if (!inOutro) {
-    const allSegs  = preview ? getKeepSegs() : [{ start: 0, end: duration }]
+    const allSegs  = preview ? getKeepSegs() : [{ start: 0, end: E.duration }]
     const segments = allSegs.filter(s => s.end > mainStartSec)
 
     let firstMainSec = -1
@@ -3194,8 +3085,8 @@ function startPlay(preview: boolean): void {
 
       if (firstMainSec < 0) firstMainSec = seg.start + offset
 
-      const node = audioCtx.createBufferSource()
-      node.buffer = audioBuffer
+      const node = E.audioCtx.createBufferSource()
+      node.buffer = E.audioBuffer
       node.connect(mixGain)
       node.start(when, seg.start + offset, dur)
       when += dur
@@ -3206,37 +3097,37 @@ function startPlay(preview: boolean): void {
     // applies when not playing through intro (we keep negative playStartSec
     // while inside intro so the timecode shows "Intro …").
     if (!inIntro && firstMainSec >= 0 && firstMainSec > mainStartSec + 0.01) {
-      playStartSec = firstMainSec
+      E.playStartSec = firstMainSec
     }
   }
 
-  sourceNodes = nodes
+  E.sourceNodes = nodes
 
   // Schedule outro after main content (or partway through if playhead is
   // already inside outro).
   if (outroOn) {
-    const outroOffset = inOutro ? Math.max(0, playStartSec - duration) : 0
-    const oDur = outroBuffer!.duration - outroOffset
+    const outroOffset = inOutro ? Math.max(0, E.playStartSec - E.duration) : 0
+    const oDur = E.outroBuffer!.duration - outroOffset
     if (oDur > 0.01) {
-      const outroNode = audioCtx.createBufferSource()
-      outroNode.buffer = outroBuffer
+      const outroNode = E.audioCtx.createBufferSource()
+      outroNode.buffer = E.outroBuffer
       outroNode.connect(mixGain)
       outroNode.start(when, outroOffset, oDur)
       nodes.push(outroNode)
     }
   }
 
-  if (nodes.length === 0) { isPlaying = false; return }
+  if (nodes.length === 0) { E.isPlaying = false; return }
 
   nodes[nodes.length - 1]?.addEventListener('ended', () => {
-    if (!isPlaying) return
-    if (isLooping) {
+    if (!E.isPlaying) return
+    if (E.isLooping) {
       stopPlay()
-      playStartSec = loopStartSec
-      startPlay(isPreview)
+      E.playStartSec = E.loopStartSec
+      startPlay(E.isPreview)
     } else {
-      isPlaying = false
-      cancelAnimationFrame(rafId)
+      E.isPlaying = false
+      cancelAnimationFrame(E.rafId)
       updatePlayIcon()
       drawWaveform()
     }
@@ -3248,41 +3139,41 @@ function startPlay(preview: boolean): void {
 
 function stopPlay(): void {
   detachVideoEndedHandler()
-  if (isVideoFile && videoEl) {
-    if (isPlaying) {
-      playStartSec = videoEl.currentTime
+  if (E.isVideoFile && E.videoEl) {
+    if (E.isPlaying) {
+      E.playStartSec = E.videoEl.currentTime
     }
-    videoEl.pause()
-    isPlaying = false
-    cancelAnimationFrame(rafId)
+    E.videoEl.pause()
+    E.isPlaying = false
+    cancelAnimationFrame(E.rafId)
     updatePlayIcon()
     drawWaveform()
     return
   }
 
-  for (const n of sourceNodes) { try { n.stop() } catch { /* already stopped */ } }
-  sourceNodes = []
-  if (isPlaying && audioCtx) {
-    playStartSec = clampPlayable(playStartSec + (audioCtx.currentTime - playStartCtxTime))
+  for (const n of E.sourceNodes) { try { n.stop() } catch { /* already stopped */ } }
+  E.sourceNodes = []
+  if (E.isPlaying && E.audioCtx) {
+    E.playStartSec = clampPlayable(E.playStartSec + (E.audioCtx.currentTime - E.playStartCtxTime))
   }
-  isPlaying = false
-  cancelAnimationFrame(rafId)
+  E.isPlaying = false
+  cancelAnimationFrame(E.rafId)
   updatePlayIcon()
   drawWaveform()
 }
 
 function animate(): void {
-  if (!isPlaying) return
+  if (!E.isPlaying) return
 
-  if (isVideoFile && videoEl) {
-    const curSec = videoEl.currentTime
+  if (E.isVideoFile && E.videoEl) {
+    const curSec = E.videoEl.currentTime
 
     // Preview mode: skip over cut regions
-    if (isPreview) {
-      const nextCut = cuts.find(c => curSec >= c.start && curSec < c.end)
+    if (E.isPreview) {
+      const nextCut = E.cuts.find(c => curSec >= c.start && curSec < c.end)
       if (nextCut) {
-        videoEl.currentTime = nextCut.end
-        playStartSec = nextCut.end
+        E.videoEl.currentTime = nextCut.end
+        E.playStartSec = nextCut.end
       }
     }
 
@@ -3290,17 +3181,17 @@ function animate(): void {
     autoScrollToPlayhead(curSec)
     setCurrentTranscriptTime(curSec)
     drawWaveform()
-    rafId = requestAnimationFrame(animate)
+    E.rafId = requestAnimationFrame(animate)
     return
   }
 
-  if (!audioCtx) return
-  const curSec = playStartSec + (audioCtx.currentTime - playStartCtxTime)
+  if (!E.audioCtx) return
+  const curSec = E.playStartSec + (E.audioCtx.currentTime - E.playStartCtxTime)
   updateTimecode(curSec)
   autoScrollToPlayhead(curSec)
   setCurrentTranscriptTime(curSec)
   drawWaveform()
-  rafId = requestAnimationFrame(animate)
+  E.rafId = requestAnimationFrame(animate)
 }
 
 function updatePlayIcon(): void {
@@ -3308,11 +3199,11 @@ function updatePlayIcon(): void {
   const previewBtn = $('btn-editor-preview')
   const canvasWrap = $('editor-canvas-wrap')
   if (!icon) return
-  if (isPlaying && !isPreview) {
+  if (E.isPlaying && !E.isPreview) {
     icon.innerHTML = '<rect x="5" y="4" width="4" height="12" rx="1"/><rect x="11" y="4" width="4" height="12" rx="1"/>'
     previewBtn?.classList.remove('is-playing')
     canvasWrap?.classList.add('is-playing')
-  } else if (isPlaying && isPreview) {
+  } else if (E.isPlaying && E.isPreview) {
     icon.innerHTML = '<path d="M6.3 4.6a1 1 0 011.4 0l6 5a1 1 0 010 1.6l-6 5A1 1 0 016 15.4V4.6z"/>'
     previewBtn?.classList.add('is-playing')
     canvasWrap?.classList.add('is-playing')
@@ -3325,21 +3216,21 @@ function updatePlayIcon(): void {
 
 // ── Export flow ────────────────────────────────────────────────────────────
 function openExportModal(): void {
-  if (!filePath) return
+  if (!E.filePath) return
 
   // Show/hide format section vs video notice
   const fmtSection   = $('export-fmt-section')
   const videoNotice  = $('export-video-notice')
-  if (fmtSection)  fmtSection.style.display  = isVideoFile ? 'none' : ''
-  if (videoNotice) videoNotice.style.display = isVideoFile ? '' : 'none'
+  if (fmtSection)  fmtSection.style.display  = E.isVideoFile ? 'none' : ''
+  if (videoNotice) videoNotice.style.display = E.isVideoFile ? '' : 'none'
 
   // Update gain summary — only shown when peak normalize has been applied.
   const procRow  = $('export-proc-row')
   const summary  = $('export-proc-summary')
   if (procRow && summary) {
-    if (audioGainDb !== 0) {
-      const sign = audioGainDb >= 0 ? '+' : ''
-      summary.textContent = `${t('editor.normalizeApplied', 'Normalisert')} (${sign}${audioGainDb.toFixed(1)} dB → -1 dBFS)`
+    if (E.audioGainDb !== 0) {
+      const sign = E.audioGainDb >= 0 ? '+' : ''
+      summary.textContent = `${t('editor.normalizeApplied', 'Normalisert')} (${sign}${E.audioGainDb.toFixed(1)} dB → -1 dBFS)`
       procRow.style.display = ''
     } else {
       procRow.style.display = 'none'
@@ -3349,19 +3240,19 @@ function openExportModal(): void {
   const ioSummary = $('export-io-summary')
   if (ioRow && ioSummary) {
     const parts = []
-    if (!isVideoFile) {
-      if (includeIntroOutro && settings.editorIntroPath) {
+    if (!E.isVideoFile) {
+      if (E.includeIntroOutro && settings.editorIntroPath) {
         parts.push('Intro: ' + (settings.editorIntroPath.split(/[/\\]/).pop() ?? ''))
       }
-      if (includeIntroOutro && settings.editorOutroPath) {
+      if (E.includeIntroOutro && settings.editorOutroPath) {
         parts.push('Outro: ' + (settings.editorOutroPath.split(/[/\\]/).pop() ?? ''))
       }
     } else {
-      if (includeIntroOutro && videoIntroPath) {
-        parts.push('Video-intro: ' + (videoIntroPath.split(/[/\\]/).pop() ?? ''))
+      if (E.includeIntroOutro && E.videoIntroPath) {
+        parts.push('Video-intro: ' + (E.videoIntroPath.split(/[/\\]/).pop() ?? ''))
       }
-      if (includeIntroOutro && videoOutroPath) {
-        parts.push('Video-outro: ' + (videoOutroPath.split(/[/\\]/).pop() ?? ''))
+      if (E.includeIntroOutro && E.videoOutroPath) {
+        parts.push('Video-outro: ' + (E.videoOutroPath.split(/[/\\]/).pop() ?? ''))
       }
     }
     ioSummary.textContent = parts.length ? parts.join(' · ') : ''
@@ -3419,7 +3310,7 @@ async function renderPublishOptions(): Promise<void> {
 
   const podcastEnabled = settings.podcast?.enabled === true
 
-  const haveAny = configuredCache.gdrive || configuredCache.dropbox || configuredCache.onedrive || podcastEnabled || (isVideoFile && configuredCache.youtubeConnected)
+  const haveAny = configuredCache.gdrive || configuredCache.dropbox || configuredCache.onedrive || podcastEnabled || (E.isVideoFile && configuredCache.youtubeConnected)
   configL.style.display = haveAny ? 'none' : ''
   // The "Eksporter og publiser" button is only meaningful if at least one
   // service is configured.
@@ -3456,7 +3347,7 @@ async function renderPublishOptions(): Promise<void> {
   // Video files: surface YouTube as an actionable row. If user is connected,
   // checkbox enables upload; otherwise we render a "Koble til YouTube"-link
   // so they can opt-in inline without leaving the modal.
-  if (isVideoFile) {
+  if (E.isVideoFile) {
     if (configuredCache.youtubeConnected) {
       addRow('youtube', t('editor.exportPublishYoutube', 'Last opp video til YouTube (privat)'), true)
     } else {
@@ -3514,8 +3405,8 @@ async function runPublishingForExport(outputPath: string): Promise<void> {
   }
   if (publishSelections.youtube) {
     // Build metadata from the file name + chapter metadata.
-    const title = (meta.title?.trim() || (outputPath.split(/[/\\]/).pop() ?? 'SundayRec opptak')).replace(/\.[^.]+$/, '')
-    const description = (meta.description ?? '').slice(0, 5000)
+    const title = (E.meta.title?.trim() || (outputPath.split(/[/\\]/).pop() ?? 'SundayRec opptak')).replace(/\.[^.]+$/, '')
+    const description = (E.meta.description ?? '').slice(0, 5000)
     tasks.push({
       label: 'YouTube',
       run: async () => {
@@ -3619,36 +3510,36 @@ async function runExport(): Promise<void> {
     dest === 'folder'  ? 'folder'  : 'new'
 
   // Auto-save metadata before export
-  if (metaDirty) await saveMetadata()
+  if (E.metaDirty) await saveMetadata()
 
   let result: { ok: boolean; outputPath?: string; error?: string }
 
-  if (isVideoFile) {
+  if (E.isVideoFile) {
     result = await window.api.editorExportVideo({
-      inputPath:    filePath,
-      cutRegions:   cuts,
-      duration,
+      inputPath:    E.filePath,
+      cutRegions:   E.cuts,
+      duration:     E.duration,
       mode,
-      outputFolder: exportOutputFolder || undefined,
+      outputFolder: E.exportOutputFolder || undefined,
       processing: { ffmpegFilters: getExportFilters() },
-      introPath:  (includeIntroOutro && videoIntroPath) ? videoIntroPath : undefined,
-      outroPath:  (includeIntroOutro && videoOutroPath) ? videoOutroPath : undefined,
-      metadata:   meta,
+      introPath:  (E.includeIntroOutro && E.videoIntroPath) ? E.videoIntroPath : undefined,
+      outroPath:  (E.includeIntroOutro && E.videoOutroPath) ? E.videoOutroPath : undefined,
+      metadata:   E.meta,
     })
   } else {
     result = await window.api.editorExportFile({
-      inputPath:    filePath,
-      cutRegions:   cuts,
-      duration,
+      inputPath:    E.filePath,
+      cutRegions:   E.cuts,
+      duration:     E.duration,
       mode,
-      outputFolder: exportOutputFolder || undefined,
+      outputFolder: E.exportOutputFolder || undefined,
       outputFormat: fmt,
       outputBitrate:  bitrate,
       outputBitDepth: bitDepth,
       processing: { ffmpegFilters: getExportFilters() },
-      introPath:  (includeIntroOutro && settings.editorIntroPath) ? settings.editorIntroPath : undefined,
-      outroPath:  (includeIntroOutro && settings.editorOutroPath) ? settings.editorOutroPath : undefined,
-      metadata:   meta,
+      introPath:  (E.includeIntroOutro && settings.editorIntroPath) ? settings.editorIntroPath : undefined,
+      outroPath:  (E.includeIntroOutro && settings.editorOutroPath) ? settings.editorOutroPath : undefined,
+      metadata:   E.meta,
     })
   }
 
@@ -3667,10 +3558,10 @@ async function runExport(): Promise<void> {
     clearEditorDraft()  // export succeeded — drop the autosave sidecar
     clearDirty()
     // Run publishing if user picked "Eksporter og publiser"
-    if (publishAfterExport && result.outputPath) {
+    if (E.publishAfterExport && result.outputPath) {
       await runPublishingForExport(result.outputPath)
     }
-    publishAfterExport = false
+    E.publishAfterExport = false
   } else {
     if (text) text.textContent = describeExportError(result.error)
     if (row) row.removeAttribute('data-ok')
@@ -3794,15 +3685,15 @@ function renderRecentFiles(): void {
 function updateHeaderSummary(): void {
   const summaryEl = $('editor-header-summary')
   const dirtyEl   = $('editor-dirty-dot')
-  if (dirtyEl) dirtyEl.style.display = editorDirty ? '' : 'none'
+  if (dirtyEl) dirtyEl.style.display = E.editorDirty ? '' : 'none'
   if (!summaryEl) return
-  if (!filePath || !duration) { summaryEl.textContent = ''; return }
+  if (!E.filePath || !E.duration) { summaryEl.textContent = ''; return }
   const remaining = getRemainingDuration()
   const parts = [formatDuration(remaining)]
-  if (cuts.length > 0) parts.push(`${cuts.length} kutt`)
-  if (audioGainDb !== 0) {
-    const sign = audioGainDb >= 0 ? '+' : ''
-    parts.push(`normalisert (${sign}${audioGainDb.toFixed(1)} dB)`)
+  if (E.cuts.length > 0) parts.push(`${E.cuts.length} kutt`)
+  if (E.audioGainDb !== 0) {
+    const sign = E.audioGainDb >= 0 ? '+' : ''
+    parts.push(`normalisert (${sign}${E.audioGainDb.toFixed(1)} dB)`)
   }
   summaryEl.textContent = parts.join(' · ')
 }
@@ -3816,7 +3707,7 @@ function updateHeaderSummary(): void {
  * button on line ~487. A custom modal would be nicer but lower priority.
  */
 function confirmDiscardIfDirty(intent: 'open' | 'close'): boolean {
-  if (!editorDirty) return true
+  if (!E.editorDirty) return true
   const msg = intent === 'close'
     ? t('editor.confirmClose', 'Du har ulagrede endringer. Lukk likevel?')
     : t('editor.confirmOpenOther', 'Du har ulagrede endringer. Åpne ny fil likevel?')
@@ -3831,35 +3722,35 @@ function confirmDiscardIfDirty(intent: 'open' | 'close'): boolean {
 function closeCurrentFile(): void {
   stopPlay()
   clearTranscript()
-  audioCtx?.close().catch(() => {})
-  audioCtx = null
-  audioBuffer = null
-  introBuffer = null
-  outroBuffer = null
-  introPeaks = null
-  outroPeaks = null
-  peaks = null
-  cuts = []
-  cutHistory = []
-  cutHistoryIdx = -1
-  suggestions = []
-  clipTimes = []
-  lastAnalyzedAt = 0
-  meta = { title: '', speaker: '', description: '', chapters: [] }
+  E.audioCtx?.close().catch(() => {})
+  E.audioCtx = null
+  E.audioBuffer = null
+  E.introBuffer = null
+  E.outroBuffer = null
+  E.introPeaks = null
+  E.outroPeaks = null
+  E.peaks = null
+  E.cuts = []
+  E.cutHistory = []
+  E.cutHistoryIdx = -1
+  E.suggestions = []
+  E.clipTimes = []
+  E.lastAnalyzedAt = 0
+  E.meta = { title: '', speaker: '', description: '', chapters: [] }
   clearDirty()
-  if (videoEl) {
-    videoEl.pause()
-    videoEl.src = ''
-    videoEl.load()
+  if (E.videoEl) {
+    E.videoEl.pause()
+    E.videoEl.src = ''
+    E.videoEl.load()
   }
-  isVideoFile = false
-  audioGainDb = 0
+  E.isVideoFile = false
+  E.audioGainDb = 0
   setNormalizeUI(0, false)
   reviewPrepId = null
   reviewPrep = null
   loadAndUpdateReviewBanner()
-  filePath = ''
-  duration = 0
+  E.filePath = ''
+  E.duration = 0
   showState('empty')
 }
 
@@ -3903,16 +3794,16 @@ function updateTimecode(sec: number): void {
   // so the user can see at a glance where they are on the extended timeline.
   if (sec < 0 && effIntroDur() > 0) {
     el.textContent = `Intro ${formatTime(sec + effIntroDur())}`
-  } else if (sec > duration && effOutroDur() > 0) {
-    el.textContent = `Outro ${formatTime(sec - duration)}`
+  } else if (sec > E.duration && effOutroDur() > 0) {
+    el.textContent = `Outro ${formatTime(sec - E.duration)}`
   } else {
-    el.textContent = formatTime(Math.max(0, Math.min(sec, duration)))
+    el.textContent = formatTime(Math.max(0, Math.min(sec, E.duration)))
   }
 }
 
 function updateTotalTime(): void {
   const el = $('editor-time-tot')
-  if (el) el.textContent = formatTime(duration)
+  if (el) el.textContent = formatTime(E.duration)
 }
 
 // ── Mastering panel ───────────────────────────────────────────────────────
@@ -4002,7 +3893,7 @@ function getSelectedPreset(): MasterPresetView | null {
 }
 
 async function runMasterPreview(): Promise<void> {
-  if (!filePath) return
+  if (!E.filePath) return
   const preset = getSelectedPreset()
   if (!preset) return
   const btn   = $('btn-master-preview') as HTMLButtonElement | null
@@ -4017,9 +3908,9 @@ async function runMasterPreview(): Promise<void> {
   if (bar) bar.style.width = '20%'
   if (label) label.textContent = t('master.applying', 'Lager forhåndsvisning…')
 
-  const start = Math.max(0, Math.min(duration > 15 ? duration - 15 : 0, clampMain(playStartSec)))
+  const start = Math.max(0, Math.min(E.duration > 15 ? E.duration - 15 : 0, clampMain(E.playStartSec)))
   try {
-    const res = await window.api.masterPreview(filePath, preset.id, start, 15)
+    const res = await window.api.masterPreview(E.filePath, preset.id, start, 15)
     if (!res.ok || !res.previewPath) {
       if (label) label.textContent = `${t('master.error', '✕ Feil')}: ${res.error ?? 'unknown'}`
       return
@@ -4046,8 +3937,8 @@ function toggleListenOriginal(): void {
   if (!audio || !btn) return
   if (!masterOriginalPreviewPath || audio.dataset.mode !== 'orig') {
     // Play original snippet — file:// directly (browser decodes locally).
-    audio.src = 'file://' + filePath
-    audio.currentTime = clampMain(playStartSec)
+    audio.src = 'file://' + E.filePath
+    audio.currentTime = clampMain(E.playStartSec)
     audio.dataset.mode = 'orig'
     btn.textContent = t('master.previewListenMastered', 'Lytt mastret')
     audio.style.display = ''
@@ -4072,7 +3963,7 @@ function deriveMasteredPath(input: string): string {
 }
 
 async function runMasterApply(): Promise<void> {
-  if (!filePath) return
+  if (!E.filePath) return
   const preset = getSelectedPreset()
   if (!preset) return
   const btnApply = $('btn-master-apply')  as HTMLButtonElement | null
@@ -4092,11 +3983,11 @@ async function runMasterApply(): Promise<void> {
   if (resRow)    { resRow.style.display = 'none' }
 
   masterJobId = 'm-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)
-  const outPath = deriveMasteredPath(filePath)
+  const outPath = deriveMasteredPath(E.filePath)
 
   try {
     // Pass 1: measure
-    const measureRes = await window.api.masterMeasure(filePath, preset.id)
+    const measureRes = await window.api.masterMeasure(E.filePath, preset.id)
     if (!measureRes.ok || !measureRes.measurement) {
       if (label) label.textContent = `${t('master.error', '✕ Feil')}: ${measureRes.error ?? 'measure_failed'}`
       return
@@ -4107,7 +3998,7 @@ async function runMasterApply(): Promise<void> {
 
     // Pass 2: apply
     const applyRes = await window.api.masterApply({
-      inputPath:   filePath,
+      inputPath:   E.filePath,
       outputPath:  outPath,
       presetId:    preset.id,
       measurement: measureRes.measurement,
