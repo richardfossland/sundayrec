@@ -33,6 +33,7 @@ import { registerLifecycleIpc } from './ipc/lifecycle'
 import { registerSettingsIpc } from './ipc/settings'
 import { registerProfileIpc } from './ipc/profile'
 import { registerCloudExtrasIpc } from './ipc/cloud-extras'
+import { registerIntegrationsIpc } from './ipc/integrations'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 
@@ -730,6 +731,9 @@ function setupIPC(): void {
 
   // Transcript archive search — moved to ipc/transcript.ts
   registerTranscriptIpc(ipcCtx)
+
+  // Sunday-suite integrations (opt-in; inert until enabled) — ipc/integrations.ts
+  registerIntegrationsIpc(ipcCtx)
 
   // Whisper transcription — moved to ipc/whisper.ts
   registerWhisperIpc({ ...ipcCtx, isAllowedMediaPath })

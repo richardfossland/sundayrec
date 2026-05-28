@@ -66,6 +66,8 @@ const defaults: Settings = {
   churchName: '',
   responsiblePerson: '',
 
+  integrations: { enabled: false },
+
   activeRecovery: null,
   nextExpectedRecordingISO: null,
   recordingHistory: [],

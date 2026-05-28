@@ -319,6 +319,10 @@ export interface Settings {
 
   // Live overlays — composited on top of camera during streaming.
   streamOverlays?: OverlayConfig[]
+
+  // Sunday-suite integrations. Entirely opt-in; absent/disabled means
+  // SundayRec behaves exactly as a standalone app (no integration code runs).
+  integrations?: IntegrationSettings
 }
 
 /**
@@ -544,4 +548,52 @@ export interface CloudQueueStatus {
     lastError?: string
     status: CloudUploadQueueEntry['status']
   }>
+}
+
+// ── Sunday-suite integrations ───────────────────────────────────────────────
+// Opt-in connection to the sister apps (Stage, Plan, Song, Verbatim). Every
+// flag defaults off; when `enabled` is false nothing in src/main/integrations/
+// runs and the renderer hides the whole "Sunday-suite" section. The recording
+// core (recorder.ts / scheduler.ts) never reads these.
+
+/** A song that was used in a service, with the cross-suite identifiers we may
+ *  know about. At least one of the IDs (or the title) is always present.
+ *  `firstShownSec`/`displayedSec` are offsets into the matched recording. */
+export interface SongUsage {
+  title: string
+  tonoWorkId?: string
+  ccliSongId?: string
+  sundaysongId?: string
+  firstShownSec?: number
+  displayedSec?: number
+}
+
+/** Links one recording to its external service context. Persisted as a
+ *  `<recording>.service.json` sidecar next to the audio/video file — mirrors
+ *  the `.transcript.json` sidecar convention. */
+export interface ServiceLink {
+  source: 'stage' | 'plan' | 'manual'
+  serviceId?: string
+  churchId?: string
+  serviceDate?: string        // YYYY-MM-DD
+  wasStreamed?: boolean        // SundayRec is the source of truth for this
+  setlist: SongUsage[]
+  linkedAt: number             // unix ms
+}
+
+export interface IntegrationSettings {
+  /** Master opt-in for the entire Sunday-suite area. */
+  enabled: boolean
+  verbatim?: { enabled: boolean }
+  stage?: { enabled: boolean; manifestFolder?: string }
+  song?: { enabled: boolean; autoSubmitUsage?: boolean }
+  plan?: { enabled: boolean; autoSchedule?: boolean }
+  /** Shared cloud connection used by the Song/Plan flows. The API key is NOT
+   *  stored here — it lives encrypted via safeStorage in the store layer,
+   *  like the SMTP password and stream keys. */
+  connection?: {
+    churchId?: string
+    songApiUrl?: string
+    planApiUrl?: string
+  }
 }
