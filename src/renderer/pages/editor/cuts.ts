@@ -4,7 +4,8 @@ import { clampMain } from './geometry'
 import { gainFactor } from './peaks'
 import { formatTime, formatDuration } from './format'
 import { drawWaveform, drawMinimap, updateMinimapViewport } from './waveform'
-import { updateHeaderSummary, startPlay, stopPlay, updateTimecode } from '../editor-page'
+import { startPlay, stopPlay, updateTimecode } from './playback'
+import { updateHeaderSummary } from '../editor-page'
 
 // Cut-region model. (Mutations + rendering land here in a later phase; for now
 // just the read-only predicates the waveform renderer needs.)
