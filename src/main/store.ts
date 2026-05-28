@@ -116,6 +116,27 @@ export function hasSmtpPassword(): boolean {
 
 // --- end safeStorage helpers ---
 
+// --- safeStorage helpers for Sunday Song API key ---
+
+export function setSongApiKey(plaintext: string): void {
+  if (!plaintext) {
+    store.delete('sundaySongApiKeyEnc' as keyof Settings)
+    return
+  }
+  if (safeStorage.isEncryptionAvailable()) {
+    const enc = safeStorage.encryptString(plaintext).toString('base64')
+    store.set('sundaySongApiKeyEnc' as keyof Settings, enc as never)
+  }
+}
+
+export function getSongApiKey(): string {
+  const enc = store.get('sundaySongApiKeyEnc' as keyof Settings) as string | undefined
+  if (!enc) return ''
+  try { return safeStorage.decryptString(Buffer.from(enc, 'base64')) } catch { return '' }
+}
+
+// --- end Sunday Song API key helpers ---
+
 export function get<K extends keyof Settings>(key: K): Settings[K] {
   return store.get(key)
 }

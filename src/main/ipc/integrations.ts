@@ -14,6 +14,7 @@ import * as store from '../store'
 import { readServiceLink } from '../integrations/service-link'
 import { launchVerbatim, importVerbatimCaptions, type VerbatimImportOptions } from '../integrations/verbatim'
 import { applyStageManifest, parseStageManifest } from '../integrations/stage'
+import { buildUsagePayloads, submitUsageLog } from '../integrations/song'
 import type { IpcContext } from './types'
 import type { IntegrationSettings } from '../../types'
 
@@ -90,6 +91,36 @@ export function registerIntegrationsIpc(_ctx: IpcContext): void {
         serviceDate: entry?.date,
       })
       return { ok: true, ...result }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
+
+  // ── SundaySong usage / licensing (Fase 3) ────────────────────────────────
+  // Encrypted API key (mirrors SMTP-password pattern).
+  ipcMain.handle('integrations-song-set-apikey', (_evt, plaintext: string) => {
+    if (typeof plaintext !== 'string') return
+    store.setSongApiKey(plaintext)
+  })
+  ipcMain.handle('integrations-song-has-apikey', () => !!store.getSongApiKey())
+
+  // Submit usage for a recording that has a .service.json sidecar.
+  ipcMain.handle('integrations-song-submit-usage', async (_evt, recordingPath: string) => {
+    if (typeof recordingPath !== 'string' || !recordingPath) return { ok: false, error: 'invalid_path' }
+    const intSettings = store.get('integrations') ?? DISABLED
+    if (!intSettings.enabled || !intSettings.song?.enabled) return { ok: false, error: 'disabled' }
+
+    const link = readServiceLink(recordingPath)
+    if (!link) return { ok: false, error: 'no_service_link', hint: 'Import Stage-kapitler first or link manually.' }
+
+    const baseUrl = intSettings.connection?.songApiUrl ?? 'https://api.sundaysong.com'
+    const apiKey  = store.getSongApiKey()
+    const payloads = buildUsagePayloads(link, intSettings)
+    if (!payloads.length) return { ok: false, error: 'no_songs', hint: 'No church_id or empty setlist.' }
+
+    try {
+      const result = await submitUsageLog(payloads, baseUrl, apiKey)
+      return { ok: result.errors.length === 0, ...result }
     } catch (err) {
       return { ok: false, error: (err as Error).message }
     }

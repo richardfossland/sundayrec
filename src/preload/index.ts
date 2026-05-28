@@ -217,6 +217,9 @@ contextBridge.exposeInMainWorld('api', {
   verbatimSend:           (opts: unknown) => ipcRenderer.invoke('integrations-verbatim-send', opts),
   verbatimImport:         (recordingPath: string, subtitlePath: string, language?: string) => ipcRenderer.invoke('integrations-verbatim-import', recordingPath, subtitlePath, language),
   stageImport:            (recordingPath: string, manifestPath: string, wasStreamed?: boolean) => ipcRenderer.invoke('integrations-stage-import', recordingPath, manifestPath, wasStreamed),
+  songSetApiKey:          (key: string) => ipcRenderer.invoke('integrations-song-set-apikey', key),
+  songHasApiKey:          () => ipcRenderer.invoke('integrations-song-has-apikey'),
+  songSubmitUsage:        (recordingPath: string) => ipcRenderer.invoke('integrations-song-submit-usage', recordingPath),
 
   on: (channel: string, fn: (...args: unknown[]) => void) => {
     if (!ALLOWED_CHANNELS.includes(channel as AllowedChannel)) return

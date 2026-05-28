@@ -11,30 +11,49 @@
 const $ = (id: string) => document.getElementById(id)
 
 export async function setupIntegrationsPage(): Promise<void> {
-  const masterEl    = $('opt-integrations-enabled')  as HTMLInputElement | null
-  const verbatimEl  = $('opt-integrations-verbatim') as HTMLInputElement | null
-  const stageEl     = $('opt-integrations-stage')    as HTMLInputElement | null
-  const verbatimCard = $('integrations-verbatim-card')
-  const stageCard    = $('integrations-stage-card')
-  if (!masterEl || !verbatimEl || !stageEl) return
+  const masterEl     = $('opt-integrations-enabled')  as HTMLInputElement | null
+  const verbatimEl   = $('opt-integrations-verbatim') as HTMLInputElement | null
+  const stageEl      = $('opt-integrations-stage')    as HTMLInputElement | null
+  const songEl       = $('opt-integrations-song')     as HTMLInputElement | null
+  if (!masterEl || !verbatimEl || !stageEl || !songEl) return
+
+  const cards = ['integrations-verbatim-card', 'integrations-song-card', 'integrations-stage-card', 'integrations-connection-card']
 
   const applyEnabledState = (): void => {
     const on = masterEl.checked
-    verbatimEl.disabled = !on
-    stageEl.disabled    = !on
-    if (verbatimCard) verbatimCard.style.opacity = on ? '' : '0.5'
-    if (stageCard)   stageCard.style.opacity    = on ? '' : '0.5'
+    ;[verbatimEl, stageEl, songEl].forEach(el => { el.disabled = !on })
+    cards.forEach(id => {
+      const el = $(id)
+      if (el) el.style.opacity = on ? '' : '0.5'
+    })
+    const keyRow = $('integrations-song-key-row')
+    if (keyRow) keyRow.style.display = (on && songEl.checked) ? '' : 'none'
   }
 
+  // Load current settings
+  let current = { enabled: false, verbatim: { enabled: false }, stage: { enabled: false }, song: { enabled: false }, connection: { churchId: '', songApiUrl: '' } }
   try {
     const s = await window.api.getIntegrationSettings()
     masterEl.checked   = !!s.enabled
     verbatimEl.checked = !!s.verbatim?.enabled
     stageEl.checked    = !!s.stage?.enabled
+    songEl.checked     = !!s.song?.enabled
+    current = s as typeof current
+
+    // Connection fields
+    const churchInput = $('integration-church-id') as HTMLInputElement | null
+    const songUrlInput = $('integration-song-api-url') as HTMLInputElement | null
+    if (churchInput && s.connection?.churchId) churchInput.value = s.connection.churchId
+    if (songUrlInput && s.connection?.songApiUrl) songUrlInput.value = s.connection.songApiUrl
+
+    // API key presence indicator
+    const keyStatus = $('integration-song-apikey-status')
+    if (keyStatus) {
+      const hasKey = await window.api.songHasApiKey()
+      keyStatus.textContent = hasKey ? '✓ API-nøkkel lagret (kryptert)' : ''
+    }
   } catch {
     masterEl.checked = false
-    verbatimEl.checked = false
-    stageEl.checked = false
   }
   applyEnabledState()
 
@@ -47,5 +66,35 @@ export async function setupIntegrationsPage(): Promise<void> {
   })
   stageEl.addEventListener('change', () => {
     void window.api.setIntegrationSettings({ stage: { enabled: stageEl.checked } })
+  })
+  songEl.addEventListener('change', () => {
+    void window.api.setIntegrationSettings({ song: { enabled: songEl.checked } })
+    applyEnabledState()
+  })
+
+  // API-key save
+  $('btn-song-apikey-save')?.addEventListener('click', async () => {
+    const inp = $('integration-song-apikey') as HTMLInputElement | null
+    const statusEl = $('integration-song-apikey-status')
+    if (!inp) return
+    await window.api.songSetApiKey(inp.value.trim())
+    inp.value = ''
+    if (statusEl) statusEl.textContent = '✓ API-nøkkel lagret (kryptert)'
+  })
+
+  // Connection save (church_id + Song API URL)
+  $('btn-integrations-connection-save')?.addEventListener('click', async () => {
+    const churchInput  = $('integration-church-id')    as HTMLInputElement | null
+    const songUrlInput = $('integration-song-api-url') as HTMLInputElement | null
+    const patch = {
+      connection: {
+        ...(current.connection ?? {}),
+        churchId:   churchInput?.value.trim()  || undefined,
+        songApiUrl: songUrlInput?.value.trim() || undefined,
+      },
+    }
+    await window.api.setIntegrationSettings(patch)
+    const btn = $('btn-integrations-connection-save') as HTMLButtonElement | null
+    if (btn) { btn.textContent = '✓ Lagret'; setTimeout(() => { btn.textContent = 'Lagre tilkobling' }, 1500) }
   })
 }

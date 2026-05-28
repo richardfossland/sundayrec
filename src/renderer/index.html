@@ -1809,6 +1809,39 @@
           <label class="toggle"><input type="checkbox" id="opt-integrations-verbatim" /><span class="toggle-track"></span></label>
         </div>
       </div>
+      <div class="card" id="integrations-song-card">
+        <div class="card-title">SundaySong — CCLI/TONO-rapportering</div>
+        <p class="card-desc">Send sanglisten (fra Stage-importen) til SundaySong etter publisering. SundaySong bygger automatiske CCLI- og TONO-lisensrapporter for menigheten.</p>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title">Aktiver SundaySong-rapportering</div>
+            <div class="toggle-desc">Legger til «Send til SundaySong»-knapp på opptakets publi­serings­panel.</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-integrations-song" /><span class="toggle-track"></span></label>
+        </div>
+        <div id="integrations-song-key-row" style="margin-top:12px">
+          <label class="form-label">SUNDAYSONG API-NØKKEL</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="password" class="form-input" id="integration-song-apikey" placeholder="Lim inn API-nøkkel…" style="max-width:360px" autocomplete="off" />
+            <button class="btn-ghost btn-sm" id="btn-song-apikey-save">Lagre</button>
+          </div>
+          <div class="form-hint" id="integration-song-apikey-status"></div>
+        </div>
+        <div class="form-hint" style="margin-top:8px">
+          Menighets-ID (church_id) settes i Tilkobling-feltet under.
+        </div>
+      </div>
+      <div class="card" id="integrations-connection-card">
+        <div class="card-title">Tilkobling</div>
+        <p class="card-desc">Delte felt brukt av Song- og Plan-integrasjonene.</p>
+        <label class="form-label">MENIGHETS-ID (church_id)</label>
+        <input type="text" class="form-input" id="integration-church-id" placeholder="UUID fra SundaySong/SundayPlan" style="max-width:420px" />
+        <label class="form-label mt">SUNDAYSONG API-URL (valgfri, standard: https://api.sundaysong.com)</label>
+        <input type="text" class="form-input" id="integration-song-api-url" placeholder="https://api.sundaysong.com" style="max-width:420px" />
+        <div style="margin-top:12px">
+          <button class="btn-ghost btn-sm" id="btn-integrations-connection-save">Lagre tilkobling</button>
+        </div>
+      </div>
       <div class="card" id="integrations-stage-card">
         <div class="card-title">SundayStage — auto-kapitler</div>
         <p class="card-desc">Importer Stage sin cue-logg etter gudstjenesten for å sette kapittelmarkører automatisk (sangtitler, preken, skriftlesing) og bygge opp setlisten for lisensiering.</p>
