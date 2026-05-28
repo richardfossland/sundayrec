@@ -14,6 +14,7 @@ import { setupEditorPage, openEditorWithFile, openEditorReviewMode, deactivateEd
 import { checkAndShowOnboarding, showOnboarding } from './pages/onboarding'
 import { setupVideoPage, applyVideoSettingsToUI, refreshVideoDevices } from './pages/video-page'
 import { setupPublishPage, applyPublishSettingsToUI } from './pages/publish-page'
+import { setupIntegrationsPage } from './pages/integrations-page'
 import { setupLivePage, deactivateLivePage, reactivateLivePage } from './pages/live-page'
 import { setupSearchPage, activateSearchPage } from './pages/search-page'
 
@@ -376,6 +377,7 @@ async function init(): Promise<void> {
   setupRecording()
   setupEditorPage()
   setupPublishPage()
+  void setupIntegrationsPage()
   setupLivePage()
   setupSearchPage()
   setupClipReset()

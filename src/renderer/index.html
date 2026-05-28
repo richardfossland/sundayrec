@@ -807,6 +807,7 @@
       <button class="inner-tab" data-tab="settings-publish" data-i18n="nav.publish">Publisering</button>
       <button class="inner-tab" data-tab="settings-notifications" data-i18n="nav.notifications">Varsler</button>
       <button class="inner-tab" data-tab="settings-general" data-i18n="nav.system">System</button>
+      <button class="inner-tab" data-tab="settings-integrations">Sunday-suite</button>
     </div>
 
     <!-- ── Lydkilde ────────────────────────────────────────────── -->
@@ -1785,6 +1786,31 @@
       </div>
     </div>
 
+    <div id="settings-integrations" class="inner-page">
+      <div class="card">
+        <div class="card-title">Sunday-suite</div>
+        <p class="card-desc">Koble SundayRec til søsterappene i Sunday-suiten. Alt er valgfritt og av som standard — SundayRec fungerer akkurat som før uten dette.</p>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title">Aktiver Sunday-suite-integrasjoner</div>
+            <div class="toggle-desc">Hovedbryter. Når den er av kjøres ingen integrasjonskode.</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-integrations-enabled" /><span class="toggle-track"></span></label>
+        </div>
+      </div>
+      <div class="card" id="integrations-verbatim-card">
+        <div class="card-title">Verbatim — pro-teksting</div>
+        <p class="card-desc">Send et videoopptak til Verbatim for profesjonell teksting (per-ord-sikkerhet, ordliste, styling). Tekstingen kommer tilbake som transkripsjon på opptaket. Krever at Verbatim er installert.</p>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title">Vis «Send til Verbatim» i editoren</div>
+            <div class="toggle-desc">Legger til en knapp på videoopptak i transkripsjons-panelet.</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-integrations-verbatim" /><span class="toggle-track"></span></label>
+        </div>
+      </div>
+    </div>
+
   </section>
 
   <!-- ══ REDIGER ═════════════════════════════════════════════════ -->
@@ -2160,6 +2186,7 @@
           <button class="btn-primary btn-sm" id="btn-transcribe" data-i18n="transcript.start">▶ Transkriber</button>
           <button class="btn-ghost btn-sm" id="btn-transcript-export" style="display:none" data-i18n="transcript.export">↧ SRT</button>
           <button class="btn-ghost btn-sm" id="btn-transcript-export-vtt" style="display:none" data-i18n="transcript.exportVtt">↧ VTT</button>
+          <button class="btn-ghost btn-sm" id="btn-transcript-verbatim" style="display:none" title="Send til Verbatim for pro-teksting">→ Verbatim</button>
           <button class="btn-ghost btn-sm" id="btn-transcript-delete" style="display:none" data-i18n="transcript.delete">Slett</button>
         </div>
         <div id="editor-transcript-body" class="editor-transcript-body">
