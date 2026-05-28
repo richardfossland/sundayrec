@@ -12,6 +12,7 @@ import { isInCut, isInDrag, addCut, deleteCut, undoCut, redoCut, getKeepSegs, ge
 import { shouldShowSegment } from './editor/detection'
 import { syncCanvasSize, scheduleDrawWaveform, drawWaveform, drawMinimap, updateMinimapViewport } from './editor/waveform'
 import { togglePlay, stopPlay, seekTo, seekBy, jumpToCutBoundary, updateTimecode, updateTotalTime } from './editor/playback'
+import { fitAll, zoomBy, panBy } from './editor/viewport'
 
 // ── Setup ─────────────────────────────────────────────────────────────────
 export function setupEditorPage(): void {
@@ -1499,36 +1500,6 @@ function setupDragDrop(): void {
       markDirty()
     })
   }
-}
-
-// ── Viewport helpers ──────────────────────────────────────────────────────
-
-function fitAll(): void {
-  E.vpStart = 0
-  E.vpEnd   = E.duration || 1
-}
-
-function zoomBy(factor: number): void {
-  const center = (E.vpStart + E.vpEnd) / 2
-  const half   = ((E.vpEnd - E.vpStart) * factor) / 2
-  E.vpStart = Math.max(0, center - half)
-  E.vpEnd   = Math.min(E.duration, center + half)
-  const minSpan = 0.5
-  if (E.vpEnd - E.vpStart < minSpan) {
-    const mid = (E.vpStart + E.vpEnd) / 2
-    E.vpStart = Math.max(0, mid - minSpan / 2)
-    E.vpEnd   = Math.min(E.duration, E.vpStart + minSpan)
-  }
-  drawWaveform()
-  updateMinimapViewport()
-}
-
-function panBy(deltaSecs: number): void {
-  const span = E.vpEnd - E.vpStart
-  E.vpStart = Math.max(0, Math.min(E.duration - span, E.vpStart + deltaSecs))
-  E.vpEnd   = E.vpStart + span
-  drawWaveform()
-  updateMinimapViewport()
 }
 
 // ── Canvas mouse events ───────────────────────────────────────────────────
