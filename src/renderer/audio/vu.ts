@@ -36,7 +36,9 @@ export function makeVuState(): VuState {
  */
 export function getDbFS(analyser: AnalyserNode, buf?: Float32Array): number {
   const sampleBuf = buf && buf.length >= analyser.fftSize ? buf : new Float32Array(analyser.fftSize)
-  analyser.getFloatTimeDomainData(sampleBuf)
+  // Cast away the ArrayBufferLike↔ArrayBuffer generic variance the DOM lib
+  // introduced (TS 5.7): the buffer is a real Float32Array at runtime regardless.
+  analyser.getFloatTimeDomainData(sampleBuf as Float32Array<ArrayBuffer>)
   const len = analyser.fftSize
   let sum = 0
   for (let i = 0; i < len; i++) sum += sampleBuf[i] * sampleBuf[i]

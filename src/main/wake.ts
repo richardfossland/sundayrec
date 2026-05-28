@@ -151,7 +151,7 @@ export function _resetSchedulingCache(): void {
   inflight = null
 }
 
-export async function reschedule(upcomingDates: Date[], win?: BrowserWindow, allowAdmin = false): Promise<WakeResult> {
+export async function reschedule(upcomingDates: Date[], win?: BrowserWindow | null, allowAdmin = false): Promise<WakeResult> {
   updateBlocker(upcomingDates)
 
   // De-dupe: if the same set of dates is already scheduled, return early.
@@ -307,7 +307,7 @@ interface TestWakeState {
 
 let activeTestWake: TestWakeState | null = null
 
-function sendProgress(win: BrowserWindow | undefined, phase: TestWakePhase, message: string): void {
+function sendProgress(win: BrowserWindow | null | undefined, phase: TestWakePhase, message: string): void {
   try { win?.webContents.send('test-wake-progress', { phase, message }) } catch { /* ignore */ }
 }
 
@@ -320,7 +320,7 @@ function sendProgress(win: BrowserWindow | undefined, phase: TestWakePhase, mess
  * CAUTION: This will sleep the user's machine. The renderer MUST show a
  * confirmation dialog before calling this.
  */
-export async function testWake(secondsAhead: number, win?: BrowserWindow): Promise<TestWakeResult> {
+export async function testWake(secondsAhead: number, win?: BrowserWindow | null): Promise<TestWakeResult> {
   if (process.platform !== 'darwin' && process.platform !== 'win32') {
     return { ok: false, reason: 'unsupported', message: 'platform' }
   }

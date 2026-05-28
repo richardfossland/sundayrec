@@ -11,6 +11,7 @@
 
 import { ipcMain } from 'electron'
 import type { IpcContext } from './types'
+import type { YouTubeUploadMetadata } from '../cloud/youtube'
 
 export interface CloudExtrasIpcContext extends IpcContext {
   isAllowedMediaPath: (filePath: string) => boolean
@@ -22,12 +23,16 @@ export function registerCloudExtrasIpc(ctx: CloudExtrasIpcContext): void {
     if (!ctx.isAllowedMediaPath(filePath))         return { ok: false, error: 'invalid_path' }
     const yt = await import('../cloud/youtube')
     const md = (metadata && typeof metadata === 'object' ? metadata : {}) as Record<string, unknown>
-    const safeMeta = {
+    const privacyStatus: 'private' | 'unlisted' | 'public' =
+      md.privacyStatus === 'public'   ? 'public'
+      : md.privacyStatus === 'unlisted' ? 'unlisted'
+      : 'private'
+    const safeMeta: YouTubeUploadMetadata = {
       title:         typeof md.title === 'string' ? md.title : 'SundayRec Recording',
       description:   typeof md.description === 'string' ? md.description : '',
       tags:          Array.isArray(md.tags) ? (md.tags as unknown[]).filter(s => typeof s === 'string') as string[] : undefined,
       categoryId:    typeof md.categoryId === 'string' ? md.categoryId : undefined,
-      privacyStatus: md.privacyStatus === 'public' || md.privacyStatus === 'unlisted' ? md.privacyStatus : 'private' as const,
+      privacyStatus,
     }
     const onProgress = (uploadedBytes: number, totalBytes: number) => {
       ctx.mainWindow?.webContents.send('youtube-upload-progress', { uploadedBytes, totalBytes })

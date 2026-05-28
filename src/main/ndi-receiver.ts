@@ -272,8 +272,11 @@ async function runReceiver(
         break
       }
       if (!frame) continue  // timeout — keep polling
-      if (clientSocket && !clientSocket.destroyed) {
-        try { clientSocket.write(frame.data) } catch { /* connection torn down */ }
+      // `clientSocket` is assigned in the connection callback; TS narrows the
+      // captured `let` to its null init inside this IIFE, so re-widen here.
+      const sock = clientSocket as net.Socket | null
+      if (sock && !sock.destroyed) {
+        try { sock.write(frame.data) } catch { /* connection torn down */ }
       }
     }
   })().catch(err => events.emit('error', err))

@@ -222,6 +222,6 @@ export function autoUploadAfterRecording(filePath: string, win: BrowserWindow): 
 }
 
 /** Run the queue once — used by the wake/resume handler and on app start. */
-export function flushQueue(win: BrowserWindow): Promise<void> {
+export function flushQueue(win: BrowserWindow | null): Promise<void> {
   return processQueue(win)
 }

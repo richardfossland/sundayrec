@@ -93,7 +93,9 @@ export function registerRecordingIpc(ctx: IpcContext): void {
       }
     }
 
-    return recorder.startSession(settings, ctx.mainWindow, prerollData)
+    const win = ctx.mainWindow
+    if (!win) return { error: 'no_window' }
+    return recorder.startSession(settings, win, prerollData)
   })
 
   ipcMain.handle('stop-recording-now', () => { recorder.stopSession(); return true })

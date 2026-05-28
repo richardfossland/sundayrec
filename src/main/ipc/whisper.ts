@@ -22,13 +22,15 @@ export function registerWhisperIpc(ctx: WhisperIpcContext): void {
     return {
       binaryAvailable: isWhisperAvailable(),
       models: MODELS.map(m => ({
+        // Spread first so the explicit fields below are authoritative (the
+        // spread also carries `id`, which is identical to m.id).
+        ...isModelInstalled(m.id),
         id:             m.id,
         label:          m.label,
         description:    m.description,
         sizeBytes:      m.sizeBytes,
         quality:        m.quality,
         realtimeFactor: m.realtimeFactor,
-        ...isModelInstalled(m.id),
       })),
     }
   })

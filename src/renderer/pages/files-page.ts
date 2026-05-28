@@ -3,7 +3,6 @@ import type { FileFormat, FilenamePattern, PodcastSettings } from '../../types'
 import { flashSaved, setVal, setRadio, isoDate, setupDirtyBar } from '../helpers'
 import { t } from '../i18n'
 import { getChurchHolidays } from '../../shared/church-calendar'
-import { t } from '../i18n'
 
 let _markFilesClean = () => {}
 let _markFilesDirty = () => {}
