@@ -210,6 +210,13 @@ contextBridge.exposeInMainWorld('api', {
   getLogs:        (): Promise<unknown[]> => ipcRenderer.invoke('get-logs'),
   getLogFilePath: (): Promise<string | null> => ipcRenderer.invoke('get-log-file-path'),
 
+  // Sunday-suite integrations (opt-in; inert until enabled)
+  getIntegrationSettings: () => ipcRenderer.invoke('integrations-get-settings'),
+  setIntegrationSettings: (patch: unknown) => ipcRenderer.invoke('integrations-set-settings', patch),
+  getServiceLink:         (recordingPath: string) => ipcRenderer.invoke('integrations-get-service-link', recordingPath),
+  verbatimSend:           (opts: unknown) => ipcRenderer.invoke('integrations-verbatim-send', opts),
+  verbatimImport:         (recordingPath: string, subtitlePath: string, language?: string) => ipcRenderer.invoke('integrations-verbatim-import', recordingPath, subtitlePath, language),
+
   on: (channel: string, fn: (...args: unknown[]) => void) => {
     if (!ALLOWED_CHANNELS.includes(channel as AllowedChannel)) return
     const sub = (_: Electron.IpcRendererEvent, ...args: unknown[]) => fn(...args)

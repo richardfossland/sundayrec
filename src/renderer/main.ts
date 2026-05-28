@@ -1,6 +1,6 @@
 import { loadLocale, setApplyHook } from './i18n'
 import { updateSettings } from './state'
-import type { Settings } from '../types'
+import type { Settings, IntegrationSettings, ServiceLink } from '../types'
 
 import { setupHome, refreshHome, loadRecentHistory, startVideoPreview, stopVideoPreview, loadVideoInfoStrip, deactivateHome } from './pages/home'
 import { stopVU, setupClipReset } from './pages/home-vu'
@@ -207,6 +207,13 @@ declare global {
       thumbnailClearEpisode:   (recordingPath: string) => Promise<boolean>
       thumbnailResolve:        (recordingPath: string) => Promise<ThumbnailResolved | null>
       thumbnailGetDefaultInfo: () => Promise<ThumbnailResolved | null>
+
+      // Sunday-suite integrations (opt-in; inert until enabled)
+      getIntegrationSettings:  () => Promise<IntegrationSettings>
+      setIntegrationSettings:  (patch: Partial<IntegrationSettings>) => Promise<IntegrationSettings>
+      getServiceLink:          (recordingPath: string) => Promise<ServiceLink | null>
+      verbatimSend:            (opts: { videoPath: string; language?: string; context?: string; glossary?: string[] }) => Promise<{ ok: boolean; error?: string }>
+      verbatimImport:          (recordingPath: string, subtitlePath: string, language?: string) => Promise<{ ok: boolean; transcriptPath?: string; error?: string }>
     }
     appVersion?: string
   }

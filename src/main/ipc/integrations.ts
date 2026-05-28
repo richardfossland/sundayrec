@@ -11,6 +11,7 @@
 import { ipcMain } from 'electron'
 import * as store from '../store'
 import { readServiceLink } from '../integrations/service-link'
+import { launchVerbatim, importVerbatimCaptions, type VerbatimImportOptions } from '../integrations/verbatim'
 import type { IpcContext } from './types'
 import type { IntegrationSettings } from '../../types'
 
@@ -36,5 +37,31 @@ export function registerIntegrationsIpc(_ctx: IpcContext): void {
   ipcMain.handle('integrations-get-service-link', (_evt, recordingPath: string) => {
     if (typeof recordingPath !== 'string' || !recordingPath) return null
     return readServiceLink(recordingPath)
+  })
+
+  // ── Verbatim hand-off (Fase 1) ────────────────────────────────────────────
+  // Launch Verbatim with a recording, primed with sermon context + glossary.
+  // Returns { ok } where ok=false means the verbatim:// scheme has no handler
+  // (Verbatim not installed) — the renderer then shows a download hint.
+  ipcMain.handle('integrations-verbatim-send', async (_evt, opts: VerbatimImportOptions) => {
+    if (!opts || typeof opts.videoPath !== 'string' || !opts.videoPath) {
+      return { ok: false, error: 'invalid_path' }
+    }
+    const launched = await launchVerbatim(opts)
+    return { ok: launched, error: launched ? undefined : 'verbatim_not_installed' }
+  })
+
+  // Import a Verbatim-exported subtitle file (SRT/VTT) → the recording's
+  // .transcript.json sidecar, so it shows up in transcript search + editor.
+  ipcMain.handle('integrations-verbatim-import', (_evt, recordingPath: string, subtitlePath: string, language?: string) => {
+    if (typeof recordingPath !== 'string' || typeof subtitlePath !== 'string' || !recordingPath || !subtitlePath) {
+      return { ok: false, error: 'invalid_path' }
+    }
+    try {
+      const transcriptPath = importVerbatimCaptions(recordingPath, subtitlePath, language)
+      return { ok: true, transcriptPath }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
   })
 }
