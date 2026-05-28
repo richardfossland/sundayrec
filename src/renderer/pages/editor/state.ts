@@ -116,3 +116,21 @@ export const E = {
   minimap: null as unknown as HTMLCanvasElement,
   minimapVp: null as unknown as HTMLElement,
 }
+
+// ── Dirty-state helpers ───────────────────────────────────────────────────
+// markDirty/clearDirty are called from many editor/ modules (cuts, metadata,
+// mastering, detection, loader). They live here so no sub-module needs to
+// import editor-page. editor-page registers the header-refresh callback in
+// setup, keeping state.ts free of DOM/UI imports.
+let _onDirtyChange: (() => void) | null = null
+export function setOnDirtyChange(cb: () => void): void { _onDirtyChange = cb }
+
+export function markDirty(): void {
+  if (E.editorDirty) return
+  E.editorDirty = true
+  _onDirtyChange?.()
+}
+export function clearDirty(): void {
+  E.editorDirty = false
+  _onDirtyChange?.()
+}
