@@ -5,7 +5,7 @@ import { formatTime } from './format'
 import { getKeepSegs } from './cuts'
 import { drawWaveform, updateMinimapViewport } from './waveform'
 import { setCurrentTranscriptTime } from '../editor-transcript'
-import { snapOutOfCut } from '../editor-page'
+import { snapOutOfCut } from './canvas-input'
 
 // ── Playback engine, seek/scroll + timecode display ─────────────────────────
 
