@@ -216,6 +216,7 @@ contextBridge.exposeInMainWorld('api', {
   getServiceLink:         (recordingPath: string) => ipcRenderer.invoke('integrations-get-service-link', recordingPath),
   verbatimSend:           (opts: unknown) => ipcRenderer.invoke('integrations-verbatim-send', opts),
   verbatimImport:         (recordingPath: string, subtitlePath: string, language?: string) => ipcRenderer.invoke('integrations-verbatim-import', recordingPath, subtitlePath, language),
+  stageImport:            (recordingPath: string, manifestPath: string, wasStreamed?: boolean) => ipcRenderer.invoke('integrations-stage-import', recordingPath, manifestPath, wasStreamed),
 
   on: (channel: string, fn: (...args: unknown[]) => void) => {
     if (!ALLOWED_CHANNELS.includes(channel as AllowedChannel)) return

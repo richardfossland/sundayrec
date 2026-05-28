@@ -215,6 +215,7 @@ declare global {
       getServiceLink:          (recordingPath: string) => Promise<ServiceLink | null>
       verbatimSend:            (opts: { videoPath: string; language?: string; context?: string; glossary?: string[] }) => Promise<{ ok: boolean; error?: string }>
       verbatimImport:          (recordingPath: string, subtitlePath: string, language?: string) => Promise<{ ok: boolean; transcriptPath?: string; error?: string }>
+      stageImport:             (recordingPath: string, manifestPath: string, wasStreamed?: boolean) => Promise<{ ok: boolean; chapterCount?: number; songCount?: number; error?: string }>
     }
     appVersion?: string
   }
