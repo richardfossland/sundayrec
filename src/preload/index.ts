@@ -220,6 +220,8 @@ contextBridge.exposeInMainWorld('api', {
   songSetApiKey:          (key: string) => ipcRenderer.invoke('integrations-song-set-apikey', key),
   songHasApiKey:          () => ipcRenderer.invoke('integrations-song-has-apikey'),
   songSubmitUsage:        (recordingPath: string) => ipcRenderer.invoke('integrations-song-submit-usage', recordingPath),
+  planFetchServices:      (fromIso?: string) => ipcRenderer.invoke('integrations-plan-fetch-services', fromIso),
+  planUpdateService:      (serviceId: string, wasStreamed?: boolean, recordingUrl?: string) => ipcRenderer.invoke('integrations-plan-update-service', serviceId, wasStreamed, recordingUrl),
 
   on: (channel: string, fn: (...args: unknown[]) => void) => {
     if (!ALLOWED_CHANNELS.includes(channel as AllowedChannel)) return

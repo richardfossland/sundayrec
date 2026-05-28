@@ -219,6 +219,8 @@ declare global {
       songSetApiKey:           (key: string) => Promise<void>
       songHasApiKey:           () => Promise<boolean>
       songSubmitUsage:         (recordingPath: string) => Promise<{ ok: boolean; submitted?: number; errors?: Array<{ key: string; error: string }>; error?: string; hint?: string }>
+      planFetchServices:       (fromIso?: string) => Promise<{ ok: boolean; services?: unknown[]; error?: string }>
+      planUpdateService:       (serviceId: string, wasStreamed?: boolean, recordingUrl?: string) => Promise<{ ok: boolean; error?: string }>
     }
     appVersion?: string
   }

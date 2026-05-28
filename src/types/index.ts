@@ -588,9 +588,8 @@ export interface IntegrationSettings {
   stage?: { enabled: boolean; manifestFolder?: string }
   song?: { enabled: boolean; autoSubmitUsage?: boolean }
   plan?: { enabled: boolean; autoSchedule?: boolean }
-  /** Shared cloud connection used by the Song/Plan flows. The API key is NOT
-   *  stored here — it lives encrypted via safeStorage in the store layer,
-   *  like the SMTP password and stream keys. */
+  /** Shared cloud connection used by the Song/Plan flows. API keys are NOT
+   *  stored here — they live encrypted via safeStorage (like stream keys). */
   connection?: {
     churchId?: string
     songApiUrl?: string

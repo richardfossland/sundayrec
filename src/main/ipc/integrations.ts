@@ -15,6 +15,7 @@ import { readServiceLink } from '../integrations/service-link'
 import { launchVerbatim, importVerbatimCaptions, type VerbatimImportOptions } from '../integrations/verbatim'
 import { applyStageManifest, parseStageManifest } from '../integrations/stage'
 import { buildUsagePayloads, submitUsageLog } from '../integrations/song'
+import { fetchUpcomingServices, updateServiceRecording, serviceToMetadata, serviceToSchedule } from '../integrations/plan'
 import type { IpcContext } from './types'
 import type { IntegrationSettings } from '../../types'
 
@@ -121,6 +122,51 @@ export function registerIntegrationsIpc(_ctx: IpcContext): void {
     try {
       const result = await submitUsageLog(payloads, baseUrl, apiKey)
       return { ok: result.errors.length === 0, ...result }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
+
+  // ── SundayPlan (Fase 4) ───────────────────────────────────────────────────
+  // All handlers guard on plan.enabled and a configured planApiUrl; otherwise
+  // they return { ok:false, error:'plan_not_ready' } — nothing silently no-ops.
+  function planConfig(): { baseUrl: string; bearer?: string } | null {
+    const s = store.get('integrations') ?? DISABLED
+    if (!s.enabled || !s.plan?.enabled) return null
+    const url = s.connection?.planApiUrl
+    if (!url) return null
+    return { baseUrl: url, bearer: store.getSongApiKey() || undefined }
+  }
+
+  // Fetch upcoming services and return schedule + metadata suggestions.
+  ipcMain.handle('integrations-plan-fetch-services', async (_evt, fromIso?: string) => {
+    const cfg = planConfig()
+    if (!cfg) return { ok: false, error: 'plan_not_ready' }
+    const churchId = store.get('integrations')?.connection?.churchId
+    if (!churchId) return { ok: false, error: 'no_church_id' }
+    try {
+      const services = await fetchUpcomingServices(cfg, churchId, fromIso ?? new Date().toISOString())
+      return {
+        ok: true,
+        services: services.map(s => ({
+          ...s,
+          _meta:     serviceToMetadata(s),
+          _schedule: serviceToSchedule(s),
+        })),
+      }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
+
+  // Write streaming flag + optional recording URL back to a Plan service.
+  ipcMain.handle('integrations-plan-update-service', async (_evt, serviceId: string, wasStreamed?: boolean, recordingUrl?: string) => {
+    const cfg = planConfig()
+    if (!cfg) return { ok: false, error: 'plan_not_ready' }
+    if (typeof serviceId !== 'string' || !serviceId) return { ok: false, error: 'invalid_id' }
+    try {
+      await updateServiceRecording(cfg, serviceId, { wasStreamed, recordingUrl })
+      return { ok: true }
     } catch (err) {
       return { ok: false, error: (err as Error).message }
     }

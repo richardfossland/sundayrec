@@ -15,13 +15,14 @@ export async function setupIntegrationsPage(): Promise<void> {
   const verbatimEl   = $('opt-integrations-verbatim') as HTMLInputElement | null
   const stageEl      = $('opt-integrations-stage')    as HTMLInputElement | null
   const songEl       = $('opt-integrations-song')     as HTMLInputElement | null
+  const planEl       = $('opt-integrations-plan')     as HTMLInputElement | null
   if (!masterEl || !verbatimEl || !stageEl || !songEl) return
 
-  const cards = ['integrations-verbatim-card', 'integrations-song-card', 'integrations-stage-card', 'integrations-connection-card']
+  const cards = ['integrations-verbatim-card', 'integrations-song-card', 'integrations-plan-card', 'integrations-stage-card', 'integrations-connection-card']
 
   const applyEnabledState = (): void => {
     const on = masterEl.checked
-    ;[verbatimEl, stageEl, songEl].forEach(el => { el.disabled = !on })
+    ;[verbatimEl, stageEl, songEl, planEl].filter(Boolean).forEach(el => { (el as HTMLInputElement).disabled = !on })
     cards.forEach(id => {
       const el = $(id)
       if (el) el.style.opacity = on ? '' : '0.5'
@@ -38,13 +39,16 @@ export async function setupIntegrationsPage(): Promise<void> {
     verbatimEl.checked = !!s.verbatim?.enabled
     stageEl.checked    = !!s.stage?.enabled
     songEl.checked     = !!s.song?.enabled
+    if (planEl) planEl.checked = !!s.plan?.enabled
     current = s as typeof current
 
     // Connection fields
-    const churchInput = $('integration-church-id') as HTMLInputElement | null
-    const songUrlInput = $('integration-song-api-url') as HTMLInputElement | null
-    if (churchInput && s.connection?.churchId) churchInput.value = s.connection.churchId
-    if (songUrlInput && s.connection?.songApiUrl) songUrlInput.value = s.connection.songApiUrl
+    const churchInput   = $('integration-church-id')    as HTMLInputElement | null
+    const songUrlInput  = $('integration-song-api-url') as HTMLInputElement | null
+    const planUrlInput  = $('integration-plan-api-url') as HTMLInputElement | null
+    if (churchInput  && s.connection?.churchId)   churchInput.value   = s.connection.churchId
+    if (songUrlInput && s.connection?.songApiUrl) songUrlInput.value  = s.connection.songApiUrl
+    if (planUrlInput && s.connection?.planApiUrl) planUrlInput.value  = s.connection.planApiUrl
 
     // API key presence indicator
     const keyStatus = $('integration-song-apikey-status')
@@ -67,6 +71,9 @@ export async function setupIntegrationsPage(): Promise<void> {
   stageEl.addEventListener('change', () => {
     void window.api.setIntegrationSettings({ stage: { enabled: stageEl.checked } })
   })
+  planEl?.addEventListener('change', () => {
+    void window.api.setIntegrationSettings({ plan: { enabled: !!(planEl as HTMLInputElement).checked } })
+  })
   songEl.addEventListener('change', () => {
     void window.api.setIntegrationSettings({ song: { enabled: songEl.checked } })
     applyEnabledState()
@@ -86,11 +93,13 @@ export async function setupIntegrationsPage(): Promise<void> {
   $('btn-integrations-connection-save')?.addEventListener('click', async () => {
     const churchInput  = $('integration-church-id')    as HTMLInputElement | null
     const songUrlInput = $('integration-song-api-url') as HTMLInputElement | null
+    const planUrlInput2 = $('integration-plan-api-url') as HTMLInputElement | null
     const patch = {
       connection: {
         ...(current.connection ?? {}),
-        churchId:   churchInput?.value.trim()  || undefined,
-        songApiUrl: songUrlInput?.value.trim() || undefined,
+        churchId:   churchInput?.value.trim()    || undefined,
+        songApiUrl: songUrlInput?.value.trim()   || undefined,
+        planApiUrl: planUrlInput2?.value.trim()  || undefined,
       },
     }
     await window.api.setIntegrationSettings(patch)

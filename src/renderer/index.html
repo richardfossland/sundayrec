@@ -1838,8 +1838,21 @@
         <input type="text" class="form-input" id="integration-church-id" placeholder="UUID fra SundaySong/SundayPlan" style="max-width:420px" />
         <label class="form-label mt">SUNDAYSONG API-URL (valgfri, standard: https://api.sundaysong.com)</label>
         <input type="text" class="form-input" id="integration-song-api-url" placeholder="https://api.sundaysong.com" style="max-width:420px" />
+        <label class="form-label mt">SUNDAYPLAN API-URL (valgfri)</label>
+        <input type="text" class="form-input" id="integration-plan-api-url" placeholder="https://din-menighet.supabase.co" style="max-width:420px" />
         <div style="margin-top:12px">
           <button class="btn-ghost btn-sm" id="btn-integrations-connection-save">Lagre tilkobling</button>
+        </div>
+      </div>
+      <div class="card" id="integrations-plan-card">
+        <div class="card-title">SundayPlan — tjeneste-bevisst opptak</div>
+        <p class="card-desc">Hent kommende tjenester fra Plan: SundayRec planlegger opptak automatisk og fyller inn tittel og taler. Etter publisering rapporteres streaming-status tilbake til Plan. <strong>Krever at SundayPlan-backend er oppe (Supabase).</strong></p>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title">Aktiver SundayPlan-synkronisering</div>
+            <div class="toggle-desc">Sjekk Plan for kommende tjenester og skriv tilbake streaming-status.</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-integrations-plan" /><span class="toggle-track"></span></label>
         </div>
       </div>
       <div class="card" id="integrations-stage-card">
