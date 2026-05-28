@@ -11,24 +11,30 @@
 const $ = (id: string) => document.getElementById(id)
 
 export async function setupIntegrationsPage(): Promise<void> {
-  const masterEl   = $('opt-integrations-enabled')  as HTMLInputElement | null
-  const verbatimEl = $('opt-integrations-verbatim') as HTMLInputElement | null
+  const masterEl    = $('opt-integrations-enabled')  as HTMLInputElement | null
+  const verbatimEl  = $('opt-integrations-verbatim') as HTMLInputElement | null
+  const stageEl     = $('opt-integrations-stage')    as HTMLInputElement | null
   const verbatimCard = $('integrations-verbatim-card')
-  if (!masterEl || !verbatimEl) return
+  const stageCard    = $('integrations-stage-card')
+  if (!masterEl || !verbatimEl || !stageEl) return
 
   const applyEnabledState = (): void => {
     const on = masterEl.checked
     verbatimEl.disabled = !on
+    stageEl.disabled    = !on
     if (verbatimCard) verbatimCard.style.opacity = on ? '' : '0.5'
+    if (stageCard)   stageCard.style.opacity    = on ? '' : '0.5'
   }
 
   try {
     const s = await window.api.getIntegrationSettings()
     masterEl.checked   = !!s.enabled
     verbatimEl.checked = !!s.verbatim?.enabled
+    stageEl.checked    = !!s.stage?.enabled
   } catch {
     masterEl.checked = false
     verbatimEl.checked = false
+    stageEl.checked = false
   }
   applyEnabledState()
 
@@ -38,5 +44,8 @@ export async function setupIntegrationsPage(): Promise<void> {
   })
   verbatimEl.addEventListener('change', () => {
     void window.api.setIntegrationSettings({ verbatim: { enabled: verbatimEl.checked } })
+  })
+  stageEl.addEventListener('change', () => {
+    void window.api.setIntegrationSettings({ stage: { enabled: stageEl.checked } })
   })
 }

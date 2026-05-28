@@ -1809,6 +1809,17 @@
           <label class="toggle"><input type="checkbox" id="opt-integrations-verbatim" /><span class="toggle-track"></span></label>
         </div>
       </div>
+      <div class="card" id="integrations-stage-card">
+        <div class="card-title">SundayStage — auto-kapitler</div>
+        <p class="card-desc">Importer Stage sin cue-logg etter gudstjenesten for å sette kapittelmarkører automatisk (sangtitler, preken, skriftlesing) og bygge opp setlisten for lisensiering.</p>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title">Vis «Importer Stage-kapitler» i editoren</div>
+            <div class="toggle-desc">Legger til en knapp i analyse-panelet som lar deg velge Stage-manifestet.</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-integrations-stage" /><span class="toggle-track"></span></label>
+        </div>
+      </div>
     </div>
 
   </section>
@@ -2123,6 +2134,7 @@
             <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M3 6a1 1 0 000 2h14a1 1 0 100-2H3zm0 5a1 1 0 000 2h14a1 1 0 100-2H3z" clip-rule="evenodd"/></svg>
             <span data-i18n="editor.analyzeTitle">Analyser opptak</span>
           </div>
+          <button class="btn-ghost btn-sm" id="btn-stage-import" style="display:none" title="Importer kapitler fra SundayStage cue-logg">↧ Stage-kapitler</button>
           <button class="btn-primary btn-sm" id="btn-detect-segments" data-i18n="editor.analyzeRun">▶ Analyser opptak</button>
         </div>
         <div class="editor-analyze-body" id="editor-analyze-body">

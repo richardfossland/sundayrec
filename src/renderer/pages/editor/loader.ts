@@ -14,6 +14,7 @@ import { drawWaveform, drawMinimap, updateMinimapViewport, syncCanvasSize } from
 import { loadTranscriptForFile } from '../editor-transcript'
 import { panelElementsByPrefix, refresh as refreshThumbPanel } from '../thumbnail-panel'
 import { showState, showEditorError, updateHeaderSummary, reviewPrepId } from '../editor-page'
+import { updateStageButton } from './stage-ui'
 
 // ── File loading (pick, decode, intro/outro buffers, metadata sidecar) ──────
 
@@ -323,6 +324,9 @@ export async function loadFile(fp: string): Promise<void> {
     // Defer slightly so the workspace UI paints first.
     setTimeout(() => { void runDetection(true) }, 200)
   }
+
+  // Update Stage-kapitler button visibility (opt-in, no-op when disabled).
+  void updateStageButton()
 }
 
 export async function reloadIntroOutro(): Promise<void> {
