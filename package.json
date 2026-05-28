@@ -17,6 +17,7 @@
     "build:win": "electron-vite build && electron-builder --win",
     "build:all": "bash scripts/build-mac.sh && electron-builder --win",
     "test": "cross-env TZ=Europe/Oslo jest",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
