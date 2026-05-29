@@ -30,7 +30,12 @@ export const CLOUD_CONFIG = {
     authUrl:     'https://accounts.google.com/o/oauth2/v2/auth',
     tokenUrl:    'https://oauth2.googleapis.com/token',
     scope:       'https://www.googleapis.com/auth/drive.file openid email profile',
-    redirectUri: 'sundayrec://oauth/google-drive',
+    // Desktop-app loopback flow — the real redirect is http://127.0.0.1:<port>
+    // computed per-flow in oauth.ts and passed explicitly to exchangeCode().
+    // This is only a fallback default; Google does NOT use the sundayrec://
+    // scheme (that's Dropbox/OneDrive). Keeping a custom-scheme value here was
+    // a redirect_uri_mismatch footgun for any caller that forgot the override.
+    redirectUri: 'http://127.0.0.1',  // dynamic loopback port, set at runtime
   },
   // Same Google OAuth client as Drive — different scope. YouTube uses the
   // localhost-redirect Desktop flow, just like Drive, so we reuse clientId

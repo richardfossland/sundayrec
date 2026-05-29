@@ -1175,7 +1175,7 @@
       <!-- ── Sky-backup (Google Drive / Dropbox / OneDrive) ──────── -->
       <div class="card">
         <div class="card-title" data-i18n="publish.title">Sky-backup</div>
-        <p class="card-desc" data-i18n="publish.desc">Last opp opptakene automatisk til Google Drive eller Dropbox — som ekstra sikkerhet og for enkel deling. Du kan koble til flere tjenester samtidig.</p>
+        <p class="card-desc" data-i18n="publish.desc">Last opp opptakene automatisk til Google Drive — som ekstra sikkerhet og for enkel deling.</p>
 
         <div class="cloud-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:12px">
 
@@ -1209,8 +1209,10 @@
             </div>
           </div>
 
-          <!-- Dropbox -->
-          <div class="cloud-card" id="cloud-card-dropbox">
+          <!-- Dropbox — skjult inntil videre. Backend-koden + tester er bevart;
+               re-aktivér ved å fjerne style="display:none" når Dropbox-app er klar
+               og DROPBOX_APP_KEY er satt i .env / GitHub Secrets. -->
+          <div class="cloud-card" id="cloud-card-dropbox" style="display:none">
             <div class="cloud-card-header">
               <svg viewBox="0 0 43 40" width="24" height="24"><path fill="#0061ff" d="M12.5 0L0 7.95l12.5 7.95L25 7.95zm18 0L18 7.95l12.5 7.95L43 7.95zM0 23.85l12.5 7.95L25 23.85l-12.5-7.95zm30.5-7.95L18 23.85l12.5 7.95L43 23.85zM12.5 34.45L25 26.5l-12.5-7.95L0 26.5z"/></svg>
               <div class="cloud-card-name">Dropbox</div>
