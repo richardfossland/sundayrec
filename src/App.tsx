@@ -1,13 +1,18 @@
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 
 import type { AppInfo } from "@/lib/bindings/AppInfo";
+import type { Settings } from "@/lib/bindings/Settings";
 import { VuMeter } from "@/features/vu/VuMeter";
 import { CameraPreview } from "@/features/preview/CameraPreview";
 import { RecorderPanel } from "@/features/recorder/RecorderPanel";
 import { FfmpegHealth } from "@/features/diagnostics/FfmpegHealth";
+import { SettingsPage } from "@/features/settings/SettingsPage";
+import { SETTINGS_QUERY_KEY } from "@/features/settings/queryKey";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { changeLanguage } from "@/i18n";
 
 /** Phase 0 proof-of-life: round-trip `app_info` through the Tauri bridge and
  *  render the backend's identity. Replaced by the real home screen in Phase 8. */
@@ -17,6 +22,18 @@ function App() {
     queryKey: ["app_info"],
     queryFn: () => invoke<AppInfo>("app_info"),
   });
+
+  // Hydrate i18n from the persisted setting once on startup. i18n initialises
+  // synchronously from localStorage (fast cache); here we reconcile with the
+  // canonical `Settings.language` and switch if it differs. We also seed the
+  // settings query cache so SettingsPage opens without a second fetch.
+  const { data: settings } = useQuery<Settings>({
+    queryKey: SETTINGS_QUERY_KEY,
+    queryFn: () => invoke<Settings>("settings_get"),
+  });
+  useEffect(() => {
+    if (settings?.language) void changeLanguage(settings.language);
+  }, [settings?.language]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
@@ -64,6 +81,17 @@ function App() {
           {/* Spike A: bundled ffmpeg sidecar health-check — proves the
               externalBin wiring the recorder + preview depend on. */}
           <FfmpegHealth />
+
+          {/* F1.2: Settings vertical. No router yet — surface the page behind a
+              disclosure until the real shell/nav lands in Phase 8. */}
+          <details className="w-full max-w-md text-left">
+            <summary className="cursor-pointer text-sm font-medium">
+              {t("nav.general", "Generelt")}
+            </summary>
+            <div className="mt-3">
+              <SettingsPage />
+            </div>
+          </details>
         </div>
       )}
     </main>

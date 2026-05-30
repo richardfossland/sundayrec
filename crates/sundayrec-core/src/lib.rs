@@ -19,6 +19,7 @@
 //!   - [`reconnect`]    — watchdog (stuck-progress) + reconnect back-off decisions
 //!   - [`timeouts`]     — recording-pipeline timeout constants (one source of truth)
 //!   - [`silence`]      — the silence-watcher *decision* state machine (no real timers)
+//!   - [`settings`]     — the typed/validated settings model + defaults (Fase 1)
 
 pub mod audio;
 pub mod capture;
@@ -28,5 +29,6 @@ pub mod ffmpeg;
 pub mod mjpeg;
 pub mod progress;
 pub mod reconnect;
+pub mod settings;
 pub mod silence;
 pub mod timeouts;
