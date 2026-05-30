@@ -16,3 +16,4 @@
 //! vs what the manual smoke-test must confirm.
 
 pub mod engine;
+pub mod preroll;

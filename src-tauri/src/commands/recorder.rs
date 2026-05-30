@@ -16,6 +16,7 @@ use sundayrec_core::recorder::RecorderState;
 use crate::db::Db;
 use crate::error::AppResult;
 use crate::recorder::engine::{list_recording_devices as enumerate, RecorderEngine, RecordingOpts};
+use crate::recorder::preroll::{preroll_settings_from, PrerollEngine, PrerollStatus};
 
 /// List capture (audio) devices the recorder can match against, via the real
 /// ffmpeg device enumerator (F2.1).
@@ -32,10 +33,73 @@ pub async fn list_recording_devices() -> AppResult<Vec<FfmpegDevice>> {
 pub async fn start_recording(
     app: AppHandle,
     engine: State<'_, RecorderEngine>,
+    preroll: State<'_, PrerollEngine>,
     db: State<'_, Db>,
     opts: RecordingOpts,
 ) -> AppResult<()> {
-    engine.start(app, Some(db.pool.clone()), opts).await
+    // Pre-roll harvest (F3.2): if the rolling capture loop is running, stop it and
+    // grab the trimmed clip of audio captured BEFORE this press, so the recorder
+    // can prepend it. Honours the persisted `pre_roll_seconds` window. Harvesting
+    // also releases the mic before the recorder opens it (one device owner on
+    // macOS). A `None` window / inactive loop / nothing-captured → no clip.
+    let clip = {
+        let settings = crate::settings::load(&db.pool).await?;
+        match (settings.pre_roll_seconds, preroll.is_active()) {
+            (secs, true) if secs > 0 => {
+                let channels = match settings.channels {
+                    sundayrec_core::settings::ChannelMode::Stereo => 2,
+                    _ => 1,
+                };
+                preroll
+                    .harvest(
+                        secs as u32,
+                        settings.sample_rate.max(8_000) as u32,
+                        channels,
+                    )
+                    .await
+            }
+            _ => None,
+        }
+    };
+    engine.start(app, Some(db.pool.clone()), opts, clip).await
+}
+
+/// Start the rolling pre-roll capture loop from the persisted settings. A no-op
+/// (returns `false`) when pre-roll is off or no device is configured. Returns
+/// whether the loop was started. Safe to call repeatedly (restarts the loop).
+///
+/// ⚠️ HARDWARE-UNVERIFIED — opens a real mic in the background.
+#[tauri::command]
+pub async fn preroll_start(
+    preroll: State<'_, PrerollEngine>,
+    db: State<'_, Db>,
+) -> AppResult<bool> {
+    let settings = crate::settings::load(&db.pool).await?;
+    match preroll_settings_from(&settings) {
+        Some(ps) => {
+            preroll.start(ps);
+            Ok(true)
+        }
+        None => {
+            // Pre-roll disabled or no device — make sure nothing is left running.
+            preroll.stop();
+            Ok(false)
+        }
+    }
+}
+
+/// Stop the rolling pre-roll capture loop without harvesting (deletes the temp
+/// capture). Safe to call when nothing is running.
+#[tauri::command]
+pub fn preroll_stop(preroll: State<'_, PrerollEngine>) -> AppResult<()> {
+    preroll.stop();
+    Ok(())
+}
+
+/// The pre-roll loop status, for the settings UI's "preroll aktiv" indicator.
+#[tauri::command]
+pub fn preroll_status(preroll: State<'_, PrerollEngine>) -> PrerollStatus {
+    preroll.status()
 }
 
 /// Stop the recording gracefully (sends ffmpeg `q` so the container finalises).

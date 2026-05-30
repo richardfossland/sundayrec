@@ -72,6 +72,7 @@ use crate::audio::device_enum::enumerate_ffmpeg_devices;
 use crate::db::store::{insert_recording, RecordingRow};
 use crate::error::{AppError, AppResult};
 use crate::media::ffmpeg::spawn_ffmpeg;
+use crate::recorder::preroll::PrerollClip;
 
 /// Event channel: a progress heartbeat (bytes written so far).
 pub const PROGRESS_EVENT: &str = "recording://progress";
@@ -274,8 +275,25 @@ impl RecorderEngine {
         app: AppHandle,
         pool: Option<SqlitePool>,
         opts: RecordingOpts,
+        preroll_clip: Option<PrerollClip>,
     ) -> AppResult<()> {
         self.stop();
+
+        // Pre-roll prepend (F3.2 — honest scope). When the caller harvested a
+        // pre-roll clip we have a real, playable `.m4a` of the audio captured
+        // BEFORE the record press. The final ffmpeg `concat` that splices it in
+        // front of the main recording is a follow-up (it travels with the
+        // multi-segment concat-merge already deferred in this module's header).
+        // For now we record the clip's existence so the wiring is observable and
+        // the file isn't silently orphaned. TODO(F3.2-cont): concat
+        // `[preroll_clip, primary_segment]` into the final container on stop.
+        if let Some(clip) = &preroll_clip {
+            tracing::info!(
+                clip = %clip.raw_path,
+                trim_ms = clip.trim_ms,
+                "recorder: pre-roll clip available to prepend (concat is a TODO)"
+            );
+        }
 
         let platform = current_platform();
         let inv = enumerate_ffmpeg_devices().await?;

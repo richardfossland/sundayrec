@@ -392,6 +392,22 @@ export function SettingsPage() {
             onChange={(e) => patch({ splitMinutes: Number(e.target.value) })}
           />
         </Field>
+
+        <Field
+          label={t("files.preRoll", "Forhåndsopptak (sek)")}
+          htmlFor="settings-pre-roll-seconds"
+        >
+          <select
+            id="settings-pre-roll-seconds"
+            className={inputClass}
+            value={draft.preRollSeconds}
+            onChange={(e) => patch({ preRollSeconds: Number(e.target.value) })}
+          >
+            <option value={0}>{t("files.preRollOff", "Av")}</option>
+            <option value={15}>15</option>
+            <option value={30}>30</option>
+          </select>
+        </Field>
       </Section>
 
       {/* ── System behaviour ─────────────────────────────────────────────── */}

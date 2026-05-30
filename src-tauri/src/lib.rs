@@ -64,6 +64,12 @@ pub fn run() {
                 .map_err(|e| format!("opening database at {}: {e}", db_path.display()))?;
             app.manage(db::Db::new(pool));
 
+            // The pre-roll engine (F3.2) writes its rolling temp captures under
+            // a `tmp` dir in app-data (cleaned up on harvest/stop). Managed here
+            // because it needs the resolved app-data path. At most one loop runs.
+            let tmp_dir = db_dir.join("tmp");
+            app.manage(recorder::preroll::PrerollEngine::new(tmp_dir));
+
             tracing::info!("SundayRec backend ready (db at {})", db_path.display());
             Ok(())
         })
@@ -80,6 +86,9 @@ pub fn run() {
             commands::recorder::start_recording,
             commands::recorder::stop_recording,
             commands::recorder::recording_status,
+            commands::recorder::preroll_start,
+            commands::recorder::preroll_stop,
+            commands::recorder::preroll_status,
             commands::db::setting_get,
             commands::db::setting_set,
             commands::db::recordings_list,
