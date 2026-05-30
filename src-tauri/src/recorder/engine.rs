@@ -23,7 +23,10 @@
 //!   5. on a split tick gracefully finalises the current segment and starts a
 //!      fresh one WITHOUT ending the session,
 //!   6. on a manual-max tick or a silence-stop tick performs a graceful stop,
-//!   7. on completion writes ONE history row spanning the whole session.
+//!   7. on each split boundary FINALISES the just-closed deliverable (concat its
+//!      reconnect fragments into one lossless file) and writes its history row;
+//!      on completion finalises the last deliverable too — so a split session
+//!      yields N files and N history rows (Fase 3.3a).
 //!
 //! Every state change emits `recording://state`.
 //!
@@ -37,17 +40,22 @@
 //! `docs/MIGRATION-TAURI2.md` Fase 3 exit). The core decisions it delegates to
 //! ARE fully tested.
 //!
+//! ## Done in Fase 3.3a (was deferred)
+//!
+//!   - **Reconnect-segment concat merge + pre-roll prepend.** Each deliverable's
+//!     reconnect `_rN` fragments are now stitched into one lossless file
+//!     (`-c copy`, [`crate::recorder::concat::finalize_deliverable`]) at the
+//!     deliverable's close, and the harvested pre-roll clip is prepended to the
+//!     FIRST deliverable's first fragment. The core
+//!     [`RecordingSession::deliverables`] groups split-vs-reconnect for it.
+//!
 //! ## Deferred (honest scope)
 //!
 //!   - **Two-process audio+video fallback** (Electron's separate `videoHandle` /
 //!     `_vtmp.mp4` merge): NOT implemented. Fase 3 targets the *unified* single
 //!     ffmpeg pipeline only. A device combination ffmpeg can't open as one input
 //!     would need this fallback — tracked as a Fase-3-continuation TODO.
-//!   - **Reconnect-segment concat merge:** the segments stay as separate files
-//!     on disk; the history row points at the primary (segment 0). Merging them
-//!     into one container with ffmpeg `concat` is a follow-up (the core already
-//!     tracks the ordered segment list for it).
-//!   - **Pre-roll buffer, NDI, streaming, lossless master:** later phases.
+//!   - **NDI, streaming, lossless master:** later phases.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -72,6 +80,7 @@ use crate::audio::device_enum::enumerate_ffmpeg_devices;
 use crate::db::store::{insert_recording, RecordingRow};
 use crate::error::{AppError, AppResult};
 use crate::media::ffmpeg::spawn_ffmpeg;
+use crate::recorder::concat::finalize_deliverable;
 use crate::recorder::preroll::PrerollClip;
 
 /// Event channel: a progress heartbeat (bytes written so far).
@@ -279,19 +288,16 @@ impl RecorderEngine {
     ) -> AppResult<()> {
         self.stop();
 
-        // Pre-roll prepend (F3.2 — honest scope). When the caller harvested a
-        // pre-roll clip we have a real, playable `.m4a` of the audio captured
-        // BEFORE the record press. The final ffmpeg `concat` that splices it in
-        // front of the main recording is a follow-up (it travels with the
-        // multi-segment concat-merge already deferred in this module's header).
-        // For now we record the clip's existence so the wiring is observable and
-        // the file isn't silently orphaned. TODO(F3.2-cont): concat
-        // `[preroll_clip, primary_segment]` into the final container on stop.
+        // Pre-roll prepend (F3.2 + F3.3a). When the caller harvested a pre-roll
+        // clip we have a real, playable clip (in the recording's codec/container)
+        // of the audio captured BEFORE the record press. The supervisor prepends
+        // it to the FIRST deliverable's concat at finalisation (see
+        // `finalize_one`); the clip travels into `run_session`.
         if let Some(clip) = &preroll_clip {
             tracing::info!(
                 clip = %clip.raw_path,
                 trim_ms = clip.trim_ms,
-                "recorder: pre-roll clip available to prepend (concat is a TODO)"
+                "recorder: pre-roll clip will be prepended to the first deliverable"
             );
         }
 
@@ -322,7 +328,16 @@ impl RecorderEngine {
         let last_state = Arc::clone(&self.last_state);
         let supervisor = tauri::async_runtime::spawn(async move {
             run_session(
-                sup_app, pool, opts, platform, audio, video, stop_rx, ready_tx, last_state,
+                sup_app,
+                pool,
+                opts,
+                platform,
+                audio,
+                video,
+                preroll_clip,
+                stop_rx,
+                ready_tx,
+                last_state,
             )
             .await;
         });
@@ -427,12 +442,17 @@ async fn run_session(
     platform: Platform,
     audio: FfmpegDevice,
     video: Option<FfmpegDevice>,
+    preroll_clip: Option<PrerollClip>,
     mut stop_rx: tokio::sync::mpsc::Receiver<()>,
     ready: std::sync::mpsc::Sender<AppResult<()>>,
     last_state: Arc<Mutex<RecorderState>>,
 ) {
     let start_ms = now_ms();
     let mut session = RecordingSession::new(opts.output_path.clone(), start_ms);
+    // How many deliverables have already been finalised (concat + history row).
+    // Each split closes one; session end finalises the rest. The pre-roll clip is
+    // prepended only to deliverable 0 (`finalize_one` checks `index == 0`).
+    let mut finalized: usize = 0;
     set_state(&app, &last_state, RecorderState::Preparing, 0);
 
     // Spawn the FIRST segment. A launch failure here is reported to the caller.
@@ -455,14 +475,13 @@ async fn run_session(
         }
     };
 
-    // Running total bytes across segments (for the history row). A reconnect or
-    // split resets ffmpeg's per-segment `size=`, so we accumulate the peak of
-    // each finished segment here rather than reading the last segment's count.
-    let total_bytes = Arc::new(AtomicU64::new(0));
     set_state(&app, &last_state, RecorderState::Recording, 0);
 
     loop {
         // ── Run ONE segment to completion ───────────────────────────────────
+        // Per-deliverable `byte_size` is read from the finalised file on disk
+        // (after concat), so we no longer accumulate a session-wide byte total;
+        // `segment_bytes` still drives this segment's live progress + watchdog.
         let segment_bytes = Arc::new(AtomicU64::new(0));
         let outcome = run_segment(
             &app,
@@ -473,8 +492,6 @@ async fn run_session(
             &mut stop_rx,
         )
         .await;
-        // Fold this segment's bytes into the session total.
-        total_bytes.fetch_add(segment_bytes.load(Ordering::Relaxed), Ordering::Relaxed);
 
         match outcome {
             SegmentOutcome::GracefulStop
@@ -483,7 +500,20 @@ async fn run_session(
                 break;
             }
             SegmentOutcome::Split => {
-                let next = session.begin_split_segment(now_ms());
+                // The split CLOSES the current deliverable. Finalise it (concat
+                // its fragments + write its history row) BEFORE opening the next.
+                let close_ms = now_ms();
+                finalize_pending(
+                    &pool,
+                    &session,
+                    &mut finalized,
+                    close_ms,
+                    &preroll_clip,
+                    &audio,
+                )
+                .await;
+
+                let next = session.begin_split_segment(close_ms);
                 let args = build_record_args(platform, &audio, video.as_ref(), &opts, &next);
                 tracing::info!(segment = %next, "recorder: split — starting new segment");
                 match spawn_ffmpeg_owned(&args).await {
@@ -497,7 +527,15 @@ async fn run_session(
                             RecorderState::Failed,
                             session.reconnect_count(),
                         );
-                        finalize_history(&pool, &session, now_ms(), &total_bytes, &audio).await;
+                        finalize_pending(
+                            &pool,
+                            &session,
+                            &mut finalized,
+                            now_ms(),
+                            &preroll_clip,
+                            &audio,
+                        )
+                        .await;
                         return;
                     }
                 }
@@ -516,7 +554,15 @@ async fn run_session(
                             RecorderState::Failed,
                             session.reconnect_count(),
                         );
-                        finalize_history(&pool, &session, now_ms(), &total_bytes, &audio).await;
+                        finalize_pending(
+                            &pool,
+                            &session,
+                            &mut finalized,
+                            now_ms(),
+                            &preroll_clip,
+                            &audio,
+                        )
+                        .await;
                         tracing::error!("recorder: giving up — fail-stop");
                         return;
                     }
@@ -609,11 +655,12 @@ async fn run_session(
                                                     RecorderState::Failed,
                                                     session.reconnect_count(),
                                                 );
-                                                finalize_history(
+                                                finalize_pending(
                                                     &pool,
                                                     &session,
+                                                    &mut finalized,
                                                     now_ms(),
-                                                    &total_bytes,
+                                                    &preroll_clip,
                                                     &audio,
                                                 )
                                                 .await;
@@ -629,11 +676,12 @@ async fn run_session(
                                             RecorderState::Failed,
                                             session.reconnect_count(),
                                         );
-                                        finalize_history(
+                                        finalize_pending(
                                             &pool,
                                             &session,
+                                            &mut finalized,
                                             now_ms(),
-                                            &total_bytes,
+                                            &preroll_clip,
                                             &audio,
                                         )
                                         .await;
@@ -648,14 +696,23 @@ async fn run_session(
         }
     }
 
-    // Graceful end of session.
+    // Graceful end of session: finalise the last (and any not-yet-finalised)
+    // deliverable — concat its fragments + write its history row.
     set_state(
         &app,
         &last_state,
         RecorderState::Stopping,
         session.reconnect_count(),
     );
-    finalize_history(&pool, &session, now_ms(), &total_bytes, &audio).await;
+    finalize_pending(
+        &pool,
+        &session,
+        &mut finalized,
+        now_ms(),
+        &preroll_clip,
+        &audio,
+    )
+    .await;
     set_state(
         &app,
         &last_state,
@@ -902,32 +959,89 @@ fn emit_error(app: &AppHandle, code: &str, message: &str) {
     );
 }
 
-/// Write ONE history row for the whole session. Represents a multi-segment
-/// session as a SINGLE row: `file_path` is the primary (first) segment, the
-/// `device_name` is the matched audio device, `started_at` is the ORIGINAL
-/// session start (so reconnects/splits don't reset it), `duration_ms` spans the
-/// whole session, and `byte_size` is the accumulated total across all segments.
-/// (The ordered segment list lives in core for a future concat-merge; we record
-/// the primary file here rather than N rows so the history reads as one
-/// recording — which is what the user made.)
+/// Finalise every deliverable that has closed but not yet been finalised
+/// (`*finalized .. deliverables.len()`), advancing `*finalized` to the end. Each
+/// is concat-stitched into its primary file and gets ONE history row (Fase
+/// 3.3a). `end_ms` is the close time of the LAST deliverable in the batch; an
+/// earlier deliverable's end is the next one's `started_at_ms` (the split
+/// boundary), so each row's `duration_ms` is the deliverable's own span.
 ///
-/// A `None` pool (tests / no DB) is a no-op. A DB error is logged, never
-/// propagated — losing a history row must not crash a finished recording.
-async fn finalize_history(
+/// Called at every split (closing one deliverable) and once at session end (the
+/// last). Idempotent: a second call with nothing pending is a no-op.
+async fn finalize_pending(
     pool: &Option<SqlitePool>,
     session: &RecordingSession,
+    finalized: &mut usize,
     end_ms: u64,
-    total_bytes: &AtomicU64,
+    preroll_clip: &Option<PrerollClip>,
     audio: &FfmpegDevice,
 ) {
+    let deliverables = session.deliverables();
+    let total = deliverables.len();
+    for index in *finalized..total {
+        let d = &deliverables[index];
+        // This deliverable ends when the NEXT one started, or at `end_ms` if it's
+        // the last in the batch.
+        let deliverable_end = deliverables
+            .get(index + 1)
+            .map(|next| next.started_at_ms)
+            .unwrap_or(end_ms);
+        finalize_one(pool, d, index, deliverable_end, preroll_clip, audio).await;
+    }
+    *finalized = total;
+}
+
+/// Finalise ONE deliverable: concat-stitch its fragments into its primary file
+/// (prepending the pre-roll clip when `index == 0`), then write its history row.
+/// `file_path` is the final (merged) file, `started_at` is the deliverable's own
+/// start, `duration_ms` is `end_ms - started_at`, and `byte_size` is the merged
+/// file's size on disk (the honest finished-file size).
+///
+/// A concat failure leaves the fragment files on disk and falls back to the
+/// primary path for the history row (no audio lost). A `None` pool is a no-op for
+/// the DB write. A DB error is logged, never propagated.
+async fn finalize_one(
+    pool: &Option<SqlitePool>,
+    deliverable: &sundayrec_core::recorder::Deliverable,
+    index: usize,
+    end_ms: u64,
+    preroll_clip: &Option<PrerollClip>,
+    audio: &FfmpegDevice,
+) {
+    // Pre-roll is prepended ONLY to the first deliverable's first fragment.
+    let preroll_path = if index == 0 {
+        preroll_clip.as_ref().map(|c| c.raw_path.as_str())
+    } else {
+        None
+    };
+
+    let final_path = match finalize_deliverable(deliverable, preroll_path).await {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::error!(
+                deliverable = %deliverable.primary_path,
+                "recorder: concat failed, keeping primary as history file: {e}"
+            );
+            deliverable.primary_path.clone()
+        }
+    };
+
+    // Best-effort: the finished file's actual size on disk.
+    let byte_size = tokio::fs::metadata(&final_path)
+        .await
+        .map(|m| m.len() as i64)
+        .ok();
+
     let Some(pool) = pool else { return };
+    let started_at = deliverable.started_at_ms;
+    let duration_ms = end_ms.saturating_sub(started_at) as f64;
     let row = RecordingRow {
         id: String::new(),
-        file_path: session.primary_path().to_string(),
+        file_path: final_path,
         device_name: Some(audio.name.clone()),
-        started_at: session.session_start_ms() as f64,
-        duration_ms: Some(session.elapsed_ms(end_ms) as f64),
-        byte_size: Some(total_bytes.load(Ordering::Relaxed) as i64),
+        started_at: started_at as f64,
+        duration_ms: Some(duration_ms),
+        byte_size,
         created_at: 0.0,
         note: None,
     };

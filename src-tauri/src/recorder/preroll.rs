@@ -193,7 +193,11 @@ impl PrerollEngine {
     /// Stop the pre-roll and return the trimmed clip to prepend, or `None` when
     /// nothing usable was captured (no loop running, segment too small/short, or
     /// the trim re-encode failed). Consumes the raw WAV (deleted) and produces a
-    /// trimmed `.m4a` at the recording's `sample_rate`/`channels`.
+    /// trimmed clip at the recording's `sample_rate`/`channels`, **encoded with
+    /// `audio_codec` into a `container_ext` file** so the F3.3a concat that
+    /// prepends it to the recording is a lossless `-c copy` (Fase 3.3a). For the
+    /// unified recorder that means `audio_codec = "aac"` and `container_ext` the
+    /// recording's output extension (e.g. `"m4a"`, `"mp4"`).
     ///
     /// ⚠️ HARDWARE-UNVERIFIED — stops a real capture + re-encodes via ffmpeg.
     pub async fn harvest(
@@ -201,6 +205,8 @@ impl PrerollEngine {
         requested_seconds: u32,
         sample_rate: u32,
         channels: u8,
+        audio_codec: &str,
+        container_ext: &str,
     ) -> Option<PrerollClip> {
         // Flip active off FIRST so the loop's exit handler won't restart it.
         self.active.store(false, Ordering::SeqCst);
@@ -228,14 +234,16 @@ impl PrerollEngine {
         };
         let start_offset_ms = preroll_start_offset_ms(captured_ms, trim_ms);
 
-        // Re-encode the kept window to AAC m4a so it can concat with the recording.
-        let out = temp.with_extension("m4a");
+        // Re-encode the kept window with the recording's codec + container so it
+        // can concat with the recording via a lossless `-c copy` (F3.3a).
+        let out = temp.with_extension(container_ext);
         let trim_args = build_preroll_trim_args(
             &temp.to_string_lossy(),
             start_offset_ms,
             trim_ms,
             sample_rate,
             channels,
+            audio_codec,
             &out.to_string_lossy(),
         );
         let trimmed_ok = run_to_completion(&trim_args).await;

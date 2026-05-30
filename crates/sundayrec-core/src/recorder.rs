@@ -165,22 +165,51 @@ pub enum RecoveryDecision {
     GiveUp,
 }
 
+/// One **deliverable** — a single finished file the user keeps. A session with
+/// no split produces exactly one deliverable; each split boundary closes the
+/// current deliverable and opens a new one (so N splits ⇒ N deliverables ⇒ N
+/// files ⇒ N history rows).
+///
+/// `fragments` is the ordered list of on-disk paths that make up THIS
+/// deliverable: its start segment first, then any `_rN` reconnect fragments that
+/// occurred *inside* this deliverable (a device unplug mid-recording). At
+/// finalisation the engine concat-`-c copy` stitches the fragments into one
+/// lossless file at `primary_path` (the first fragment). `started_at_ms` is when
+/// this deliverable's first segment began — for the per-deliverable history row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Deliverable {
+    /// The final file path for this deliverable — its first fragment, which the
+    /// concat stitches the rest INTO (and which the history row points at).
+    pub primary_path: String,
+    /// Every fragment path for this deliverable, in start order (start fragment
+    /// then `_rN` reconnect fragments). `fragments[0] == primary_path`.
+    pub fragments: Vec<String>,
+    /// Epoch ms this deliverable's first fragment started.
+    pub started_at_ms: u64,
+}
+
 /// The pure recording-session state. The engine constructs one per recording,
 /// feeds it events, and acts on its decisions. Holds NO clock, NO process, NO
 /// file handles — only the facts needed to decide recovery and splitting.
 ///
-/// `segments` is the canonical ordered list of every output path the session
-/// has produced: the first segment, then any `_rN` reconnect segments and `_N`
-/// split segments, in the order they were started. The history layer represents
-/// the whole session as ONE row whose `file_path` is `segments[0]` (the
-/// original) — see the engine's finalisation. (Electron merged reconnect
-/// segments into `segments[0]` at finalize; the unified Fase-3 pipeline keeps
-/// the segments on disk and records the primary one, leaving an explicit
-/// concat-merge as a follow-up rather than baking ffmpeg muxing into core.)
+/// ## Deliverable / fragment model (Fase 3.3a)
+///
+/// The session is a sequence of **deliverables**. The first deliverable opens at
+/// `new()`. A **reconnect** (`on_unexpected_exit` → `_rN`) appends a fragment to
+/// the *current* deliverable — it stays one file. A **split**
+/// (`begin_split_segment` → `_N`) CLOSES the current deliverable and OPENS a new
+/// one whose first fragment is the `_N` path. So:
+///   - reconnect = stitch (more fragments in the same deliverable),
+///   - split = a brand-new deliverable (its own file + own history row),
+///   - the pre-roll clip is prepended to the FIRST deliverable's FIRST fragment
+///     only (the engine owns that decision; core just exposes the deliverables).
+///
+/// `segments()` still returns the flat ordered path list (every fragment of
+/// every deliverable) for backward compatibility; [`deliverables`] groups them.
 #[derive(Debug, Clone)]
 pub struct RecordingSession {
     /// Original session start (epoch ms) — NEVER updated on reconnect/split, so
-    /// the history row's `started_at` + duration span the whole session.
+    /// the whole-session duration spans every deliverable.
     session_start_ms: u64,
     /// Wall-clock (ms) the CURRENT segment started — reset on every reconnect
     /// and split, so [`should_split`](Self::should_split) measures per-segment.
@@ -189,10 +218,12 @@ pub struct RecordingSession {
     reconnect_count: u32,
     /// How many *split* rotations have happened (drives the `_N` suffix).
     split_count: u32,
-    /// Every output path in order (reconnect + split segments appended).
-    segments: Vec<String>,
-    /// The base path (segment 0) all suffixed segment names derive from.
+    /// The base path (deliverable 0's first fragment) all suffixed segment names
+    /// derive from.
     base_path: String,
+    /// The deliverables produced so far, in order. Always ≥ 1 (the first opens at
+    /// construction). The last is the one currently being recorded into.
+    deliverables: Vec<Deliverable>,
 }
 
 impl RecordingSession {
@@ -200,13 +231,18 @@ impl RecordingSession {
     /// `start_ms` (epoch ms supplied by the engine).
     pub fn new(output_path: impl Into<String>, start_ms: u64) -> Self {
         let base_path = output_path.into();
+        let first = Deliverable {
+            primary_path: base_path.clone(),
+            fragments: vec![base_path.clone()],
+            started_at_ms: start_ms,
+        };
         Self {
             session_start_ms: start_ms,
             current_segment_start_ms: start_ms,
             reconnect_count: 0,
             split_count: 0,
-            segments: vec![base_path.clone()],
             base_path,
+            deliverables: vec![first],
         }
     }
 
@@ -233,22 +269,57 @@ impl RecordingSession {
         self.split_count
     }
 
-    /// All segment paths in start order. `segments()[0]` is the original output.
-    pub fn segments(&self) -> &[String] {
-        &self.segments
+    /// All segment paths in start order, flattened across every deliverable.
+    /// `segments()[0]` is the original output. Kept for backward compatibility /
+    /// diagnostics; [`deliverables`](Self::deliverables) is the structured view.
+    pub fn segments(&self) -> Vec<String> {
+        self.deliverables
+            .iter()
+            .flat_map(|d| d.fragments.iter().cloned())
+            .collect()
     }
 
-    /// The primary (history-representative) file path — the original segment.
+    /// The primary (history-representative) file path — the FIRST deliverable's
+    /// first fragment (the original output path). Use
+    /// [`deliverables`](Self::deliverables) for the per-deliverable paths.
     pub fn primary_path(&self) -> &str {
-        &self.segments[0]
+        &self.deliverables[0].primary_path
     }
 
-    /// The path of the segment currently being written (the most recent one).
+    /// The path of the segment currently being written (the most recent fragment
+    /// of the current deliverable).
     pub fn current_segment(&self) -> &str {
-        self.segments
+        self.deliverables
             .last()
+            .and_then(|d| d.fragments.last())
             .map(String::as_str)
             .unwrap_or(&self.base_path)
+    }
+
+    /// The fragment paths of the deliverable currently being recorded into, in
+    /// start order (start fragment + any `_rN` reconnect fragments so far).
+    pub fn current_deliverable_fragments(&self) -> &[String] {
+        &self
+            .deliverables
+            .last()
+            .expect("a session always has at least one deliverable")
+            .fragments
+    }
+
+    /// Whether the deliverable currently being recorded is the FIRST one — the
+    /// only deliverable the pre-roll clip is prepended to. (Equivalent to "no
+    /// split has happened yet".)
+    pub fn current_is_first_deliverable(&self) -> bool {
+        self.deliverables.len() == 1
+    }
+
+    /// All deliverables produced so far, in order. Each is a finished (or
+    /// in-progress, for the last) file the user keeps: its `primary_path`, its
+    /// ordered `fragments` (start + reconnect `_rN`), and its `started_at_ms`.
+    /// The engine writes ONE history row per deliverable and concat-stitches each
+    /// deliverable's fragments into its `primary_path`.
+    pub fn deliverables(&self) -> Vec<Deliverable> {
+        self.deliverables.clone()
     }
 
     /// Decide what to do after ffmpeg exits UNEXPECTEDLY (not a graceful `q`).
@@ -282,8 +353,24 @@ impl RecordingSession {
         let zero_based = self.reconnect_count;
         self.reconnect_count += 1;
         let attempt = self.reconnect_count;
-        let next_segment = reconnect_segment_path(&self.base_path, attempt);
-        self.segments.push(next_segment.clone());
+        // The reconnect fragment derives from the CURRENT deliverable's primary
+        // path (NOT the session base), so a reconnect inside a split deliverable
+        // is named `g_2_r1.mp3` and groups under that deliverable — its concat
+        // target is `g_2.mp3`, not the original `g.mp3`.
+        let current_primary = self
+            .deliverables
+            .last()
+            .expect("a session always has at least one deliverable")
+            .primary_path
+            .clone();
+        let next_segment = reconnect_fragment_path(&current_primary, attempt);
+        // A reconnect appends a fragment to the CURRENT deliverable — it stays
+        // one file (the fragments are stitched at finalisation).
+        self.deliverables
+            .last_mut()
+            .expect("a session always has at least one deliverable")
+            .fragments
+            .push(next_segment.clone());
         // A reconnect starts a fresh segment clock for split purposes.
         self.current_segment_start_ms = now_ms;
         RecoveryDecision::Reconnect {
@@ -315,17 +402,26 @@ impl RecordingSession {
         self.elapsed_ms(now_ms) >= u64::from(manual_max_minutes) * 60_000
     }
 
-    /// Rotate to a fresh split segment: bump the split count, append the `_N`
-    /// segment path, reset the per-segment clock, and return the new path the
-    /// engine should spawn ffmpeg against. Call this when
-    /// [`should_split`](Self::should_split) returns true (after finalising the
-    /// current segment with a graceful `q`).
+    /// Rotate to a fresh split segment: a split CLOSES the current deliverable
+    /// and OPENS a new one. Bumps the split count, appends a new [`Deliverable`]
+    /// whose first fragment is the `_N` path, resets the per-segment clock, and
+    /// returns the new path the engine should spawn ffmpeg against. Call this
+    /// when [`should_split`](Self::should_split) returns true (after finalising
+    /// the current segment with a graceful `q`).
+    ///
+    /// `now_ms` becomes the new deliverable's `started_at_ms` — each split file
+    /// gets its own history `started_at` (Electron stamped each split file with
+    /// the rotation time, not the original session start).
     pub fn begin_split_segment(&mut self, now_ms: u64) -> String {
         self.split_count += 1;
-        // Split segments are numbered globally (segment index = how many we've
-        // started so far) to keep names monotonic alongside any `_rN` segments.
+        // Split segments are numbered globally (segment index = how many splits
+        // we've started) to keep names monotonic alongside any `_rN` fragments.
         let next = split_segment_path(&self.base_path, self.split_count);
-        self.segments.push(next.clone());
+        self.deliverables.push(Deliverable {
+            primary_path: next.clone(),
+            fragments: vec![next.clone()],
+            started_at_ms: now_ms,
+        });
         self.current_segment_start_ms = now_ms;
         next
     }
@@ -341,6 +437,37 @@ pub fn reconnect_segment_path(base_path: &str, attempt: u32) -> String {
     match ext {
         Some(e) => format!("{stem}_r{attempt}.{e}"),
         None => format!("{stem}_r{attempt}"),
+    }
+}
+
+/// Build a reconnect-fragment path for the 1-based reconnect `attempt`, derived
+/// from a deliverable's PRIMARY path (which may itself carry a `_N` split
+/// suffix). Only a trailing `_rN` reconnect suffix is stripped first, so a split
+/// deliverable's `_N` is preserved: `g_2.mp3` → `g_2_r1.mp3`, and a stacked
+/// reconnect `g_2_r1.mp3` → `g_2_r2.mp3` (no `_r1_r2`).
+pub fn reconnect_fragment_path(primary_path: &str, attempt: u32) -> String {
+    let (stem, ext) = split_ext(primary_path);
+    let stem = strip_reconnect_suffix(stem);
+    match ext {
+        Some(e) => format!("{stem}_r{attempt}.{e}"),
+        None => format!("{stem}_r{attempt}"),
+    }
+}
+
+/// Strip ONLY a trailing `_rN` reconnect suffix from a stem (leaving any `_N`
+/// split suffix intact). Used by [`reconnect_fragment_path`] so reconnects don't
+/// stack but a split deliverable's number is preserved.
+fn strip_reconnect_suffix(stem: &str) -> &str {
+    let bytes = stem.as_bytes();
+    let mut i = bytes.len();
+    while i > 0 && bytes[i - 1].is_ascii_digit() {
+        i -= 1;
+    }
+    // Only strip when the digit run is preceded by `_r`.
+    if i < bytes.len() && i >= 2 && &stem[i - 2..i] == "_r" {
+        &stem[..i - 2]
+    } else {
+        stem
     }
 }
 
@@ -394,6 +521,84 @@ fn strip_segment_suffix(stem: &str) -> &str {
     } else {
         stem
     }
+}
+
+// ── Concat / mux argument builders (Fase 3.3a) ───────────────────────────────
+//
+// Pure ports of the Electron `mergeSegments` / pre-roll-concat path. These build
+// the ffmpeg concat-demuxer inputs and the concat-list file body; the `src-tauri`
+// layer writes the list to a temp file and runs ffmpeg with `-c copy` (lossless —
+// every fragment shares the recording's codec/container, and the pre-roll clip is
+// re-encoded to that same format at harvest, so no transcode is needed).
+
+/// Escape a path for ffmpeg's concat-demuxer list, an EXACT port of the Electron
+/// `escPath`:
+///   1. Windows: backslashes → forward slashes (so the concat parser doesn't
+///      treat `\` as an escape). POSIX: backslashes → doubled (`\` → `\\`), since
+///      a literal `\` inside the single-quoted path must itself be escaped.
+///   2. Then single quotes → `\'` on every platform (the path is wrapped in `'…'`
+///      in the list, so an embedded quote must be backslash-escaped).
+pub fn escape_concat_path(path: &str, is_windows: bool) -> String {
+    let normalized = if is_windows {
+        path.replace('\\', "/")
+    } else {
+        path.replace('\\', "\\\\")
+    };
+    normalized.replace('\'', "\\'")
+}
+
+/// Build the body of an ffmpeg concat-demuxer list: one `file '<escaped>'` line
+/// per input, in order, each terminated by `\n` (matching the Electron writer's
+/// trailing newline).
+pub fn build_concat_list(files: &[String], is_windows: bool) -> String {
+    let mut out = String::new();
+    for f in files {
+        out.push_str("file '");
+        out.push_str(&escape_concat_path(f, is_windows));
+        out.push_str("'\n");
+    }
+    out
+}
+
+/// Build the ffmpeg concat-demuxer argument vector — an EXACT port of the
+/// Electron `mergeSegments` / pre-roll-concat args:
+/// `["-nostdin","-hide_banner","-f","concat","-safe","0","-i",<list>,"-c","copy","-y",<out>]`.
+/// Lossless stream-copy: every input shares the recording's codec/container.
+pub fn build_concat_args(list_path: &str, out_path: &str) -> Vec<String> {
+    vec![
+        "-nostdin".into(),
+        "-hide_banner".into(),
+        "-f".into(),
+        "concat".into(),
+        "-safe".into(),
+        "0".into(),
+        "-i".into(),
+        list_path.into(),
+        "-c".into(),
+        "copy".into(),
+        "-y".into(),
+        out_path.into(),
+    ]
+}
+
+/// Whether a concat is actually needed for a deliverable: `true` when there is
+/// more than one fragment OR a pre-roll clip must be prepended. With a single
+/// fragment and no pre-roll the primary file is already the finished deliverable,
+/// so the engine skips ffmpeg entirely.
+pub fn concat_needed(fragments: &[String], has_preroll: bool) -> bool {
+    fragments.len() > 1 || has_preroll
+}
+
+/// The ordered list of ffmpeg concat inputs for a deliverable: the optional
+/// pre-roll clip FIRST (only the first deliverable ever passes `Some` here — the
+/// engine decides), then the deliverable's fragments in start order.
+pub fn concat_inputs(fragments: &[String], preroll_clip_path: Option<&str>) -> Vec<String> {
+    let mut inputs = Vec::with_capacity(fragments.len() + 1);
+    if let Some(p) = preroll_clip_path {
+        inputs.push(p.to_string());
+    }
+    inputs.extend(fragments.iter().cloned());
+    inputs
 }
 
 #[cfg(test)]
@@ -495,7 +700,12 @@ mod tests {
             other => panic!("expected Reconnect, got {other:?}"),
         }
         assert_eq!(s.reconnect_count(), 1);
-        assert_eq!(s.segments(), &["/rec/sermon.mp3", "/rec/sermon_r1.mp3"]);
+        assert_eq!(s.segments(), ["/rec/sermon.mp3", "/rec/sermon_r1.mp3"]);
+        // A reconnect stays in the SAME (first) deliverable, not a new one.
+        let dels = s.deliverables();
+        assert_eq!(dels.len(), 1);
+        assert_eq!(dels[0].primary_path, "/rec/sermon.mp3");
+        assert_eq!(dels[0].fragments, ["/rec/sermon.mp3", "/rec/sermon_r1.mp3"]);
     }
 
     #[test]
@@ -591,10 +801,17 @@ mod tests {
         assert_eq!(s.begin_split_segment(120_000), "/rec/sermon_3.mp3");
         assert_eq!(
             s.segments(),
-            &["/rec/sermon.mp3", "/rec/sermon_2.mp3", "/rec/sermon_3.mp3"]
+            ["/rec/sermon.mp3", "/rec/sermon_2.mp3", "/rec/sermon_3.mp3"]
         );
         assert_eq!(s.split_count(), 2);
         assert_eq!(s.current_segment(), "/rec/sermon_3.mp3");
+        // Each split opened a NEW deliverable — three one-fragment deliverables.
+        let dels = s.deliverables();
+        assert_eq!(dels.len(), 3);
+        assert_eq!(dels[0].primary_path, "/rec/sermon.mp3");
+        assert_eq!(dels[1].primary_path, "/rec/sermon_2.mp3");
+        assert_eq!(dels[2].primary_path, "/rec/sermon_3.mp3");
+        assert!(dels.iter().all(|d| d.fragments.len() == 1));
     }
 
     // ── manual-max auto-stop ────────────────────────────────────────────────────
@@ -615,22 +832,24 @@ mod tests {
     #[test]
     fn segments_accumulate_across_reconnect_and_split_in_order() {
         let mut s = RecordingSession::new("/rec/g.mp3", 0);
-        // split at 30 min → _2
+        // split at 30 min → _2 (opens deliverable 2)
         let _ = s.begin_split_segment(30 * 60_000);
-        // reconnect during the split segment → _r1
+        // reconnect during the _2 deliverable → its fragment derives from the
+        // deliverable primary (`g_2`), not the session base → `g_2_r1`.
         let _ = s.on_unexpected_exit(35 * 60_000, None);
-        // another split → _3
+        // another split → _3 (opens deliverable 3)
         let _ = s.begin_split_segment(65 * 60_000);
         assert_eq!(
             s.segments(),
-            &[
+            [
                 "/rec/g.mp3",
                 "/rec/g_2.mp3",
-                "/rec/g_r1.mp3",
+                "/rec/g_2_r1.mp3",
                 "/rec/g_3.mp3",
             ]
         );
-        // primary is always the original; duration spans the whole session.
+        // primary is always the FIRST deliverable's original path; duration spans
+        // the whole session.
         assert_eq!(s.primary_path(), "/rec/g.mp3");
         assert_eq!(s.elapsed_ms(65 * 60_000), 65 * 60_000);
         assert_eq!(s.session_start_ms(), 0);
@@ -662,5 +881,179 @@ mod tests {
         assert_eq!(split_ext("C:\\rec\\g.flac"), ("C:\\rec\\g", Some("flac")));
         // A leading-dot file name is not an extension.
         assert_eq!(split_ext("/a/.hidden"), ("/a/.hidden", None));
+    }
+
+    #[test]
+    fn reconnect_fragment_path_preserves_split_number() {
+        // A reconnect inside the FIRST deliverable: `g.mp3` → `g_r1.mp3`.
+        assert_eq!(reconnect_fragment_path("/rec/g.mp3", 1), "/rec/g_r1.mp3");
+        // A reconnect inside a SPLIT deliverable keeps the `_2`: `g_2` → `g_2_r1`.
+        assert_eq!(
+            reconnect_fragment_path("/rec/g_2.mp3", 1),
+            "/rec/g_2_r1.mp3"
+        );
+        // A stacked reconnect strips only the prior `_rN`, not the `_2`.
+        assert_eq!(
+            reconnect_fragment_path("/rec/g_2_r1.mp3", 2),
+            "/rec/g_2_r2.mp3"
+        );
+        // No extension.
+        assert_eq!(reconnect_fragment_path("/rec/g_2", 1), "/rec/g_2_r1");
+    }
+
+    // ── Deliverable / fragment grouping (Fase 3.3a) ──────────────────────────────
+
+    #[test]
+    fn fresh_session_is_one_deliverable_one_fragment() {
+        let s = RecordingSession::new("/rec/s.mp3", 100);
+        let dels = s.deliverables();
+        assert_eq!(dels.len(), 1);
+        assert_eq!(dels[0].primary_path, "/rec/s.mp3");
+        assert_eq!(dels[0].fragments, ["/rec/s.mp3"]);
+        assert_eq!(dels[0].started_at_ms, 100);
+        assert_eq!(s.current_deliverable_fragments(), ["/rec/s.mp3"]);
+        assert!(s.current_is_first_deliverable());
+    }
+
+    #[test]
+    fn reconnect_appends_fragment_to_current_deliverable() {
+        let mut s = RecordingSession::new("/rec/s.mp3", 0);
+        let _ = s.on_unexpected_exit(1_000, None);
+        let _ = s.on_unexpected_exit(2_000, None);
+        let dels = s.deliverables();
+        // Still one deliverable, now three fragments.
+        assert_eq!(dels.len(), 1);
+        assert_eq!(
+            dels[0].fragments,
+            ["/rec/s.mp3", "/rec/s_r1.mp3", "/rec/s_r2.mp3"]
+        );
+        assert_eq!(
+            s.current_deliverable_fragments(),
+            ["/rec/s.mp3", "/rec/s_r1.mp3", "/rec/s_r2.mp3"]
+        );
+    }
+
+    #[test]
+    fn split_opens_new_deliverable_and_reconnect_targets_it() {
+        let mut s = RecordingSession::new("/rec/s.mp3", 0);
+        let _ = s.begin_split_segment(60_000);
+        assert!(!s.current_is_first_deliverable());
+        // A reconnect now lands in deliverable 2 → `s_2_r1`.
+        let _ = s.on_unexpected_exit(70_000, None);
+        let dels = s.deliverables();
+        assert_eq!(dels.len(), 2);
+        assert_eq!(dels[0].fragments, ["/rec/s.mp3"]);
+        assert_eq!(dels[1].primary_path, "/rec/s_2.mp3");
+        assert_eq!(dels[1].fragments, ["/rec/s_2.mp3", "/rec/s_2_r1.mp3"]);
+        assert_eq!(dels[1].started_at_ms, 60_000);
+    }
+
+    #[test]
+    fn deliverables_over_a_full_session() {
+        // [preroll, frag, _r1, SPLIT, frag2, _r1] → 2 deliverables.
+        // (Pre-roll is the engine's concern; here we model the recorder events:
+        // start → reconnect → split → reconnect.)
+        let mut s = RecordingSession::new("/rec/g.mp3", 0);
+        let _ = s.on_unexpected_exit(10_000, None); // _r1 in deliverable 1
+        let _ = s.begin_split_segment(1_800_000); // split → deliverable 2
+        let _ = s.on_unexpected_exit(1_810_000, None); // _r1 in deliverable 2
+        let dels = s.deliverables();
+        assert_eq!(dels.len(), 2);
+        // Deliverable 1: original + its reconnect fragment.
+        assert_eq!(dels[0].primary_path, "/rec/g.mp3");
+        assert_eq!(dels[0].fragments, ["/rec/g.mp3", "/rec/g_r1.mp3"]);
+        assert_eq!(dels[0].started_at_ms, 0);
+        // Deliverable 2: the split file + ITS reconnect fragment. The reconnect
+        // ATTEMPT number is session-wide (the budget is session-wide), so this is
+        // the SECOND reconnect of the session → `_r2`, derived from the
+        // deliverable's `g_2` primary → `g_2_r2`.
+        assert_eq!(dels[1].primary_path, "/rec/g_2.mp3");
+        assert_eq!(dels[1].fragments, ["/rec/g_2.mp3", "/rec/g_2_r2.mp3"]);
+        assert_eq!(dels[1].started_at_ms, 1_800_000);
+    }
+
+    // ── Concat-list / args / inputs (ports of Electron escPath + mergeSegments) ──
+
+    #[test]
+    fn escape_concat_path_windows_normalises_backslashes() {
+        // Windows: `\` → `/`, then `'` → `\'`.
+        assert_eq!(escape_concat_path("C:\\rec\\g.mp3", true), "C:/rec/g.mp3");
+        assert_eq!(
+            escape_concat_path("C:\\re'c\\g.mp3", true),
+            "C:/re\\'c/g.mp3"
+        );
+    }
+
+    #[test]
+    fn escape_concat_path_posix_doubles_backslashes_and_quotes() {
+        // POSIX: `\` → `\\`, then `'` → `\'`. A plain path is unchanged.
+        assert_eq!(escape_concat_path("/rec/g.mp3", false), "/rec/g.mp3");
+        // A literal backslash in a POSIX filename is doubled.
+        assert_eq!(
+            escape_concat_path("/rec/a\\b.mp3", false),
+            "/rec/a\\\\b.mp3"
+        );
+        // An apostrophe (e.g. "St Olav's") is backslash-escaped.
+        assert_eq!(
+            escape_concat_path("/rec/Olav's.mp3", false),
+            "/rec/Olav\\'s.mp3"
+        );
+    }
+
+    #[test]
+    fn build_concat_list_one_line_per_file() {
+        let files = vec!["/rec/g.mp3".to_string(), "/rec/g_r1.mp3".to_string()];
+        assert_eq!(
+            build_concat_list(&files, false),
+            "file '/rec/g.mp3'\nfile '/rec/g_r1.mp3'\n"
+        );
+        // Empty input → empty body.
+        assert_eq!(build_concat_list(&[], false), "");
+    }
+
+    #[test]
+    fn build_concat_args_match_electron() {
+        assert_eq!(
+            build_concat_args("/tmp/list.txt", "/rec/out.mp3"),
+            vec![
+                "-nostdin",
+                "-hide_banner",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                "/tmp/list.txt",
+                "-c",
+                "copy",
+                "-y",
+                "/rec/out.mp3",
+            ]
+        );
+    }
+
+    #[test]
+    fn concat_needed_only_when_multiple_fragments_or_preroll() {
+        let one = vec!["/rec/g.mp3".to_string()];
+        let two = vec!["/rec/g.mp3".to_string(), "/rec/g_r1.mp3".to_string()];
+        // 1 fragment, no pre-roll → already finished, no concat.
+        assert!(!concat_needed(&one, false));
+        // 1 fragment + pre-roll → must prepend.
+        assert!(concat_needed(&one, true));
+        // >1 fragment → must stitch.
+        assert!(concat_needed(&two, false));
+        assert!(concat_needed(&two, true));
+    }
+
+    #[test]
+    fn concat_inputs_prepend_preroll_then_fragments_in_order() {
+        let frags = vec!["/rec/g.mp3".to_string(), "/rec/g_r1.mp3".to_string()];
+        // No pre-roll → just the fragments in order.
+        assert_eq!(concat_inputs(&frags, None), ["/rec/g.mp3", "/rec/g_r1.mp3"]);
+        // Pre-roll first, then fragments.
+        assert_eq!(
+            concat_inputs(&frags, Some("/tmp/pre.mp3")),
+            ["/tmp/pre.mp3", "/rec/g.mp3", "/rec/g_r1.mp3"]
+        );
     }
 }

@@ -140,19 +140,24 @@ pub fn build_preroll_capture_args(
 
 /// Build the ffmpeg arguments that TRIM a harvested pre-roll segment to the kept
 /// window: seek `start_offset_ms` into the raw WAV and keep `trim_ms` of audio,
-/// re-encoding to AAC/m4a so it can be concatenated with the main recording.
+/// **re-encoding to the recording's own audio codec** so the trimmed clip can be
+/// concatenated in front of the recording with a lossless `-c copy` (Fase 3.3a).
+///
+/// `audio_codec` MUST match the recording's audio codec (the unified recorder
+/// uses `aac`), and `output_path` MUST carry the recording's container extension
+/// — then the F3.3a concat is a true stream-copy of the (untouched) main
+/// recording, and only the short pre-roll clip is ever re-encoded.
 ///
 /// `-ss` BEFORE `-i` is an (accurate, for WAV) input seek; `-t` bounds the
-/// output duration. We re-encode rather than stream-copy because the main
-/// recording is AAC and a clean concat needs matching codecs. `-ss`/`-t` are
-/// given in seconds (with millisecond precision) — ffmpeg accepts fractional
-/// seconds.
+/// output duration. `-ss`/`-t` are given in seconds (with millisecond
+/// precision) — ffmpeg accepts fractional seconds.
 pub fn build_preroll_trim_args(
     raw_path: &str,
     start_offset_ms: u64,
     trim_ms: u64,
     sample_rate: u32,
     channels: u8,
+    audio_codec: &str,
     output_path: &str,
 ) -> Vec<String> {
     vec![
@@ -164,8 +169,9 @@ pub fn build_preroll_trim_args(
         raw_path.into(),
         "-t".into(),
         ms_to_seconds_string(trim_ms),
+        // Match the recording's codec so the later concat is `-c copy`.
         "-c:a".into(),
-        "aac".into(),
+        audio_codec.into(),
         "-b:a".into(),
         "192k".into(),
         "-ar".into(),
@@ -313,8 +319,15 @@ mod tests {
     #[test]
     fn trim_args_seek_and_duration() {
         // Keep 15 s starting 75 s into the raw capture.
-        let args =
-            build_preroll_trim_args("/tmp/pre.wav", 75_000, 15_000, 48_000, 2, "/tmp/pre.m4a");
+        let args = build_preroll_trim_args(
+            "/tmp/pre.wav",
+            75_000,
+            15_000,
+            48_000,
+            2,
+            "aac",
+            "/tmp/pre.m4a",
+        );
         // -ss BEFORE -i (input seek).
         let ss = args.iter().position(|a| a == "-ss").unwrap();
         let i = args.iter().position(|a| a == "-i").unwrap();
@@ -324,6 +337,18 @@ mod tests {
         assert_eq!(args[t + 1], "15.000");
         assert!(args.windows(2).any(|w| w == ["-c:a", "aac"]));
         assert_eq!(args.last().unwrap(), "/tmp/pre.m4a");
+    }
+
+    #[test]
+    fn trim_args_use_the_passed_codec_for_concat_copy() {
+        // The codec must be threaded through so the clip matches the recording's
+        // codec → the F3.3a concat is a lossless `-c copy`.
+        let args =
+            build_preroll_trim_args("/tmp/pre.wav", 0, 5_000, 44_100, 1, "aac", "/tmp/pre.mp4");
+        assert!(args.windows(2).any(|w| w == ["-c:a", "aac"]));
+        assert!(args.windows(2).any(|w| w == ["-ar", "44100"]));
+        assert!(args.windows(2).any(|w| w == ["-ac", "1"]));
+        assert_eq!(args.last().unwrap(), "/tmp/pre.mp4");
     }
 
     #[test]
