@@ -589,6 +589,14 @@ export async function startSession(
       (audioResult as { onExit: ((c: number | null) => void) | null }).onExit?.(code)
       ;(rawVideoResult as VideoHandle | null)?.onExit?.(code)
     }
+    // Forward silence events too — without this the unified path detects
+    // silence (its -af now emits silencedetect) but the warning/stop handlers
+    // wired onto audioResult below (onSilenceWarning/onSilenceEnd) would never
+    // fire, so a muted mixer recorded silently with no alert in unified mode.
+    unified.onSilenceWarning = () =>
+      (audioResult as { onSilenceWarning: (() => void) | null }).onSilenceWarning?.()
+    unified.onSilenceEnd     = () =>
+      (audioResult as { onSilenceEnd: (() => void) | null }).onSilenceEnd?.()
   } else {
     // Legacy two-process path — kept for the default config until unified
     // has hours-on-it confidence. Spawns audio + video ffmpegs concurrently

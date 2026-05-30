@@ -33,11 +33,12 @@ import {
   listFfmpegDevices,
   findBestDeviceMatch,
   buildCodecArgs,
+  buildSilenceDetectFilter,
 } from './native-recorder'
 import { resolveVideoInput } from './native-recorder'
 import { getWorkingMacConfigIdx, MAC_CONFIGS, buildMacInputArgs } from './video-preview'
 import { resolutionToDimensions, autoBitrate, buildVideoFilterComplex } from './video-recorder'
-import { classifyRecordingError, RECORDER_TIMEOUTS } from './recorder-utils'
+import { classifyRecordingError, createSilenceWatcher, RECORDER_TIMEOUTS } from './recorder-utils'
 import type { Settings, RecordingOpts } from '../types'
 
 export interface UnifiedHandle {
@@ -57,6 +58,12 @@ export interface UnifiedHandle {
   onExit:            ((code: number | null) => void) | null
   onProgress:        ((bytes: number) => void) | null
   onFrame:           ((frame: Buffer) => void) | null
+  /** Fired when silence has persisted past the stop-on-silence timeout. Gated
+   *  by settings.stopOnSilence — null-op otherwise. Mirrors NativeHandle. */
+  onSilenceEnd:      (() => void) | null
+  /** Fired once per silent stretch ≥ silenceWarnMs, regardless of
+   *  stopOnSilence — the weak-signal/muted-mixer warning. */
+  onSilenceWarning:  (() => void) | null
   /** Internal flag set to true when stopUnifiedCapture() initiates a
    *  graceful shutdown so the exit-handler doesn't trigger reconnect. */
   stopping?:         boolean
@@ -166,6 +173,28 @@ async function startUnifiedWin(
 
 // ─── Shared spawn + output mapping ─────────────────────────────────────────
 
+/**
+ * Audio drift-correction filter args for the unified combined output.
+ *
+ * • macOS — the camera AND mic come from ONE avfoundation input, so they
+ *   share a single device clock. A/V stays sample-accurate for the whole
+ *   recording with no correction needed → no filter (keep the proven path
+ *   byte-identical).
+ * • Windows — the two `-i` are TWO independent dshow device clocks (camera
+ *   vs mixer). Their sample-rates differ by parts-per-million, so without
+ *   correction the audio slowly drifts against the video wall-clock — the
+ *   classic "lips out of sync after 90 minutes" failure. aresample=async
+ *   inserts/drops up to 1000 samples per second to track the wall-clock
+ *   timestamps — inaudible at speech volumes, eliminates the drift. This is
+ *   exactly the same correction the two-process muxAudioVideo() applies.
+ *
+ * Returns the ffmpeg filter expression (empty string = no correction needed),
+ * to be comma-joined into the combined output's -af chain.
+ */
+export function unifiedAudioDriftFilter(platform: NodeJS.Platform): string {
+  return platform === 'win32' ? 'aresample=async=1000:first_pts=0' : ''
+}
+
 function spawnUnified(
   opts:    StartUnifiedOpts,
   inArgs:  string[],
@@ -185,6 +214,20 @@ function spawnUnified(
   //   • Mac avfoundation: 0:a (combined input 0 carries video + audio)
   //   • Windows dshow:    1:a (video is input 0, audio is input 1)
   const audioInputIdx = (process.platform === 'win32') ? '1:a' : '0:a'
+
+  // Combined-output audio filter chain, comma-joined into a single -af:
+  //   1. Windows drift correction (unifiedAudioDriftFilter) — see its doc.
+  //   2. silencedetect — emits silence_start/silence_end to stderr so the
+  //      silence watcher below can warn on / stop for a muted mixer. This was
+  //      entirely MISSING from the unified path before: a stuck mixer recorded
+  //      silently with no alert. silencedetect passes audio through unchanged.
+  // Applies ONLY to the combined output; the separate lossless master below is
+  // left untouched so it stays a pristine source.
+  const audioFilterExpr = [
+    unifiedAudioDriftFilter(process.platform),
+    buildSilenceDetectFilter(s),
+  ].filter(Boolean).join(',')
+  const audioFilterArgs = ['-af', audioFilterExpr]
 
   // Wall-clock timestamps on input give us correct duration when wrapped
   // by the muxer — but we hand the raw stamps to ffmpeg's container, then
@@ -209,6 +252,7 @@ function spawnUnified(
     '-maxrate', `${Math.round(bitrate * 1.5)}k`,
     '-bufsize', `${bitrate * 2}k`,
     '-pix_fmt', 'yuv420p',
+    ...audioFilterArgs,
     '-c:a', 'aac',
     '-b:a', '192k',
     '-ar', '48000',
@@ -257,10 +301,23 @@ function spawnUnified(
     startTime:    Date.now(),
     bytesWritten: 0,
     format,
-    onExit:       null,
-    onProgress:   null,
-    onFrame:      null,
+    onExit:           null,
+    onProgress:       null,
+    onFrame:          null,
+    onSilenceEnd:     null,
+    onSilenceWarning: null,
   }
+
+  // Silence watcher — reacts to the silencedetect lines our combined-output
+  // -af chain now emits. Same state machine the audio-only recorder uses, so
+  // a muted mixer warns (and, when stopOnSilence is set, stops) in unified
+  // mode just like the legacy two-process path.
+  const silenceWatcher = createSilenceWatcher({
+    stopOnSilence:    s.stopOnSilence ?? false,
+    silenceTimeoutMs: (s.silenceTimeoutMinutes ?? 5) * 60 * 1000,
+    onStopSilence:    () => handle.onSilenceEnd?.(),
+    onWarning:        () => handle.onSilenceWarning?.(),
+  })
 
   // MJPEG preview parsing — copy of the same SOI/EOI scan video-recorder
   // uses. Frames are forwarded via the onFrame callback.
@@ -297,6 +354,8 @@ function spawnUnified(
     // disconnects on the floor (mic unplug → device_error → 20 retries).
     const err = classifyRecordingError(text)
     if (err !== 'device_error') handle.lastError = err
+    // Silence: feed silencedetect's silence_start/silence_end lines to the watcher.
+    silenceWatcher.feed(text)
     // Progress: ffmpeg emits "size=12345kB" every second. Throttle to 5 s.
     const m = /size=\s*(\d+)kB/.exec(text)
     if (m) {
@@ -311,6 +370,7 @@ function spawnUnified(
   })
 
   proc.on('close', code => {
+    silenceWatcher.clear()  // cancel pending silence timers so none fire post-exit
     handle.onExit?.(code)
     if (code !== 0 && !handle.stopping) {
       console.warn('[unified-recorder] ffmpeg closed code=', code, '— last stderr:', stderrBuf.slice(-400))

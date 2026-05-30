@@ -193,4 +193,70 @@ export const RECORDER_TIMEOUTS = {
   /** Per-receiver timeout for NDI shutdown — prevents libndi deadlock
    *  from blocking stream-stop forever. */
   ndiStopTimeoutMs: 2_000,
+
+  /** Background silence-warning delay. After this much continuous silence we
+   *  fire onWarning once (per stretch), even when stopOnSilence is off — so a
+   *  muted mixer doesn't yield a 2-hour silent file with no alert. */
+  silenceWarnMs: 60_000,
 } as const
+
+export interface SilenceWatcher {
+  /** Feed a chunk of ffmpeg stderr. Fires the callbacks as silent stretches
+   *  develop, based on silencedetect's `silence_start` / `silence_end` lines. */
+  feed(chunk: string): void
+  /** Cancel any pending timers — call on process close so a trailing silent
+   *  stretch can't fire a warning after the recording has already ended. */
+  clear(): void
+}
+
+/**
+ * Silence-state machine shared by the recorders. Mirrors the inline logic in
+ * native-recorder.startCaptureWithInput so the unified pipeline reacts to
+ * silence identically (the unified path previously had NO silence handling at
+ * all — a muted mixer recorded silently with no warning or stop).
+ *
+ *   • `silence_start` → arm a stop timer (only when stopOnSilence) AND a
+ *     warning timer (always). The warning fires once per stretch.
+ *   • `silence_end`   → cancel both timers and re-arm the warning for the
+ *     next stretch.
+ *
+ * Timers are injected via setTimeout so callers can drive it with fake timers
+ * in tests.
+ */
+export function createSilenceWatcher(opts: {
+  stopOnSilence:    boolean
+  /** How long silence must persist before onStopSilence fires (stop path). */
+  silenceTimeoutMs: number
+  /** Override the warn delay; defaults to RECORDER_TIMEOUTS.silenceWarnMs. */
+  warnAfterMs?:     number
+  /** Stop the recording — gated on stopOnSilence. */
+  onStopSilence:    () => void
+  /** Non-fatal weak-signal warning — always armed. */
+  onWarning:        () => void
+}): SilenceWatcher {
+  const warnAfterMs = opts.warnAfterMs ?? RECORDER_TIMEOUTS.silenceWarnMs
+  let stopTimer: ReturnType<typeof setTimeout> | null = null
+  let warnTimer: ReturnType<typeof setTimeout> | null = null
+  let warnFired = false
+
+  return {
+    feed(chunk: string): void {
+      if (chunk.includes('silence_start')) {
+        if (opts.stopOnSilence && !stopTimer) {
+          stopTimer = setTimeout(() => { stopTimer = null; opts.onStopSilence() }, opts.silenceTimeoutMs)
+        }
+        if (!warnTimer && !warnFired) {
+          warnTimer = setTimeout(() => { warnTimer = null; warnFired = true; opts.onWarning() }, warnAfterMs)
+        }
+      } else if (chunk.includes('silence_end')) {
+        if (stopTimer) { clearTimeout(stopTimer); stopTimer = null }
+        if (warnTimer) { clearTimeout(warnTimer); warnTimer = null }
+        warnFired = false  // re-arm so the next silent stretch can warn again
+      }
+    },
+    clear(): void {
+      if (stopTimer) { clearTimeout(stopTimer); stopTimer = null }
+      if (warnTimer) { clearTimeout(warnTimer); warnTimer = null }
+    },
+  }
+}

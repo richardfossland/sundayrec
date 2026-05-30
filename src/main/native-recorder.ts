@@ -532,19 +532,29 @@ function buildAudioFilters(opts: RecordingOpts): string {
     filters.push('silenceremove=start_periods=1:start_duration=0.1:start_threshold=-50dB:stop_periods=-1:stop_duration=1:stop_threshold=-50dB')
   }
 
-  // Silence detection — always on. When stopOnSilence is enabled the threshold
-  // and duration come from settings (used to abort the recording). When it's
-  // off we still want a background "weak-signal" warning so a stuck mixer
-  // doesn't produce 2 hours of silence unnoticed. We pick a permissive
-  // threshold (-55 dB, 1 s) and let the warning timer (60 s) gate the alert.
-  if (opts.stopOnSilence) {
-    const noiseDb = Math.max(-70, Math.min(-10, Number(opts.silenceThreshold ?? -50)))
-    filters.push(`silencedetect=noise=${noiseDb}dB:duration=1`)
-  } else {
-    filters.push('silencedetect=noise=-55dB:duration=1')
-  }
+  // Silence detection — always on. See buildSilenceDetectFilter for the
+  // threshold rationale. Shared with the unified pipeline so both capture
+  // modes detect silence identically.
+  filters.push(buildSilenceDetectFilter(opts))
 
   return filters.join(',')
+}
+
+/**
+ * The `silencedetect` filter string. Always on: when stopOnSilence is enabled
+ * the threshold/duration come from settings (used to abort the recording);
+ * when it's off we still want a background "weak-signal" warning so a stuck
+ * mixer doesn't produce 2 hours of silence unnoticed — a permissive threshold
+ * (-55 dB, 1 s) with the warning timer (createSilenceWatcher) gating the alert.
+ *
+ * Exported so the unified recorder injects the IDENTICAL detector.
+ */
+export function buildSilenceDetectFilter(opts: RecordingOpts): string {
+  if (opts.stopOnSilence) {
+    const noiseDb = Math.max(-70, Math.min(-10, Number(opts.silenceThreshold ?? -50)))
+    return `silencedetect=noise=${noiseDb}dB:duration=1`
+  }
+  return 'silencedetect=noise=-55dB:duration=1'
 }
 
 export function buildCodecArgs(opts: RecordingOpts): string[] {
