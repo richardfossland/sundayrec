@@ -13,6 +13,7 @@ import { SettingsPage } from "@/features/settings/SettingsPage";
 import { SchedulePage } from "@/features/schedule/SchedulePage";
 import { WakePanel } from "@/features/wake/WakePanel";
 import { HistoryPanel } from "@/features/history/HistoryPanel";
+import { CloudBackupPanel } from "@/features/cloud/CloudBackupPanel";
 import { SETTINGS_QUERY_KEY } from "@/features/settings/queryKey";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { changeLanguage } from "@/i18n";
@@ -127,6 +128,17 @@ function App() {
             </summary>
             <div className="mt-3">
               <HistoryPanel />
+            </div>
+          </details>
+
+          {/* Fase 6: cloud-backup connections + durable upload queue. Same
+              disclosure pattern until the real shell/nav lands in Phase 8. */}
+          <details className="w-full max-w-md text-left">
+            <summary className="cursor-pointer text-sm font-medium">
+              {t("cloud.title", "Sky-backup")}
+            </summary>
+            <div className="mt-3">
+              <CloudBackupPanel />
             </div>
           </details>
 

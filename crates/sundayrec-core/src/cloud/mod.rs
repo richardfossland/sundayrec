@@ -95,3 +95,17 @@ pub struct TokenResponse {
     #[ts(type = "number | null")]
     pub expires_at: Option<i64>,
 }
+
+/// Whether a cloud service currently holds a stored refresh token. UI-facing
+/// status the `src-tauri` shell fills from the keychain (Fase 6). Defined here,
+/// next to [`CloudService`], so the generated TS binding resolves cleanly.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(
+    export,
+    export_to = "../../../src/lib/bindings/CloudConnectionStatus.ts"
+)]
+#[serde(rename_all = "camelCase")]
+pub struct CloudConnectionStatus {
+    pub service: CloudService,
+    pub connected: bool,
+}

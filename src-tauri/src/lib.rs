@@ -16,6 +16,7 @@
 //!   media     bundled ffmpeg sidecar — resolution + tokio spawn primitive
 
 pub mod audio;
+pub mod cloud;
 pub mod commands;
 pub mod db;
 pub mod diagnostics;
@@ -111,6 +112,13 @@ pub fn run() {
             commands::db::recordings_delete,
             commands::db::recordings_clear,
             commands::db::recording_update_note,
+            commands::cloud::cloud_connection_status,
+            commands::cloud::cloud_queue_status,
+            commands::cloud::cloud_enqueue_backup,
+            commands::cloud::cloud_retry_upload,
+            commands::cloud::cloud_remove_upload,
+            commands::cloud::cloud_clear_failed,
+            commands::cloud::cloud_disconnect,
             commands::settings::settings_get,
             commands::settings::settings_save,
             commands::settings::settings_reset,
