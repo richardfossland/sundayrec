@@ -23,6 +23,7 @@ pub mod error;
 pub mod media;
 pub mod preflight;
 pub mod recorder;
+pub mod scheduler;
 pub mod secrets;
 pub mod settings;
 
@@ -39,9 +40,14 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         // The VU engine holds at most one running cpal session; commands reach
         // it through managed state.
         .manage(audio::vu::VuEngine::new())
+        // The scheduler engine runs one supervisor task firing scheduled
+        // start/stop/reminder/preflight events (Fase 5). Started in setup once
+        // the db pool is managed.
+        .manage(scheduler::SchedulerEngine::new())
         // The preview engine holds at most one running ffmpeg MJPEG stream.
         .manage(media::preview::PreviewEngine::new())
         // The recorder engine holds at most one running unified ffmpeg capture
@@ -69,6 +75,12 @@ pub fn run() {
             // because it needs the resolved app-data path. At most one loop runs.
             let tmp_dir = db_dir.join("tmp");
             app.manage(recorder::preroll::PrerollEngine::new(tmp_dir));
+
+            // Launch the scheduler supervisor now that the db pool + recorder
+            // engine are managed. It reads slots/specials from settings and
+            // fires start/stop/reminder/preflight on the wall clock.
+            app.state::<scheduler::SchedulerEngine>()
+                .start(app.handle().clone());
 
             tracing::info!("SundayRec backend ready (db at {})", db_path.display());
             Ok(())
@@ -104,6 +116,9 @@ pub fn run() {
             commands::settings::settings_import_from_file,
             commands::diagnostics::run_preflight,
             commands::diagnostics::run_diagnostics,
+            commands::scheduler::scheduler_reschedule,
+            commands::scheduler::scheduler_status,
+            commands::scheduler::scheduler_check_missed,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -10,4 +10,5 @@ pub mod db;
 pub mod diagnostics;
 pub mod media;
 pub mod recorder;
+pub mod scheduler;
 pub mod settings;

@@ -2,6 +2,8 @@
 import type { ChannelMode } from "./ChannelMode";
 import type { FileFormat } from "./FileFormat";
 import type { FilenamePattern } from "./FilenamePattern";
+import type { ScheduleSlot } from "./ScheduleSlot";
+import type { SpecialRecording } from "./SpecialRecording";
 
 /**
  * The complete (Fase-1 subset) settings model.
@@ -173,6 +175,17 @@ wakeFromSleep: boolean,
  * Require confirmation before stopping an in-progress recording? Default true.
  */
 protectRecording: boolean, 
+/**
+ * Weekly recurring recording windows. Empty by default. The scheduler
+ * engine turns these into start/stop/reminder/preflight timers; see
+ * [`crate::schedule`] for the decision logic.
+ */
+slots: Array<ScheduleSlot>, 
+/**
+ * One-off dated recordings (concerts, special services). Empty by default.
+ * Auto-pruned 7 days after they end ([`crate::schedule::prune_specials`]).
+ */
+specialRecordings: Array<SpecialRecording>, 
 /**
  * Download and install updates automatically? Default true.
  */

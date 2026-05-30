@@ -57,6 +57,8 @@ const DEFAULTS: Settings = {
   minimizeToTray: true,
   wakeFromSleep: true,
   protectRecording: true,
+  slots: [],
+  specialRecordings: [],
   autoUpdate: true,
   askOpenEditor: true,
 };

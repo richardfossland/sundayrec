@@ -18,6 +18,9 @@ vi.mock("@tauri-apps/api/core", () => ({
         path: "/x/ffmpeg",
       };
     if (cmd === "recordings_list") return [];
+    // F5.1: App mounts <SchedulePage/>, which reads settings + schedule status.
+    if (cmd === "settings_get") return { slots: [], specialRecordings: [] };
+    if (cmd === "scheduler_status") return { next: null, upcoming: [] };
     return {
       name: "SundayRec",
       version: "0.1.0",

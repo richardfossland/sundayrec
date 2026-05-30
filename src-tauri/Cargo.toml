@@ -25,6 +25,10 @@ tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2.7.1"
 # `process` plugin: relaunch/exit, used by the updater flow later.
 tauri-plugin-process = "2"
+# Native notifications — the scheduler (Fase 5) fires "recording starts in N
+# min" reminders and preflight/missed alerts from the backend, even when the
+# window is hidden in the tray.
+tauri-plugin-notification = "2"
 
 # Native audio I/O (CoreAudio / WASAPI) — used by the VU metering engine to
 # read microphone levels in Rust, so the webview never needs `getUserMedia`.
@@ -44,6 +48,10 @@ base64 = "0.22"
 # encoding cleanly. `std::process` only gives us a blocking `wait()`/`output()`.
 tokio = { version = "1", features = ["full"] }
 thiserror = "2"
+# Wall-clock → local civil time for the scheduler shell. The pure decisions live
+# in `sundayrec-core::schedule` (clock-free); this crate owns `Local::now()` and
+# feeds the `NaiveDateTime` in. `clock` (default) is required here for `Local`.
+chrono = "0.4"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

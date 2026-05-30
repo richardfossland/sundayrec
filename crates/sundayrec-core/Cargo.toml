@@ -16,3 +16,9 @@ thiserror = "2"
 # makes ts-rs honour serde attributes (rename_all, etc.). Run the export with
 # `cargo test export_bindings -p sundayrec-core`.
 ts-rs = { version = "11", features = ["serde-compat"] }
+# Civil date/time arithmetic for the scheduler (Fase 5): weekday-of, "next
+# occurrence at HH:MM on weekday N", missed-recording look-back. `default-features
+# = false` (NO `clock`) keeps this crate PURE — it never reads the wall clock
+# itself; callers pass `now: NaiveDateTime` in, exactly like the Electron
+# `scheduler.ts` takes `now: Date`. The `src-tauri` shell owns `Local::now()`.
+chrono = { version = "0.4", default-features = false, features = ["serde"] }

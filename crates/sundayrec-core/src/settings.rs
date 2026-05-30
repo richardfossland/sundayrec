@@ -18,7 +18,6 @@
 //! This is the Fase-1 subset of the Electron `Settings`. Fields that belong to
 //! later phases are deliberately NOT modelled yet and will be added in their
 //! own phase so the model stays honest about what is actually wired:
-//!   - `slots` / `specialRecordings` (schedule)            → Fase 5
 //!   - `streamDestinations` (live streaming)               → Fase 7
 //!   - `email*` / webhook / notify* (notifications)        → Fase 6
 //!   - `editorIntroPath` / `editorOutroPath` (editor)      → Fase 4
@@ -30,6 +29,8 @@
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+
+use crate::schedule::{ScheduleSlot, SpecialRecording};
 
 /// Input channel layout. Serialised to the EXACT Electron string union
 /// (`'stereo' | 'monoL' | 'monoR' | 'monoMix'`, see `types/index.ts:1`), so the
@@ -223,6 +224,17 @@ pub struct Settings {
     #[serde(default = "default_true")]
     pub protect_recording: bool,
 
+    // ── Schedule (Fase 5) ─────────────────────────────────────────────────────
+    /// Weekly recurring recording windows. Empty by default. The scheduler
+    /// engine turns these into start/stop/reminder/preflight timers; see
+    /// [`crate::schedule`] for the decision logic.
+    #[serde(default)]
+    pub slots: Vec<ScheduleSlot>,
+    /// One-off dated recordings (concerts, special services). Empty by default.
+    /// Auto-pruned 7 days after they end ([`crate::schedule::prune_specials`]).
+    #[serde(default)]
+    pub special_recordings: Vec<SpecialRecording>,
+
     // ── Misc ─────────────────────────────────────────────────────────────────
     /// Download and install updates automatically? Default true.
     #[serde(default = "default_true")]
@@ -330,6 +342,9 @@ impl Default for Settings {
             minimize_to_tray: true,
             wake_from_sleep: true,
             protect_recording: true,
+
+            slots: Vec::new(),
+            special_recordings: Vec::new(),
 
             auto_update: true,
             ask_open_editor: true,
@@ -458,6 +473,9 @@ mod tests {
         assert!(s.minimize_to_tray);
         assert!(s.wake_from_sleep);
         assert!(s.protect_recording);
+        // Schedule (Fase 5)
+        assert!(s.slots.is_empty());
+        assert!(s.special_recordings.is_empty());
         // Misc
         assert!(s.auto_update);
         assert!(s.ask_open_editor);
@@ -692,6 +710,39 @@ mod tests {
         assert!(obj.contains_key("silenceTimeoutMinutes"));
         assert!(obj.contains_key("autoUpdate"));
         assert!(obj.contains_key("askOpenEditor"));
+        // Schedule keys must match the Electron `Settings` interface.
+        assert!(obj.contains_key("slots"));
+        assert!(obj.contains_key("specialRecordings"));
+    }
+
+    #[test]
+    fn slots_and_specials_round_trip_through_json() {
+        use crate::schedule::{ScheduleSlot, SpecialRecording};
+        let original = Settings {
+            slots: vec![ScheduleSlot {
+                days: vec![6],
+                start: "11:00".to_string(),
+                stop: "12:30".to_string(),
+                max: Some(120),
+            }],
+            special_recordings: vec![SpecialRecording {
+                id: Some("s1".to_string()),
+                date: "2026-12-24".to_string(),
+                name: "Julaften".to_string(),
+                start: "16:00".to_string(),
+                stop: "17:00".to_string(),
+                device_id: None,
+            }],
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&original).unwrap();
+        let back = Settings::from_json_merged(&json);
+        assert_eq!(back.slots, original.slots);
+        assert_eq!(back.special_recordings, original.special_recordings);
+        // An older blob without the schedule keys defaults them to empty.
+        let legacy = Settings::from_json_merged(r#"{ "sampleRate": 44100 }"#);
+        assert!(legacy.slots.is_empty());
+        assert!(legacy.special_recordings.is_empty());
     }
 
     #[test]

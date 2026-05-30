@@ -10,6 +10,7 @@ import { RecorderPanel } from "@/features/recorder/RecorderPanel";
 import { FfmpegHealth } from "@/features/diagnostics/FfmpegHealth";
 import { DiagnosticsPanel } from "@/features/diagnostics/DiagnosticsPanel";
 import { SettingsPage } from "@/features/settings/SettingsPage";
+import { SchedulePage } from "@/features/schedule/SchedulePage";
 import { HistoryPanel } from "@/features/history/HistoryPanel";
 import { SETTINGS_QUERY_KEY } from "@/features/settings/queryKey";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -91,6 +92,18 @@ function App() {
             </summary>
             <div className="mt-3">
               <SettingsPage />
+            </div>
+          </details>
+
+          {/* F5.1: Schedule vertical — weekly slots + dated specials drive the
+              backend scheduler supervisor. Same disclosure pattern until the
+              real shell/nav lands in Phase 8. */}
+          <details className="w-full max-w-md text-left">
+            <summary className="cursor-pointer text-sm font-medium">
+              {t("schedule.title", "Planlegging")}
+            </summary>
+            <div className="mt-3">
+              <SchedulePage />
             </div>
           </details>
 
