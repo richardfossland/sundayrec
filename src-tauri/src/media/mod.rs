@@ -4,6 +4,8 @@
 //!
 //! `ffmpeg` owns binary resolution (env override → bundled sidecar → PATH) and
 //! the `tokio::process` spawn helper used to drive ffmpeg with real-time
-//! stderr/stdout streaming and a graceful stdin `q` shutdown.
+//! stderr/stdout streaming and a graceful stdin `q` shutdown. `preview` is the
+//! MJPEG camera-preview engine built on that spawn primitive.
 
 pub mod ffmpeg;
+pub mod preview;

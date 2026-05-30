@@ -33,6 +33,10 @@ cpal = "0.15"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# Encodes MJPEG preview frames as base64 so they cross the Tauri event boundary
+# as plain JSON (the renderer drops them into `data:image/jpeg;base64,…`).
+base64 = "0.22"
+
 # Async process control for the ffmpeg sidecar. We use `tokio::process` (not
 # `std::process`) for the recorder + MJPEG-preview because we need to stream
 # stderr/stdout line-by-line in real time (parsing `size=`/`silence_*` progress)

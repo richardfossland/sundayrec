@@ -12,11 +12,13 @@
 //!   - [`audio`]    — pure VU metering mat: block peak/RMS, dBFS, lock-free `PeakMeters`
 //!   - [`ffmpeg`]   — pure ffmpeg filter-string builders (drift, silencedetect)
 //!   - [`errors`]   — ffmpeg-stderr → stable error-code classification
+//!   - [`mjpeg`]    — MJPEG stdout reassembly (SOI/EOI frame splitter + JPEG dims)
 //!   - [`timeouts`] — recording-pipeline timeout constants (one source of truth)
 //!   - [`silence`]  — the silence-watcher *decision* state machine (no real timers)
 
 pub mod audio;
 pub mod errors;
 pub mod ffmpeg;
+pub mod mjpeg;
 pub mod silence;
 pub mod timeouts;

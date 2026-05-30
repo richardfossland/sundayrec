@@ -36,6 +36,8 @@ pub fn run() {
         // The VU engine holds at most one running cpal session; commands reach
         // it through managed state.
         .manage(audio::vu::VuEngine::new())
+        // The preview engine holds at most one running ffmpeg MJPEG stream.
+        .manage(media::preview::PreviewEngine::new())
         .setup(|_app| {
             tracing::info!("SundayRec backend ready");
             Ok(())
@@ -46,6 +48,8 @@ pub fn run() {
             commands::audio::start_vu,
             commands::audio::stop_vu,
             commands::media::ffmpeg_health,
+            commands::media::start_preview,
+            commands::media::stop_preview,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
