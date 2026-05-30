@@ -8,6 +8,7 @@ import type { Settings } from "@/lib/bindings/Settings";
 import { DevicePicker } from "@/features/devices/DevicePicker";
 import { RecorderPanel } from "@/features/recorder/RecorderPanel";
 import { FfmpegHealth } from "@/features/diagnostics/FfmpegHealth";
+import { DiagnosticsPanel } from "@/features/diagnostics/DiagnosticsPanel";
 import { SettingsPage } from "@/features/settings/SettingsPage";
 import { HistoryPanel } from "@/features/history/HistoryPanel";
 import { SETTINGS_QUERY_KEY } from "@/features/settings/queryKey";
@@ -101,6 +102,17 @@ function App() {
             </summary>
             <div className="mt-3">
               <HistoryPanel />
+            </div>
+          </details>
+
+          {/* F2.2: preflight (ready-to-record) + diagnostics markdown report.
+              Same disclosure pattern until the real shell/nav lands in Phase 8. */}
+          <details className="w-full max-w-md text-left">
+            <summary className="cursor-pointer text-sm font-medium">
+              {t("diagnostics.title", "Diagnose")}
+            </summary>
+            <div className="mt-3">
+              <DiagnosticsPanel />
             </div>
           </details>
         </div>

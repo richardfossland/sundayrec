@@ -18,8 +18,10 @@
 pub mod audio;
 pub mod commands;
 pub mod db;
+pub mod diagnostics;
 pub mod error;
 pub mod media;
+pub mod preflight;
 pub mod recorder;
 pub mod secrets;
 pub mod settings;
@@ -90,6 +92,8 @@ pub fn run() {
             commands::settings::settings_import,
             commands::settings::settings_export_to_file,
             commands::settings::settings_import_from_file,
+            commands::diagnostics::run_preflight,
+            commands::diagnostics::run_diagnostics,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

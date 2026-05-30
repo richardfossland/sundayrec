@@ -21,14 +21,18 @@
 //!   - [`timeouts`]     — recording-pipeline timeout constants (one source of truth)
 //!   - [`silence`]      — the silence-watcher *decision* state machine (no real timers)
 //!   - [`settings`]     — the typed/validated settings model + defaults (Fase 1)
+//!   - [`preflight`]    — the "ready-to-record" finding decisions (Fase 2)
+//!   - [`diagnostics`]  — the diagnostics markdown report builder (Fase 2)
 
 pub mod audio;
 pub mod capture;
 pub mod device_enum;
 pub mod device_match;
+pub mod diagnostics;
 pub mod errors;
 pub mod ffmpeg;
 pub mod mjpeg;
+pub mod preflight;
 pub mod progress;
 pub mod reconnect;
 pub mod settings;

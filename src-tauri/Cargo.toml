@@ -68,6 +68,13 @@ keyring = { version = "3", features = ["apple-native", "windows-native"] }
 # Type generation for the frontend (run with `cargo test export_bindings`).
 ts-rs = { version = "11", features = ["serde-compat"] }
 
+# Free-disk-space probe for the preflight check (F2.2). `fs4` is a tiny,
+# dependency-light cross-platform wrapper over the native statfs /
+# GetDiskFreeSpaceEx calls (`fs4::available_space(path)`), chosen over the much
+# heavier `sysinfo` (which pulls a whole process/CPU/disk inventory we don't
+# need just to read free bytes on one volume).
+fs4 = "1.1"
+
 [dev-dependencies]
 # Throwaway temp databases for the storage tests — no app, no device.
 tempfile = "3"
