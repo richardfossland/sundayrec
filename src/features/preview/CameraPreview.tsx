@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { useTranslation } from "react-i18next";
 
 import type { PreviewFrame } from "@/lib/bindings/PreviewFrame";
 
@@ -11,6 +12,7 @@ import type { PreviewFrame } from "@/lib/bindings/PreviewFrame";
  * docs/MIGRATION-TAURI2.md, "Webview media" risk).
  */
 export function CameraPreview() {
+  const { t } = useTranslation();
   const [running, setRunning] = useState(false);
   const [frame, setFrame] = useState<PreviewFrame | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +69,9 @@ export function CameraPreview() {
       aria-label="Kamera-preview"
     >
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-medium">Kamera-preview</h2>
+        <h2 className="text-sm font-medium">
+          {t("home.videoPreview", "Kamera-preview")}
+        </h2>
         {running ? (
           <button
             type="button"

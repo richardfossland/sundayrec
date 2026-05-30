@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { useTranslation } from "react-i18next";
 
 import type { AudioDeviceList } from "@/lib/bindings/AudioDeviceList";
 import type { VuLevels } from "@/lib/bindings/VuLevels";
@@ -63,6 +64,7 @@ function ChannelBar({ db, label }: { db: number | null; label: string }) {
  * the webview never touches `getUserMedia`.
  */
 export function VuMeter() {
+  const { t } = useTranslation();
   const [devices, setDevices] = useState<AudioDeviceList | null>(null);
   const [selected, setSelected] = useState<string>("");
   const [running, setRunning] = useState(false);
@@ -125,7 +127,9 @@ export function VuMeter() {
       aria-label="VU-meter"
     >
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-medium">Mikrofon-VU</h2>
+        <h2 className="text-sm font-medium">
+          {t("home.audioLevel", "Mikrofon-VU")}
+        </h2>
         <span className="text-xs opacity-50">{devices?.host ?? "…"}</span>
       </div>
 
