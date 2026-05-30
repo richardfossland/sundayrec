@@ -21,6 +21,7 @@
 //!   - [`reconnect`]    — watchdog (stuck-progress) + reconnect back-off decisions
 //!   - [`recorder`]     — the recorder state machine + session recovery/split policy (Fase 3)
 //!   - [`timeouts`]     — recording-pipeline timeout constants (one source of truth)
+//!   - [`two_process`]  — two-process audio+video fallback: per-process capture args + A/V mux/offset (Fase 3.3b)
 //!   - [`silence`]      — the silence-watcher *decision* state machine (no real timers)
 //!   - [`settings`]     — the typed/validated settings model + defaults (Fase 1)
 //!   - [`preflight`]    — the "ready-to-record" finding decisions (Fase 2)
@@ -42,3 +43,4 @@ pub mod recorder;
 pub mod settings;
 pub mod silence;
 pub mod timeouts;
+pub mod two_process;

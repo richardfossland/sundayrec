@@ -49,12 +49,22 @@
 //!     FIRST deliverable's first fragment. The core
 //!     [`RecordingSession::deliverables`] groups split-vs-reconnect for it.
 //!
-//! ## Deferred (honest scope)
+//! ## Done in Fase 3.3b (partial)
 //!
 //!   - **Two-process audio+video fallback** (Electron's separate `videoHandle` /
-//!     `_vtmp.mp4` merge): NOT implemented. Fase 3 targets the *unified* single
-//!     ffmpeg pipeline only. A device combination ffmpeg can't open as one input
-//!     would need this fallback — tracked as a Fase-3-continuation TODO.
+//!     `_vtmp.mp4` merge): implemented as a SELF-CONTAINED simple path in
+//!     [`crate::recorder::two_process`] — two ffmpeg processes (video + audio),
+//!     muxed at stop with start_time head-alignment + `aresample` drift
+//!     correction. Scoped to a SIMPLE video session (NO split, NO reconnect);
+//!     this engine still owns the unified split/reconnect machinery. Fusing the
+//!     two-process path INTO this engine's reconnect/split state machine (each
+//!     side reconnecting independently, N×N fragment mux) remains the
+//!     Fase-3-continuation TODO. The two-process path is not yet auto-selected
+//!     from this engine's unified-startup-failure branch — see that module's
+//!     header; wiring the auto-fallback trigger is the next step.
+//!
+//! ## Deferred (honest scope)
+//!
 //!   - **NDI, streaming, lossless master:** later phases.
 
 use std::sync::atomic::{AtomicU64, Ordering};
