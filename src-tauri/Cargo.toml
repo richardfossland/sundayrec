@@ -47,5 +47,27 @@ thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+# Local-first storage. Replaces Electron's `electron-store` (a JSON blob) with
+# SQLite via sqlx. Runtime-checked queries (no DATABASE_URL / `.sqlx` cache
+# needed to build); `migrate` runs the versioned schema in `migrations/`.
+sqlx = { version = "0.8", default-features = false, features = [
+    "runtime-tokio",
+    "sqlite",
+    "macros",
+    "migrate",
+] }
+# Time-ordered ids (UUID v7) for rows — sortable by creation without a separate
+# timestamp index.
+uuid = { version = "1", features = ["v7"] }
+
+# OS-native secret storage. Replaces Electron's `safeStorage` — OAuth tokens and
+# stream keys live in the macOS Keychain / Windows Credential Manager, never in
+# a plaintext file.
+keyring = { version = "3", features = ["apple-native", "windows-native"] }
+
 # Type generation for the frontend (run with `cargo test export_bindings`).
 ts-rs = { version = "11", features = ["serde-compat"] }
+
+[dev-dependencies]
+# Throwaway temp databases for the storage tests — no app, no device.
+tempfile = "3"

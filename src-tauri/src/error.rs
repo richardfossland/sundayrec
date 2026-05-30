@@ -37,6 +37,14 @@ pub enum AppError {
     #[error("invalid json: {0}")]
     Json(#[from] serde_json::Error),
 
+    /// SQLite/sqlx query or connection failure.
+    #[error("database error: {0}")]
+    Database(#[from] sqlx::Error),
+
+    /// Schema-migration failure on startup.
+    #[error("migration error: {0}")]
+    Migration(#[from] sqlx::migrate::MigrateError),
+
     /// Anything else we couldn't classify.
     #[error("internal: {0}")]
     Internal(String),
@@ -52,6 +60,8 @@ impl AppError {
             AppError::Audio(_) => "audio",
             AppError::Io(_) => "io",
             AppError::Json(_) => "json",
+            AppError::Database(_) => "database",
+            AppError::Migration(_) => "migration",
             AppError::Internal(_) => "internal",
         }
     }

@@ -6,5 +6,6 @@
 
 pub mod app;
 pub mod audio;
+pub mod db;
 pub mod media;
 pub mod recorder;

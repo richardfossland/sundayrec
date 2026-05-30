@@ -17,9 +17,11 @@
 
 pub mod audio;
 pub mod commands;
+pub mod db;
 pub mod error;
 pub mod media;
 pub mod recorder;
+pub mod secrets;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -42,8 +44,24 @@ pub fn run() {
         // The recorder engine holds at most one running unified ffmpeg capture
         // (Spike B). Commands reach it through managed state.
         .manage(recorder::engine::RecorderEngine::new())
-        .setup(|_app| {
-            tracing::info!("SundayRec backend ready");
+        .setup(|app| {
+            use tauri::Manager;
+
+            // Open the app database (settings + recording history) once and
+            // share it as managed state. Lives under the OS app-data dir so it
+            // survives reinstalls and isn't tied to the executable location.
+            let db_dir = app
+                .path()
+                .app_data_dir()
+                .map_err(|e| format!("resolving app data dir: {e}"))?;
+            std::fs::create_dir_all(&db_dir)
+                .map_err(|e| format!("creating app data dir {}: {e}", db_dir.display()))?;
+            let db_path = db_dir.join("sundayrec.sqlite");
+            let pool = tauri::async_runtime::block_on(db::store::open_pool(&db_path))
+                .map_err(|e| format!("opening database at {}: {e}", db_path.display()))?;
+            app.manage(db::Db::new(pool));
+
+            tracing::info!("SundayRec backend ready (db at {})", db_path.display());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -57,6 +75,9 @@ pub fn run() {
             commands::recorder::list_recording_devices,
             commands::recorder::start_recording,
             commands::recorder::stop_recording,
+            commands::db::setting_get,
+            commands::db::setting_set,
+            commands::db::recordings_list,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
