@@ -5,8 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import type { AppInfo } from "@/lib/bindings/AppInfo";
 import type { Settings } from "@/lib/bindings/Settings";
-import { VuMeter } from "@/features/vu/VuMeter";
-import { CameraPreview } from "@/features/preview/CameraPreview";
+import { DevicePicker } from "@/features/devices/DevicePicker";
 import { RecorderPanel } from "@/features/recorder/RecorderPanel";
 import { FfmpegHealth } from "@/features/diagnostics/FfmpegHealth";
 import { SettingsPage } from "@/features/settings/SettingsPage";
@@ -70,13 +69,10 @@ function App() {
             </p>
           </div>
 
-          {/* Spike A: live mic VU metered in Rust (cpal), pushed over a Tauri
-              event — proves the webview never needs getUserMedia. */}
-          <VuMeter />
-
-          {/* Spike A: live camera preview as MJPEG frames decoded in Rust
-              (ffmpeg) and painted into an <img> — no webview video codec. */}
-          <CameraPreview />
+          {/* F2.1: the device picker — choose mic + camera (real ffmpeg
+              enumeration), persist to Settings, and drive the live VU (cpal)
+              and the MJPEG camera preview (ffmpeg) from the selection. */}
+          <DevicePicker />
 
           {/* Spike B: unified ffmpeg recorder prototype — start/stop a capture
               and watch live progress/silence/error events from the Rust engine. */}

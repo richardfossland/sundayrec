@@ -106,6 +106,21 @@ pub struct Settings {
     #[serde(default)]
     pub device_name: Option<String>,
 
+    // ── Video device (F2.1 — "alt som mater opptak") ─────────────────────────
+    /// Capture video (camera) alongside audio? Default false (audio-only is the
+    /// common church-recording case).
+    #[serde(default)]
+    pub video_enabled: bool,
+    /// Stored camera human-readable name — the device-match moat input for video
+    /// (matched with [`crate::device_enum::find_best_video_device_match`]).
+    #[serde(default)]
+    pub video_device_name: Option<String>,
+    /// Last-known avfoundation index for the chosen camera. A fallback for when
+    /// the name lookup fails (e.g. after a reconnect); the name match wins when
+    /// it succeeds. dshow cameras are addressed by name, so this stays `None`.
+    #[serde(default)]
+    pub video_device_index: Option<i32>,
+
     // ── Audio processing ───────────────────────────────────────────────────────
     /// Input channel layout.
     #[serde(default = "default_channels")]
@@ -277,6 +292,10 @@ impl Default for Settings {
             device_id: None,
             device_name: None,
 
+            video_enabled: false,
+            video_device_name: None,
+            video_device_index: None,
+
             channels: default_channels(),
             sample_rate: default_sample_rate(),
             input_volume: default_input_volume(),
@@ -400,6 +419,10 @@ mod tests {
         // Audio device
         assert_eq!(s.device_id, None);
         assert_eq!(s.device_name, None);
+        // Video device
+        assert!(!s.video_enabled);
+        assert_eq!(s.video_device_name, None);
+        assert_eq!(s.video_device_index, None);
         // Audio processing
         assert_eq!(s.channels, ChannelMode::Stereo);
         assert_eq!(s.sample_rate, 48_000);
@@ -659,6 +682,9 @@ mod tests {
         let obj = json.as_object().unwrap();
         assert!(obj.contains_key("hasLaunched"));
         assert!(obj.contains_key("deviceName"));
+        assert!(obj.contains_key("videoEnabled"));
+        assert!(obj.contains_key("videoDeviceName"));
+        assert!(obj.contains_key("videoDeviceIndex"));
         assert!(obj.contains_key("sampleRate"));
         assert!(obj.contains_key("inputVolume"));
         assert!(obj.contains_key("filenamePattern"));

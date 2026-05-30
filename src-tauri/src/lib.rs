@@ -68,6 +68,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::app::app_info,
             commands::audio::list_input_devices,
+            commands::audio::list_devices,
             commands::audio::start_vu,
             commands::audio::stop_vu,
             commands::media::ffmpeg_health,

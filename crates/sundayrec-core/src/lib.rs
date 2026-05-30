@@ -14,6 +14,7 @@
 //!   - [`capture`]      — unified ffmpeg capture-argument builder (Spike B)
 //!   - [`errors`]       — ffmpeg-stderr → stable error-code classification
 //!   - [`device_match`] — 5-strategy fuzzy device matching (the device-name moat)
+//!   - [`device_enum`]  — pure ffmpeg `-list_devices` stderr parsers (audio + video)
 //!   - [`mjpeg`]        — MJPEG stdout reassembly (SOI/EOI frame splitter + JPEG dims)
 //!   - [`progress`]     — ffmpeg `size=`-progress parsing + one-shot startup resolution
 //!   - [`reconnect`]    — watchdog (stuck-progress) + reconnect back-off decisions
@@ -23,6 +24,7 @@
 
 pub mod audio;
 pub mod capture;
+pub mod device_enum;
 pub mod device_match;
 pub mod errors;
 pub mod ffmpeg;

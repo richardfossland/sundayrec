@@ -33,6 +33,22 @@ deviceId: string | null,
  */
 deviceName: string | null, 
 /**
+ * Capture video (camera) alongside audio? Default false (audio-only is the
+ * common church-recording case).
+ */
+videoEnabled: boolean, 
+/**
+ * Stored camera human-readable name — the device-match moat input for video
+ * (matched with [`crate::device_enum::find_best_video_device_match`]).
+ */
+videoDeviceName: string | null, 
+/**
+ * Last-known avfoundation index for the chosen camera. A fallback for when
+ * the name lookup fails (e.g. after a reconnect); the name match wins when
+ * it succeeds. dshow cameras are addressed by name, so this stays `None`.
+ */
+videoDeviceIndex: number | null, 
+/**
  * Input channel layout.
  */
 channels: ChannelMode, 
