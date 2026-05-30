@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, typecheck & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # Tauri needs the system webview + GTK libs to compile on Linux; cpal
+      # needs ALSA dev headers (libasound2-dev) for the VU metering engine.
+      # ffmpeg itself ships as a sidecar binary (fetched below), not a system
+      # dependency.
+      - name: Install Tauri + audio system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libgtk-3-dev \
+            libasound2-dev
+
+      - run: npm ci
+
+      # Populate src-tauri/binaries/ffmpeg-<triple> + ffprobe so the media
+      # health-check + recorder integration tests resolve a real binary instead
+      # of taking their tolerant skip path.
+      - name: Fetch ffmpeg/ffprobe sidecars
+        run: npm run ffmpeg
+
+      - name: Frontend lint / format / types
+        run: |
+          npm run lint
+          npm run format:check
+          npm run typecheck
+
+      - name: Frontend unit tests
+        run: npm run test
+
+      # The Rust suite is deliberately device-INDEPENDENT (device enumeration
+      # tolerates zero devices; the cpal/ffmpeg streams are not opened in tests;
+      # the keychain test skips when no keychain is reachable) so it passes on a
+      # headless runner. Hardware capture/preview is validated manually — see
+      # docs/MIGRATION-TAURI2.md, Phase 0/3 hardware matrix.
+      - name: Rust fmt / clippy / tests
+        working-directory: src-tauri
+        run: |
+          cargo fmt --all --check
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo test --workspace
+
+      # The ts-rs bindings in src/lib/bindings/ are generated from the Rust
+      # types and committed. Regenerate them and fail if anything drifted, so
+      # the frontend contract can never silently diverge from the backend.
+      - name: ts-rs bindings are up to date
+        run: |
+          npm run bindings
+          if ! git diff --quiet -- src/lib/bindings; then
+            echo "::error::ts-rs bindings are stale — run 'npm run bindings' and commit the result."
+            git --no-pager diff -- src/lib/bindings
+            exit 1
+          fi
+
+      # Compile the frontend + the Rust app on Linux (fast smoke; the real
+      # macOS/Windows bundles are built in release.yml). --no-bundle skips
+      # installer packaging.
+      - name: Build Tauri app (no bundle)
+        run: npm run tauri build -- --no-bundle

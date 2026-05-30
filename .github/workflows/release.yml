@@ -1,0 +1,100 @@
+# Build, sign, notarize, and publish SundayRec for macOS + Windows on a version
+# tag. Mirrors the proven SundayEdit/Verbatim release flow.
+#
+# Cut a release:   npm version <patch|minor|major>   (bumps package.json)
+#                  # bump src-tauri/tauri.conf.json "version" + Cargo.toml to match
+#                  git tag vX.Y.Z && git push origin vX.Y.Z
+#
+# The tag push triggers this workflow, which builds on macOS (Apple Silicon) and
+# Windows, signs + notarizes macOS, and creates a DRAFT GitHub Release with the
+# installers. Review the draft, then publish it.
+#
+# ── STATUS (Phase 0 → Phase 9) ────────────────────────────────────────────────
+# Signing is wired and ACTIVATES the moment the documented secrets exist
+# (docs/DISTRIBUTION.md). Until then the build still runs but produces UNSIGNED
+# installers (tauri-action skips signing when the secrets are absent).
+#
+# The auto-updater (`latest.json`) is intentionally OFF here — the updater
+# plugin + signing keypair land in Phase 9 (see docs/MIGRATION-TAURI2.md). To
+# turn it on then: install tauri-plugin-updater, add its pubkey to
+# tauri.conf.json, add the TAURI_SIGNING_* secrets, and flip
+# `includeUpdaterJson: true`. The env wiring is already in place below.
+
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macos-latest is Apple Silicon (arm64) — native build so the fetched
+          # ffmpeg sidecar matches. Intel/universal is a follow-up (needs both
+          # ffmpeg arches + a universal target).
+          - platform: macos-latest
+            args: ""
+          - platform: windows-latest
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo (src-tauri)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Fetch bundled ffmpeg/ffprobe sidecars
+        run: node scripts/fetch-ffmpeg.mjs
+
+      - name: Build, sign, and publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # ── Updater signing (Phase 9 — unused until includeUpdaterJson:true) ──
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # ── macOS code signing + notarization ───────────────────────────────
+          # Absent secrets → tauri-action produces an unsigned build (no failure).
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "SundayRec ${{ github.ref_name }}"
+          releaseBody: |
+            SundayRec — recording for church services (Tauri 2 rebuild).
+
+            See the assets below to download and install. If a build is
+            unsigned (pre-signing), on first launch:
+            - macOS: right-click the app ▸ Open ▸ Open.
+            - Windows: "More info" ▸ "Run anyway".
+          releaseDraft: true
+          prerelease: true
+          # Phase 9: flip to true once the updater plugin + keypair are in place.
+          includeUpdaterJson: false
+          args: ${{ matrix.args }}
