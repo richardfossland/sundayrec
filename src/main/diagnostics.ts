@@ -5,6 +5,28 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import type { Settings } from '../types'
+// Static imports: both modules are already pulled into the main bundle by
+// recorder.ts et al., so a dynamic import here gained no code-split — only a
+// Vite "dynamically + statically imported" warning. native-recorder/
+// video-preview have no heavy load-time side effects (device enumeration is
+// behind the exported functions), so eager import costs nothing at startup.
+import {
+  ffmpegBin,
+  resolveDeviceInput,
+  resolveVideoInput,
+  listFfmpegDevices,
+  listWasapiDevices,
+  listVideoFfmpegDevices,
+  probeWasapiAvailable,
+} from './native-recorder'
+import {
+  isPreviewRunning,
+  stopPreview,
+  startPreview,
+  MAC_CONFIGS,
+  buildMacInputArgs,
+  getWorkingMacConfigIdx,
+} from './video-preview'
 
 export interface DiagnosticsReport {
   markdown: string
@@ -35,7 +57,6 @@ interface CaptureTestResult {
 }
 
 async function runAudioCaptureTest(ffmpegBin: string, settings: Settings): Promise<CaptureTestResult> {
-  const { resolveDeviceInput } = await import('./native-recorder')
   let input: { format: string; device: string; resolvedName: string } | null = null
   try { input = await resolveDeviceInput(settings) } catch {}
   if (!input) return { ok: false, error: 'no_device' }
@@ -76,7 +97,6 @@ async function runAudioCaptureTest(ffmpegBin: string, settings: Settings): Promi
 
 async function runVideoCaptureTest(ffmpegBin: string, settings: Settings, win: BrowserWindow | null): Promise<CaptureTestResult> {
   if (!settings.videoEnabled) return { ok: false, error: 'video_disabled' }
-  const { resolveVideoInput } = await import('./native-recorder')
   let input: { format: string; device: string; resolvedName: string } | null = null
   try {
     input = await resolveVideoInput({
@@ -88,7 +108,6 @@ async function runVideoCaptureTest(ffmpegBin: string, settings: Settings, win: B
 
   // macOS: only one process can hold the camera at a time — stop any running preview
   // first so the test can open the device, then restart it afterwards.
-  const { isPreviewRunning, stopPreview, startPreview } = await import('./video-preview')
   const previewWasRunning = isPreviewRunning()
   if (previewWasRunning) {
     await stopPreview()
@@ -103,7 +122,6 @@ async function runVideoCaptureTest(ffmpegBin: string, settings: Settings, win: B
   // 1000k-fps internal timebase that makes ffmpeg duplicate millions of frames.
   // For the test config, prefer the last working preview config; if no preview has
   // run yet (index 0, size=null), fall back to 720p to avoid the portrait-mode trap.
-  const { MAC_CONFIGS, buildMacInputArgs, getWorkingMacConfigIdx } = await import('./video-preview')
   let inputArgs: string[]
   if (process.platform === 'darwin') {
     const cfgIdx = getWorkingMacConfigIdx()
@@ -205,14 +223,6 @@ function sanitizeSettings(s: Settings): Record<string, unknown> {
 }
 
 export async function runDiagnostics(settings: Settings, win: BrowserWindow | null = null): Promise<DiagnosticsReport> {
-  const {
-    ffmpegBin,
-    listFfmpegDevices,
-    listWasapiDevices,
-    listVideoFfmpegDevices,
-    probeWasapiAvailable,
-  } = await import('./native-recorder')
-
   const videoEnabled = !!settings.videoEnabled
 
   const [ffmpegVersion, audioDevices, wasapiDevices, videoDevices, wasapiAvailable, audioTest, videoTest] =

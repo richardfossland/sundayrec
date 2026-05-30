@@ -9,6 +9,11 @@ import path from 'path'
 import fs from 'fs'
 import * as store from '../store'
 import type { IpcContext } from './types'
+// Static import: recorder-utils is already in the main bundle (recorder.ts et
+// al. import it statically), so dynamically importing it here gained no
+// code-split — just a Vite warning. (streamer/stream-keys stay dynamic: those
+// ARE genuinely lazy-loaded into their own chunks.)
+import { buildFilename } from '../recorder-utils'
 
 export function registerStreamIpc(ctx: IpcContext): void {
   ipcMain.handle('stream-status', async () => {
@@ -46,7 +51,6 @@ export function registerStreamIpc(ctx: IpcContext): void {
     // looks at home next to regular recordings in Siste opptak.
     let alsoRecord: { outputPath: string } | undefined
     if (p.alsoRecord) {
-      const { buildFilename } = await import('../recorder-utils')
       const baseFolder = settings.saveFolder ?? path.join(app.getPath('music'), 'SundayRec')
       try { fs.mkdirSync(baseFolder, { recursive: true }) } catch {}
       // Force MP4 since the streamer's local-record encoder writes H.264/AAC.

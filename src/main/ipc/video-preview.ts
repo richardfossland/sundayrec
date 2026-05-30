@@ -10,10 +10,14 @@
 
 import { ipcMain, systemPreferences } from 'electron'
 import type { IpcContext } from './types'
+// Static imports: both modules are already in the main bundle (recorder.ts et
+// al. import them statically), so the dynamic imports here gave no code-split
+// — just a Vite warning. Device/camera work stays behind the functions.
+import { listVideoFfmpegDevices } from '../native-recorder'
+import { startPreview, stopPreview } from '../video-preview'
 
 export function registerVideoPreviewIpc(ctx: IpcContext): void {
   ipcMain.handle('list-video-devices', async () => {
-    const { listVideoFfmpegDevices } = await import('../native-recorder')
     return listVideoFfmpegDevices()
   })
 
@@ -27,12 +31,10 @@ export function registerVideoPreviewIpc(ctx: IpcContext): void {
       }
     }
     if (!ctx.mainWindow) return false
-    const preview = await import('../video-preview')
-    return preview.startPreview(opts, ctx.mainWindow)
+    return startPreview(opts, ctx.mainWindow)
   })
 
   ipcMain.handle('video-preview-stop', async () => {
-    const preview = await import('../video-preview')
-    await preview.stopPreview()
+    await stopPreview()
   })
 }

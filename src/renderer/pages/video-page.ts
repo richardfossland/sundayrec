@@ -3,6 +3,7 @@ import { flashMsg } from '../helpers'
 import type { Settings } from '../../types'
 
 import { t } from '../i18n'
+import { updateAudioSeparateButton } from './home'
 
 function updateKeepAudioVisibility(): void {
   const modeEl    = document.querySelector<HTMLInputElement>('input[name="video-mode"]:checked')
@@ -224,9 +225,9 @@ async function saveVideoSettings(): Promise<void> {
   patchSettings(updated)
   await window.api.saveSettings(updated as Settings)
   // Mirror to Hjem-skjermens "Separat lydfil"-badge så den reflekterer
-  // toggle-en uten at brukeren må navigere bort og tilbake.
-  try {
-    const { updateAudioSeparateButton } = await import('./home')
-    updateAudioSeparateButton()
-  } catch { /* home not ready — fine, will refresh on next visit */ }
+  // toggle-en uten at brukeren må navigere bort og tilbake. Statisk import:
+  // home.ts importeres uansett statisk fra main.ts, så en dynamisk import her
+  // ga ingen code-split — bare en Vite-advarsel. updateAudioSeparateButton
+  // er no-op hvis home-DOM ikke er montert (guard internt).
+  updateAudioSeparateButton()
 }
