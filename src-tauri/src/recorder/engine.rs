@@ -1299,4 +1299,179 @@ mod tests {
         let back: RecorderStatePayload = serde_json::from_str(&json).unwrap();
         assert_eq!(p, back);
     }
+
+    #[test]
+    fn build_record_args_mono_has_no_stereo_channel_flag() {
+        let mut o = opts();
+        o.stereo = false;
+        let audio = FfmpegDevice::new("Built-in Mic", "avfoundation", Some(0));
+        let args = build_record_args(Platform::MacOS, &audio, None, &o, "/tmp/mono.m4a");
+        // Mono maps to `-ac 1`; stereo would request 2 channels.
+        let ac = args
+            .iter()
+            .position(|a| a == "-ac")
+            .map(|i| args[i + 1].clone());
+        assert_eq!(ac.as_deref(), Some("1"), "got: {args:?}");
+    }
+
+    #[test]
+    fn build_record_args_stereo_requests_two_channels() {
+        let mut o = opts();
+        o.stereo = true;
+        let audio = FfmpegDevice::new("Built-in Mic", "avfoundation", Some(0));
+        let args = build_record_args(Platform::MacOS, &audio, None, &o, "/tmp/st.m4a");
+        let ac = args
+            .iter()
+            .position(|a| a == "-ac")
+            .map(|i| args[i + 1].clone());
+        assert_eq!(ac.as_deref(), Some("2"), "got: {args:?}");
+    }
+
+    #[test]
+    fn build_record_args_video_on_mac_uses_combined_index_token() {
+        // mac avfoundation addresses video+audio as `<videoIdx>:<audioIdx>`.
+        let audio = FfmpegDevice::new("Built-in Mic", "avfoundation", Some(1));
+        let video = FfmpegDevice::new("FaceTime HD", "avfoundation", Some(0));
+        let args = build_record_args(
+            Platform::MacOS,
+            &audio,
+            Some(&video),
+            &opts(),
+            "/tmp/av.mp4",
+        );
+        assert!(args.iter().any(|a| a == "0:1"), "got: {args:?}");
+        // A video session encodes a video stream.
+        assert!(args.iter().any(|a| a == "-c:v"), "got: {args:?}");
+        assert_eq!(args.last().unwrap(), "/tmp/av.mp4");
+    }
+
+    #[test]
+    fn build_record_args_passes_silence_threshold_to_filter() {
+        let mut o = opts();
+        o.stop_on_silence = true;
+        o.silence_threshold_db = Some(-45);
+        let audio = FfmpegDevice::new("Mic", "avfoundation", Some(0));
+        let args = build_record_args(Platform::MacOS, &audio, None, &o, "/tmp/s.m4a");
+        // The silencedetect filter must carry the requested threshold.
+        let joined = args.join(" ");
+        assert!(
+            joined.contains("silencedetect=noise=-45dB"),
+            "expected the -45 dB threshold in the detector, got: {joined}"
+        );
+    }
+
+    #[test]
+    fn build_record_args_off_silence_uses_the_permissive_warn_threshold() {
+        // The detector is ALWAYS in the chain (the warning path needs the markers);
+        // with stop-on-silence OFF it falls back to the fixed -55 dB warn level
+        // rather than any user threshold.
+        let mut o = opts();
+        o.stop_on_silence = false;
+        o.silence_threshold_db = Some(-45);
+        let audio = FfmpegDevice::new("Mic", "avfoundation", Some(0));
+        let args = build_record_args(Platform::MacOS, &audio, None, &o, "/tmp/s.m4a");
+        let joined = args.join(" ");
+        assert!(
+            joined.contains("silencedetect=noise=-55dB"),
+            "off → fixed -55 dB warn detector, got: {joined}"
+        );
+        assert!(
+            !joined.contains("-45dB"),
+            "the user threshold must be ignored when stop-on-silence is off"
+        );
+    }
+
+    #[test]
+    fn current_platform_matches_the_build_target() {
+        let p = current_platform();
+        #[cfg(target_os = "macos")]
+        assert_eq!(p, Platform::MacOS);
+        #[cfg(target_os = "windows")]
+        assert_eq!(p, Platform::Windows);
+        #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+        assert_eq!(p, Platform::Linux);
+    }
+
+    #[test]
+    fn error_code_str_covers_every_variant() {
+        // Every variant maps to a distinct snake_case string (the renderer's
+        // localisation switch depends on this enumeration).
+        let all = [
+            (RecordingErrorCode::DeviceNotFound, "device_not_found"),
+            (
+                RecordingErrorCode::DevicePermissionDenied,
+                "device_permission_denied",
+            ),
+            (RecordingErrorCode::DeviceBusy, "device_busy"),
+            (RecordingErrorCode::DiskFull, "disk_full"),
+            (
+                RecordingErrorCode::DeviceDisconnected,
+                "device_disconnected",
+            ),
+            (RecordingErrorCode::DeviceError, "device_error"),
+        ];
+        let mut seen = std::collections::HashSet::new();
+        for (code, want) in all {
+            assert_eq!(error_code_str(code), want);
+            assert!(seen.insert(want), "duplicate mapping for {want}");
+        }
+    }
+
+    #[test]
+    fn looks_like_error_catches_permission_and_disconnect_lines() {
+        assert!(looks_like_error(
+            "[avfoundation] Audio device access denied"
+        ));
+        assert!(looks_like_error("Device or resource busy"));
+        assert!(looks_like_error("USB camera unplugged"));
+        assert!(looks_like_error("Input/output error"));
+        // Case-insensitive: an upper-case ERROR still trips.
+        assert!(looks_like_error("FATAL ERROR while opening device"));
+    }
+
+    #[test]
+    fn looks_like_error_ignores_benign_progress_and_stream_lines() {
+        assert!(!looks_like_error(
+            "frame= 30 fps=30 q=28.0 size=512kB time=00:00:01.00 bitrate=..."
+        ));
+        assert!(!looks_like_error("Output #0, mp4, to '/tmp/rec.mp4':"));
+        assert!(!looks_like_error("  Metadata:"));
+    }
+
+    #[test]
+    fn recording_opts_serde_round_trips() {
+        let o = RecordingOpts {
+            audio_device_name: "Soundcraft USB Audio".into(),
+            video_device_name: Some("Logitech BRIO".into()),
+            output_path: "/tmp/rec.mp4".into(),
+            stop_on_silence: true,
+            silence_threshold_db: Some(-50),
+            silence_timeout_minutes: 7,
+            framerate: 25,
+            stereo: false,
+            split_minutes: 30,
+            manual_max_minutes: 120,
+        };
+        let json = serde_json::to_string(&o).unwrap();
+        // The wire shape is the struct's default snake_case keys (no rename_all).
+        assert!(json.contains("\"audio_device_name\""), "got: {json}");
+        assert!(json.contains("\"manual_max_minutes\""), "got: {json}");
+        let back: RecordingOpts = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.audio_device_name, o.audio_device_name);
+        assert_eq!(back.video_device_name, o.video_device_name);
+        assert_eq!(back.silence_threshold_db, o.silence_threshold_db);
+        assert_eq!(back.split_minutes, o.split_minutes);
+        assert_eq!(back.manual_max_minutes, o.manual_max_minutes);
+    }
+
+    #[test]
+    fn recording_event_serde_round_trips() {
+        let e = RecordingEvent {
+            code: "device_disconnected".into(),
+            message: "Mister kontakt".into(),
+        };
+        let back: RecordingEvent =
+            serde_json::from_str(&serde_json::to_string(&e).unwrap()).unwrap();
+        assert_eq!(e, back);
+    }
 }
