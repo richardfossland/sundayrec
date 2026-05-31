@@ -547,4 +547,62 @@ mod tests {
         // Clearing an empty table is a no-op.
         clear_recordings(&pool).await.unwrap();
     }
+
+    #[tokio::test]
+    async fn migrations_create_every_table_including_the_upload_queue() {
+        let (pool, _d) = temp_pool().await;
+        // Every migrated table must be SELECTable on a fresh database. The queue
+        // and wake-failure tables come from later migrations, so this proves the
+        // full migration set applied — not just the first one.
+        for table in ["app_setting", "recording", "upload_queue", "wake_failure"] {
+            let q = format!("SELECT COUNT(*) AS n FROM {table}");
+            let row = sqlx::query(&q).fetch_one(&pool).await.expect(table);
+            assert_eq!(row.get::<i64, _>("n"), 0, "{table} should start empty");
+        }
+    }
+
+    #[tokio::test]
+    async fn new_id_is_unique_and_time_ordered() {
+        // UUID v7 is time-ordered: a later mint sorts after an earlier one, and two
+        // mints never collide.
+        let a = new_id();
+        let b = new_id();
+        assert_ne!(a, b, "ids must be unique");
+        assert!(a < b, "v7 ids sort by mint time: {a} !< {b}");
+    }
+
+    #[tokio::test]
+    async fn now_ms_is_a_recent_positive_epoch() {
+        let t = now_ms();
+        // Sanity: after 2020-01-01 (1.5e12 ms) and a finite, non-NaN value.
+        assert!(t > 1_577_836_800_000.0, "now_ms looks like real epoch ms");
+        assert!(t.is_finite());
+    }
+
+    #[tokio::test]
+    async fn data_survives_reopening_the_same_database_file() {
+        // Durability: write through one pool, then open a SECOND pool over the same
+        // file and read it back. Proves the migration is idempotent on reopen and
+        // the rows persisted to disk (not just an in-memory pool).
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("persist.sqlite");
+
+        {
+            let pool = open_pool(&path).await.unwrap();
+            set_setting(&pool, "theme", "\"dark\"").await.unwrap();
+            insert_recording(&pool, sample("/tmp/keep.mp3", 1.0))
+                .await
+                .unwrap();
+            pool.close().await;
+        }
+
+        let reopened = open_pool(&path).await.unwrap();
+        assert_eq!(
+            get_setting(&reopened, "theme").await.unwrap().as_deref(),
+            Some("\"dark\"")
+        );
+        let recs = list_recordings(&reopened).await.unwrap();
+        assert_eq!(recs.len(), 1);
+        assert_eq!(recs[0].file_path, "/tmp/keep.mp3");
+    }
 }
