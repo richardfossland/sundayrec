@@ -8,7 +8,8 @@
 use tauri::{Manager, State};
 
 use sundayrec_core::whisper::{
-    InstalledStatus, TranscribeOptions, TranscriptData, WhisperModelMeta,
+    self, InstalledStatus, TranscribeOptions, TranscriptData, TranscriptExportFormat,
+    WhisperModelMeta,
 };
 
 use crate::db::store::now_ms;
@@ -47,6 +48,22 @@ pub async fn whisper_transcribe(
         subtitle_style: subtitle_style.unwrap_or(true),
     };
     seam::transcribe(&dir, &input_path, &model_id, opts, now_ms() as i64).await
+}
+
+/// Render a transcript to a subtitle/text file at `path` (the renderer picks the
+/// destination through the native save dialog). The rendering is the pure
+/// `sundayrec_core::whisper::export_transcript`; works in every build (no
+/// `whisper` feature needed — there's nothing to infer, just format + write).
+#[tauri::command]
+pub fn whisper_export_transcript(
+    data: TranscriptData,
+    format: TranscriptExportFormat,
+    path: String,
+) -> AppResult<()> {
+    let body = whisper::export_transcript(&data, format);
+    std::fs::write(&path, body)
+        .map_err(|e| AppError::Internal(format!("write transcript {path}: {e}")))?;
+    Ok(())
 }
 
 /// The OS app-data `whisper-models/` directory (created if missing).

@@ -199,6 +199,7 @@ pub fn run() {
             commands::whisper::whisper_list_models,
             commands::whisper::whisper_model_status,
             commands::whisper::whisper_transcribe,
+            commands::whisper::whisper_export_transcript,
             // PU-6 episode prep + review queue + Stage import.
             commands::review::prep_build_episode,
             commands::review::review_queue_list,

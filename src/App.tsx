@@ -14,6 +14,7 @@ import { SchedulePage } from "@/features/schedule/SchedulePage";
 import { WakePanel } from "@/features/wake/WakePanel";
 import { HistoryPanel } from "@/features/history/HistoryPanel";
 import { EditorPanel } from "@/features/editor/EditorPanel";
+import { TranscribePanel } from "@/features/transcribe/TranscribePanel";
 import { CloudBackupPanel } from "@/features/cloud/CloudBackupPanel";
 import { EmailSettingsPanel } from "@/features/email/EmailSettingsPanel";
 import { StreamingPanel } from "@/features/streaming/StreamingPanel";
@@ -145,6 +146,20 @@ function App() {
             </summary>
             <div className="mt-3">
               <EditorPanel />
+            </div>
+          </details>
+
+          {/* PU-5: transcription — pick a recording + a whisper model, run
+              local AI transcription, and save the result to SRT/VTT/TXT. The
+              inference is behind the default-off `whisper` feature, so the
+              panel shows a "not built into this build" hint in the default
+              build (the model registry still lists). Same disclosure pattern. */}
+          <details className="w-full max-w-md text-left">
+            <summary className="cursor-pointer text-sm font-medium">
+              {t("transcribe.title", "Transkribering")}
+            </summary>
+            <div className="mt-3">
+              <TranscribePanel />
             </div>
           </details>
 

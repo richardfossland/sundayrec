@@ -272,8 +272,26 @@ cargo build -p sundayrec --features whisper   # CMake builds libwhisper
      `TranscriptData` (seconds-based segments) comes back. A `feature_disabled`
      validation error means the build doesn't have `--features whisper`.
 
+The **Transkribering** panel (R5) drives this: pick a recording (from history) +
+a model + a language, **Transkriber**, then the segments render and **SRT** /
+**VTT** / **TXT** buttons save the transcript via `whisper_export_transcript`
+(native save dialog). The model registry + the export render work in **every**
+build; only `whisper_transcribe` needs the feature. In the default build the
+panel shows a calm "ikke bygd inn" hint after a transcribe attempt (GUI-UNVERIFIED).
+
+```bash
+npm run tauri dev -- --features whisper   # drive the Transkribering disclosure
+```
+
+3. (any build) **Export.** After a transcript exists, click SRT/VTT/TXT.
+   - **Expected:** a file appears at the chosen path. SRT uses `HH:MM:SS,mmm`
+     numbered cues; VTT has a `WEBVTT` header + `.` ms separator; TXT is one
+     segment per line. The rendering is the pure
+     `sundayrec-core::whisper::export_transcript` (unit-tested).
+
 > [HW] The C/C++ build, the model download, and inference are unproven in the
-> gate — only the `sundayrec-core::whisper` decisions are unit-tested.
+> gate — only the `sundayrec-core::whisper` decisions are unit-tested. The
+> export render + the file write are pure/GUI-UNVERIFIED (no feature needed).
 
 ---
 

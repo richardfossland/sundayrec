@@ -1033,5 +1033,21 @@
     "testFailed": "Klarte ikke sende testvarsel.",
     "noConfig": "Fyll inn mottaker og e-postoppsett.",
     "featureDisabled": "E-postvarsler er ikke bygd inn i denne versjonen. Innstillingene kan likevel lagres."
+  },
+  "transcribe": {
+    "title": "Transkribering",
+    "recording": "Opptak",
+    "noRecordings": "Ingen opptak ennå",
+    "model": "Modell",
+    "language": "Språk",
+    "langAuto": "Automatisk",
+    "translate": "Oversett til engelsk",
+    "start": "Transkriber",
+    "running": "Transkriberer…",
+    "failed": "Transkribering feilet.",
+    "featureDisabled": "Transkribering er ikke bygd inn i denne versjonen.",
+    "result": "Transkripsjon",
+    "segmentCount": "({{n}} segmenter)",
+    "empty": "Ingen tale funnet i opptaket."
   }
 }

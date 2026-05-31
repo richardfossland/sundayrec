@@ -18,6 +18,11 @@ vi.mock("@tauri-apps/api/core", () => ({
         path: "/x/ffmpeg",
       };
     if (cmd === "recordings_list") return [];
+    // PU-5: App mounts <TranscribePanel/>, which reads the model registry.
+    if (cmd === "whisper_list_models") return [];
+    // PU-1: App mounts <EmailSettingsPanel/>, which reads the email status.
+    if (cmd === "email_status")
+      return { featureBuilt: false, gmailConnected: false };
     // Fase 6: App mounts <CloudBackupPanel/>, which reads connection + queue.
     if (cmd === "cloud_connection_status") return [];
     if (cmd === "cloud_queue_status") return [];

@@ -556,6 +556,111 @@ pub fn language_label(code: &str) -> String {
         .unwrap_or_else(|| code.to_string())
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//   Transcript export (ports editor-transcript.ts transcriptToSrt/Vtt)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A subtitle/text format the transcript can be exported to. Serialised
+/// lowercase to match the file extension (`srt` | `vtt` | `txt`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(
+    export,
+    export_to = "../../../src/lib/bindings/TranscriptExportFormat.ts"
+)]
+#[serde(rename_all = "lowercase")]
+pub enum TranscriptExportFormat {
+    /// SubRip — comma millisecond separator, numbered cues.
+    Srt,
+    /// WebVTT — dot millisecond separator, `WEBVTT` header.
+    Vtt,
+    /// Plain text — one segment per line, no timing.
+    Txt,
+}
+
+impl TranscriptExportFormat {
+    /// The file extension (without the dot).
+    pub fn extension(self) -> &'static str {
+        match self {
+            TranscriptExportFormat::Srt => "srt",
+            TranscriptExportFormat::Vtt => "vtt",
+            TranscriptExportFormat::Txt => "txt",
+        }
+    }
+}
+
+/// Format `sec` as an `HH:MM:SS,mmm` SubRip timestamp. Ports the
+/// `editor-transcript.ts` `srtTimestamp` (floor h/m/s, rounded ms).
+fn srt_timestamp(sec: f64) -> String {
+    let total = sec.max(0.0);
+    let h = (total / 3600.0).floor() as u64;
+    let m = ((total % 3600.0) / 60.0).floor() as u64;
+    let s = (total % 60.0).floor() as u64;
+    let ms = ((total - total.floor()) * 1000.0).round() as u64;
+    format!("{h:02}:{m:02}:{s:02},{ms:03}")
+}
+
+/// `HH:MM:SS.mmm` WebVTT timestamp — the SRT form with a dot separator.
+fn vtt_timestamp(sec: f64) -> String {
+    srt_timestamp(sec).replace(',', ".")
+}
+
+/// Render `segments` to a SubRip (.srt) document. Ports `transcriptToSrt`:
+/// numbered cues separated by a blank line, each `idx\n start --> end\n text\n`.
+pub fn to_srt(segments: &[TranscriptSegment]) -> String {
+    segments
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            format!(
+                "{}\n{} --> {}\n{}\n",
+                i + 1,
+                srt_timestamp(s.start),
+                srt_timestamp(s.end),
+                s.text
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Render `segments` to a WebVTT (.vtt) document. Ports `transcriptToVtt`: the
+/// SRT cue body (dot ms separator) behind a `WEBVTT` header.
+pub fn to_vtt(segments: &[TranscriptSegment]) -> String {
+    let cues = segments
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            format!(
+                "{}\n{} --> {}\n{}\n",
+                i + 1,
+                vtt_timestamp(s.start),
+                vtt_timestamp(s.end),
+                s.text
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!("WEBVTT\n\n{cues}")
+}
+
+/// Render `segments` to plain text — one segment per line, no timing.
+pub fn to_txt(segments: &[TranscriptSegment]) -> String {
+    segments
+        .iter()
+        .map(|s| s.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Render a transcript to the chosen `format`.
+pub fn export_transcript(data: &TranscriptData, format: TranscriptExportFormat) -> String {
+    match format {
+        TranscriptExportFormat::Srt => to_srt(&data.segments),
+        TranscriptExportFormat::Vtt => to_vtt(&data.segments),
+        TranscriptExportFormat::Txt => to_txt(&data.segments),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -828,6 +933,67 @@ mod tests {
         let b = vec![seg(0.1, 5.1, "amen"), seg(6.0, 8.0, "next")];
         let merged = merge_segments(vec![a, b]);
         assert_eq!(merged.len(), 2);
+    }
+
+    // ── export ───────────────────────────────────────────────────────────────
+
+    fn sample_data() -> TranscriptData {
+        TranscriptData {
+            version: 1,
+            model: "ggml-base".into(),
+            language: "no".into(),
+            duration: 3725.5,
+            created_at: 0,
+            translated: None,
+            segments: vec![
+                seg(0.0, 2.5, "Hei"),
+                seg(3725.0, 3725.5, "verden"), // 1h2m5s → exercises HH + ms rounding
+            ],
+        }
+    }
+
+    #[test]
+    fn srt_timestamps_match_electron_format() {
+        assert_eq!(srt_timestamp(0.0), "00:00:00,000");
+        assert_eq!(srt_timestamp(2.5), "00:00:02,500");
+        // 3725.5s = 1h 2m 5.5s
+        assert_eq!(srt_timestamp(3725.5), "01:02:05,500");
+    }
+
+    #[test]
+    fn to_srt_numbers_cues_and_uses_comma_ms() {
+        let srt = to_srt(&sample_data().segments);
+        assert!(srt.starts_with("1\n00:00:00,000 --> 00:00:02,500\nHei\n"));
+        assert!(srt.contains("2\n01:02:05,000 --> 01:02:05,500\nverden\n"));
+        // Cues separated by a blank line (join on "\n" over "…\n" entries).
+        assert!(srt.contains("Hei\n\n2"));
+    }
+
+    #[test]
+    fn to_vtt_has_header_and_dot_ms() {
+        let vtt = to_vtt(&sample_data().segments);
+        assert!(vtt.starts_with("WEBVTT\n\n1\n"));
+        assert!(vtt.contains("00:00:00.000 --> 00:00:02.500"));
+        assert!(!vtt.contains(",500")); // dot, never comma
+    }
+
+    #[test]
+    fn to_txt_is_one_line_per_segment_no_timing() {
+        assert_eq!(to_txt(&sample_data().segments), "Hei\nverden");
+    }
+
+    #[test]
+    fn export_transcript_dispatches_on_format() {
+        let d = sample_data();
+        assert!(export_transcript(&d, TranscriptExportFormat::Srt).contains("-->"));
+        assert!(export_transcript(&d, TranscriptExportFormat::Vtt).starts_with("WEBVTT"));
+        assert_eq!(
+            export_transcript(&d, TranscriptExportFormat::Txt),
+            "Hei\nverden"
+        );
+        assert_eq!(TranscriptExportFormat::Srt.extension(), "srt");
+        assert_eq!(TranscriptExportFormat::Vtt.extension(), "vtt");
+        assert_eq!(TranscriptExportFormat::Txt.extension(), "txt");
     }
 
     // ── languages ──────────────────────────────────────────────────────────
