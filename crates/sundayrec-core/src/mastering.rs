@@ -345,6 +345,110 @@ pub fn clamp_preview_duration(requested: f64) -> f64 {
     d.clamp(1.0, 60.0)
 }
 
+/// Clamp a preview *start* second to `>= 0`, defaulting a non-finite request to
+/// 0 — mirrors `buildPreview`'s `Math.max(0, Number.isFinite(startSec) ? startSec : 0)`.
+pub fn clamp_preview_start(requested: f64) -> f64 {
+    let s = if requested.is_finite() { requested } else { 0.0 };
+    s.max(0.0)
+}
+
+/// ffmpeg args for a single-pass mastering *preview* of a `[start, start+dur]`
+/// snippet to a temp mp3. Mirrors `buildPreview`'s argv exactly: `-ss`/`-t`
+/// BEFORE `-i` for an accurate container-index seek, the preview (single-pass)
+/// loudnorm chain via `-af`, a fixed `libmp3lame -b:a 192k` encode, `-y out`.
+/// `start`/`dur` are formatted to 3 decimals as the TS `.toFixed(3)` did. The
+/// seam supplies the clamped values (via [`clamp_preview_start`]/
+/// [`clamp_preview_duration`]) and the temp `out_path`.
+pub fn preview_args(input_path: &str, preset: &MasterPreset, start: f64, dur: f64, out_path: &str) -> Vec<String> {
+    [
+        "-nostdin",
+        "-hide_banner",
+        "-ss",
+        &format!("{start:.3}"),
+        "-t",
+        &format!("{dur:.3}"),
+        "-i",
+        input_path,
+        "-af",
+        &build_preview_pass_filters(preset),
+        "-c:a",
+        "libmp3lame",
+        "-b:a",
+        "192k",
+        "-y",
+        out_path,
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect()
+}
+
+/// Filename prefix for mastering-preview temp files left in the OS temp dir. The
+/// startup sweep (and [`is_preview_temp_name`]) match this. Mirrors the Electron
+/// `sundayrec-master-preview-` prefix.
+pub const PREVIEW_TEMP_PREFIX: &str = "sundayrec-master-preview-";
+
+/// Whether a temp-dir entry name is a leftover mastering-preview mp3 the startup
+/// sweep should delete. Mirrors `cleanupOldPreviews`'s `startsWith(prefix) &&
+/// endsWith('.mp3')`.
+pub fn is_preview_temp_name(name: &str) -> bool {
+    name.starts_with(PREVIEW_TEMP_PREFIX) && name.ends_with(".mp3")
+}
+
+// ── In-flight job tracking (P1 parity) ──────────────────────────────────────────
+//
+// The Electron `applyMastering` / `editor.exportEdited` kept a `Map<jobId,
+// ChildProcess>` so the UI could abort a long render by job id (`cancelMastering`
+// / `cancelExport`). That state machine — register on start, drop on
+// completion, "was this id actually tracked?" on cancel — is pure and tested
+// here; the seam holds the real abort handles in a parallel map and only asks
+// this registry whether the cancel/complete is legitimate.
+
+use std::collections::HashSet as JobSet;
+
+/// A pure registry of in-flight job ids. The seam owns the real process/abort
+/// handles; this mirror answers "is `id` a live job?" so `cancel`/`complete`
+/// return the same booleans the Electron `Map.has`/`Map.delete` did.
+#[derive(Debug, Default, Clone)]
+pub struct JobRegistry {
+    active: JobSet<String>,
+}
+
+impl JobRegistry {
+    /// A fresh, empty registry.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Register a starting job. Returns `false` if the id was already live (the
+    /// caller should reject a duplicate job id rather than orphan the first).
+    pub fn register(&mut self, id: &str) -> bool {
+        self.active.insert(id.to_string())
+    }
+
+    /// Whether `id` is currently a live job.
+    pub fn is_active(&self, id: &str) -> bool {
+        self.active.contains(id)
+    }
+
+    /// Mark a job finished (success or failure). Returns whether it was tracked.
+    pub fn complete(&mut self, id: &str) -> bool {
+        self.active.remove(id)
+    }
+
+    /// Request a cancel: drop the id, returning whether it was live. Mirrors
+    /// `cancelMastering`/`cancelExport` returning `false` for an unknown id
+    /// (so the renderer shows "nothing to cancel" rather than a phantom success).
+    pub fn cancel(&mut self, id: &str) -> bool {
+        self.active.remove(id)
+    }
+
+    /// How many jobs are in flight (for diagnostics/tests).
+    pub fn active_count(&self) -> usize {
+        self.active.len()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -503,5 +607,76 @@ mod tests {
         assert_eq!(clamp_preview_duration(120.0), 60.0);
         assert_eq!(clamp_preview_duration(30.0), 30.0);
         assert_eq!(clamp_preview_duration(f64::NAN), 15.0);
+    }
+
+    #[test]
+    fn preview_start_clamps_to_non_negative() {
+        assert_eq!(clamp_preview_start(-5.0), 0.0);
+        assert_eq!(clamp_preview_start(12.5), 12.5);
+        assert_eq!(clamp_preview_start(f64::NAN), 0.0);
+    }
+
+    // ── preview args ───────────────────────────────────────────────────────────────
+
+    #[test]
+    fn preview_args_seek_before_input_and_3dp_times() {
+        let p = get_preset_by_id("speech-clear").unwrap();
+        let args = preview_args("/rec/a.mp3", &p, 5.0, 15.0, "/tmp/prev.mp3");
+        // -ss/-t must come before -i for an accurate seek.
+        let ss = args.iter().position(|a| a == "-ss").unwrap();
+        let i = args.iter().position(|a| a == "-i").unwrap();
+        assert!(ss < i);
+        assert!(args.contains(&"5.000".to_string()));
+        assert!(args.contains(&"15.000".to_string()));
+        assert_eq!(args.last().unwrap(), "/tmp/prev.mp3");
+        // Single-pass preview chain (no print_format), libmp3lame encode.
+        assert!(args.iter().any(|a| a.contains("loudnorm") && !a.contains("print_format")));
+        assert!(args.contains(&"libmp3lame".to_string()));
+    }
+
+    // ── preview temp cleanup ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn preview_temp_name_matches_prefix_and_mp3() {
+        assert!(is_preview_temp_name("sundayrec-master-preview-deadbeef.mp3"));
+        assert!(!is_preview_temp_name("sundayrec-master-preview-deadbeef.wav"));
+        assert!(!is_preview_temp_name("other.mp3"));
+    }
+
+    // ── job registry ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn job_registry_register_tracks_and_rejects_duplicates() {
+        let mut reg = JobRegistry::new();
+        assert!(reg.register("job-1"));
+        assert!(reg.is_active("job-1"));
+        assert_eq!(reg.active_count(), 1);
+        // A duplicate id is rejected (returns false) without orphaning the first.
+        assert!(!reg.register("job-1"));
+        assert_eq!(reg.active_count(), 1);
+    }
+
+    #[test]
+    fn job_registry_cancel_returns_whether_live() {
+        let mut reg = JobRegistry::new();
+        reg.register("job-1");
+        assert!(reg.cancel("job-1"));
+        assert!(!reg.is_active("job-1"));
+        // Cancelling an unknown / already-cancelled id reports false.
+        assert!(!reg.cancel("job-1"));
+        assert!(!reg.cancel("never-started"));
+    }
+
+    #[test]
+    fn job_registry_complete_drops_the_job() {
+        let mut reg = JobRegistry::new();
+        reg.register("job-1");
+        reg.register("job-2");
+        assert!(reg.complete("job-1"));
+        assert!(!reg.is_active("job-1"));
+        assert!(reg.is_active("job-2"));
+        assert_eq!(reg.active_count(), 1);
+        // Completing twice is a no-op false.
+        assert!(!reg.complete("job-1"));
     }
 }

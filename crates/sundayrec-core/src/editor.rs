@@ -670,6 +670,172 @@ pub fn downsample_peaks(samples: &[f32], buckets: usize) -> Vec<f32> {
     out
 }
 
+// ── Sidecar path policy (P1 parity) ──────────────────────────────────────────
+//
+// The Electron editor persisted per-recording editor state in three JSON
+// sidecars written *next to* the media file (`<base>.meta.json`,
+// `<base>.cuts-draft.json`, `<base>.transcript.json` — the killer reopen-ability:
+// reopen a recording and your cuts / intro-outro / metadata are right there).
+// The path is `dir/<stem><suffix>` where `<stem>` drops the media extension.
+// We refuse a `suffix`/`stem` that would escape the media's own directory
+// (matches the Electron `sidecarPath` `path.dirname(result) !== dir` guard
+// against a stem containing `..`). Pure; the fs read/write/delete is the seam.
+
+/// The three sidecar suffixes the editor persists, mirroring the Electron
+/// `editor-read-meta` / `editor-read-cuts-draft` / `editor-read-transcript`
+/// handlers. Kept as a typed enum so the seam can't fat-finger a suffix.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Sidecar {
+    /// `<base>.meta.json` — title/speaker/description/chapters.
+    Meta,
+    /// `<base>.cuts-draft.json` — autosaved cut regions for crash recovery.
+    CutsDraft,
+    /// `<base>.transcript.json` — the saved transcript.
+    Transcript,
+}
+
+impl Sidecar {
+    /// The filename suffix appended to the media's stem.
+    pub fn suffix(self) -> &'static str {
+        match self {
+            Sidecar::Meta => ".meta.json",
+            Sidecar::CutsDraft => ".cuts-draft.json",
+            Sidecar::Transcript => ".transcript.json",
+        }
+    }
+}
+
+/// Compute the sidecar path for a media file, mirroring the Electron
+/// `sidecarPath(audioPath, suffix)`:
+///   - take the media's directory + its stem (filename minus the last extension),
+///   - join `<stem><suffix>` back onto that directory,
+///   - refuse (return `None`) if the result would land in a *different*
+///     directory — the `path.dirname(result) !== dir` guard against a crafted
+///     stem (`..`) escaping the recording's own folder.
+///
+/// `dir` and `stem` are supplied pre-split (the seam derives them with
+/// `Path::parent`/`file_stem`) so the policy stays host-path-quirk-free and
+/// testable; the only logic here is the suffix join + the escape guard.
+pub fn sidecar_path(dir: &str, stem: &str, sidecar: Sidecar) -> Option<String> {
+    // A stem that itself contains a separator would relocate the file out of
+    // `dir` — reject it (mirrors the dirname-equality guard).
+    if stem.contains('/') || stem.contains('\\') || stem.is_empty() {
+        return None;
+    }
+    Some(join(dir, &format!("{stem}{}", sidecar.suffix())))
+}
+
+// ── Inline-vs-stream file-size guard (P1 parity) ─────────────────────────────
+
+/// 400 MB — the editor reads a media file's bytes inline up to this size (covers
+/// a 4-hour service in lossless WAV); anything larger the renderer must stream
+/// via the ffmpeg peaks-extract path instead. Mirrors `EDITOR_INLINE_LIMIT`.
+pub const EDITOR_INLINE_LIMIT: u64 = 400 * 1024 * 1024;
+
+/// What `editor-read-file` should do for a file of `size` bytes:
+/// read it inline, or signal `{ tooLarge }` so the renderer streams it.
+/// Mirrors the `stat.size > EDITOR_INLINE_LIMIT` branch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InlineDecision {
+    /// Small enough to return the bytes inline.
+    Inline,
+    /// Over the limit — return `{ tooLarge, size }` instead.
+    TooLarge,
+}
+
+/// Decide inline vs stream for a media file of `size` bytes.
+pub fn inline_decision(size: u64) -> InlineDecision {
+    if size > EDITOR_INLINE_LIMIT {
+        InlineDecision::TooLarge
+    } else {
+        InlineDecision::Inline
+    }
+}
+
+// ── Crashed-edit temp-file cleanup (P1 parity) ───────────────────────────────
+
+/// The two suffixes the editor's atomic save leaves behind when it crashes
+/// mid-write. Startup sweeps every save-folder for them. Mirror the Electron
+/// `.__editor_tmp` / `.__editor_bak` constants.
+pub const EDITOR_TMP_SUFFIX: &str = ".__editor_tmp";
+pub const EDITOR_BAK_SUFFIX: &str = ".__editor_bak";
+
+/// Whether a directory entry name is a leftover editor temp/backup file the
+/// startup sweep should delete. Mirrors `cleanupEditorTempFiles`'s
+/// `name.endsWith('.__editor_tmp') || name.endsWith('.__editor_bak')`. The
+/// `.mp4` video-save variant (`.__editor_tmp.mp4`) also matches via the contains
+/// check the Electron suffix-endsWith would miss, so a crashed *video* export's
+/// temp is swept too.
+pub fn is_editor_temp_name(name: &str) -> bool {
+    name.ends_with(EDITOR_TMP_SUFFIX)
+        || name.ends_with(EDITOR_BAK_SUFFIX)
+        || name.contains(".__editor_tmp.")
+}
+
+/// De-duplicate + canonicalise a list of candidate cleanup folders, dropping
+/// empties and preserving first-seen order — the pure half of
+/// `cleanupEditorTempFiles`'s folder-prep loop (the `existsSync` filter + the
+/// `readdir`/`unlink` are the seam). `resolve` lets the caller plug in the host
+/// path canonicaliser (or identity in tests).
+pub fn dedupe_cleanup_dirs<F>(folders: &[String], resolve: F) -> Vec<String>
+where
+    F: Fn(&str) -> String,
+{
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut out: Vec<String> = Vec::new();
+    for f in folders {
+        if f.is_empty() {
+            continue;
+        }
+        let r = resolve(f);
+        if seen.insert(r.clone()) {
+            out.push(r);
+        }
+    }
+    out
+}
+
+// ── Atomic safe-replace decision (P1 parity) ─────────────────────────────────
+
+/// The platform-specific plan for atomically replacing a target file with a
+/// freshly rendered temp file, mirroring `safeReplaceFile`:
+///   - POSIX `rename()` replaces the target atomically (no missing-file gap),
+///   - Windows `rename()` fails if the target exists, so we rename the target
+///     to a `.__editor_bak`, move the temp into place, then unlink the backup
+///     (restoring the backup on failure).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SafeReplacePlan {
+    /// One atomic `rename(temp → target)` (POSIX).
+    Rename {
+        temp: String,
+        target: String,
+    },
+    /// `rename(target → bak)`, `rename(temp → target)`, `unlink(bak)` (Windows).
+    BackupSwap {
+        temp: String,
+        target: String,
+        bak: String,
+    },
+}
+
+/// Build the safe-replace plan for `temp → target`. `windows` selects the
+/// backup-swap path; the `bak` path is `target + ".__editor_bak"` exactly as
+/// the Electron code formed it. Pure — the seam executes the renames/unlink.
+pub fn safe_replace_plan(temp: &str, target: &str, windows: bool) -> SafeReplacePlan {
+    if windows {
+        SafeReplacePlan::BackupSwap {
+            temp: temp.to_string(),
+            target: target.to_string(),
+            bak: format!("{target}{EDITOR_BAK_SUFFIX}"),
+        }
+    } else {
+        SafeReplacePlan::Rename {
+            temp: temp.to_string(),
+            target: target.to_string(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1174,5 +1340,100 @@ mod tests {
         // more buckets than samples → one peak per sample.
         let peaks = downsample_peaks(&s, 100);
         assert_eq!(peaks.len(), 3);
+    }
+
+    // ── sidecar path policy ──────────────────────────────────────────────────────
+
+    #[test]
+    fn sidecar_path_joins_stem_and_suffix() {
+        assert_eq!(
+            sidecar_path("/rec", "service", Sidecar::Meta).unwrap(),
+            "/rec/service.meta.json"
+        );
+        assert_eq!(
+            sidecar_path("/rec", "service", Sidecar::CutsDraft).unwrap(),
+            "/rec/service.cuts-draft.json"
+        );
+        assert_eq!(
+            sidecar_path("/rec", "service", Sidecar::Transcript).unwrap(),
+            "/rec/service.transcript.json"
+        );
+    }
+
+    #[test]
+    fn sidecar_path_refuses_escaping_stem() {
+        // A stem containing a separator would relocate the sidecar out of `dir`.
+        assert!(sidecar_path("/rec", "../evil", Sidecar::Meta).is_none());
+        assert!(sidecar_path("/rec", "sub\\evil", Sidecar::Meta).is_none());
+        assert!(sidecar_path("/rec", "", Sidecar::Meta).is_none());
+    }
+
+    // ── inline-vs-stream guard ─────────────────────────────────────────────────────
+
+    #[test]
+    fn inline_decision_flips_at_400mb() {
+        assert_eq!(inline_decision(0), InlineDecision::Inline);
+        assert_eq!(inline_decision(EDITOR_INLINE_LIMIT), InlineDecision::Inline);
+        assert_eq!(
+            inline_decision(EDITOR_INLINE_LIMIT + 1),
+            InlineDecision::TooLarge
+        );
+    }
+
+    // ── temp-file cleanup ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn editor_temp_name_matches_tmp_bak_and_video_tmp() {
+        assert!(is_editor_temp_name("service.mp3.__editor_tmp"));
+        assert!(is_editor_temp_name("service.mp3.__editor_bak"));
+        // The video-save variant ends in .mp4 but still carries the tmp marker.
+        assert!(is_editor_temp_name("service.__editor_tmp.mp4"));
+        assert!(!is_editor_temp_name("service.mp3"));
+        assert!(!is_editor_temp_name("service.meta.json"));
+    }
+
+    #[test]
+    fn dedupe_cleanup_dirs_drops_empties_and_duplicates_preserving_order() {
+        let folders = vec![
+            "/a".to_string(),
+            "".to_string(),
+            "/b".to_string(),
+            "/a".to_string(),
+        ];
+        let out = dedupe_cleanup_dirs(&folders, |s| s.to_string());
+        assert_eq!(out, vec!["/a".to_string(), "/b".to_string()]);
+    }
+
+    #[test]
+    fn dedupe_cleanup_dirs_canonicalises_via_resolve() {
+        // Two paths that resolve to the same canonical dir collapse to one.
+        let folders = vec!["/a/".to_string(), "/a".to_string()];
+        let out = dedupe_cleanup_dirs(&folders, |s| s.trim_end_matches('/').to_string());
+        assert_eq!(out, vec!["/a".to_string()]);
+    }
+
+    // ── atomic safe-replace ────────────────────────────────────────────────────────
+
+    #[test]
+    fn safe_replace_posix_is_single_rename() {
+        assert_eq!(
+            safe_replace_plan("/rec/a.__editor_tmp", "/rec/a.mp3", false),
+            SafeReplacePlan::Rename {
+                temp: "/rec/a.__editor_tmp".into(),
+                target: "/rec/a.mp3".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn safe_replace_windows_uses_backup_swap() {
+        assert_eq!(
+            safe_replace_plan("/rec/a.__editor_tmp", "/rec/a.mp3", true),
+            SafeReplacePlan::BackupSwap {
+                temp: "/rec/a.__editor_tmp".into(),
+                target: "/rec/a.mp3".into(),
+                bak: "/rec/a.mp3.__editor_bak".into(),
+            }
+        );
     }
 }
