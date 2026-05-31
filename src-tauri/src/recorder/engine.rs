@@ -56,12 +56,13 @@
 //!     [`crate::recorder::two_process`] — two ffmpeg processes (video + audio),
 //!     muxed at stop with start_time head-alignment + `aresample` drift
 //!     correction. Scoped to a SIMPLE video session (NO split, NO reconnect);
-//!     this engine still owns the unified split/reconnect machinery. Fusing the
-//!     two-process path INTO this engine's reconnect/split state machine (each
-//!     side reconnecting independently, N×N fragment mux) remains the
-//!     Fase-3-continuation TODO. The two-process path is not yet auto-selected
-//!     from this engine's unified-startup-failure branch — see that module's
-//!     header; wiring the auto-fallback trigger is the next step.
+//!     this engine still owns the unified split/reconnect machinery. It is now
+//!     AUTO-SELECTED: when a video session's first unified capture dies at
+//!     startup with no output (`two_process::should_fallback_to_two_process`),
+//!     the `UnexpectedExit` branch hands off to `run_two_process_session`
+//!     instead of burning the reconnect budget. Fusing the two-process path
+//!     fully INTO the reconnect/split state machine (each side reconnecting
+//!     independently, N×N fragment mux) remains the Fase-3-continuation TODO.
 //!
 //! ## Deferred (honest scope)
 //!
@@ -551,6 +552,59 @@ async fn run_session(
                 }
             }
             SegmentOutcome::UnexpectedExit { last_error } => {
+                // F3.3b auto-fallback: a video session whose FIRST capture died
+                // at startup without producing output usually means the camera +
+                // mic can't share one ffmpeg process. Rather than burn the
+                // reconnect budget on a pairing that will never work, hand off to
+                // the two-process path (separate captures + mux). Narrow trigger
+                // (pure decision in core); anything else falls through to the
+                // normal reconnect policy below. HARDWARE-UNVERIFIED.
+                if let Some(video_dev) = video.as_ref() {
+                    if sundayrec_core::two_process::should_fallback_to_two_process(
+                        true,
+                        finalized == 0,
+                        session.reconnect_count(),
+                        segment_bytes.load(Ordering::Relaxed),
+                        (now_ms() - start_ms) as i64,
+                    ) {
+                        tracing::warn!(
+                            "recorder: unified video startup failed with no output — \
+                             switching to two-process fallback"
+                        );
+                        let _ = app.emit(
+                            RECONNECTING_EVENT,
+                            RecordingEvent {
+                                code: "two_process_fallback".into(),
+                                message: "Kamera og mikrofon kan ikke deles i én prosess — \
+                                          bytter til to-prosess-opptak"
+                                    .into(),
+                            },
+                        );
+                        // Drop the empty/broken unified file before the fallback
+                        // writes its own temps + muxed output.
+                        let _ = std::fs::remove_file(session.primary_path());
+
+                        let result = crate::recorder::two_process::run_two_process_session(
+                            app.clone(),
+                            pool.clone(),
+                            opts.clone(),
+                            platform,
+                            audio.clone(),
+                            video_dev.clone(),
+                            stop_rx,
+                        )
+                        .await;
+                        match result {
+                            Ok(()) => set_state(&app, &last_state, RecorderState::Stopped, 0),
+                            Err(e) => {
+                                emit_error(&app, "device_error", &e.to_string());
+                                set_state(&app, &last_state, RecorderState::Failed, 0);
+                            }
+                        }
+                        return;
+                    }
+                }
+
                 // Consult the pure recovery policy.
                 match session.on_unexpected_exit(now_ms(), last_error) {
                     RecoveryDecision::GiveUp => {

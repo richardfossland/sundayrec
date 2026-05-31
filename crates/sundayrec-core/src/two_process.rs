@@ -35,6 +35,33 @@
 
 use crate::ffmpeg::Platform;
 
+/// A unified-capture startup failure dies within this many ms of session start
+/// (the camera+mic were refused as one ffmpeg input). Past it, a death is a
+/// genuine mid-recording disconnect that the reconnect machinery handles.
+pub const STARTUP_FAILURE_MS: i64 = 3000;
+
+/// Decide whether a failed unified capture should fall back to the two-process
+/// path. True only for a VIDEO session whose FIRST segment died almost
+/// immediately (`elapsed_ms < STARTUP_FAILURE_MS`) without producing output
+/// (`bytes_produced == 0`) and before any reconnect — the signature of "this
+/// camera+mic pair can't share one ffmpeg process". A later death, or one after
+/// bytes were written, is a real disconnect (reconnect handles it), not a
+/// startup incompatibility — so the two paths never fight over the same failure.
+/// Pure.
+pub fn should_fallback_to_two_process(
+    has_video: bool,
+    is_first_segment: bool,
+    reconnect_count: u32,
+    bytes_produced: u64,
+    elapsed_ms: i64,
+) -> bool {
+    has_video
+        && is_first_segment
+        && reconnect_count == 0
+        && bytes_produced == 0
+        && elapsed_ms < STARTUP_FAILURE_MS
+}
+
 /// The decided A/V head-alignment for the mux step.
 ///
 /// Exactly one of these is ever non-zero (or both zero when no/unknown offset):
@@ -309,6 +336,32 @@ mod tests {
 
     fn index_of(args: &[String], needle: &str) -> Option<usize> {
         args.iter().position(|a| a == needle)
+    }
+
+    // ── should_fallback_to_two_process — the auto-fallback trigger ───────────
+
+    #[test]
+    fn fallback_fires_only_on_first_video_startup_failure() {
+        // The textbook case: video session, first segment, no reconnect, no
+        // bytes, died fast → fall back.
+        assert!(should_fallback_to_two_process(true, true, 0, 0, 800));
+
+        // Audio-only session never needs the fallback.
+        assert!(!should_fallback_to_two_process(false, true, 0, 0, 800));
+        // Bytes were produced → a real mid-recording death (reconnect handles it).
+        assert!(!should_fallback_to_two_process(true, true, 0, 4096, 800));
+        // A later death (past the startup window) is a disconnect, not a startup
+        // incompatibility.
+        assert!(!should_fallback_to_two_process(
+            true,
+            true,
+            0,
+            0,
+            STARTUP_FAILURE_MS
+        ));
+        // Already reconnecting, or not the first segment → leave it to reconnect.
+        assert!(!should_fallback_to_two_process(true, true, 1, 0, 800));
+        assert!(!should_fallback_to_two_process(true, false, 0, 0, 800));
     }
 
     // ── av_offset_decision — both directions, dead-zone, ceilings, None ──────
