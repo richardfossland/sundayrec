@@ -55,6 +55,7 @@ pub mod settings;
 // per-destination keys from the keychain. `stream_start` returns
 // `feature_disabled` in the default build.
 pub mod streaming;
+pub mod test_recording;
 // PU-2 menubar tray + `sundayrec://` deep-link handling — default-off `tray`
 // feature (GUI-UNVERIFIED). The menu-model + link parse are in `sundayrec_core`;
 // this seam maps them to tauri menu/tray + the scheme handler.
@@ -209,6 +210,8 @@ pub fn run() {
             commands::recorder::preroll_start,
             commands::recorder::preroll_stop,
             commands::recorder::preroll_status,
+            commands::recorder::get_disk_space,
+            commands::recorder::run_test_recording,
             commands::db::setting_get,
             commands::db::setting_set,
             commands::db::recordings_list,

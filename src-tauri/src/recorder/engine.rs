@@ -168,7 +168,7 @@ pub struct RecorderStatePayload {
 }
 
 /// Map the running OS to the core [`Platform`] enum.
-fn current_platform() -> Platform {
+pub fn current_platform() -> Platform {
     if cfg!(target_os = "windows") {
         Platform::Windows
     } else if cfg!(target_os = "macos") {

@@ -76,6 +76,7 @@ pub mod schedule;
 pub mod settings;
 pub mod silence;
 pub mod streaming;
+pub mod test_recording;
 pub mod timeouts;
 pub mod tray;
 pub mod two_process;

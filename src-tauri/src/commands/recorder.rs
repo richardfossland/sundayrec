@@ -8,7 +8,9 @@
 //!     reconnecting,reconnected}` events,
 //!   - `recording_status` to read the current [`RecorderState`] synchronously.
 
-use tauri::{AppHandle, State};
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager, State};
+use ts_rs::TS;
 
 use sundayrec_core::device_match::FfmpegDevice;
 use sundayrec_core::recorder::RecorderState;
@@ -17,6 +19,8 @@ use crate::db::Db;
 use crate::error::AppResult;
 use crate::recorder::engine::{list_recording_devices as enumerate, RecorderEngine, RecordingOpts};
 use crate::recorder::preroll::{preroll_settings_from, PrerollEngine, PrerollStatus};
+use crate::settings;
+use crate::test_recording::{run_test_recording as run_test, TestRecordingResult};
 
 /// List capture (audio) devices the recorder can match against, via the real
 /// ffmpeg device enumerator (F2.1).
@@ -124,4 +128,52 @@ pub fn stop_recording(engine: State<'_, RecorderEngine>) -> AppResult<()> {
 #[tauri::command]
 pub fn recording_status(engine: State<'_, RecorderEngine>) -> RecorderState {
     engine.current_state()
+}
+
+/// Free bytes on the volume holding the save folder, or `null` when the platform
+/// can't report it. Mirrors the Electron `get-disk-space` handler, but uses the
+/// `fs4` cross-platform probe (already a dep, used by preflight) instead of
+/// shelling out to `df`/`powershell`. Fully testable — no device, no ffmpeg.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/lib/bindings/DiskSpace.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct DiskSpace {
+    /// Free space in bytes, or `null` when unavailable.
+    #[ts(type = "number | null")]
+    pub free_bytes: Option<u64>,
+}
+
+/// Read the free disk space for the configured save folder.
+#[tauri::command]
+pub async fn get_disk_space(app: AppHandle, db: State<'_, Db>) -> AppResult<DiskSpace> {
+    let s = settings::load(&db.pool).await.unwrap_or_default();
+    let folder = s.save_folder.clone().unwrap_or_else(|| {
+        app.path()
+            .document_dir()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    });
+    // Fall back to the documents dir when the configured folder is gone (mirrors
+    // the Electron `if (!fs.existsSync(folder)) folder = documents` guard).
+    let path = std::path::Path::new(&folder);
+    let probe = if path.exists() {
+        path.to_path_buf()
+    } else {
+        app.path()
+            .document_dir()
+            .unwrap_or_else(|_| std::path::PathBuf::from("."))
+    };
+    Ok(DiskSpace {
+        free_bytes: fs4::available_space(&probe).ok(),
+    })
+}
+
+/// Run a ~10 s test capture for the configured mic and report size + measured
+/// signal level. The argv + classifiers are the unit-tested core; the spawn/
+/// astats path is HARDWARE-UNVERIFIED (needs a real mic + the ffmpeg sidecar).
+#[tauri::command]
+pub async fn run_test_recording(db: State<'_, Db>) -> AppResult<TestRecordingResult> {
+    let s = settings::load(&db.pool).await.unwrap_or_default();
+    let device = s.device_name.clone().unwrap_or_default();
+    run_test(&device).await
 }
