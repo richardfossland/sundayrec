@@ -16,6 +16,9 @@
 //!   - [`filename`]     — output-filename construction (sanitise + pattern) (Fase 5)
 //!   - [`device_match`] — 5-strategy fuzzy device matching (the device-name moat)
 //!   - [`device_enum`]  — pure ffmpeg `-list_devices` stderr parsers (audio + video)
+//!   - [`email`]         — error/test alert templates (7-lang) + throttle/dedup gate + RFC 2822/base64url assembly (PU-1)
+//!   - [`feed`]          — podcast RSS 2.0 + iTunes XML builder (PU-3)
+//!   - [`tray`]          — tray menu-model (localized items/actions) + inbound deep-link dispatch sits in [`link`] (PU-2)
 //!   - [`mjpeg`]        — MJPEG stdout reassembly (SOI/EOI frame splitter + JPEG dims)
 //!   - [`preroll`]      — pre-roll rolling-capture / harvest-trim decision mat (Fase 3.2)
 //!   - [`progress`]     — ffmpeg `size=`-progress parsing + one-shot startup resolution
@@ -37,7 +40,9 @@ pub mod cloud;
 pub mod device_enum;
 pub mod device_match;
 pub mod diagnostics;
+pub mod email;
 pub mod errors;
+pub mod feed;
 pub mod ffmpeg;
 pub mod filename;
 pub mod link;
@@ -51,5 +56,6 @@ pub mod schedule;
 pub mod settings;
 pub mod silence;
 pub mod timeouts;
+pub mod tray;
 pub mod two_process;
 pub mod wake;
