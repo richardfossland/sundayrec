@@ -21,7 +21,8 @@
     "recording": "Recording now",
     "ok": "READY TO RECORD",
     "warn": "ACTION NEEDED",
-    "noSchedule": "No recording scheduled"
+    "noSchedule": "No recording scheduled",
+    "recordingError": "Recording error"
   },
   "home": {
     "greeting": "Good day",

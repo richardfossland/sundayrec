@@ -21,7 +21,8 @@
     "recording": "Tar opp nå",
     "ok": "KLAR FOR OPPTAK",
     "warn": "KREVER HANDLING",
-    "noSchedule": "Ingen opptak planlagt"
+    "noSchedule": "Ingen opptak planlagt",
+    "recordingError": "Opptaksfeil"
   },
   "home": {
     "greeting": "God dag",
