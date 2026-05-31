@@ -84,8 +84,7 @@ pub fn build_menu<R: Runtime>(
                 action,
                 enabled,
             } => {
-                let mi =
-                    MenuItem::with_id(app, action_id(action), &label, enabled, None::<&str>)?;
+                let mi = MenuItem::with_id(app, action_id(action), &label, enabled, None::<&str>)?;
                 menu.append(&mi)?;
             }
         }

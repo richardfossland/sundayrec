@@ -136,7 +136,18 @@ async fn dispatch(
             user,
             pass,
             from,
-        } => send_via_smtp(host, *port, user.as_deref(), pass, from, recipient, rendered).await,
+        } => {
+            send_via_smtp(
+                host,
+                *port,
+                user.as_deref(),
+                pass,
+                from,
+                recipient,
+                rendered,
+            )
+            .await
+        }
     }
 }
 
