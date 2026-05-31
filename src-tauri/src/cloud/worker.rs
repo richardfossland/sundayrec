@@ -37,7 +37,10 @@ pub(crate) enum TokenOutcome {
 }
 
 /// Exchange the stored refresh token for a fresh access token.
-pub(crate) async fn access_token(service: CloudService, config: &GoogleOAuthConfig) -> TokenOutcome {
+pub(crate) async fn access_token(
+    service: CloudService,
+    config: &GoogleOAuthConfig,
+) -> TokenOutcome {
     let refresh = match crate::secrets::get(secret_provider_for(service)) {
         Some(r) if !r.trim().is_empty() => r,
         _ => return TokenOutcome::NeedsReauth,
