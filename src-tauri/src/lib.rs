@@ -122,6 +122,10 @@ pub fn run() {
         // renderer polls. Compiles in every build; the network/install seam is
         // gated behind the default-off `updater` feature.
         .manage(update::UpdateEngine::new())
+        // P1 editor parity: the mastering-apply engine tracks in-flight jobs so
+        // the UI can cancel a long render by id. The pure JobRegistry inside is
+        // tested in core; the real ffmpeg children are held feature-on.
+        .manage(editor::MasterEngine::new())
         .setup(|app| {
             use tauri::Manager;
 
@@ -237,6 +241,17 @@ pub fn run() {
             commands::editor::editor_segments,
             commands::editor::editor_mastering_analyze,
             commands::editor::editor_export,
+            // P1 parity: sidecar persistence, stream probe, inline guard,
+            // temp-file cleanup, and the full mastering preview/apply/cancel flow.
+            commands::editor::editor_read_sidecar,
+            commands::editor::editor_write_sidecar,
+            commands::editor::editor_delete_sidecar,
+            commands::editor::editor_probe_streams,
+            commands::editor::editor_read_file,
+            commands::editor::editor_cleanup_temp_files,
+            commands::editor::editor_master_preview,
+            commands::editor::editor_master_apply,
+            commands::editor::editor_master_cancel,
             // PU-1 email alerts (status pure; send gated by `email`).
             commands::email::email_status,
             commands::email::email_send_test,

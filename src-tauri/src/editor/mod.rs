@@ -35,9 +35,9 @@
 //! mechanical output→core handoff live here. See docs/SMOKE-TEST.md §9.
 
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use ts_rs::TS;
 
-#[cfg(feature = "editor")]
 use crate::error::AppError;
 use crate::error::AppResult;
 
@@ -139,6 +139,256 @@ pub struct EditorExportResult {
     pub output_path: String,
 }
 
+/// Which sidecar a read/write/delete targets, mirroring the Electron suffixes.
+/// Maps 1:1 to [`sundayrec_core::editor::Sidecar`].
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[ts(export, export_to = "../../src/lib/bindings/EditorSidecar.ts")]
+#[serde(rename_all = "camelCase")]
+pub enum EditorSidecar {
+    Meta,
+    CutsDraft,
+    Transcript,
+}
+
+impl From<EditorSidecar> for sundayrec_core::editor::Sidecar {
+    fn from(s: EditorSidecar) -> Self {
+        match s {
+            EditorSidecar::Meta => sundayrec_core::editor::Sidecar::Meta,
+            EditorSidecar::CutsDraft => sundayrec_core::editor::Sidecar::CutsDraft,
+            EditorSidecar::Transcript => sundayrec_core::editor::Sidecar::Transcript,
+        }
+    }
+}
+
+/// The result of probing a recording's streams for the editor — has_video /
+/// has_audio so the renderer can choose the audio-only vs video editor layout.
+/// Mirrors the Electron `editor-probe-streams` `MediaStreamInfo`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "../../src/lib/bindings/EditorStreamInfo.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct EditorStreamInfo {
+    pub has_video: bool,
+    pub has_audio: bool,
+}
+
+/// The `editor-read-file` outcome: either the file is small enough to read its
+/// bytes inline, or it is over the 400 MB limit and the renderer must stream it
+/// via the peaks-extract path. Mirrors the `{ tooLarge, size }` shape.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "../../src/lib/bindings/EditorFileRead.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct EditorFileRead {
+    /// Over the inline limit — the renderer should stream instead.
+    pub too_large: bool,
+    /// The file's size in bytes (always reported).
+    pub size: u64,
+    /// The bytes, present only when within the inline limit.
+    pub bytes: Option<Vec<u8>>,
+}
+
+// ── Sidecar fs seam (P1 parity) — pure decisions in core, fs here ────────────────
+//
+// These compile in BOTH feature states (no ffmpeg) — the per-recording JSON
+// sidecars are the editor's reopen-ability and must always work. The *path*
+// (incl. the `..`-escape guard) is the tested core; this layer is the read /
+// write / delete. INFRA-UNVERIFIED only in that the real on-disk round-trip
+// is exercised by the smoke test, not the gate (the gate uses a tempdir test).
+
+/// Split a media path into `(dir, stem)` for the core's [`sidecar_path`], using
+/// the host path APIs. Returns `None` if the path has no usable parent/stem.
+fn split_dir_stem(media_path: &str) -> Option<(String, String)> {
+    let p = Path::new(media_path);
+    let dir = p.parent()?.to_string_lossy().into_owned();
+    let stem = p.file_stem()?.to_string_lossy().into_owned();
+    Some((dir, stem))
+}
+
+/// Resolve the on-disk sidecar path for a media file + sidecar kind, applying
+/// the core's escape guard. `None` when the path is unusable / would escape.
+fn resolve_sidecar(media_path: &str, sidecar: EditorSidecar) -> Option<String> {
+    let (dir, stem) = split_dir_stem(media_path)?;
+    sundayrec_core::editor::sidecar_path(&dir, &stem, sidecar.into())
+}
+
+/// Read a sidecar's JSON, mirroring `editor-read-meta`/`-cuts-draft`/`-transcript`:
+/// parse the file as arbitrary JSON, returning `None` when it is missing or
+/// unparseable (the editor treats "no sidecar" and "corrupt sidecar" the same —
+/// start fresh). The returned value is the raw `serde_json::Value` the renderer
+/// shapes per sidecar.
+pub fn read_sidecar(media_path: &str, sidecar: EditorSidecar) -> AppResult<Option<serde_json::Value>> {
+    let Some(path) = resolve_sidecar(media_path, sidecar) else {
+        return Ok(None);
+    };
+    match std::fs::read_to_string(&path) {
+        Ok(raw) => Ok(serde_json::from_str(&raw).ok()),
+        Err(_) => Ok(None),
+    }
+}
+
+/// Write a sidecar's JSON (pretty, 2-space — matches the Electron
+/// `JSON.stringify(_, null, 2)`). Returns whether the write succeeded; a bad
+/// path (escape guard) or an fs error is a clean `false`, never a throw, so the
+/// autosave can fail silently exactly as the Electron handlers did.
+pub fn write_sidecar(media_path: &str, sidecar: EditorSidecar, value: &serde_json::Value) -> bool {
+    let Some(path) = resolve_sidecar(media_path, sidecar) else {
+        return false;
+    };
+    match serde_json::to_string_pretty(value) {
+        Ok(json) => std::fs::write(&path, json).is_ok(),
+        Err(_) => false,
+    }
+}
+
+/// Delete a sidecar, mirroring `editor-delete-cuts-draft`/`-transcript`. A
+/// missing file or a bad path is a clean `false`.
+pub fn delete_sidecar(media_path: &str, sidecar: EditorSidecar) -> bool {
+    match resolve_sidecar(media_path, sidecar) {
+        Some(path) => std::fs::remove_file(&path).is_ok(),
+        None => false,
+    }
+}
+
+/// Stat a media file and decide inline-vs-stream, mirroring `editor-read-file`.
+/// Reads the bytes only when within the 400 MB limit. A missing file surfaces
+/// as an error (the renderer should not have asked for an absent recording).
+pub fn read_file_guarded(media_path: &str) -> AppResult<EditorFileRead> {
+    use sundayrec_core::editor::{inline_decision, InlineDecision};
+    let meta = std::fs::metadata(media_path)
+        .map_err(|e| AppError::Validation(format!("file_not_found: {e}")))?;
+    let size = meta.len();
+    match inline_decision(size) {
+        InlineDecision::TooLarge => Ok(EditorFileRead {
+            too_large: true,
+            size,
+            bytes: None,
+        }),
+        InlineDecision::Inline => {
+            let bytes = std::fs::read(media_path)
+                .map_err(|e| AppError::Validation(format!("read_failed: {e}")))?;
+            Ok(EditorFileRead {
+                too_large: false,
+                size,
+                bytes: Some(bytes),
+            })
+        }
+    }
+}
+
+/// Sweep `folders` for crashed-edit `.__editor_tmp`/`.__editor_bak` leftovers,
+/// returning how many were deleted. Mirrors `cleanupEditorTempFiles`: the core
+/// de-dups + the predicate decides what to unlink; this layer does the readdir/
+/// unlink (best-effort, never throws). Non-existent dirs are skipped.
+pub fn cleanup_temp_files(folders: &[String]) -> usize {
+    use sundayrec_core::editor::{dedupe_cleanup_dirs, is_editor_temp_name};
+    let dirs = dedupe_cleanup_dirs(folders, |s| {
+        std::fs::canonicalize(s)
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_else(|_| s.to_string())
+    });
+    let mut removed = 0usize;
+    for dir in dirs {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if is_editor_temp_name(&name) && std::fs::remove_file(entry.path()).is_ok() {
+                removed += 1;
+            }
+        }
+    }
+    removed
+}
+
+// ── Mastering preview / apply DTOs + engine (P1 parity) ──────────────────────────
+
+/// A windowed mastering-preview request — render `[startSec, startSec+durationSec]`
+/// of `inputPath` through the preset's single-pass chain to a temp mp3 the
+/// renderer can `<audio>`-play A/B against the original. Mirrors `master-preview`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "../../src/lib/bindings/EditorMasterPreviewRequest.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct EditorMasterPreviewRequest {
+    pub input_path: String,
+    pub preset_id: String,
+    pub start_sec: f64,
+    pub duration_sec: f64,
+}
+
+/// Where the rendered preview mp3 landed (a temp file the renderer plays).
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "../../src/lib/bindings/EditorMasterPreviewResult.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct EditorMasterPreviewResult {
+    pub preview_path: String,
+}
+
+/// A full two-pass mastering *apply* request — measure (pass 1, here re-measured
+/// from the preset) then apply (pass 2) `inputPath` to `outputPath`, tracked by
+/// `jobId` so the UI can [`master_cancel`] it. Mirrors `master-apply`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "../../src/lib/bindings/EditorMasterApplyRequest.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct EditorMasterApplyRequest {
+    pub input_path: String,
+    pub output_path: String,
+    pub preset_id: String,
+    /// Client-supplied job id for cancellation; the apply is rejected if it is
+    /// already in flight (duplicate-id guard, via the core JobRegistry).
+    pub job_id: String,
+    /// Output bitrate (kbps) for lossy formats; `None` uses the codec default.
+    pub bitrate: Option<u32>,
+}
+
+/// Where the mastered file landed.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "../../src/lib/bindings/EditorMasterApplyResult.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct EditorMasterApplyResult {
+    pub output_path: String,
+}
+
+/// A mastering-apply progress tick, emitted on the `editor-master-progress`
+/// event. Mirrors the Electron `master-progress` `{ currentSec, totalSec }`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "../../src/lib/bindings/EditorMasterProgress.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct EditorMasterProgress {
+    pub job_id: String,
+    pub current_sec: f64,
+    pub total_sec: f64,
+}
+
+/// The mastering-apply engine: the pure [`JobRegistry`](sundayrec_core::mastering::JobRegistry)
+/// bookkeeping (which ids are legitimately live) plus the real abort handles the
+/// seam kills on cancel. At most a handful of jobs run; the registry answers the
+/// same booleans the Electron `Map.has/.delete` did. The `children` field is only
+/// used feature-on (the ffmpeg handles) but the struct compiles either way — the
+/// same idiom as `StreamEngine`.
+pub struct MasterEngine {
+    /// Pure legitimacy bookkeeping — register/cancel/complete.
+    registry: std::sync::Mutex<sundayrec_core::mastering::JobRegistry>,
+    /// Real in-flight ffmpeg children keyed by job id (feature-on only).
+    #[cfg_attr(not(feature = "editor"), allow(dead_code))]
+    children: std::sync::Mutex<std::collections::HashMap<String, tokio::process::Child>>,
+}
+
+impl Default for MasterEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MasterEngine {
+    /// A fresh engine with no jobs in flight.
+    pub fn new() -> Self {
+        Self {
+            registry: std::sync::Mutex::new(sundayrec_core::mastering::JobRegistry::new()),
+            children: std::sync::Mutex::new(std::collections::HashMap::new()),
+        }
+    }
+}
+
 // ── Public entry points ─────────────────────────────────────────────────────────
 //
 // Each compiles in both feature states. OFF → a clear `feature_disabled` error.
@@ -149,6 +399,58 @@ fn disabled<T>(verb: &str) -> AppResult<T> {
     Err(crate::error::AppError::Validation(format!(
         "feature_disabled: editor.{verb} requires a build with `--features editor`"
     )))
+}
+
+/// Probe just has_video/has_audio for the editor's audio-vs-video layout choice.
+#[cfg(not(feature = "editor"))]
+pub async fn probe_streams(_input_path: &str) -> AppResult<EditorStreamInfo> {
+    disabled("probeStreams")
+}
+
+/// Render a windowed single-pass mastering preview to a temp mp3.
+#[cfg(not(feature = "editor"))]
+pub async fn master_preview(
+    _req: &EditorMasterPreviewRequest,
+) -> AppResult<EditorMasterPreviewResult> {
+    disabled("masterPreview")
+}
+
+/// Run the full two-pass mastering apply, tracked by job id.
+#[cfg(not(feature = "editor"))]
+pub async fn master_apply<F>(
+    _engine: &MasterEngine,
+    _req: &EditorMasterApplyRequest,
+    _on_progress: F,
+) -> AppResult<EditorMasterApplyResult>
+where
+    F: Fn(f64, f64),
+{
+    disabled("masterApply")
+}
+
+/// Abort an in-flight mastering apply by job id. Returns whether it was live.
+/// Compiles in both states — the registry bookkeeping is pure, so even the
+/// default build answers "nothing to cancel" rather than erroring.
+pub async fn master_cancel(engine: &MasterEngine, job_id: &str) -> AppResult<bool> {
+    // Drop the legitimacy record first (returns whether it was live).
+    let was_live = engine
+        .registry
+        .lock()
+        .expect("master registry mutex")
+        .cancel(job_id);
+    // Then kill the real child if we are holding one (feature-on).
+    #[cfg(feature = "editor")]
+    {
+        let child = engine
+            .children
+            .lock()
+            .expect("master children mutex")
+            .remove(job_id);
+        if let Some(mut c) = child {
+            let _ = c.kill().await;
+        }
+    }
+    Ok(was_live)
 }
 
 /// Probe a recording's duration/streams for the editor's first paint.
@@ -304,6 +606,208 @@ pub async fn mastering_analyze(input_path: &str, preset_id: &str) -> AppResult<E
         input_lra: m.input_lra,
         input_tp: m.input_tp,
         target_lufs: preset.target_lufs,
+    })
+}
+
+/// Probe just has_video/has_audio — reuses the full load probe and projects the
+/// two booleans the editor's layout choice needs. HARDWARE-UNVERIFIED.
+#[cfg(feature = "editor")]
+pub async fn probe_streams(input_path: &str) -> AppResult<EditorStreamInfo> {
+    let info = load_recording(input_path).await?;
+    Ok(EditorStreamInfo {
+        has_video: info.has_video,
+        has_audio: info.has_audio,
+    })
+}
+
+/// Render a windowed single-pass mastering preview to a temp mp3, with the
+/// core's argv (`-ss`/`-t` before `-i`) + clamped start/duration. The renderer
+/// A/B-plays the result against the original. HARDWARE-UNVERIFIED.
+#[cfg(feature = "editor")]
+pub async fn master_preview(
+    req: &EditorMasterPreviewRequest,
+) -> AppResult<EditorMasterPreviewResult> {
+    use sundayrec_core::mastering::{
+        clamp_preview_duration, clamp_preview_start, get_preset_by_id, preview_args,
+        PREVIEW_TEMP_PREFIX,
+    };
+
+    if !std::path::Path::new(&req.input_path).exists() {
+        return Err(AppError::Validation("file_not_found".into()));
+    }
+    let preset = get_preset_by_id(&req.preset_id)
+        .ok_or_else(|| AppError::Validation(format!("unknown_preset: {}", req.preset_id)))?;
+    let start = clamp_preview_start(req.start_sec);
+    let dur = clamp_preview_duration(req.duration_sec);
+    let out_path = std::env::temp_dir().join(format!(
+        "{PREVIEW_TEMP_PREFIX}{}.mp3",
+        uuid::Uuid::now_v7().simple()
+    ));
+    let out_str = out_path.to_string_lossy().into_owned();
+    let args = preview_args(&req.input_path, &preset, start, dur, &out_str);
+    run_ffmpeg(&args).await?;
+    if !out_path.exists() {
+        return Err(AppError::Recording("master preview produced no file".into()));
+    }
+    Ok(EditorMasterPreviewResult {
+        preview_path: out_str,
+    })
+}
+
+/// Run the full two-pass mastering apply: measure (pass 1) then apply (pass 2)
+/// with the measured values, tracked by job id so the UI can cancel mid-render.
+/// The preset chain / loudnorm filters / codec args are the core's tested
+/// decisions; the seam spawns ffmpeg, streams `-progress`, and parses the
+/// current-second with the core. HARDWARE-UNVERIFIED.
+#[cfg(feature = "editor")]
+pub async fn master_apply<F>(
+    engine: &MasterEngine,
+    req: &EditorMasterApplyRequest,
+    on_progress: F,
+) -> AppResult<EditorMasterApplyResult>
+where
+    F: Fn(f64, f64),
+{
+    use sundayrec_core::mastering::get_preset_by_id;
+
+    if !std::path::Path::new(&req.input_path).exists() {
+        return Err(AppError::Validation("file_not_found".into()));
+    }
+    if req.output_path.is_empty() {
+        return Err(AppError::Validation("invalid_output_path".into()));
+    }
+    let preset = get_preset_by_id(&req.preset_id)
+        .ok_or_else(|| AppError::Validation(format!("unknown_preset: {}", req.preset_id)))?;
+
+    // Reject a duplicate job id before doing any work (mirrors the Map guard).
+    if !engine
+        .registry
+        .lock()
+        .expect("master registry mutex")
+        .register(&req.job_id)
+    {
+        return Err(AppError::Validation("job_already_running".into()));
+    }
+
+    // Wrap the work so the registry record + child handle are always dropped.
+    let result = master_apply_inner(engine, req, &preset, &on_progress).await;
+    engine
+        .registry
+        .lock()
+        .expect("master registry mutex")
+        .complete(&req.job_id);
+    engine
+        .children
+        .lock()
+        .expect("master children mutex")
+        .remove(&req.job_id);
+    result
+}
+
+/// The measure→apply work for [`master_apply`], split out so the registry record
+/// is dropped on every exit. HARDWARE-UNVERIFIED.
+#[cfg(feature = "editor")]
+async fn master_apply_inner<F>(
+    engine: &MasterEngine,
+    req: &EditorMasterApplyRequest,
+    preset: &sundayrec_core::mastering::MasterPreset,
+    on_progress: &F,
+) -> AppResult<EditorMasterApplyResult>
+where
+    F: Fn(f64, f64),
+{
+    use sundayrec_core::mastering::{build_apply_pass_filters, master_codec_args, parse_progress_time};
+    use tokio::io::AsyncReadExt;
+
+    // 1. Measure (pass 1) for the linear-mode apply chain.
+    let measured = measure_loudness(&req.input_path, preset).await?;
+    let filters = build_apply_pass_filters(preset, &measured);
+
+    // 2. Apply (pass 2): the preset+measured loudnorm, codec from the output ext.
+    let ext = std::path::Path::new(&req.output_path)
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_else(|| "mp3".into());
+    let mut args: Vec<String> = vec![
+        "-nostdin".into(),
+        "-hide_banner".into(),
+        "-i".into(),
+        req.input_path.clone(),
+        "-af".into(),
+        filters,
+    ];
+    args.extend(master_codec_args(&ext, req.bitrate));
+    args.extend([
+        "-progress".into(),
+        "pipe:1".into(),
+        "-y".into(),
+        req.output_path.clone(),
+    ]);
+
+    // Spawn with stdout piped for -progress; store the child for cancellation.
+    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let mut child = tokio::process::Command::new(crate::media::ffmpeg::ffmpeg_path())
+        .args(&arg_refs)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| AppError::Recording(format!("mastering spawn: {e}")))?;
+
+    let mut stdout = child.stdout.take();
+    // Register the live child so master_cancel can kill it.
+    engine
+        .children
+        .lock()
+        .expect("master children mutex")
+        .insert(req.job_id.clone(), child);
+
+    // Stream -progress; total duration is unknown without a probe, so we report
+    // current with total 0 (the renderer shows an indeterminate bar) — matches
+    // the Electron behaviour when the Duration line hasn't been parsed yet.
+    if let Some(mut out) = stdout.take() {
+        let mut buf = String::new();
+        let mut chunk = [0u8; 4096];
+        loop {
+            match out.read(&mut chunk).await {
+                Ok(0) => break,
+                Ok(n) => {
+                    buf.push_str(&String::from_utf8_lossy(&chunk[..n]));
+                    if let Some(cur) = parse_progress_time(&buf) {
+                        on_progress(cur, 0.0);
+                    }
+                    // keep the tail so a split line still parses next read
+                    if buf.len() > 4096 {
+                        buf = buf[buf.len() - 4096..].to_string();
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    }
+
+    // Reclaim the child to await its exit (it may already be gone if cancelled).
+    let child = engine
+        .children
+        .lock()
+        .expect("master children mutex")
+        .remove(&req.job_id);
+    let status = match child {
+        Some(mut c) => c
+            .wait()
+            .await
+            .map_err(|e| AppError::Recording(format!("mastering wait: {e}")))?,
+        None => return Err(AppError::Recording("cancelled".into())),
+    };
+    if !status.success() {
+        return Err(AppError::Recording("apply_failed (ffmpeg non-zero)".into()));
+    }
+    if !std::path::Path::new(&req.output_path).exists() {
+        return Err(AppError::Recording("mastering produced no output".into()));
+    }
+    Ok(EditorMasterApplyResult {
+        output_path: req.output_path.clone(),
     })
 }
 
@@ -500,13 +1004,15 @@ fn read_wav_s16_f32(path: &std::path::Path) -> AppResult<Vec<f32>> {
     Err(AppError::Recording("peaks WAV has no data chunk".into()))
 }
 
-#[cfg(all(test, not(feature = "editor")))]
+#[cfg(test)]
 mod tests {
     use super::*;
 
-    // The DTOs compile in both feature states; the feature-off entry points are
-    // the unit-testable behaviour here (the feature-on paths are
-    // HARDWARE-UNVERIFIED — proven only in the smoke test).
+    // The DTOs + the sidecar/inline/cleanup fs seam compile in both feature
+    // states and ARE exercised in the gate (real tempdir round-trips). The
+    // ffmpeg-driven entry points are HARDWARE-UNVERIFIED — feature-off they
+    // return `feature_disabled` (tested here), feature-on they are proven only
+    // in the smoke test.
 
     #[cfg(not(feature = "editor"))]
     #[tokio::test]
@@ -549,5 +1055,132 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("feature_disabled"));
+    }
+
+    #[cfg(not(feature = "editor"))]
+    #[tokio::test]
+    async fn probe_preview_apply_disabled_without_feature() {
+        assert!(probe_streams("/x.mp4")
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("feature_disabled"));
+        let prev = EditorMasterPreviewRequest {
+            input_path: "/x.mp4".into(),
+            preset_id: "speech-clear".into(),
+            start_sec: 0.0,
+            duration_sec: 15.0,
+        };
+        assert!(master_preview(&prev)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("feature_disabled"));
+        let engine = MasterEngine::new();
+        let apply = EditorMasterApplyRequest {
+            input_path: "/x.mp4".into(),
+            output_path: "/tmp/out.mp3".into(),
+            preset_id: "speech-clear".into(),
+            job_id: "j1".into(),
+            bitrate: None,
+        };
+        assert!(master_apply(&engine, &apply, |_, _| {})
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("feature_disabled"));
+    }
+
+    // ── sidecar fs round-trip (gated to neither feature — pure fs) ────────────────
+
+    fn tmp_media() -> (tempfile::TempDir, String) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let media = dir.path().join("service.mp3");
+        std::fs::write(&media, b"not really audio").expect("write media");
+        let p = media.to_string_lossy().into_owned();
+        (dir, p)
+    }
+
+    #[test]
+    fn sidecar_write_read_delete_round_trip() {
+        let (_dir, media) = tmp_media();
+        // Nothing there yet → read is None.
+        assert!(read_sidecar(&media, EditorSidecar::Meta).unwrap().is_none());
+        // Write then read back the same JSON.
+        let value = serde_json::json!({ "title": "Søndag", "chapters": [] });
+        assert!(write_sidecar(&media, EditorSidecar::Meta, &value));
+        let back = read_sidecar(&media, EditorSidecar::Meta).unwrap().unwrap();
+        assert_eq!(back, value);
+        // The sidecar sits next to the media with the dropped-extension stem.
+        let expected = std::path::Path::new(&media)
+            .parent()
+            .unwrap()
+            .join("service.meta.json");
+        assert!(expected.exists());
+        // Delete removes it; a second delete is a clean false.
+        assert!(delete_sidecar(&media, EditorSidecar::Meta));
+        assert!(!delete_sidecar(&media, EditorSidecar::Meta));
+        assert!(read_sidecar(&media, EditorSidecar::Meta).unwrap().is_none());
+    }
+
+    #[test]
+    fn cuts_draft_and_transcript_use_distinct_files() {
+        let (_dir, media) = tmp_media();
+        let cuts = serde_json::json!({ "cuts": [{ "start": 1.0, "end": 2.0 }], "ts": 5 });
+        let transcript = serde_json::json!({ "segments": [] });
+        assert!(write_sidecar(&media, EditorSidecar::CutsDraft, &cuts));
+        assert!(write_sidecar(&media, EditorSidecar::Transcript, &transcript));
+        assert_eq!(
+            read_sidecar(&media, EditorSidecar::CutsDraft)
+                .unwrap()
+                .unwrap(),
+            cuts
+        );
+        assert_eq!(
+            read_sidecar(&media, EditorSidecar::Transcript)
+                .unwrap()
+                .unwrap(),
+            transcript
+        );
+    }
+
+    #[test]
+    fn read_file_guarded_returns_bytes_for_small_file() {
+        let (_dir, media) = tmp_media();
+        let r = read_file_guarded(&media).unwrap();
+        assert!(!r.too_large);
+        assert_eq!(r.size, b"not really audio".len() as u64);
+        assert_eq!(r.bytes.unwrap(), b"not really audio");
+    }
+
+    #[test]
+    fn read_file_guarded_errors_on_missing() {
+        let err = read_file_guarded("/no/such/file.mp3").unwrap_err();
+        assert!(err.to_string().contains("file_not_found"));
+    }
+
+    #[test]
+    fn cleanup_temp_files_removes_only_editor_leftovers() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let d = dir.path();
+        std::fs::write(d.join("service.mp3"), b"keep").unwrap();
+        std::fs::write(d.join("service.mp3.__editor_tmp"), b"x").unwrap();
+        std::fs::write(d.join("service.mp3.__editor_bak"), b"x").unwrap();
+        std::fs::write(d.join("clip.__editor_tmp.mp4"), b"x").unwrap();
+        let removed = cleanup_temp_files(&[d.to_string_lossy().into_owned()]);
+        assert_eq!(removed, 3);
+        assert!(d.join("service.mp3").exists());
+        assert!(!d.join("service.mp3.__editor_tmp").exists());
+        assert!(!d.join("clip.__editor_tmp.mp4").exists());
+    }
+
+    #[test]
+    fn master_cancel_unknown_job_is_false() {
+        let engine = MasterEngine::new();
+        let was = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(master_cancel(&engine, "never-started"))
+            .unwrap();
+        assert!(!was);
     }
 }
