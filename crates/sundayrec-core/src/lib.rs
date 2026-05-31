@@ -58,6 +58,7 @@ pub mod errors;
 pub mod feed;
 pub mod ffmpeg;
 pub mod filename;
+pub mod history;
 pub mod integrations;
 pub mod link;
 pub mod mastering;

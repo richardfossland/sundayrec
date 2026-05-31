@@ -215,6 +215,7 @@ pub fn run() {
             commands::db::recordings_delete,
             commands::db::recordings_clear,
             commands::db::recording_update_note,
+            commands::db::recordings_prune,
             commands::cloud::cloud_connection_status,
             commands::cloud::cloud_connect,
             commands::cloud::cloud_process_queue_now,
