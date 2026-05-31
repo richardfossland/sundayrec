@@ -7,19 +7,42 @@
 //! connect flow and the upload worker (network I/O) are a separate, deferred
 //! step — see `crate::cloud` docs.
 
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use sundayrec_core::cloud::queue::QueueEntryView;
 use sundayrec_core::cloud::{CloudConnectionStatus, CloudService};
 
-use crate::cloud;
+use crate::cloud::{self, config::GoogleOAuthConfig};
 use crate::db::Db;
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
+
+/// Resolve the Google OAuth config or a clear "not configured" error.
+fn require_config() -> AppResult<GoogleOAuthConfig> {
+    GoogleOAuthConfig::resolve().ok_or_else(|| {
+        AppError::Validation(
+            "Google OAuth is not configured (set SUNDAYREC_GOOGLE_CLIENT_ID)".into(),
+        )
+    })
+}
 
 /// Which cloud services currently hold a stored token (Drive/YouTube/Gmail).
 #[tauri::command]
 pub async fn cloud_connection_status() -> AppResult<Vec<CloudConnectionStatus>> {
     Ok(cloud::connection_statuses())
+}
+
+/// Start the OAuth loopback connect flow for a service (opens the browser).
+/// NETWORK/HARDWARE-UNVERIFIED.
+#[tauri::command]
+pub async fn cloud_connect(app: AppHandle, service: CloudService) -> AppResult<()> {
+    cloud::oauth_flow::connect(&app, service, &require_config()?).await
+}
+
+/// Manually run the next due upload now (the background worker also drains the
+/// queue on its own schedule). Returns whether it processed an entry.
+#[tauri::command]
+pub async fn cloud_process_queue_now(db: State<'_, Db>) -> AppResult<bool> {
+    cloud::worker::process_once(&db.pool, &require_config()?).await
 }
 
 /// The compact upload-queue view for the cloud-backup panel.

@@ -66,7 +66,7 @@ sqlx = { version = "0.8", default-features = false, features = [
 ] }
 # Time-ordered ids (UUID v7) for rows — sortable by creation without a separate
 # timestamp index.
-uuid = { version = "1", features = ["v7"] }
+uuid = { version = "1", features = ["v4", "v7"] }
 
 # OS-native secret storage. Replaces Electron's `safeStorage` — OAuth tokens and
 # stream keys live in the macOS Keychain / Windows Credential Manager, never in
@@ -82,6 +82,17 @@ ts-rs = { version = "11", features = ["serde-compat"] }
 # heavier `sysinfo` (which pulls a whole process/CPU/disk inventory we don't
 # need just to read free bytes on one volume).
 fs4 = "1.1"
+
+# HTTP client for the cloud upload worker + OAuth token exchange/refresh (Fase
+# 6). rustls (no system OpenSSL). The pure decisions (chunk math, retry
+# classification, token-body shaping) live in `sundayrec-core::cloud`; reqwest is
+# just the wire.
+reqwest = { version = "0.12", default-features = false, features = [
+    "rustls-tls",
+    "charset",
+    "http2",
+    "json",
+] }
 
 [dev-dependencies]
 # Throwaway temp databases for the storage tests — no app, no device.

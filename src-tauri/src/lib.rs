@@ -73,6 +73,11 @@ pub fn run() {
             let db_path = db_dir.join("sundayrec.sqlite");
             let pool = tauri::async_runtime::block_on(db::store::open_pool(&db_path))
                 .map_err(|e| format!("opening database at {}: {e}", db_path.display()))?;
+
+            // Fase 6: drain the durable cloud-upload queue in the background.
+            // Idles cleanly when Google OAuth isn't configured (no spinning).
+            cloud::worker::spawn(pool.clone(), cloud::config::GoogleOAuthConfig::resolve());
+
             app.manage(db::Db::new(pool));
 
             // The pre-roll engine (F3.2) writes its rolling temp captures under
@@ -113,6 +118,8 @@ pub fn run() {
             commands::db::recordings_clear,
             commands::db::recording_update_note,
             commands::cloud::cloud_connection_status,
+            commands::cloud::cloud_connect,
+            commands::cloud::cloud_process_queue_now,
             commands::cloud::cloud_queue_status,
             commands::cloud::cloud_enqueue_backup,
             commands::cloud::cloud_retry_upload,

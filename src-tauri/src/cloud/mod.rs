@@ -11,17 +11,16 @@
 //! affected row. The DB is the single source of truth (no in-memory cache), so a
 //! queued backup survives a restart.
 //!
-//! NOT YET BUILT (clearly-scoped next step, deferred because it can't be
-//! exercised without a network, a Google OAuth client id, and a real device):
-//! the OAuth loopback connect flow and the resumable upload worker. Both are
-//! pure-core-driven — connect calls `cloud::oauth::{build_auth_url,
-//! parse_loopback_callback, build_token_exchange_body, parse_token_response}`
-//! over a `reqwest` + loopback `TcpListener`; the worker drives
-//! `cloud::queue::{select_next, mark_uploading, on_success, on_failure}` and
-//! `cloud::drive::{chunk_plan, content_range_header, …}` over `reqwest`,
-//! persisting each transition through [`store`]. See docs/PHASE6.md.
+//! The network I/O lives in two NETWORK/HARDWARE-UNVERIFIED submodules whose
+//! every decision still comes from the unit-tested core: [`oauth_flow`] (the
+//! loopback PKCE connect flow) and [`worker`] (the resumable Drive upload loop).
+//! [`config`] resolves the (non-secret, installed-app) Google OAuth client id.
+//! See docs/PHASE6.md.
 
+pub mod config;
+pub mod oauth_flow;
 pub mod store;
+pub mod worker;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 

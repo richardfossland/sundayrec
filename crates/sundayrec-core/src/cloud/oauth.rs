@@ -107,6 +107,68 @@ pub fn encode_form(pairs: &[(&str, &str)]) -> String {
     out
 }
 
+/// Decode a callback URL's query string into `(key, value)` pairs, the input
+/// [`parse_loopback_callback`] expects. Accepts a bare query, a `path?query`, or
+/// a full URL; `+` → space and `%XX` → byte (the inverse of [`encode_form`]).
+/// Invalid `%` escapes are left intact so a stray `%` never drops a pair. Pure.
+pub fn decode_query_pairs(raw: &str) -> Vec<(String, String)> {
+    let after_q = raw.split_once('?').map(|(_, q)| q).unwrap_or(raw);
+    // Tolerate a trailing fragment or whitespace (e.g. a raw HTTP request line).
+    let query = after_q
+        .split(|c: char| c == '#' || c.is_whitespace())
+        .next()
+        .unwrap_or("");
+    query
+        .split('&')
+        .filter(|s| !s.is_empty())
+        .map(|pair| {
+            let (k, v) = pair.split_once('=').unwrap_or((pair, ""));
+            (decode_component(k), decode_component(v))
+        })
+        .collect()
+}
+
+/// Percent-decode one form component (`%XX` → byte, `+` → space).
+fn decode_component(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'+' => {
+                out.push(b' ');
+                i += 1;
+            }
+            b'%' if i + 2 < bytes.len() => {
+                match (hex_nibble(bytes[i + 1]), hex_nibble(bytes[i + 2])) {
+                    (Some(hi), Some(lo)) => {
+                        out.push(hi << 4 | lo);
+                        i += 3;
+                    }
+                    _ => {
+                        out.push(b'%');
+                        i += 1;
+                    }
+                }
+            }
+            b => {
+                out.push(b);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn hex_nibble(b: u8) -> Option<u8> {
+    match b {
+        b'0'..=b'9' => Some(b - b'0'),
+        b'a'..=b'f' => Some(b - b'a' + 10),
+        b'A'..=b'F' => Some(b - b'A' + 10),
+        _ => None,
+    }
+}
+
 /// Build the Google authorization URL for the Desktop loopback flow. Mirrors the
 /// `params` block in `openGoogleAuthWithScope` (`oauth.ts:190`): `access_type=
 /// offline` + `prompt=consent` so we always get a refresh token.
@@ -310,6 +372,21 @@ pub fn classify_refresh_error(body: &str) -> RefreshErrorKind {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn decode_query_pairs_handles_url_query_and_request_line() {
+        // Full redirect URL with encoded values + a "+"-as-space.
+        let pairs =
+            decode_query_pairs("http://127.0.0.1:5712/?code=4%2Fabc&state=xyz&scope=a+b#frag");
+        assert_eq!(pairs[0], ("code".to_string(), "4/abc".to_string()));
+        assert_eq!(pairs[1], ("state".to_string(), "xyz".to_string()));
+        assert_eq!(pairs[2], ("scope".to_string(), "a b".to_string()));
+        // Bare query works too, and round-trips with encode_form for safe input.
+        let bare = decode_query_pairs("error=access_denied&error_description=No+thanks");
+        assert_eq!(bare[1].1, "No thanks");
+        // A stray percent is preserved, not dropped.
+        assert_eq!(decode_query_pairs("code=a%zz")[0].1, "a%zz");
+    }
 
     // RFC 7636 Appendix B test vector — the canonical PKCE example.
     #[test]

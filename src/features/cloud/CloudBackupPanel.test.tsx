@@ -136,6 +136,19 @@ describe("CloudBackupPanel", () => {
     confirmSpy.mockRestore();
   });
 
+  it("connects a disconnected service over IPC", async () => {
+    renderPanel();
+    await screen.findByText("YouTube");
+    // YouTube + Gmail are disconnected → two "Koble til" buttons.
+    const connectButtons = screen.getAllByText("Koble til");
+    fireEvent.click(connectButtons[0]!);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("cloud_connect", {
+        service: "youtube",
+      }),
+    );
+  });
+
   it("shows the empty state with no queued uploads", async () => {
     routeInvoke(CONNECTIONS, []);
     renderPanel();

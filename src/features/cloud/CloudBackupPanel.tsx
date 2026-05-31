@@ -53,6 +53,13 @@ export function CloudBackupPanel() {
     void queryClient.invalidateQueries({ queryKey: CLOUD_QUEUE_KEY });
   }, [queryClient]);
 
+  const connectMutation = useMutation({
+    // Opens the system browser for the OAuth loopback flow (resolves once the
+    // refresh token is stored). NETWORK/HARDWARE-UNVERIFIED.
+    mutationFn: (service: CloudService) =>
+      invoke<void>("cloud_connect", { service }),
+    onSuccess: invalidate,
+  });
   const disconnectMutation = useMutation({
     mutationFn: (service: CloudService) =>
       invoke<void>("cloud_disconnect", { service }),
@@ -155,12 +162,9 @@ export function CloudBackupPanel() {
                 ) : (
                   <button
                     type="button"
-                    disabled
-                    title={t(
-                      "cloud.connectComingSoon",
-                      "Tilkobling kommer snart",
-                    )}
-                    className="cursor-not-allowed rounded border border-zinc-800 px-2 py-1 text-xs opacity-50"
+                    disabled={connectMutation.isPending}
+                    className="rounded border border-zinc-700 px-2 py-1 text-xs hover:bg-zinc-800 disabled:opacity-50"
+                    onClick={() => connectMutation.mutate(s.service)}
                   >
                     {t("cloud.connect", "Koble til")}
                   </button>

@@ -30,30 +30,34 @@ Verified: `cargo test` (queue store + manager) + `vitest` (panel) green; clippy 
 fmt + tsc + eslint clean. The DB is the single source of truth, so a queued
 backup survives a restart.
 
-## Not yet built (clearly-scoped next step)
+## F6.3 — network layer (wired; NETWORK/HARDWARE-UNVERIFIED)
 
-Deferred because it cannot be exercised without a network, a Google OAuth client
-id, and a real device — keeping unverifiable I/O glue out of the tree until it
-can be run. Both pieces are thin, because the decisions already live in the
-tested core:
+Built and compiling, every decision delegated to the tested core. Verified only
+to the seam — the actual wire behaviour needs a real device + Google account +
+a configured client id, so these run but are unverified end-to-end.
 
-1. **OAuth connect flow** — a `cloud_connect(service)` command that:
-   opens a loopback `TcpListener`, builds the consent URL via
-   `cloud::oauth::build_auth_url` (with a random PKCE verifier +
-   `cloud::oauth::pkce_challenge`), opens the system browser, validates the
-   redirect via `cloud::oauth::parse_loopback_callback` + the `StateReplayGuard`,
-   exchanges the code (`build_token_exchange_body` → `reqwest` →
-   `parse_token_response`), and stores the refresh token via
-   `crate::secrets::set`.
+- `cloud/config.rs` — `GoogleOAuthConfig::resolve()` from env / build-time
+  `option_env!` (`SUNDAYREC_GOOGLE_CLIENT_ID` / `_SECRET`; installed-app secrets
+  aren't confidential). `normalize` unit-tested.
+- `cloud/oauth_flow.rs` — `cloud_connect(service)` command: loopback
+  `TcpListener`, `build_auth_url` (random PKCE verifier + `pkce_challenge`),
+  browser via `tauri-plugin-opener`, redirect validated by `decode_query_pairs`
+  - `parse_loopback_callback` + `StateReplayGuard`, code exchanged over `reqwest`
+    → `parse_token_response`, refresh token stored via `secrets::set`.
+- `cloud/worker.rs` — `process_once` + a `spawn`ed background loop that drains
+  the queue: `select_next` → `mark_uploading` → token refresh
+  (`build_refresh_body` + `classify_refresh_error`, `invalid_grant` →
+  `reauth-required`) → resumable Drive upload (`chunk_plan` /
+  `content_range_header` / `chunk_status_outcome` / `parse_resume_offset` over
+  `reqwest` + `tokio::fs`) → `on_success`/`on_failure`, persisting each
+  transition; re-schedules off `next_wakeup_delay_ms`, idles when unconfigured.
+- Wired: `reqwest` (rustls) added; `cloud_connect` + `cloud_process_queue_now`
+  commands registered; worker spawned in `lib.rs` setup.
 
-2. **Upload worker** — a background task that drives
-   `cloud::queue::{select_next, mark_uploading, on_success, on_failure}` and
-   `cloud::drive::{chunk_plan, content_range_header, parse_resume_offset,
-chunk_status_outcome}` over `reqwest` resumable uploads, refreshing the access
-   token (`build_refresh_body` + `classify_refresh_error`) as needed, persisting
-   each transition through `cloud::store`, and scheduling its next wake with
-   `cloud::queue::next_wakeup_delay_ms`.
+### Smoke-test on a real rig (Richard)
 
-Both require `reqwest` (add to `src-tauri/Cargo.toml`) and a configured Google
-OAuth client id. When wired, they will be HARDWARE/NETWORK-UNVERIFIED until run
-on a real device with a real Google account.
+1. Set `SUNDAYREC_GOOGLE_CLIENT_ID` (+ `_SECRET`) to a Desktop OAuth client.
+2. `npm run tauri dev`, open Sky-backup → Koble til → consent in browser →
+   expect the service to show **Tilkoblet**.
+3. Record something, confirm it enqueues, and watch the worker upload it to
+   Drive (or use the manual `cloud_process_queue_now`).
