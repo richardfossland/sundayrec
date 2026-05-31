@@ -613,6 +613,32 @@ mod tests {
     }
 
     #[test]
+    fn wake_points_empty_input_and_stable_dedup_key() {
+        let now = dtm("2026-06-07 09:00");
+        // No upcoming recordings → no wake points, and an empty, stable key (the
+        // WakeEngine treats an unchanged empty schedule as a cheap no-op).
+        assert!(wake_points(&[], now, WAKE_LEAD_MINUTES).is_empty());
+        assert_eq!(key_of(&[]), "");
+
+        // The same upcoming set yields the same points and therefore the same
+        // dedup key on a repeated reschedule — the engine's no-op contract.
+        let up = vec![dtm("2026-06-07 11:00"), dtm("2026-06-14 11:00")];
+        let wp1 = wake_points(&up, now, WAKE_LEAD_MINUTES);
+        let wp2 = wake_points(&up, now, WAKE_LEAD_MINUTES);
+        assert_eq!(key_of(&wp1), key_of(&wp2));
+        assert!(!wp1.is_empty());
+    }
+
+    #[test]
+    fn wake_points_drops_a_point_landing_exactly_on_now() {
+        // A point whose lead-adjusted time equals `now` is dropped (strict `>`),
+        // so we never schedule a wake for a moment already upon us.
+        let now = dtm("2026-06-07 10:50");
+        let up = vec![dtm("2026-06-07 11:00")]; // − 10min lead = 10:50 == now
+        assert!(wake_points(&up, now, WAKE_LEAD_MINUTES).is_empty());
+    }
+
+    #[test]
     fn pmset_and_win_date_formats() {
         let d = dt("2026-05-31 10:30:00");
         assert_eq!(format_pmset_date(d), "05/31/26 10:30:00");

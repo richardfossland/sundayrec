@@ -925,6 +925,90 @@ mod tests {
     }
 
     #[test]
+    fn next_recording_picks_slot_when_it_beats_a_later_special() {
+        // The mirror of next_recording_picks_nearest: a slot sooner than a
+        // special wins (cross-source nearest, the other direction).
+        let slots = vec![sunday_slot()]; // Sun 11:00
+        let specials = vec![SpecialRecording {
+            id: None,
+            date: "2026-06-20".to_string(), // far-off Saturday
+            name: "Konsert".to_string(),
+            start: "19:00".to_string(),
+            stop: "21:00".to_string(),
+            device_id: None,
+        }];
+        // now = Saturday 2026-06-06 09:00 → tomorrow's Sunday slot is nearest.
+        assert_eq!(
+            next_recording(&slots, &specials, dt("2026-06-06 09:00")),
+            Some(dt("2026-06-07 11:00"))
+        );
+    }
+
+    #[test]
+    fn next_recording_is_none_when_nothing_future_or_all_degenerate() {
+        // No slots, no specials → nothing to fire.
+        assert!(next_recording(&[], &[], dt("2026-06-07 09:00")).is_none());
+        // A degenerate slot is skipped, leaving nothing.
+        let deg = vec![ScheduleSlot {
+            days: vec![6],
+            start: "11:00".to_string(),
+            stop: "11:00".to_string(),
+            max: None,
+        }];
+        assert!(next_recording(&deg, &[], dt("2026-06-07 09:00")).is_none());
+        // A special entirely in the past contributes no future fire.
+        let past = vec![SpecialRecording {
+            id: None,
+            date: "2026-06-01".to_string(),
+            name: "Forbi".to_string(),
+            start: "11:00".to_string(),
+            stop: "12:00".to_string(),
+            device_id: None,
+        }];
+        assert!(next_recording(&[], &past, dt("2026-06-07 09:00")).is_none());
+    }
+
+    #[test]
+    fn next_recording_rolls_past_an_occurrence_that_just_started() {
+        // `now` is exactly at the slot start: that occurrence is no longer in the
+        // future (strict `> now`), so the next fire rolls a week forward.
+        let slots = vec![sunday_slot()];
+        assert_eq!(
+            next_recording(&slots, &[], dt("2026-06-07 11:00")),
+            Some(dt("2026-06-14 11:00"))
+        );
+    }
+
+    #[test]
+    fn missed_recordings_catches_up_a_slot_and_a_special_together() {
+        // now = Monday 2026-06-08 09:00. Sunday's 11:00 slot occurred ~22h ago
+        // (past the late-start window, inside 24h) and was never recorded, and a
+        // Saturday special also went un-run — both should surface as catch-up.
+        let slots = vec![sunday_slot()];
+        let specials = vec![SpecialRecording {
+            id: None,
+            date: "2026-06-07".to_string(), // Sunday too, 14:00 — distinct from slot
+            name: "Dåp".to_string(),
+            start: "14:00".to_string(),
+            stop: "15:00".to_string(),
+            device_id: None,
+        }];
+        let now = dt("2026-06-08 09:00");
+        let missed = missed_recordings(&slots, &specials, now, &[], &HashSet::new());
+        let labels: Vec<_> = missed.iter().map(|m| m.label.as_str()).collect();
+        assert!(labels.iter().any(|l| l.contains("Ukentlig")));
+        assert!(labels.contains(&"Dåp"));
+        assert_eq!(missed.len(), 2);
+
+        // A history row covering the slot occurrence removes it from catch-up;
+        // the un-covered special still surfaces.
+        let history = vec![dt("2026-06-07 11:00")];
+        let missed2 = missed_recordings(&slots, &specials, now, &history, &HashSet::new());
+        assert_eq!(missed2.len(), 1);
+        assert_eq!(missed2[0].label, "Dåp");
+    }
+
+    #[test]
     fn upcoming_dates_bounds_and_sorts() {
         let slots = vec![ScheduleSlot {
             days: vec![6, 0], // Sun + Mon
