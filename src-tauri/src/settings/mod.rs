@@ -227,4 +227,89 @@ mod tests {
         let err = import_from_path(&pool, &missing).await.unwrap_err();
         assert_eq!(err.code(), "io");
     }
+
+    #[tokio::test]
+    async fn save_overwrites_the_prior_blob_rather_than_appending() {
+        let (pool, _d) = temp_pool().await;
+        save(
+            &pool,
+            Settings {
+                input_volume: 150,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        // A second save with a different value must REPLACE, not stack a row —
+        // there is exactly one settings key and the latest value wins.
+        save(
+            &pool,
+            Settings {
+                input_volume: 80,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(load(&pool).await.unwrap().input_volume, 80);
+        // Exactly one row backs the settings key.
+        assert_eq!(
+            store::get_all_settings(&pool)
+                .await
+                .unwrap()
+                .iter()
+                .filter(|(k, _)| k == SETTINGS_KEY)
+                .count(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn import_whitespace_only_json_falls_back_to_defaults() {
+        let (pool, _d) = temp_pool().await;
+        // A blank/whitespace blob isn't valid JSON; the merge tolerates it and
+        // yields the defaults (mirrors the Electron importProfile resilience).
+        let imported = import(&pool, "   \n  ").await.unwrap();
+        assert_eq!(imported, Settings::default());
+        assert_eq!(load(&pool).await.unwrap(), Settings::default());
+    }
+
+    #[tokio::test]
+    async fn import_clamps_out_of_range_values_before_persisting() {
+        let (pool, _d) = temp_pool().await;
+        // An imported blob with an out-of-range numeric is clamped on the way in.
+        let imported = import(&pool, r#"{ "inputVolume": 9000, "sampleRate": 1 }"#)
+            .await
+            .unwrap();
+        assert_eq!(imported.input_volume, 200);
+        assert_eq!(imported.sample_rate, 8_000);
+        // The persisted value is the clamped one, not the raw import.
+        let loaded = load(&pool).await.unwrap();
+        assert_eq!(loaded.input_volume, 200);
+        assert_eq!(loaded.sample_rate, 8_000);
+    }
+
+    #[tokio::test]
+    async fn export_to_path_overwrites_an_existing_file() {
+        let (pool, _d) = temp_pool().await;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let file = dir.path().join("settings.json");
+        // Pre-seed the destination with stale content.
+        std::fs::write(&file, "STALE CONTENT THAT MUST BE REPLACED").unwrap();
+
+        save(
+            &pool,
+            Settings {
+                language: Some("sv".to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        export_to_path(&pool, &file).await.unwrap();
+
+        let on_disk = std::fs::read_to_string(&file).unwrap();
+        assert!(!on_disk.contains("STALE"), "stale content must be gone");
+        assert!(on_disk.contains("\"sv\""), "fresh export written");
+    }
 }
