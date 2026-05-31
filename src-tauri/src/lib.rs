@@ -35,6 +35,11 @@ pub mod recorder;
 pub mod scheduler;
 pub mod secrets;
 pub mod settings;
+// PU-2 menubar tray + `sundayrec://` deep-link handling — default-off `tray`
+// feature (GUI-UNVERIFIED). The menu-model + link parse are in `sundayrec_core`;
+// this seam maps them to tauri menu/tray + the scheme handler.
+#[cfg(feature = "tray")]
+pub mod tray;
 pub mod wake;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
