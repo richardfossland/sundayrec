@@ -73,6 +73,14 @@ function routeInvoke(over: Record<string, () => unknown> = {}) {
         return Promise.resolve(LOUDNESS);
       case "editor_export":
         return Promise.resolve({ outputPath: "/rec/2026-05-31_redigert.mp3" });
+      case "editor_read_sidecar":
+        // No draft by default — tests that need one override this.
+        return Promise.resolve(null);
+      case "editor_write_sidecar":
+      case "editor_delete_sidecar":
+        return Promise.resolve(true);
+      case "editor_master_preview":
+        return Promise.resolve({ previewPath: "/tmp/preview.mp3" });
       default:
         return Promise.resolve(undefined);
     }
@@ -244,6 +252,87 @@ describe("EditorPanel", () => {
         }),
       }),
     );
+  });
+
+  it("autosaves the cut-plan to the cuts-draft sidecar after an edit", async () => {
+    renderPanel();
+    await pickAndLoad();
+    fireEvent.click(screen.getByText("Legg til kutt"));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("editor_write_sidecar", {
+        mediaPath: "/rec/2026-05-31.mp4",
+        sidecar: "cutsDraft",
+        value: expect.objectContaining({
+          cuts: [{ start: 0, end: 10 }],
+          ts: expect.any(Number),
+        }),
+      }),
+    );
+  });
+
+  it("does not autosave a draft on a fresh untouched selection", async () => {
+    renderPanel();
+    await pickAndLoad();
+    // No region edits yet → no write_sidecar should have fired.
+    expect(invoke).not.toHaveBeenCalledWith(
+      "editor_write_sidecar",
+      expect.anything(),
+    );
+  });
+
+  it("offers to restore a cuts-draft found on pick and restores it", async () => {
+    routeInvoke({
+      editor_read_sidecar: () =>
+        Promise.resolve({
+          cuts: [
+            { start: 5, end: 12 },
+            { start: 30, end: 44 },
+          ],
+          ts: 1_700_000_000_000,
+        }),
+    });
+    renderPanel();
+    await pickAndLoad();
+    // Banner reports the count, restore brings the cuts back as editable rows.
+    expect(await screen.findByText(/Fant lagrede kutt/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Gjenopprett"));
+    expect(screen.getAllByLabelText("Kutt")).toHaveLength(2);
+    // Banner is gone after restoring.
+    expect(screen.queryByText(/Fant lagrede kutt/)).not.toBeInTheDocument();
+  });
+
+  it("deletes the cuts-draft after a successful export", async () => {
+    renderPanel();
+    await pickAndLoad();
+    fireEvent.click(screen.getByText("Eksporter"));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("editor_delete_sidecar", {
+        mediaPath: "/rec/2026-05-31.mp4",
+        sidecar: "cutsDraft",
+      }),
+    );
+  });
+
+  it("renders a mastering preview when a preset is chosen", async () => {
+    renderPanel();
+    await pickAndLoad();
+    // No preset → no preview button.
+    expect(screen.queryByText(/Forhåndsvis mastering/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Mastering"), {
+      target: { value: "speech-clear" },
+    });
+    fireEvent.click(screen.getByText(/Forhåndsvis mastering/));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("editor_master_preview", {
+        request: {
+          inputPath: "/rec/2026-05-31.mp4",
+          presetId: "speech-clear",
+          startSec: 0,
+          durationSec: 15,
+        },
+      }),
+    );
+    expect(await screen.findByLabelText("Forhåndsvisning")).toBeInTheDocument();
   });
 
   it("shows a calm hint when the editor feature is disabled", async () => {

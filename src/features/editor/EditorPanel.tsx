@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -12,8 +12,15 @@ import type { EditorLoudness } from "@/lib/bindings/EditorLoudness";
 import type { EditorCutRegion } from "@/lib/bindings/EditorCutRegion";
 import type { EditorExportRequest } from "@/lib/bindings/EditorExportRequest";
 import type { EditorExportResult } from "@/lib/bindings/EditorExportResult";
+import type { EditorMasterPreviewRequest } from "@/lib/bindings/EditorMasterPreviewRequest";
+import type { EditorMasterPreviewResult } from "@/lib/bindings/EditorMasterPreviewResult";
 import { EDITOR_RECORDINGS_KEY } from "./queryKey";
 import { waveformPath } from "./waveform";
+
+/** The `.cuts-draft.json` sidecar shape — the autosaved cut-plan + a timestamp,
+ *  mirroring the Electron `{ cuts, ts }`. Persisting this is the editor's
+ *  reopen-ability: reopen a recording mid-edit and the marked cuts come back. */
+type CutsDraft = { cuts: EditorCutRegion[]; ts: number };
 
 /**
  * A mastering target the user picks. We surface friendly publishing-target
@@ -113,6 +120,13 @@ export function EditorPanel() {
   const [target, setTarget] = useState<string>("none");
   const [regions, setRegions] = useState<Region[]>([]);
   const [disabled, setDisabled] = useState(false);
+  // A cut-plan found in the recording's `.cuts-draft.json` sidecar on pick —
+  // surfaced as a "restore" banner so the user opts in rather than us silently
+  // overwriting their fresh session. Cleared once restored or dismissed.
+  const [draftToRestore, setDraftToRestore] = useState<CutsDraft | null>(null);
+  // Whether the current region set has been touched since the last persisted
+  // draft, so the autosave effect only writes after a real edit.
+  const dirty = useRef(false);
 
   const presetId = useMemo(
     () => MASTER_TARGETS.find((m) => m.value === target)?.presetId ?? null,
@@ -155,20 +169,45 @@ export function EditorPanel() {
       invoke<EditorExportResult>("editor_export", { request }),
     onError: (e) => setDisabled(isFeatureDisabled(e)),
   });
+  // Windowed single-pass mastering preview — render a short snippet through the
+  // chosen preset so the user can A/B it against the original before committing
+  // to a full export. Returns a temp mp3 path the renderer plays.
+  const previewMutation = useMutation({
+    mutationFn: (request: EditorMasterPreviewRequest) =>
+      invoke<EditorMasterPreviewResult>("editor_master_preview", { request }),
+    onError: (e) => setDisabled(isFeatureDisabled(e)),
+  });
 
   const onSelect = useCallback(
     (path: string) => {
       setSelected(path);
       setDisabled(false);
       setRegions([]);
+      setDraftToRestore(null);
+      dirty.current = false;
       peaksMutation.reset();
       segmentsMutation.reset();
       analyzeMutation.reset();
       exportMutation.reset();
+      previewMutation.reset();
       // Probe immediately so the user sees duration/streams on pick, and pull
       // the waveform so they have something to mark cut regions against.
       loadMutation.mutate(path);
       peaksMutation.mutate(path);
+      // Look for a `.cuts-draft.json` left by a prior session — the editor's
+      // reopen-ability. If one carries cuts, surface a restore banner.
+      void invoke<CutsDraft | null>("editor_read_sidecar", {
+        mediaPath: path,
+        sidecar: "cutsDraft",
+      })
+        .then((draft) => {
+          if (draft && Array.isArray(draft.cuts) && draft.cuts.length > 0) {
+            setDraftToRestore(draft);
+          }
+        })
+        .catch(() => {
+          /* no draft / feature off → nothing to restore */
+        });
     },
     [
       loadMutation,
@@ -176,8 +215,45 @@ export function EditorPanel() {
       segmentsMutation,
       analyzeMutation,
       exportMutation,
+      previewMutation,
     ],
   );
+
+  // Autosave the cut-plan to the `.cuts-draft.json` sidecar after any edit, so
+  // the marks survive a crash / reopen. Only writes once the user has actually
+  // touched the regions (the `dirty` ref), never on the initial empty state.
+  useEffect(() => {
+    if (!selected || !dirty.current) return;
+    const draft: CutsDraft = {
+      cuts: regions
+        .filter((r) => r.end > r.start)
+        .map((r) => ({ start: r.start, end: r.end })),
+      ts: Date.now(),
+    };
+    void invoke<boolean>("editor_write_sidecar", {
+      mediaPath: selected,
+      sidecar: "cutsDraft",
+      value: draft,
+    }).catch(() => {
+      /* autosave is best-effort, exactly like the Electron handler */
+    });
+  }, [regions, selected]);
+
+  // Restore the cuts found in the sidecar into editable regions.
+  const onRestoreDraft = useCallback(() => {
+    if (!draftToRestore) return;
+    setRegions(
+      draftToRestore.cuts.map((c, i) => ({
+        id: i + 1,
+        start: c.start,
+        end: c.end,
+      })),
+    );
+    dirty.current = true;
+    setDraftToRestore(null);
+  }, [draftToRestore]);
+
+  const onDismissDraft = useCallback(() => setDraftToRestore(null), []);
 
   // Native file picker — edit any audio/video on disk, not only history rows.
   const onPickFile = useCallback(async () => {
@@ -197,6 +273,7 @@ export function EditorPanel() {
 
   // ── Region (cut/trim) editing ───────────────────────────────────────────
   const addRegion = useCallback(() => {
+    dirty.current = true;
     setRegions((rs) => {
       // Seed a 10 s region after the last one (or at the start), clamped to the
       // file duration when known. The user nudges start/end with the inputs.
@@ -212,16 +289,33 @@ export function EditorPanel() {
 
   const updateRegion = useCallback(
     (id: number, patch: Partial<Pick<Region, "start" | "end">>) => {
+      dirty.current = true;
       setRegions((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
     },
     [],
   );
 
   const removeRegion = useCallback((id: number) => {
+    dirty.current = true;
     setRegions((rs) => rs.filter((r) => r.id !== id));
   }, []);
 
-  const clearRegions = useCallback(() => setRegions([]), []);
+  const clearRegions = useCallback(() => {
+    dirty.current = true;
+    setRegions([]);
+  }, []);
+
+  // ── Mastering preview ────────────────────────────────────────────────────
+  // Render a 15 s snippet from the start of the file through the chosen preset.
+  const onPreview = useCallback(() => {
+    if (!selected || !presetId) return;
+    previewMutation.mutate({
+      inputPath: selected,
+      presetId,
+      startSec: 0,
+      durationSec: 15,
+    });
+  }, [selected, presetId, previewMutation]);
 
   const onExport = useCallback(() => {
     if (!selected) return;
@@ -240,7 +334,17 @@ export function EditorPanel() {
       bitDepth: null,
       masterPreset: presetId,
     };
-    exportMutation.mutate(request);
+    exportMutation.mutate(request, {
+      onSuccess: () => {
+        // The edit landed — discard the autosaved draft so a future reopen
+        // doesn't offer to restore stale cuts (mirrors editor-delete-cuts-draft).
+        dirty.current = false;
+        void invoke<boolean>("editor_delete_sidecar", {
+          mediaPath: selected,
+          sidecar: "cutsDraft",
+        }).catch(() => {});
+      },
+    });
   }, [selected, duration, regions, format, presetId, exportMutation]);
 
   const rows = recordings.data ?? [];
@@ -260,6 +364,34 @@ export function EditorPanel() {
             "Redigering er ikke bygget inn i denne versjonen.",
           )}
         </p>
+      )}
+
+      {/* ── Restore-draft banner (reopen-ability) ──────────────────────── */}
+      {draftToRestore && (
+        <div className="flex items-center gap-2 rounded border border-sky-700 bg-sky-950/40 p-2 text-xs">
+          <span className="flex-1">
+            {t(
+              "editor.draftFound",
+              "Fant lagrede kutt fra forrige økt ({{n}}).",
+              { n: draftToRestore.cuts.length },
+            )}
+          </span>
+          <button
+            type="button"
+            className="rounded border border-sky-600 px-2 py-0.5 hover:bg-sky-900"
+            onClick={onRestoreDraft}
+          >
+            {t("editor.draftRestore", "Gjenopprett")}
+          </button>
+          <button
+            type="button"
+            className="rounded border border-zinc-700 px-2 py-0.5 hover:bg-zinc-800"
+            aria-label={t("editor.draftDismiss", "Forkast")}
+            onClick={onDismissDraft}
+          >
+            ✕
+          </button>
+        </div>
       )}
 
       {/* ── Recording picker ───────────────────────────────────────────── */}
@@ -527,6 +659,29 @@ export function EditorPanel() {
                 ))}
               </select>
             </div>
+            {/* Mastering A/B preview — only meaningful when a preset is chosen. */}
+            {presetId && (
+              <div className="flex flex-col gap-1">
+                <button
+                  type="button"
+                  className="self-start rounded border border-zinc-700 px-2 py-1 text-xs hover:bg-zinc-800 disabled:opacity-50"
+                  disabled={previewMutation.isPending}
+                  onClick={onPreview}
+                >
+                  {previewMutation.isPending
+                    ? t("editor.previewing", "Lager forhåndsvisning…")
+                    : t("editor.preview", "Forhåndsvis mastering (15 s)")}
+                </button>
+                {previewMutation.data && (
+                  <audio
+                    controls
+                    aria-label={t("editor.previewAudio", "Forhåndsvisning")}
+                    src={previewMutation.data.previewPath}
+                    className="w-full"
+                  />
+                )}
+              </div>
+            )}
             <button
               type="button"
               className="self-start rounded bg-emerald-600 px-3 py-1 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
