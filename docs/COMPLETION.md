@@ -67,6 +67,22 @@ suite that mocks `invoke` and asserts render + IPC calls.
 - **Tray installed:** the `tray` feature now actually installs the menubar icon +
   menu in `setup()`, wires start/stop/show to commands (Stop → `RecorderEngine::stop()`
   directly), and registers the `sundayrec://` deep-link handler.
+- **Editor backend parity (P1):** closed the depth gap vs the Electron editor/
+  master backend. New `sundayrec-core` decisions (all tested): the three sidecar
+  paths (`.meta`/`.cuts-draft`/`.transcript`) with the `..`-escape guard, the
+  400 MB inline-vs-stream guard, the `__editor_tmp`/`__editor_bak` cleanup
+  predicate + dir de-dup, the POSIX/Windows atomic safe-replace plan, the
+  single-pass mastering-preview argv, and a pure `JobRegistry` state machine
+  (register/cancel/complete). Nine new commands wire these: sidecar read/write/
+  delete + stream probe + inline read-guard + temp-file sweep all compile and
+  run in the **default build** (fs, not ffmpeg — gate-tested via tempdir
+  round-trips), and the full mastering flow (`master_preview`/`master_apply`
+  with `editor-master-progress` events/`master_cancel`) sits behind the
+  default-off `editor` feature (HARDWARE-UNVERIFIED). The panel gained
+  cuts-draft reopen-ability (restore banner + autosave + delete-on-export) and a
+  mastering A/B preview. (Still deferred to a later pass: the destructive
+  in-place `saveEdited`/video-save handlers — the non-destructive export already
+  covers the audio + mp4 render path.)
 - **i18n:** the `update.*` catalog (Electron-ported) gained the two new R7 keys in
   all 7 locales; every other new R-phase string follows the established
   inline-`t(key, "Norsk fallback")` idiom (the panels work without catalog entries).

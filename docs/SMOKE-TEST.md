@@ -443,6 +443,29 @@ npm run tauri dev -- --features editor          # drive the Redigering disclosur
    - **Expected:** a `*_redigert.<fmt>` file lands next to the source; on
      playback the marked regions are removed and (with a target) the loudness is
      normalised. No target + no cuts takes the fast `-af`/copy path.
+5. **P1 reopen-ability (cuts-draft sidecar):** with cuts marked, close the
+   editor (or reselect another recording) then reselect the same recording.
+   - **Expected:** a **"Fant lagrede kutt fra forrige økt (N)"** banner appears
+     (read from `<base>.cuts-draft.json` written next to the recording by the
+     autosave); **Gjenopprett** brings the cut rows back. After a successful
+     **Eksporter** the draft is deleted, so a later reopen offers nothing.
+6. **P1 mastering A/B preview:** with a mastering target chosen, click
+   **Forhåndsvis mastering (15 s)**.
+   - **Expected:** an `<audio>` control appears playing a temp
+     `sundayrec-master-preview-*.mp3` of the first 15 s through the preset chain
+     — A/B it against the original before committing to the full export.
+7. **P1 mastering apply + cancel:** (when wired to the full-file `editor_master_apply`
+   flow) start a master, watch the `editor-master-progress` ticks, and abort
+   mid-render via `editor_master_cancel(jobId)`.
+   - **Expected:** progress advances, and a cancel kills the ffmpeg child and
+     returns `true` only while the job is live (`false` afterwards — the pure
+     `JobRegistry` bookkeeping). A duplicate job id is rejected up front.
+
+> The sidecar read/write/delete + the 400 MB inline-vs-stream guard + the
+> `__editor_tmp`/`__editor_bak` startup sweep are **fs, not ffmpeg** — they
+> compile and run in the default build and ARE exercised in the gate (real
+> tempdir round-trips). Only the ffmpeg-driven probe/preview/apply are
+> HARDWARE-UNVERIFIED behind `--features editor`.
 
 > [HW] The ffprobe/decode/measure/render runs only execute under `--features
 editor` against real media — never in the gate. Only the core argv-building,
