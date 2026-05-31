@@ -184,6 +184,9 @@ pub fn run() {
             commands::editor::editor_segments,
             commands::editor::editor_mastering_analyze,
             commands::editor::editor_export,
+            // PU-1 email alerts (status pure; send gated by `email`).
+            commands::email::email_status,
+            commands::email::email_send_test,
             commands::scheduler::scheduler_reschedule,
             commands::scheduler::scheduler_status,
             commands::scheduler::scheduler_check_missed,

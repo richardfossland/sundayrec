@@ -15,6 +15,7 @@ import { WakePanel } from "@/features/wake/WakePanel";
 import { HistoryPanel } from "@/features/history/HistoryPanel";
 import { EditorPanel } from "@/features/editor/EditorPanel";
 import { CloudBackupPanel } from "@/features/cloud/CloudBackupPanel";
+import { EmailSettingsPanel } from "@/features/email/EmailSettingsPanel";
 import { StreamingPanel } from "@/features/streaming/StreamingPanel";
 import { SETTINGS_QUERY_KEY } from "@/features/settings/queryKey";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -155,6 +156,20 @@ function App() {
             </summary>
             <div className="mt-3">
               <CloudBackupPanel />
+            </div>
+          </details>
+
+          {/* PU-1: email alerts — a Gmail-connect (no SMTP) or SMTP transport
+              for a localized "email works" test. The send is behind the
+              default-off `email` feature, so the panel shows a calm "not built
+              into this build" hint in the default build (it reads `email_status`
+              up-front). Same disclosure pattern until the real shell lands. */}
+          <details className="w-full max-w-md text-left">
+            <summary className="cursor-pointer text-sm font-medium">
+              {t("email.title", "E-postvarsler")}
+            </summary>
+            <div className="mt-3">
+              <EmailSettingsPanel />
             </div>
           </details>
 

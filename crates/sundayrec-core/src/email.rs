@@ -21,6 +21,42 @@
 
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
+
+// ─────────────────────────────────────────────────────────────────────────────
+//   UI-facing DTOs (the renderer's email panel)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Which transport the renderer asked the shell to use for a test send. Mirrors
+/// `mailer.ts`'s "prefer Gmail OAuth, else SMTP" choice as an explicit pick the
+/// user makes in the panel. Serialised lowercase on the wire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../../src/lib/bindings/EmailTransportKind.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum EmailTransportKind {
+    /// Send via the connected Gmail account (no SMTP config needed).
+    Gmail,
+    /// Send via a user-supplied SMTP server.
+    Smtp,
+}
+
+/// What the email panel needs to render itself without a failed send: whether
+/// this build compiled the `email` feature in at all, and whether a Gmail
+/// refresh token is already stored (so the panel can offer the no-config path).
+/// Filled by the `src-tauri` shell from the cargo feature + the keychain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../../src/lib/bindings/EmailStatus.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct EmailStatus {
+    /// True when the binary was built with `--features email` (the send path is
+    /// present). The default build is `false` → the panel shows a calm hint.
+    pub feature_built: bool,
+    /// True when a Gmail OAuth refresh token is stored, so the Gmail transport
+    /// is usable without any SMTP fields.
+    pub gmail_connected: bool,
+}
+
 /// The seven UI languages SundayRec ships, matching `mailer.ts` `MAIL_STRINGS`.
 /// Unknown/blank language codes fall back to Norwegian (the Electron default).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -480,6 +516,29 @@ fn base64_standard(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn transport_kind_serialises_lowercase() {
+        assert_eq!(
+            serde_json::to_string(&EmailTransportKind::Gmail).unwrap(),
+            "\"gmail\""
+        );
+        assert_eq!(
+            serde_json::to_string(&EmailTransportKind::Smtp).unwrap(),
+            "\"smtp\""
+        );
+    }
+
+    #[test]
+    fn email_status_serialises_camel_case() {
+        let s = EmailStatus {
+            feature_built: false,
+            gmail_connected: true,
+        };
+        let json = serde_json::to_string(&s).unwrap();
+        assert!(json.contains("\"featureBuilt\":false"));
+        assert!(json.contains("\"gmailConnected\":true"));
+    }
 
     #[test]
     fn lang_resolves_and_defaults_to_norwegian() {

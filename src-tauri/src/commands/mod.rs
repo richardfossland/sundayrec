@@ -12,6 +12,7 @@ pub mod cloud;
 pub mod db;
 pub mod diagnostics;
 pub mod editor;
+pub mod email;
 pub mod media;
 pub mod ndi;
 pub mod recorder;

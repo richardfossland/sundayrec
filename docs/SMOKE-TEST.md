@@ -173,11 +173,21 @@ NETWORK-UNVERIFIED. Build with the feature to exercise it:
 
 ```bash
 cargo build -p sundayrec --features email
+npm run tauri dev -- --features email   # drive the "E-postvarsler" disclosure
 # Gmail path reuses the cloud OAuth token (connect Gmail first, §7-style);
 # SMTP path needs a host/port/credentials.
 ```
 
-1. **Test message** via the Gmail path (Gmail OAuth connected).
+The **E-postvarsler** panel (R5) drives this. It reads `email_status` up-front
+(works in every build) to show whether this binary has the `email` feature and
+whether Gmail is already connected, picks the transport (Gmail no-config / SMTP
+host·port·user·pass·from), and fires `email_send_test` with the chosen language.
+In the **default build** (no `--features email`) `email_send_test` returns
+`feature_disabled` and the panel shows a calm "ikke bygd inn" hint (GUI-UNVERIFIED;
+the SMTP password is never persisted — it travels with the request and is dropped).
+
+1. **Test message** via the Gmail path (Gmail OAuth connected). Pick "Gmail",
+   enter a recipient, **Send testvarsel**.
    - **Expected:** a "✓ SundayRec — email works" message arrives; the raw
      message was base64url-encoded and POSTed to `gmail.googleapis.com`.
 2. **Error alert throttle.** Trigger two identical recording errors within

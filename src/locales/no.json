@@ -194,7 +194,15 @@
     "max": "MAKS",
     "noLimit": "Ingen",
     "edit": "Rediger",
-    "days": ["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"],
+    "days": [
+      "Man",
+      "Tir",
+      "Ons",
+      "Tor",
+      "Fre",
+      "Lør",
+      "Søn"
+    ],
     "wakeTitle": "Vekk datamaskinen fra dvale",
     "wakeDesc": "Starter automatisk noen minutter før opptaket begynner",
     "wakeBtn": "Planlegg oppvåkning",
@@ -360,7 +368,15 @@
       "November",
       "Desember"
     ],
-    "weekdays": ["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"],
+    "weekdays": [
+      "Man",
+      "Tir",
+      "Ons",
+      "Tor",
+      "Fre",
+      "Lør",
+      "Søn"
+    ],
     "legendWeekly": "Ukentlig opptak",
     "legendSpecial": "Spesialopptak",
     "legendHoliday": "Kirkehøytid",
@@ -998,5 +1014,24 @@
     "info": {
       "size": "{w}×{h} px · {size}"
     }
+  },
+  "email": {
+    "title": "E-postvarsler",
+    "method": "Sendemetode",
+    "methodGmail": "Gmail (tilkoblet)",
+    "methodGmailOff": "Gmail (ikke tilkoblet)",
+    "methodSmtp": "SMTP",
+    "gmailHint": "Koble til Google under Sky-backup for å sende via Gmail uten SMTP.",
+    "smtpHost": "SMTP-tjener (f.eks. smtp.gmail.com)",
+    "smtpPort": "Port",
+    "smtpUser": "Brukernavn (e-postadresse)",
+    "smtpPass": "Passord / app-passord",
+    "smtpFrom": "Avsender-adresse",
+    "recipient": "Mottaker (e-postadresse)",
+    "sendTest": "Send testvarsel",
+    "testSent": "Testvarsel sendt.",
+    "testFailed": "Klarte ikke sende testvarsel.",
+    "noConfig": "Fyll inn mottaker og e-postoppsett.",
+    "featureDisabled": "E-postvarsler er ikke bygd inn i denne versjonen. Innstillingene kan likevel lagres."
   }
 }
