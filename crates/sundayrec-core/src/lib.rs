@@ -40,6 +40,9 @@
 //!   - [`prep`]         — episode-prep assembly: sermon detection + attention reasons + EpisodePrep build (PU-6)
 //!   - [`review_queue`] — the human-review queue state machine + reminder timeline (PU-6)
 //!   - [`integrations`] — Sunday-suite hand-offs: Stage manifest→chapters/setlist + the live cue-bridge consumer (PU-6 + Bridge #2)
+//!   - [`streaming`]    — live RTMP multi-destination `tee` muxer arg-building + bitrate/keyframe options + stream-key validation (R3)
+//!   - [`overlay`]      — ffmpeg `filter_complex` generation for lower-thirds: image + drawtext, position/opacity (R3)
+//!   - [`ndi`]          — NDI source-discovery model + the pure loopback-TCP rawvideo input-arg builder (R3)
 
 pub mod audio;
 pub mod audio_analysis;
@@ -58,6 +61,8 @@ pub mod integrations;
 pub mod link;
 pub mod mastering;
 pub mod mjpeg;
+pub mod ndi;
+pub mod overlay;
 pub mod preflight;
 pub mod prep;
 pub mod preroll;
@@ -68,6 +73,7 @@ pub mod review_queue;
 pub mod schedule;
 pub mod settings;
 pub mod silence;
+pub mod streaming;
 pub mod timeouts;
 pub mod tray;
 pub mod two_process;
