@@ -133,3 +133,61 @@ gate cannot provide. None block the default build or the gate.
   `BridgeEffect`; wiring `ChapterAdded` into the running recording's metadata +
   emitting a Tauri event for the UI is the remaining glue. The Supabase URL +
   anon key also need to flow from settings (the integration `connection` config).
+
+## R3 — Live streaming (`--features streaming`)
+
+- **A real camera + a real RTMP endpoint + a stream key.** The `streaming`
+  feature compiles the ffmpeg spawn seam (`src-tauri/src/streaming/mod.rs`)
+  in/out — NO new native dep (ffmpeg is a sidecar). The default build + the CI
+  gate carry no streaming path; `stream_start`/`stream_stop` return
+  `feature_disabled` there. Only the `sundayrec-core::{streaming,overlay}`
+  decisions (the multi-destination `tee` muxer argv with `onfail=ignore`, the
+  libx264/aac encode + keyframe-every-2s GOP + bitrate/bufsize math, the
+  platform audio-map, the optional local-MP4 branch, the 0.5fps preview, the
+  lower-third image/drawtext `filter_complex`, the key/URL validation, the
+  key-redacted loggable copy) are unit-tested.
+- **Auto-recovery + live stats are NOT yet ported.** The Electron `streamer.ts`
+  restarted ffmpeg up to 3× on an unexpected crash (USB drop / brief RTMP
+  disconnect over a 90-min sermon) and parsed `frame=…fps=…bitrate=…` from
+  stderr at ~1 Hz to drive the UI stats + per-destination `connecting/live/
+  failed` state. The R3 seam spawns + kills cleanly and reports `active`; wiring
+  the stderr-parse → `StreamStatus` updates (emit a `streaming://stats` event)
+  and the crash auto-restart loop is the remaining glue once the panel shows a
+  live stats row. The watchdog/restart *decisions* should be lifted into the
+  core first (mirrors the recorder's reconnect policy), then wired here.
+- **`alsoRecord` history row.** The "Start direktesending + opptak" local MP4 is
+  built into the argv (the 3-way split branch), but registering the finished
+  file in recording history (the Electron `registerAlsoRecordInHistory` + the
+  MP4-duration probe + the 100 KB skeleton guard) is not yet wired.
+- **The stream-keys live in the OS keychain** (per-destination, namespaced
+  `stream.key.<id>` via `crate::secrets`), never a plaintext file — confirm the
+  keychain round-trips on the target machine (the tolerant test skips when no
+  keychain is reachable).
+
+## R3 NDI — receiver (`--features ndi`) — **SDK NOT BUNDLED**
+
+- **The NDI SDK runtime + a native FFI binding + an NDI source on the LAN.** The
+  `ndi` feature compiles a **STUB** seam (`src-tauri/src/ndi/mod.rs`):
+  `list_sources` returns empty and `start_receiver` returns
+  `ndi_not_bundled: NDI SDK not bundled — see docs/NEEDS-RICHARD.md`. The
+  default build returns `feature_disabled`. NO native NDI dep is added (none is
+  present in this environment).
+- **What's already done (pure + tested).** `sundayrec-core::ndi` has the
+  discovered-source model, the delivered-FourCC → ffmpeg-pixfmt selection
+  (`UYVY`/`BGRA`/`BGRX` → `uyvy422`/`bgra`, falling back to the alpha request),
+  the `-f rawvideo -pix_fmt … -s WxH -framerate … -i tcp://127.0.0.1:<port>`
+  input-arg builder, and the saved-source-name matcher. The `streaming` seam
+  already knows how to splice an NDI overlay's input args + frame size into the
+  pipeline once a receiver hands back an `NdiReceiverInfo`.
+- **The real implementation (needs Richard + a rig + the SDK):** vendor the NDI
+  SDK (the runtime `.dylib`/`.dll` + headers) and add an FFI crate (the Electron
+  app used the `grandiose` Node binding; the Rust equivalent is a thin FFI over
+  `NDIlib_find_*` + `NDIlib_recv_*`). Then implement, per the Electron
+  `ndi-receiver.ts` architecture: an mDNS-style `find` discovery window
+  (~2 s), a receiver that pulls the first frame to resolve `WxH`+FourCC, an
+  ephemeral **loopback TCP server** (`127.0.0.1:0`) that serves the raw frame
+  bytes (one client = the streamer's ffmpeg, back-pressured by the TCP window,
+  late frames dropped), and a clean `stop()` racing a 2 s timeout
+  (`RecorderTimeouts::NDI_STOP_TIMEOUT_MS`) so a libndi deadlock can't block
+  stream-stop. Bundle the SDK in `tauri.conf.json` (`externalBin`/resources) the
+  way the Electron app `asarUnpack`-ed `vendor/grandiose`.

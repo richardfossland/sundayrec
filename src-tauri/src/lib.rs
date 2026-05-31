@@ -36,6 +36,10 @@ pub mod editor;
 pub mod email;
 pub mod error;
 pub mod media;
+// R3 NDI receiver — default-off `ndi` feature (STUB; SDK not bundled). The
+// source-discovery/pixfmt/input-arg logic is `sundayrec_core::ndi`; this seam
+// returns `feature_disabled` (default) or a clear "NDI SDK not bundled" error.
+pub mod ndi;
 pub mod preflight;
 // PU-3 podcast RSS publish — default-off `publish` feature (NETWORK-UNVERIFIED).
 // The XML shaping is `sundayrec_core::feed`; this seam maps history + writes/uploads.
@@ -45,6 +49,12 @@ pub mod recorder;
 pub mod scheduler;
 pub mod secrets;
 pub mod settings;
+// R3 live RTMP streaming — default-off `streaming` feature (NETWORK/HARDWARE-
+// UNVERIFIED). The tee/encode/overlay argv + key validation are
+// `sundayrec_core::{streaming,overlay}`; this seam spawns ffmpeg + reads the
+// per-destination keys from the keychain. `stream_start` returns
+// `feature_disabled` in the default build.
+pub mod streaming;
 // PU-2 menubar tray + `sundayrec://` deep-link handling — default-off `tray`
 // feature (GUI-UNVERIFIED). The menu-model + link parse are in `sundayrec_core`;
 // this seam maps them to tauri menu/tray + the scheme handler.
@@ -86,6 +96,9 @@ pub fn run() {
         // The recorder engine holds at most one running unified ffmpeg capture
         // (Spike B). Commands reach it through managed state.
         .manage(recorder::engine::RecorderEngine::new())
+        // R3: the live-stream engine holds at most one running RTMP ffmpeg.
+        // Compiles in every build; only the spawn is feature-gated.
+        .manage(streaming::StreamEngine::new())
         .setup(|app| {
             use tauri::Manager;
 
@@ -193,6 +206,15 @@ pub fn run() {
             // Bridge #2 — live cue → chapter mapping (renderer-driven).
             commands::bridge_live::live_bridge_channel,
             commands::bridge_live::live_bridge_map_event,
+            // R3 live streaming (tee/overlay argv pure; spawn gated by `streaming`).
+            commands::streaming::stream_status,
+            commands::streaming::stream_start,
+            commands::streaming::stream_stop,
+            commands::streaming::stream_set_key,
+            commands::streaming::stream_delete_key,
+            // R3 NDI source discovery + receiver (STUB; gated by `ndi`).
+            commands::ndi::ndi_list_sources,
+            commands::ndi::ndi_start_receiver,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

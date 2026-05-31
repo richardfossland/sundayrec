@@ -81,6 +81,51 @@ pub fn delete(provider: SecretProvider) -> AppResult<()> {
     }
 }
 
+// ── Per-destination stream keys (R3) ──────────────────────────────────────────
+//
+// Live streaming pushes to MANY destinations, each with its own key — the single
+// [`SecretProvider::StreamKey`] slot isn't enough. We namespace each destination
+// under its own keychain account derived from the destination id. Mirrors the
+// Electron `stream-keys.ts` per-`destId` store, but in the OS keychain (never a
+// plaintext JSON file).
+
+/// The keychain account for a destination's stream key. Pure so the namespacing
+/// (and the fact that ids are kept distinct from the OAuth accounts above) is
+/// unit-tested without a real keychain.
+fn stream_key_account(dest_id: &str) -> String {
+    format!("stream.key.{dest_id}")
+}
+
+fn stream_key_entry(dest_id: &str) -> AppResult<Entry> {
+    Entry::new(SERVICE, &stream_key_account(dest_id))
+        .map_err(|e| AppError::Internal(format!("keychain entry: {e}")))
+}
+
+/// Store (or replace) a destination's stream key.
+pub fn set_stream_key(dest_id: &str, key: &str) -> AppResult<()> {
+    stream_key_entry(dest_id)?
+        .set_password(key)
+        .map_err(|e| AppError::Internal(format!("keychain set: {e}")))
+}
+
+/// Read a destination's stream key, or `None` when unset/unreadable.
+pub fn get_stream_key(dest_id: &str) -> Option<String> {
+    stream_key_entry(dest_id).ok()?.get_password().ok()
+}
+
+/// Whether a destination has a stored stream key (drives the UI's "saved" badge).
+pub fn has_stream_key(dest_id: &str) -> bool {
+    get_stream_key(dest_id).is_some()
+}
+
+/// Delete a destination's stream key. A missing entry is success.
+pub fn delete_stream_key(dest_id: &str) -> AppResult<()> {
+    match stream_key_entry(dest_id)?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(AppError::Internal(format!("keychain delete: {e}"))),
+    }
+}
+
 /// Resolve a credential from, in order: an explicit value (a non-blank override
 /// the caller already holds), the keychain, then an environment variable. Pure
 /// over its inputs so the precedence is unit-tested without a real keychain.
@@ -139,6 +184,34 @@ mod tests {
     fn nothing_set_yields_empty() {
         assert_eq!(resolve_from(None, None, None), "");
         assert_eq!(resolve_from(Some("".into()), None, Some("  ".into())), "");
+    }
+
+    #[test]
+    fn stream_key_accounts_are_namespaced_and_distinct_from_oauth() {
+        assert_eq!(stream_key_account("yt"), "stream.key.yt");
+        assert_ne!(stream_key_account("a"), stream_key_account("b"));
+        // Must not collide with the single OAuth StreamKey slot's account.
+        assert_ne!(
+            stream_key_account("x"),
+            SecretProvider::StreamKey.account()
+        );
+    }
+
+    // Tolerant: exercise the REAL keychain for a per-destination key when one is
+    // reachable, otherwise skip so headless CI stays green.
+    #[test]
+    fn real_stream_key_round_trip_or_skip() {
+        let id = "sundayrec-test-dest";
+        let sentinel = "stream-key-sentinel-1234";
+        match set_stream_key(id, sentinel) {
+            Ok(()) => {
+                assert_eq!(get_stream_key(id).as_deref(), Some(sentinel));
+                assert!(has_stream_key(id));
+                delete_stream_key(id).expect("delete should succeed");
+                assert!(!has_stream_key(id));
+            }
+            Err(e) => eprintln!("SKIP: no reachable keychain: {e}"),
+        }
     }
 
     #[test]

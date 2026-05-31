@@ -40,6 +40,18 @@ editor = []
 # feature is OFF, the seam still compiles and `transcribe_*` returns a clear
 # "feature disabled" error (same idiom as SundayPaper's `pdf` feature).
 whisper = ["dep:whisper-rs", "dep:tempfile"]
+# R3: live RTMP streaming (multi-destination tee + lower-third overlays). NO new
+# native dep — ffmpeg is a sidecar — so the gate only compiles the spawn seam
+# in/out. DEFAULT-OFF: the camera open + RTMP push are NETWORK/HARDWARE-
+# UNVERIFIED, and the shipping/CI gate stays lean. When OFF the commands return
+# a clear `feature_disabled` error (same idiom as `editor`/`whisper`).
+streaming = []
+# R3 NDI: receive a network NDI source over a loopback-TCP bridge and composite
+# it as an overlay. DEFAULT-OFF. The NDI SDK is NOT bundled here — the seam is a
+# STUB returning a clear "NDI SDK not bundled — see NEEDS-RICHARD" error; the
+# pure source-discovery/pixfmt/input-arg logic lives in `sundayrec-core::ndi`.
+# Enabling the feature only compiles the stub seam in/out (no native dep yet).
+ndi = []
 # Bridge Integration #2: subscribe to the SundayStage live cue channel over
 # Supabase Realtime. Reuses `reqwest` (the WebSocket client is the only extra),
 # so the wire is INFRA-UNVERIFIED. The LiveEvent→chapter mapping is the

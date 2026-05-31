@@ -370,6 +370,59 @@ editor` against real media — never in the gate. Only the core argv-building,
 
 ---
 
+## §R3 — Live streaming (RTMP + lower-thirds) — `--features streaming`
+
+```bash
+cargo build -p sundayrec --features streaming   # must compile (gate verifies this)
+npm run tauri dev -- --features streaming         # drive the Direktesending disclosure
+```
+
+> [NET][HW] NETWORK + HARDWARE-UNVERIFIED. The camera open, the libx264 encode,
+> the RTMP push, the lower-third compositing, and the live-stats parse only run
+> under `--features streaming` against a real camera + a real RTMP endpoint +
+> a real key — never in the gate. Only the core decisions (the tee/encode/
+> overlay argv, the keyframe/bitrate math, the audio-map, the key/URL validation,
+> the key-redacted log copy) and the panel's IPC data-flow (vitest, invoke
+> mocked) are unit-tested.
+
+1. Open the **Direktesending** disclosure. In the default build (no
+   `--features streaming`) **Start** returns `feature_disabled` and the panel
+   shows a calm "not built into this build" hint — the key vault still works.
+2. Add a destination (name + `rtmp://…` URL), paste a stream key, click
+   **Lagre nøkkel**.
+   - **Expected:** the key is validated (a key with a space/too short is
+     rejected with a clear message) and stored in the OS keychain; the row shows
+     a "•••• (lagret)" badge. **Slett nøkkel** removes it.
+3. (streaming build) With at least one enabled destination that has a saved key,
+   pick a resolution + framerate, optionally add a lower-third (text title ±
+   subtitle, or a logo image), and click **Start**.
+   - **Expected:** one ffmpeg opens the camera/mic, composites the overlay, and
+     pushes to every enabled destination; **Status** shows `active` + a live
+     bitrate/fps. A second **Start** is refused (`stream_already_active`).
+     // NETWORK/HARDWARE-UNVERIFIED.
+4. Click **Stopp**.
+   - **Expected:** the stream goes idle; the broadcast ends on the platform.
+
+> The argv is logged KEY-REDACTED (`rtmp://…/***`) — confirm no stream key
+> appears in the `tauri dev` stderr.
+
+## §R3b — NDI (STUB) — `--features ndi`
+
+```bash
+cargo build -p sundayrec --features ndi          # must compile (gate verifies this)
+```
+
+> [NEEDS-RICHARD] The NDI SDK is NOT bundled in this repo. Even WITH
+> `--features ndi` the seam is a STUB: `ndi_list_sources` returns empty and
+> `ndi_start_receiver` returns `ndi_not_bundled: NDI SDK not bundled — see
+> docs/NEEDS-RICHARD.md`. The default build returns `feature_disabled`. The pure
+> source-discovery / FourCC→pixfmt / rawvideo input-arg logic
+> (`sundayrec_core::ndi`) IS unit-tested. Wiring the real libndi FFI + the
+> loopback-TCP frame pump needs the SDK runtime + an NDI source on the LAN — see
+> the NEEDS-RICHARD doc.
+
+---
+
 ## What "passed" means
 
 A green smoke test = §2–§6 all behave as the **Expected** lines say on a real
