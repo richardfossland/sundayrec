@@ -13,6 +13,7 @@ import { SettingsPage } from "@/features/settings/SettingsPage";
 import { SchedulePage } from "@/features/schedule/SchedulePage";
 import { WakePanel } from "@/features/wake/WakePanel";
 import { HistoryPanel } from "@/features/history/HistoryPanel";
+import { EditorPanel } from "@/features/editor/EditorPanel";
 import { CloudBackupPanel } from "@/features/cloud/CloudBackupPanel";
 import { SETTINGS_QUERY_KEY } from "@/features/settings/queryKey";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -128,6 +129,20 @@ function App() {
             </summary>
             <div className="mt-3">
               <HistoryPanel />
+            </div>
+          </details>
+
+          {/* R1: non-destructive editor — load a recording, peaks/segments/
+              loudness, export to a chosen format with optional mastering. The
+              ffmpeg work is behind the default-off `editor` feature, so the
+              panel shows a "not built into this build" hint in the default
+              build. Same disclosure pattern until the real shell lands. */}
+          <details className="w-full max-w-md text-left">
+            <summary className="cursor-pointer text-sm font-medium">
+              {t("editor.title", "Redigering")}
+            </summary>
+            <div className="mt-3">
+              <EditorPanel />
             </div>
           </details>
 

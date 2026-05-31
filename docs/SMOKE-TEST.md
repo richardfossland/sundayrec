@@ -321,6 +321,43 @@ and whether the machine truly wakes are HARDWARE-UNVERIFIED.
 
 ---
 
+## 12. Non-destructive editor [HW] — `--features editor`
+
+The editor I/O seam (`src-tauri/src/editor`) drives the bundled ffmpeg/ffprobe
+sidecar over the unit-tested `sundayrec-core::{editor, mastering,
+audio_analysis}` decisions: load (ffprobe duration/channels/format/streams),
+peaks (8 kHz mono WAV decode → core down-sample), segments (16 kHz s16le decode →
+VAD/sermon classifier), mastering analyze (pass-1 loudnorm measure), and export
+(core cut-plan + mastering gain → mp3/aac/wav/flac/mp4). NO new native dep —
+ffmpeg is a sidecar and the WAV/PCM is parsed by hand. All ffmpeg runs are
+**HARDWARE-UNVERIFIED** (need real media), so the commands are behind the
+**default-off `editor`** feature; the shipping build returns `feature_disabled`
+and the panel shows a calm "not built into this build" hint.
+
+```bash
+cargo build -p sundayrec --features editor    # must compile (gate verifies this)
+npm run tauri dev -- --features editor          # drive the Redigering disclosure
+```
+
+1. Record (or import) a short service so it shows in History, open the
+   **Redigering** disclosure, and pick the recording.
+   - **Expected:** the duration + stream info paint (ffprobe load); no
+     `feature_disabled` hint.
+2. Click **Bølgeform**, **Finn segmenter**, **Mål lydstyrke** in turn.
+   - **Expected:** a peak count appears; segments list with one **Preken**
+     (sermon) block highlighted gold; a loudness reading like `-23.4 LUFS → -16`.
+3. Choose a format + a mastering preset and click **Eksporter**.
+   - **Expected:** a `*_redigert.<fmt>` file lands next to the source; on
+     playback the cuts are applied and (with a preset) the loudness is
+     normalised. No preset + a single keep-segment takes the fast `-af` path.
+
+> [HW] The ffprobe/decode/measure/render runs only execute under `--features
+> editor` against real media — never in the gate. Only the core argv-building,
+> filter-graph, loudnorm parse, and VAD/sermon decisions are unit-tested. The
+> default build deliberately returns `feature_disabled` for every editor command.
+
+---
+
 ## What "passed" means
 
 A green smoke test = §2–§6 all behave as the **Expected** lines say on a real

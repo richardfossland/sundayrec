@@ -85,6 +85,39 @@ gate cannot provide. None block the default build or the gate.
   `ServiceLink`; writing them into the recording's `.meta.json` + `.service.json`
   sidecars (the Electron `applyStageManifest` fs step) is the remaining glue.
 
+## R1 — Non-destructive editor (`--features editor`)
+
+- **A real recording + a smoke run.** The cut/keep planning, the audio/video
+  filter graphs, the codec/output-path/chapter decisions, the EBU R128
+  loudnorm measure/apply chains + JSON parse, and the VAD/sermon classifier are
+  all unit-tested in `sundayrec-core::{editor, mastering, audio_analysis}`. The
+  I/O seam (`src-tauri/src/editor`) spawns the ffmpeg/ffprobe sidecar with that
+  argv (load / peaks / segments / mastering-analyze / export). NO new native dep
+  (ffmpeg is a sidecar; WAV/PCM parsed by hand). All five runs are
+  HARDWARE-UNVERIFIED — they need real media (smoke §12). Build proven to
+  compile with `cargo build -p sundayrec --features editor`.
+- **Deferred to a later editor phase (parity gaps, not bugs):**
+  - **Cut-region timeline UI.** The R1 panel exports the *whole* file
+    (`cutRegions: []`) — it proves the full IPC surface end-to-end. The
+    drag-to-mark cut UI + waveform-overlaid timeline (the Electron
+    `renderer/pages/editor/*`) is the renderer work for the next phase; the
+    backend already accepts `cutRegions` and the core plans the keeps.
+  - **Intro/outro + chapter metadata on export.** The core builds the
+    intro/outro concat graph + the `;FFMETADATA1` chapter sidecar
+    (`audio_export_filter_complex(has_intro, has_outro)`, `ffmetadata`,
+    `metadata_args`), but the R1 `EditorExportRequest` doesn't yet carry those
+    fields — wire them through when the editor UI surfaces intro/outro pickers +
+    a chapter editor.
+  - **Replace-mode + atomic swap.** R1 exports a new `*_redigert.<fmt>` file
+    only. The Electron `saveEdited`/`safeReplaceFile` in-place replace (with the
+    `.__editor_tmp`/`.__editor_bak` crash-recovery sweep) + the FORCE_WAV
+    replace refusal (`resolve_save_ext` is already tested in core) is the next
+    increment.
+  - **Export progress events + cancel.** The Electron flow streamed `time=`
+    progress + a `cancelExport(jobId)`. The seam currently `wait_with_output()`s;
+    streaming progress to a Tauri event + a cancel handle is glue once the UI
+    shows a progress bar (`export_timeout_ms` is already the tested kill-timer).
+
 ## Bridge Integration #2 — Live cue bridge (`--features bridge`)
 
 - **A live Supabase project + SundayStage publishing.** The Rec side SUBSCRIBES
