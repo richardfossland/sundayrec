@@ -15,6 +15,7 @@ import { WakePanel } from "@/features/wake/WakePanel";
 import { HistoryPanel } from "@/features/history/HistoryPanel";
 import { EditorPanel } from "@/features/editor/EditorPanel";
 import { CloudBackupPanel } from "@/features/cloud/CloudBackupPanel";
+import { StreamingPanel } from "@/features/streaming/StreamingPanel";
 import { SETTINGS_QUERY_KEY } from "@/features/settings/queryKey";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { changeLanguage } from "@/i18n";
@@ -154,6 +155,20 @@ function App() {
             </summary>
             <div className="mt-3">
               <CloudBackupPanel />
+            </div>
+          </details>
+
+          {/* R3: live RTMP streaming — per-destination keys in the keychain,
+              optional lower-third text overlay, start/stop + live status. The
+              ffmpeg push is behind the default-off `streaming` feature, so the
+              panel shows a calm "not built into this build" hint in the default
+              build (the key vault still works). Same disclosure pattern. */}
+          <details className="w-full max-w-md text-left">
+            <summary className="cursor-pointer text-sm font-medium">
+              {t("streaming.title", "Direktesending")}
+            </summary>
+            <div className="mt-3">
+              <StreamingPanel />
             </div>
           </details>
 
