@@ -12,9 +12,14 @@
 //! and is dropped after the send (mirrors the Electron `smtpPass` arg to
 //! `mailer.ts` `sendTest`). NETWORK-UNVERIFIED behind `--features email`.
 
-use sundayrec_core::email::{EmailStatus, EmailTransportKind};
+use tauri::State;
 
+use sundayrec_core::email::{EmailStatus, EmailTransportKind};
+use sundayrec_core::webhook::{build_webhook_body, WebhookPayload};
+
+use crate::db::Db;
 use crate::error::AppResult;
+use crate::settings;
 
 /// Whether this build can send email + whether Gmail is already connected. Works
 /// in every build: `feature_built` reflects the compile-time `email` feature and
@@ -82,4 +87,41 @@ pub async fn email_send_test(
         };
         crate::email::send_test(&transport, &recipient, language.as_deref()).await
     }
+}
+
+/// Send a test notification to `url` to verify a webhook before relying on it
+/// during a recording failure. The body shaping (URL validation, Slack/Discord
+/// detection, the structured-vs-chat payload) is the unit-tested
+/// [`sundayrec_core::webhook`]; the church name comes from settings. Returns the
+/// `no_url` error for an invalid URL (matching the Electron handler). The POST
+/// itself is NETWORK-UNVERIFIED (reuses the always-present `reqwest`, no feature).
+#[tauri::command]
+pub async fn email_test_webhook(db: State<'_, Db>, url: String) -> AppResult<bool> {
+    let s = settings::load(&db.pool).await.unwrap_or_default();
+    let ts = chrono::Utc::now().to_rfc3339();
+    let payload = WebhookPayload::test(&s.church_name, &ts);
+    let Some(body) = build_webhook_body(&url, &payload) else {
+        return Err(crate::error::AppError::Validation("no_url".into()));
+    };
+    // NETWORK-UNVERIFIED: a 10 s-bounded POST; any non-success status / transport
+    // error means the webhook isn't reachable (returns Ok(false), not an error,
+    // so the panel shows "didn't work" rather than a stack-trace).
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .body(body)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await;
+    Ok(matches!(resp, Ok(r) if r.status().is_success()))
+}
+
+/// Wipe the stored SMTP password from the OS keychain (the user disabled email
+/// notifications or switched to Gmail). Mirrors the Electron `clear-smtp-password`
+/// handler. A missing entry is success, not an error.
+#[tauri::command]
+pub fn email_clear_smtp_password() -> AppResult<bool> {
+    crate::secrets::delete(crate::secrets::SecretProvider::SmtpPassword)?;
+    Ok(true)
 }

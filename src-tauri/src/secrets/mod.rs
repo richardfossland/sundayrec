@@ -27,6 +27,9 @@ pub enum SecretProvider {
     Gmail,
     /// RTMP stream key (live streaming).
     StreamKey,
+    /// SMTP password for the email-alert mailer (never persisted in settings;
+    /// mirrors the Electron `emailSmtpPassEnc` keychain slot).
+    SmtpPassword,
 }
 
 impl SecretProvider {
@@ -37,16 +40,18 @@ impl SecretProvider {
             SecretProvider::YouTube => "oauth.youtube",
             SecretProvider::Gmail => "oauth.gmail",
             SecretProvider::StreamKey => "stream.key",
+            SecretProvider::SmtpPassword => "email.smtp_password",
         }
     }
 
     /// All providers — handy for a "disconnect everything" sweep.
-    pub fn all() -> [SecretProvider; 4] {
+    pub fn all() -> [SecretProvider; 5] {
         [
             SecretProvider::GoogleDrive,
             SecretProvider::YouTube,
             SecretProvider::Gmail,
             SecretProvider::StreamKey,
+            SecretProvider::SmtpPassword,
         ]
     }
 }

@@ -259,6 +259,8 @@ pub fn run() {
             // PU-1 email alerts (status pure; send gated by `email`).
             commands::email::email_status,
             commands::email::email_send_test,
+            commands::email::email_test_webhook,
+            commands::email::email_clear_smtp_password,
             commands::scheduler::scheduler_reschedule,
             commands::scheduler::scheduler_status,
             commands::scheduler::scheduler_check_missed,
