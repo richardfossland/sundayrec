@@ -32,6 +32,9 @@
 //!   - [`settings`]     — the typed/validated settings model + defaults (Fase 1)
 //!   - [`preflight`]    — the "ready-to-record" finding decisions (Fase 2)
 //!   - [`diagnostics`]  — the diagnostics markdown report builder (Fase 2)
+//!   - [`editor`]       — non-destructive cut/trim/region planning + export-arg math (PU-7 editor)
+//!   - [`mastering`]    — EBU R128 loudness (integrated/range/true-peak) + normalise-gain decisions (PU-7)
+//!   - [`audio_analysis`] — peaks/waveform, spectrum (FFT), segment classification (PU-7)
 //!   - [`cloud`]        — Google cloud-backup backbone: OAuth/PKCE, retry mat, upload-queue, Drive resumable bits (Fase 6)
 //!   - [`whisper`]      — whisper.cpp transcription decisions: model registry, argv/thread heuristic, progress/exit parse, JSON-sidecar normalise, chunk/merge, language map (PU-5)
 //!   - [`prep`]         — episode-prep assembly: sermon detection + attention reasons + EpisodePrep build (PU-6)
@@ -39,11 +42,13 @@
 //!   - [`integrations`] — Sunday-suite hand-offs: Stage manifest→chapters/setlist + the live cue-bridge consumer (PU-6 + Bridge #2)
 
 pub mod audio;
+pub mod audio_analysis;
 pub mod capture;
 pub mod cloud;
 pub mod device_enum;
 pub mod device_match;
 pub mod diagnostics;
+pub mod editor;
 pub mod email;
 pub mod errors;
 pub mod feed;
@@ -51,6 +56,7 @@ pub mod ffmpeg;
 pub mod filename;
 pub mod integrations;
 pub mod link;
+pub mod mastering;
 pub mod mjpeg;
 pub mod preflight;
 pub mod prep;
