@@ -201,4 +201,55 @@ describe("HistoryPanel", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Vis i mappe" })[0]);
     await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
   });
+
+  it("filters the list by the search box (filename match)", async () => {
+    renderPanel();
+    await waitFor(() =>
+      expect(screen.getByText("2026-05-30.mp3")).toBeInTheDocument(),
+    );
+    fireEvent.change(screen.getByLabelText("Søk i historikk…"), {
+      target: { value: "05-23" },
+    });
+    // Only the matching row remains.
+    await waitFor(() =>
+      expect(screen.queryByText("2026-05-30.mp3")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText("2026-05-23.wav")).toBeInTheDocument();
+  });
+
+  it("filters by note text and shows a no-hits message when nothing matches", async () => {
+    renderPanel();
+    await waitFor(() =>
+      expect(screen.getByText("2026-05-30.mp3")).toBeInTheDocument(),
+    );
+    // "kun preken" is the note on r1.
+    fireEvent.change(screen.getByLabelText("Søk i historikk…"), {
+      target: { value: "preken" },
+    });
+    await waitFor(() =>
+      expect(screen.queryByText("2026-05-23.wav")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText("2026-05-30.mp3")).toBeInTheDocument();
+
+    // A query matching nothing shows the search no-hits state, not "empty".
+    fireEvent.change(screen.getByLabelText("Søk i historikk…"), {
+      target: { value: "zzz-nope" },
+    });
+    await waitFor(() =>
+      expect(screen.getByText("Ingen treff for")).toBeInTheDocument(),
+    );
+  });
+
+  it("renders an aggregate stats line over the full (unfiltered) history", async () => {
+    renderPanel();
+    const stats = await screen.findByTestId("history-stats");
+    // 2 recordings; only r1 has a duration (3_661_000 ms → 1:01:01).
+    expect(stats.textContent).toContain("2");
+    expect(stats.textContent).toContain("1:01:01");
+    // Filtering does not change the stats (Electron parity).
+    fireEvent.change(screen.getByLabelText("Søk i historikk…"), {
+      target: { value: "05-30" },
+    });
+    expect(screen.getByTestId("history-stats").textContent).toContain("2");
+  });
 });

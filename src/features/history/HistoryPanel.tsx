@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import type { RecordingRow } from "@/lib/bindings/RecordingRow";
 import { HISTORY_QUERY_KEY } from "./queryKey";
+import { filterHistory, historyStats } from "./historyFilter";
 
 /** Debounce (ms) before a note edit is auto-saved — matches the settings feel. */
 const NOTE_DEBOUNCE_MS = 600;
@@ -163,6 +164,7 @@ export function HistoryPanel() {
   });
 
   const [revealError, setRevealError] = useState(false);
+  const [query, setQuery] = useState("");
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: HISTORY_QUERY_KEY });
@@ -209,6 +211,13 @@ export function HistoryPanel() {
     [noteMutation],
   );
 
+  // Pure filter/stats (mirrors home.ts filterAndRenderHistory + updateHistoryStats):
+  // search the full set, but compute stats over everything (Electron parity).
+  // Computed before the early returns so the hook order stays stable.
+  const allRows = useMemo(() => data ?? [], [data]);
+  const rows = useMemo(() => filterHistory(allRows, query), [allRows, query]);
+  const stats = useMemo(() => historyStats(allRows), [allRows]);
+
   if (isLoading) {
     return (
       <p className="opacity-70">
@@ -225,8 +234,6 @@ export function HistoryPanel() {
     );
   }
 
-  const rows = data ?? [];
-
   return (
     <section
       className="flex w-full max-w-md flex-col gap-3"
@@ -236,7 +243,7 @@ export function HistoryPanel() {
         <h2 className="text-sm font-medium">
           {t("history.title", "Historikk")}
         </h2>
-        {rows.length > 0 && (
+        {allRows.length > 0 && (
           <button
             type="button"
             className="rounded border border-red-800 px-2 py-1 text-xs text-red-300 hover:bg-red-950"
@@ -246,6 +253,33 @@ export function HistoryPanel() {
           </button>
         )}
       </div>
+
+      {allRows.length > 0 && (
+        <>
+          <input
+            type="search"
+            className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
+            aria-label={t("history.searchPlaceholder", "Søk i historikk…")}
+            placeholder={t("history.searchPlaceholder", "Søk i historikk…")}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {stats.count > 0 && (
+            <p className="text-xs opacity-60" data-testid="history-stats">
+              {stats.count} {t("history.totalCount", "opptak")} ·{" "}
+              {formatDuration(stats.totalDurationMs)}{" "}
+              {t("history.totalDuration", "totalt")}
+              {stats.lastRecordedAt != null && (
+                <>
+                  {" "}
+                  · {t("history.lastRecording", "sist")}{" "}
+                  {formatDate(stats.lastRecordedAt, i18n.language)}
+                </>
+              )}
+            </p>
+          )}
+        </>
+      )}
 
       {revealError && (
         <p className="text-xs text-amber-400" role="alert">
@@ -257,7 +291,11 @@ export function HistoryPanel() {
       )}
 
       {rows.length === 0 ? (
-        <p className="opacity-60">{t("history.empty", "Ingen opptak ennå")}</p>
+        <p className="opacity-60">
+          {allRows.length > 0 && query.trim() !== ""
+            ? t("search.noHits", "Ingen treff for")
+            : t("history.empty", "Ingen opptak ennå")}
+        </p>
       ) : (
         <ul className="flex flex-col gap-2">
           {rows.map((row) => (
