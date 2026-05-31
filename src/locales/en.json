@@ -130,7 +130,13 @@
     "editNote": "Edit note",
     "notePlaceholder": "Write a note…",
     "confirmDeleteErrors": "Delete all error entries?",
-    "deleteEntry": "Delete entry"
+    "deleteEntry": "Delete entry",
+    "size": "Size",
+    "unknownDevice": "Unknown device",
+    "revealInFolder": "Show in folder",
+    "revealError": "Could not open the folder — the file may no longer exist",
+    "loadError": "Could not load history",
+    "confirmDelete": "Delete this recording from history?"
   },
   "review": {
     "queueTitle": "Ready for review and publishing",
@@ -185,7 +191,15 @@
     "ageDayOne": "1 day ago",
     "ageDays": "{n} days ago",
     "ageOldest": "Over 14 days ago",
-    "confident": "confident"
+    "confident": "confident",
+    "title": "Review",
+    "runReminders": "Run reminders",
+    "loadError": "Could not read the review queue",
+    "queueEmpty": "No episodes awaiting review.",
+    "statusAnalyzing": "Analyzing",
+    "statusReady": "Ready",
+    "statusDiscarded": "Discarded",
+    "sermonMinutes": "Sermon estimate: {{min}} min"
   },
   "schedule": {
     "title": "Weekly schedule",
@@ -646,7 +660,34 @@
     "minimap": "Overview",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
-    "fitAll": "Fit all"
+    "fitAll": "Fit all",
+    "pickTitle": "Choose a recording",
+    "noRecordings": "No recordings yet",
+    "mediaFilter": "Audio/video",
+    "featureDisabled": "Editing is not built into this version.",
+    "duration": "Duration",
+    "video": "video",
+    "audioOnly": "audio only",
+    "waveform": "Waveform",
+    "noWaveform": "No waveform yet",
+    "loadPeaks": "Waveform",
+    "detectSegments": "Detect segments",
+    "analyzeLoudness": "Measure loudness",
+    "peaksCount": "{{n}} waveform points",
+    "loudness": "Loudness",
+    "addCut": "Add cut",
+    "cutRegion": "Cut",
+    "cutStart": "Start (seconds)",
+    "cutEnd": "End (seconds)",
+    "format": "Format",
+    "preset": "Mastering",
+    "masterNone": "None (unchanged)",
+    "masterPodcast": "Podcast (−16 LUFS)",
+    "masterStreaming": "Streaming (−14 LUFS)",
+    "masterNatural": "Natural (−19 LUFS)",
+    "masterMusic": "Music + speech (−16 LUFS)",
+    "export": "Export",
+    "exported": "Saved"
   },
   "master": {
     "title": "Mastering (prepare for publishing)",
@@ -891,7 +932,16 @@
     "enabled": "Enabled",
     "streamConfirmDelete": "Delete this destination?",
     "streamKeyPlaceholder": "(paste stream key)",
-    "streamNoneYet": "No destinations yet. Add one to start streaming."
+    "streamNoneYet": "No destinations yet. Add one to start streaming.",
+    "title": "Publishing",
+    "featureDisabled": "Publishing to disk/cloud is not built into this version. You can still preview the feed.",
+    "candidateCount": "{{n}} recordings in the feed",
+    "previewFeed": "Preview feed",
+    "noFolder": "Choose a save folder in settings first.",
+    "generateFailed": "Could not generate the feed.",
+    "writtenTo": "Written to: {{path}}",
+    "previewTitle": "Preview ({{n}} episodes)",
+    "feedXml": "Feed XML"
   },
   "live": {
     "title": "Live broadcast",
@@ -966,7 +1016,8 @@
     "noTranscriptsTitle": "No transcripts yet",
     "noTranscriptsDesc": "Open a recording in the Editor and click Transcribe to build a searchable archive. Once you have one or more transcripts they will appear here.",
     "indexFailed": "Could not load index",
-    "fileNotFound": "Source file not found. It may have been moved or deleted."
+    "fileNotFound": "Source file not found. It may have been moved or deleted.",
+    "empty": "No transcripts yet — transcribe a recording first."
   },
   "thumbnail": {
     "section": {
@@ -998,5 +1049,61 @@
     "info": {
       "size": "{w}×{h} px · {size}"
     }
+  },
+  "email": {
+    "title": "Email notifications",
+    "method": "Send method",
+    "methodGmail": "Gmail (connected)",
+    "methodGmailOff": "Gmail (not connected)",
+    "methodSmtp": "SMTP",
+    "gmailHint": "Connect Google under Cloud backup to send via Gmail without SMTP.",
+    "smtpHost": "SMTP server (e.g. smtp.gmail.com)",
+    "smtpPort": "Port",
+    "smtpUser": "Username (email address)",
+    "smtpPass": "Password / app password",
+    "smtpFrom": "From address",
+    "recipient": "Recipient (email address)",
+    "sendTest": "Send test notification",
+    "testSent": "Test notification sent.",
+    "testFailed": "Could not send the test notification.",
+    "noConfig": "Fill in a recipient and email setup.",
+    "featureDisabled": "Email notifications are not built into this version. Settings can still be saved."
+  },
+  "transcribe": {
+    "title": "Transcription",
+    "recording": "Recording",
+    "noRecordings": "No recordings yet",
+    "model": "Model",
+    "language": "Language",
+    "langAuto": "Automatic",
+    "translate": "Translate to English",
+    "start": "Transcribe",
+    "running": "Transcribing…",
+    "failed": "Transcription failed.",
+    "featureDisabled": "Transcription is not built into this version.",
+    "result": "Transcript",
+    "segmentCount": "({{n}} segments)",
+    "empty": "No speech found in the recording."
+  },
+  "integrations": {
+    "title": "Integrations",
+    "peersTitle": "The Sunday apps",
+    "peerPlan": "Planning and volunteers",
+    "peerSong": "Hymns and setlists",
+    "peerStage": "Live big screen and cues",
+    "peerEdit": "Captioning recordings",
+    "peerStudio": "Podcast and jingle editing",
+    "handoffHint": "Send a finished recording to SundayEdit or SundayStudio from History.",
+    "connectionTitle": "Connection",
+    "churchId": "Church ID",
+    "serviceId": "Service ID (live)",
+    "songApiUrl": "SundaySong API URL",
+    "planApiUrl": "SundayPlan API URL",
+    "save": "Save connection",
+    "saved": "Connection saved.",
+    "bridgeTitle": "Live cue bridge (SundayStage)",
+    "bridgeDisabled": "The built-in live bridge is not compiled into this version. You can still save the connection and test the channel name.",
+    "testChannel": "Show channel name",
+    "channelError": "Fill in both church ID and service ID."
   }
 }

@@ -13,7 +13,10 @@
     "general": "Allmänt",
     "editor": "Redigera",
     "live": "Live",
-    "search": "Sök"
+    "search": "Sök",
+    "produceGroup": "Producera",
+    "distributeGroup": "Distribuera",
+    "systemGroup": "System"
   },
   "status": {
     "ready": "Allt är klart",
@@ -21,7 +24,8 @@
     "recording": "Spelar in nu",
     "ok": "REDO ATT SPELA IN",
     "warn": "ÅTGÄRD KRÄVS",
-    "noSchedule": "Ingen inspelning schemalagd"
+    "noSchedule": "Ingen inspelning schemalagd",
+    "recordingError": "Inspelningsfel"
   },
   "home": {
     "greeting": "God dag",
@@ -77,7 +81,10 @@
     },
     "cloudLabel": "MOLN-BACKUP",
     "thumbLabel": "AVSNITTSBILD",
-    "whisperLabel": "TRANSKRIBERING"
+    "whisperLabel": "TRANSKRIBERING",
+    "reviewQueueCount": "{{n}} avsnitt klara",
+    "reviewQueueHint": "Väntar på granskning innan publicering",
+    "reviewOpen": "Öppna →"
   },
   "update": {
     "available": "Ny version {v} tillgänglig — laddar ner…",
@@ -123,7 +130,13 @@
     "editNote": "Redigera anteckning",
     "notePlaceholder": "Skriv en anteckning…",
     "confirmDeleteErrors": "Radera alla felposter?",
-    "deleteEntry": "Radera post"
+    "deleteEntry": "Radera post",
+    "size": "Storlek",
+    "unknownDevice": "Okänd enhet",
+    "revealInFolder": "Visa i mapp",
+    "revealError": "Kunde inte öppna mappen — filen finns kanske inte längre",
+    "loadError": "Kunde inte läsa historiken",
+    "confirmDelete": "Ta bort denna inspelning från historiken?"
   },
   "review": {
     "queueTitle": "Klara för granskning och publicering",
@@ -178,7 +191,15 @@
     "ageDayOne": "1 dag sedan",
     "ageDays": "{n} dagar sedan",
     "ageOldest": "Över 14 dagar sedan",
-    "confident": "säker"
+    "confident": "säker",
+    "title": "Granskning",
+    "runReminders": "Kör påminnelser",
+    "loadError": "Kunde inte läsa granskningskön",
+    "queueEmpty": "Inga avsnitt väntar på granskning.",
+    "statusAnalyzing": "Analyserar",
+    "statusReady": "Klar",
+    "statusDiscarded": "Förkastad",
+    "sermonMinutes": "Predikan uppskattad: {{min}} min"
   },
   "schedule": {
     "title": "Veckoschema",
@@ -471,7 +492,10 @@
     "days": "dagar",
     "formatWavDesc": "Okomprimerat, högsta kvalitet",
     "qualityHighest": "Högsta",
-    "qualityRecommendedDesc": "Rekommenderas för delning och webb"
+    "qualityRecommendedDesc": "Rekommenderas för delning och webb",
+    "preRoll": "Förinspelning (sek)",
+    "preRollOff": "Av",
+    "preRollActive": "Förinspelning aktiv"
   },
   "general": {
     "title": "Allmänt",
@@ -632,7 +656,38 @@
     "errFileNotFound": "Originalfilen är inte tillgänglig — är disken frånkopplad?",
     "errCutData": "Internt fel i klippdata. Försök ladda om filen.",
     "chaptersEmpty": "Inga kapitel ännu. Klicka på \"+ Lägg till vid uppspelningsmarkör\" för att starta.",
-    "chapterClickSeek": "Klicka för att söka"
+    "chapterClickSeek": "Klicka för att söka",
+    "minimap": "Översikt",
+    "zoomIn": "Zooma in",
+    "zoomOut": "Zooma ut",
+    "fitAll": "Visa allt",
+    "pickTitle": "Välj inspelning",
+    "noRecordings": "Inga inspelningar ännu",
+    "mediaFilter": "Ljud/video",
+    "featureDisabled": "Redigering är inte inbyggd i denna version.",
+    "duration": "Längd",
+    "video": "video",
+    "audioOnly": "endast ljud",
+    "waveform": "Vågform",
+    "noWaveform": "Ingen vågform ännu",
+    "loadPeaks": "Vågform",
+    "detectSegments": "Hitta segment",
+    "analyzeLoudness": "Mät ljudstyrka",
+    "peaksCount": "{{n}} vågformspunkter",
+    "loudness": "Ljudstyrka",
+    "addCut": "Lägg till klipp",
+    "cutRegion": "Klipp",
+    "cutStart": "Start (sekunder)",
+    "cutEnd": "Slut (sekunder)",
+    "format": "Format",
+    "preset": "Mastring",
+    "masterNone": "Ingen (oförändrad)",
+    "masterPodcast": "Podd (−16 LUFS)",
+    "masterStreaming": "Streaming (−14 LUFS)",
+    "masterNatural": "Naturlig (−19 LUFS)",
+    "masterMusic": "Musik + tal (−16 LUFS)",
+    "export": "Exportera",
+    "exported": "Sparad"
   },
   "master": {
     "title": "Mastring (förbered för publicering)",
@@ -740,7 +795,27 @@
     "back": "Tillbaka",
     "finish": "✓ Klar — aktivera appen",
     "usbHint": "Anslut USB-mixern om den inte syns här",
-    "filenameExample": "Exempel på filnamn:"
+    "filenameExample": "Exempel på filnamn:",
+    "title": "Inställning",
+    "welcomeTitle": "Välkommen till SundayRec",
+    "welcomeBody": "Låt oss ställa in appen så att allt är klart till söndagen.",
+    "start": "Kom igång →",
+    "skipAll": "Hoppa över — ställ in manuellt",
+    "deviceTitle": "Vilken ljudenhet använder du?",
+    "deviceBody": "Välj mixern eller ljudgränssnittet som är anslutet till datorn.",
+    "deviceDefault": "Systemstandard",
+    "deviceMixer": "Mixer / ljudgränssnitt",
+    "noDevices": "Inga ljudenheter hittades.",
+    "useDevice": "Använd vald enhet →",
+    "pickDeviceFirst": "Välj en ljudenhet innan du fortsätter",
+    "skipStep": "Hoppa över detta steg",
+    "testTitle": "Testa att ljudet fungerar",
+    "testBody": "Säg något i mikrofonen — kontrollera att mätaren rör sig.",
+    "waiting": "Väntar på ljud…",
+    "audioWorks": "Ljudet fungerar →",
+    "readyTitle": "Allt klart!",
+    "readyBody": "SundayRec är redo att spela in gudstjänster. Du kan när som helst ändra inställningar från menyn.",
+    "open": "Öppna SundayRec →"
   },
   "time": {
     "yr": "år",
@@ -857,7 +932,16 @@
     "enabled": "Aktiverad",
     "streamConfirmDelete": "Radera denna destination?",
     "streamKeyPlaceholder": "(klistra in stream-nyckel)",
-    "streamNoneYet": "Inga destinationer ännu. Lägg till en för att börja sända."
+    "streamNoneYet": "Inga destinationer ännu. Lägg till en för att börja sända.",
+    "title": "Publicering",
+    "featureDisabled": "Publicering till disk/moln är inte inbyggd i denna version. Du kan ändå förhandsgranska flödet.",
+    "candidateCount": "{{n}} inspelningar i flödet",
+    "previewFeed": "Förhandsgranska flöde",
+    "noFolder": "Välj en sparmapp i inställningarna först.",
+    "generateFailed": "Kunde inte generera flödet.",
+    "writtenTo": "Skrivet till: {{path}}",
+    "previewTitle": "Förhandsvisning ({{n}} avsnitt)",
+    "feedXml": "Flödes-XML"
   },
   "live": {
     "title": "Direktsändning",
@@ -932,7 +1016,8 @@
     "noTranscriptsTitle": "Inga transkriberingar ännu",
     "noTranscriptsDesc": "Öppna en inspelning i redigeraren och klicka på Transkribera för att bygga ett sökbart arkiv.",
     "indexFailed": "Kunde inte ladda index",
-    "fileNotFound": "Källfilen hittades inte. Den kan ha flyttats eller raderats."
+    "fileNotFound": "Källfilen hittades inte. Den kan ha flyttats eller raderats.",
+    "empty": "Inga transkript ännu — transkribera en inspelning först."
   },
   "thumbnail": {
     "section": {
@@ -964,5 +1049,61 @@
     "info": {
       "size": "{w}×{h} px · {size}"
     }
+  },
+  "email": {
+    "title": "E-postaviseringar",
+    "method": "Sändmetod",
+    "methodGmail": "Gmail (ansluten)",
+    "methodGmailOff": "Gmail (ej ansluten)",
+    "methodSmtp": "SMTP",
+    "gmailHint": "Anslut Google under Molnbackup för att skicka via Gmail utan SMTP.",
+    "smtpHost": "SMTP-server (t.ex. smtp.gmail.com)",
+    "smtpPort": "Port",
+    "smtpUser": "Användarnamn (e-postadress)",
+    "smtpPass": "Lösenord / app-lösenord",
+    "smtpFrom": "Avsändaradress",
+    "recipient": "Mottagare (e-postadress)",
+    "sendTest": "Skicka testavisering",
+    "testSent": "Testavisering skickad.",
+    "testFailed": "Kunde inte skicka testaviseringen.",
+    "noConfig": "Fyll i mottagare och e-postinställningar.",
+    "featureDisabled": "E-postaviseringar är inte inbyggda i denna version. Inställningarna kan ändå sparas."
+  },
+  "transcribe": {
+    "title": "Transkribering",
+    "recording": "Inspelning",
+    "noRecordings": "Inga inspelningar ännu",
+    "model": "Modell",
+    "language": "Språk",
+    "langAuto": "Automatiskt",
+    "translate": "Översätt till engelska",
+    "start": "Transkribera",
+    "running": "Transkriberar…",
+    "failed": "Transkribering misslyckades.",
+    "featureDisabled": "Transkribering är inte inbyggd i denna version.",
+    "result": "Transkript",
+    "segmentCount": "({{n}} segment)",
+    "empty": "Inget tal hittades i inspelningen."
+  },
+  "integrations": {
+    "title": "Integrationer",
+    "peersTitle": "Sunday-apparna",
+    "peerPlan": "Planering och volontärer",
+    "peerSong": "Psalmer och låtlistor",
+    "peerStage": "Live storbildsskärm och cues",
+    "peerEdit": "Textning av inspelningar",
+    "peerStudio": "Podd- och jingelredigering",
+    "handoffHint": "Skicka en färdig inspelning till SundayEdit eller SundayStudio från Historik.",
+    "connectionTitle": "Anslutning",
+    "churchId": "Församlings-ID",
+    "serviceId": "Gudstjänst-ID (live)",
+    "songApiUrl": "SundaySong API-URL",
+    "planApiUrl": "SundayPlan API-URL",
+    "save": "Spara anslutning",
+    "saved": "Anslutning sparad.",
+    "bridgeTitle": "Live cue-brygga (SundayStage)",
+    "bridgeDisabled": "Den inbyggda live-bryggan är inte kompilerad i denna version. Du kan ändå spara anslutningen och testa kanalnamnet.",
+    "testChannel": "Visa kanalnamn",
+    "channelError": "Fyll i både församlings-ID och gudstjänst-ID."
   }
 }

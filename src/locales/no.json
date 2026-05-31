@@ -1016,7 +1016,8 @@
     "noTranscriptsTitle": "Ingen transkripsjoner ennå",
     "noTranscriptsDesc": "Åpne et opptak i Rediger og klikk Transkriber for å bygge opp et søkbart arkiv. Når du har én eller flere transkripsjoner, vises de her.",
     "indexFailed": "Klarte ikke laste indeks",
-    "fileNotFound": "Originalfilen ble ikke funnet. Den kan ha blitt flyttet eller slettet."
+    "fileNotFound": "Originalfilen ble ikke funnet. Den kan ha blitt flyttet eller slettet.",
+    "empty": "Ingen transkripsjoner ennå — transkriber et opptak først."
   },
   "thumbnail": {
     "section": {

@@ -13,7 +13,10 @@
     "general": "Generelt",
     "editor": "Rediger",
     "live": "Live",
-    "search": "Søg"
+    "search": "Søg",
+    "produceGroup": "Producér",
+    "distributeGroup": "Distribuér",
+    "systemGroup": "System"
   },
   "status": {
     "ready": "Alt er klar",
@@ -21,7 +24,8 @@
     "recording": "Optager nu",
     "ok": "KLAR TIL OPTAGELSE",
     "warn": "HANDLING PÅKRÆVET",
-    "noSchedule": "Ingen optagelse planlagt"
+    "noSchedule": "Ingen optagelse planlagt",
+    "recordingError": "Optagelsesfejl"
   },
   "home": {
     "greeting": "Goddag",
@@ -77,7 +81,10 @@
     },
     "cloudLabel": "CLOUD-BACKUP",
     "thumbLabel": "EPISODEBILLEDE",
-    "whisperLabel": "TRANSSKRIPTION"
+    "whisperLabel": "TRANSSKRIPTION",
+    "reviewQueueCount": "{{n}} afsnit klar",
+    "reviewQueueHint": "Venter på gennemgang før udgivelse",
+    "reviewOpen": "Åbn →"
   },
   "update": {
     "available": "Ny version {v} tilgængelig — henter…",
@@ -123,7 +130,13 @@
     "editNote": "Rediger note",
     "notePlaceholder": "Skriv en note…",
     "confirmDeleteErrors": "Slet alle fejlposter?",
-    "deleteEntry": "Slet post"
+    "deleteEntry": "Slet post",
+    "size": "Størrelse",
+    "unknownDevice": "Ukendt enhed",
+    "revealInFolder": "Vis i mappe",
+    "revealError": "Kunne ikke åbne mappen — filen findes måske ikke længere",
+    "loadError": "Kunne ikke indlæse historikken",
+    "confirmDelete": "Slet denne optagelse fra historikken?"
   },
   "review": {
     "queueTitle": "Klar til gennemgang og udgivelse",
@@ -178,7 +191,15 @@
     "ageDayOne": "1 dag siden",
     "ageDays": "{n} dage siden",
     "ageOldest": "Over 14 dage siden",
-    "confident": "sikker"
+    "confident": "sikker",
+    "title": "Gennemgang",
+    "runReminders": "Kør påmindelser",
+    "loadError": "Kunne ikke læse gennemgangskøen",
+    "queueEmpty": "Ingen afsnit venter på gennemgang.",
+    "statusAnalyzing": "Analyserer",
+    "statusReady": "Klar",
+    "statusDiscarded": "Forkastet",
+    "sermonMinutes": "Prædiken anslået: {{min}} min"
   },
   "schedule": {
     "title": "Ugentlig tidsplan",
@@ -471,7 +492,10 @@
     "days": "dage",
     "formatWavDesc": "Ukomprimeret, højeste kvalitet",
     "qualityHighest": "Højeste",
-    "qualityRecommendedDesc": "Anbefales til deling og web"
+    "qualityRecommendedDesc": "Anbefales til deling og web",
+    "preRoll": "Forindspilning (sek)",
+    "preRollOff": "Fra",
+    "preRollActive": "Forindspilning aktiv"
   },
   "general": {
     "title": "Generelt",
@@ -632,7 +656,38 @@
     "errFileNotFound": "Originalfilen er ikke tilgængelig — er disken afbrudt?",
     "errCutData": "Intern fejl i klippedata. Prøv at genindlæse filen.",
     "chaptersEmpty": "Ingen kapitler endnu. Klik på \"+ Tilføj ved afspilningsmarkør\" for at starte.",
-    "chapterClickSeek": "Klik for at søge"
+    "chapterClickSeek": "Klik for at søge",
+    "minimap": "Oversigt",
+    "zoomIn": "Zoom ind",
+    "zoomOut": "Zoom ud",
+    "fitAll": "Vis alt",
+    "pickTitle": "Vælg optagelse",
+    "noRecordings": "Ingen optagelser endnu",
+    "mediaFilter": "Lyd/video",
+    "featureDisabled": "Redigering er ikke bygget ind i denne version.",
+    "duration": "Varighed",
+    "video": "video",
+    "audioOnly": "kun lyd",
+    "waveform": "Bølgeform",
+    "noWaveform": "Ingen bølgeform endnu",
+    "loadPeaks": "Bølgeform",
+    "detectSegments": "Find segmenter",
+    "analyzeLoudness": "Mål lydstyrke",
+    "peaksCount": "{{n}} bølgeformpunkter",
+    "loudness": "Lydstyrke",
+    "addCut": "Tilføj klip",
+    "cutRegion": "Klip",
+    "cutStart": "Start (sekunder)",
+    "cutEnd": "Slut (sekunder)",
+    "format": "Format",
+    "preset": "Mastering",
+    "masterNone": "Ingen (uændret)",
+    "masterPodcast": "Podcast (−16 LUFS)",
+    "masterStreaming": "Streaming (−14 LUFS)",
+    "masterNatural": "Naturlig (−19 LUFS)",
+    "masterMusic": "Musik + tale (−16 LUFS)",
+    "export": "Eksportér",
+    "exported": "Gemt"
   },
   "master": {
     "title": "Mastering (klargør til udgivelse)",
@@ -740,7 +795,27 @@
     "back": "Tilbage",
     "finish": "✓ Færdig — aktivér appen",
     "usbHint": "Tilslut USB-mixeren, hvis den ikke vises her",
-    "filenameExample": "Eksempel på filnavn:"
+    "filenameExample": "Eksempel på filnavn:",
+    "title": "Opsætning",
+    "welcomeTitle": "Velkommen til SundayRec",
+    "welcomeBody": "Lad os sætte appen op, så alt er klar til søndag.",
+    "start": "Kom i gang →",
+    "skipAll": "Spring over — sæt op manuelt",
+    "deviceTitle": "Hvilken lydenhed bruger du?",
+    "deviceBody": "Vælg mixeren eller lydinterfacet, der er tilsluttet computeren.",
+    "deviceDefault": "Systemstandard",
+    "deviceMixer": "Mixer / lydinterface",
+    "noDevices": "Ingen lydenheder fundet.",
+    "useDevice": "Brug valgte enhed →",
+    "pickDeviceFirst": "Vælg en lydenhed før du fortsætter",
+    "skipStep": "Spring dette trin over",
+    "testTitle": "Test at lyden virker",
+    "testBody": "Sig noget i mikrofonen — tjek at måleren bevæger sig.",
+    "waiting": "Venter på lyd…",
+    "audioWorks": "Lyden virker →",
+    "readyTitle": "Alt er klar!",
+    "readyBody": "SundayRec er klar til at optage gudstjenester. Du kan til enhver tid ændre indstillinger fra menuen.",
+    "open": "Åbn SundayRec →"
   },
   "time": {
     "yr": "år",
@@ -857,7 +932,16 @@
     "enabled": "Aktiveret",
     "streamConfirmDelete": "Slet denne destination?",
     "streamKeyPlaceholder": "(indsæt stream-nøgle)",
-    "streamNoneYet": "Ingen destinationer endnu. Tilføj én for at sende."
+    "streamNoneYet": "Ingen destinationer endnu. Tilføj én for at sende.",
+    "title": "Udgivelse",
+    "featureDisabled": "Udgivelse til disk/sky er ikke bygget ind i denne version. Du kan stadig forhåndsvise feedet.",
+    "candidateCount": "{{n}} optagelser i feedet",
+    "previewFeed": "Forhåndsvis feed",
+    "noFolder": "Vælg en gemmemappe i indstillingerne først.",
+    "generateFailed": "Kunne ikke generere feedet.",
+    "writtenTo": "Skrevet til: {{path}}",
+    "previewTitle": "Forhåndsvisning ({{n}} afsnit)",
+    "feedXml": "Feed-XML"
   },
   "live": {
     "title": "Direkte udsendelse",
@@ -932,7 +1016,8 @@
     "noTranscriptsTitle": "Ingen transskriberinger endnu",
     "noTranscriptsDesc": "Åbn en optagelse i editoren og klik Transskribér for at bygge et søgbart arkiv.",
     "indexFailed": "Kunne ikke indlæse indeks",
-    "fileNotFound": "Kildefilen blev ikke fundet. Den kan være flyttet eller slettet."
+    "fileNotFound": "Kildefilen blev ikke fundet. Den kan være flyttet eller slettet.",
+    "empty": "Ingen transskripter endnu — transskribér en optagelse først."
   },
   "thumbnail": {
     "section": {
@@ -964,5 +1049,61 @@
     "info": {
       "size": "{w}×{h} px · {size}"
     }
+  },
+  "email": {
+    "title": "E-mailnotifikationer",
+    "method": "Sendemetode",
+    "methodGmail": "Gmail (forbundet)",
+    "methodGmailOff": "Gmail (ikke forbundet)",
+    "methodSmtp": "SMTP",
+    "gmailHint": "Forbind Google under Sky-backup for at sende via Gmail uden SMTP.",
+    "smtpHost": "SMTP-server (f.eks. smtp.gmail.com)",
+    "smtpPort": "Port",
+    "smtpUser": "Brugernavn (e-mailadresse)",
+    "smtpPass": "Adgangskode / app-adgangskode",
+    "smtpFrom": "Afsenderadresse",
+    "recipient": "Modtager (e-mailadresse)",
+    "sendTest": "Send testnotifikation",
+    "testSent": "Testnotifikation sendt.",
+    "testFailed": "Kunne ikke sende testnotifikationen.",
+    "noConfig": "Udfyld modtager og e-mailopsætning.",
+    "featureDisabled": "E-mailnotifikationer er ikke bygget ind i denne version. Indstillingerne kan stadig gemmes."
+  },
+  "transcribe": {
+    "title": "Transskribering",
+    "recording": "Optagelse",
+    "noRecordings": "Ingen optagelser endnu",
+    "model": "Model",
+    "language": "Sprog",
+    "langAuto": "Automatisk",
+    "translate": "Oversæt til engelsk",
+    "start": "Transskribér",
+    "running": "Transskriberer…",
+    "failed": "Transskribering mislykkedes.",
+    "featureDisabled": "Transskribering er ikke bygget ind i denne version.",
+    "result": "Transskript",
+    "segmentCount": "({{n}} segmenter)",
+    "empty": "Ingen tale fundet i optagelsen."
+  },
+  "integrations": {
+    "title": "Integrationer",
+    "peersTitle": "Sunday-apperne",
+    "peerPlan": "Planlægning og frivillige",
+    "peerSong": "Salmer og setlister",
+    "peerStage": "Live storskærm og cues",
+    "peerEdit": "Tekstning af optagelser",
+    "peerStudio": "Podcast- og jingleredigering",
+    "handoffHint": "Send en færdig optagelse til SundayEdit eller SundayStudio fra Historik.",
+    "connectionTitle": "Forbindelse",
+    "churchId": "Menigheds-ID",
+    "serviceId": "Gudstjeneste-ID (live)",
+    "songApiUrl": "SundaySong API-URL",
+    "planApiUrl": "SundayPlan API-URL",
+    "save": "Gem forbindelse",
+    "saved": "Forbindelse gemt.",
+    "bridgeTitle": "Live cue-bro (SundayStage)",
+    "bridgeDisabled": "Den indbyggede live-bro er ikke kompileret i denne version. Du kan stadig gemme forbindelsen og teste kanalnavnet.",
+    "testChannel": "Vis kanalnavn",
+    "channelError": "Udfyld både menigheds-ID og gudstjeneste-ID."
   }
 }

@@ -13,7 +13,10 @@
     "general": "Général",
     "editor": "Éditeur",
     "live": "Direct",
-    "search": "Recherche"
+    "search": "Recherche",
+    "produceGroup": "Produire",
+    "distributeGroup": "Distribuer",
+    "systemGroup": "Système"
   },
   "status": {
     "ready": "Tout est prêt",
@@ -21,7 +24,8 @@
     "recording": "Enregistrement en cours",
     "ok": "PRÊT À ENREGISTRER",
     "warn": "ACTION REQUISE",
-    "noSchedule": "Aucun enregistrement prévu"
+    "noSchedule": "Aucun enregistrement prévu",
+    "recordingError": "Erreur d'enregistrement"
   },
   "home": {
     "greeting": "Bonjour",
@@ -77,7 +81,10 @@
     },
     "cloudLabel": "SAUVEGARDE CLOUD",
     "thumbLabel": "IMAGE D'ÉPISODE",
-    "whisperLabel": "TRANSCRIPTION"
+    "whisperLabel": "TRANSCRIPTION",
+    "reviewQueueCount": "{{n}} épisodes prêts",
+    "reviewQueueHint": "En attente de relecture avant publication",
+    "reviewOpen": "Ouvrir →"
   },
   "update": {
     "available": "Nouvelle version {v} disponible — téléchargement en cours…",
@@ -123,7 +130,13 @@
     "editNote": "Modifier la note",
     "notePlaceholder": "Écrire une note…",
     "confirmDeleteErrors": "Supprimer toutes les entrées en erreur ?",
-    "deleteEntry": "Supprimer l’entrée"
+    "deleteEntry": "Supprimer l’entrée",
+    "size": "Taille",
+    "unknownDevice": "Périphérique inconnu",
+    "revealInFolder": "Afficher dans le dossier",
+    "revealError": "Impossible d'ouvrir le dossier — le fichier n'existe peut-être plus",
+    "loadError": "Impossible de charger l'historique",
+    "confirmDelete": "Supprimer cet enregistrement de l'historique ?"
   },
   "review": {
     "queueTitle": "Prêts pour relecture et publication",
@@ -178,7 +191,15 @@
     "ageDayOne": "il y a 1 jour",
     "ageDays": "il y a {n} jours",
     "ageOldest": "il y a plus de 14 jours",
-    "confident": "sûr"
+    "confident": "sûr",
+    "title": "Relecture",
+    "runReminders": "Lancer les rappels",
+    "loadError": "Impossible de lire la file de relecture",
+    "queueEmpty": "Aucun épisode en attente de relecture.",
+    "statusAnalyzing": "Analyse",
+    "statusReady": "Prêt",
+    "statusDiscarded": "Rejeté",
+    "sermonMinutes": "Prédication estimée : {{min}} min"
   },
   "schedule": {
     "title": "Planning hebdomadaire",
@@ -471,7 +492,10 @@
     "days": "jours",
     "formatWavDesc": "Non compressé, qualité maximale",
     "qualityHighest": "Maximum",
-    "qualityRecommendedDesc": "Recommandé pour partage et web"
+    "qualityRecommendedDesc": "Recommandé pour partage et web",
+    "preRoll": "Pré-enregistrement (s)",
+    "preRollOff": "Désactivé",
+    "preRollActive": "Pré-enregistrement actif"
   },
   "general": {
     "title": "Général",
@@ -632,7 +656,38 @@
     "errFileNotFound": "Le fichier original n’est pas disponible — le disque est-il déconnecté ?",
     "errCutData": "Erreur interne dans les données de coupe. Essayez de recharger le fichier.",
     "chaptersEmpty": "Pas encore de chapitres. Cliquez sur « + Ajouter à la tête de lecture » pour commencer.",
-    "chapterClickSeek": "Cliquer pour rechercher"
+    "chapterClickSeek": "Cliquer pour rechercher",
+    "minimap": "Aperçu",
+    "zoomIn": "Zoom avant",
+    "zoomOut": "Zoom arrière",
+    "fitAll": "Tout afficher",
+    "pickTitle": "Choisir un enregistrement",
+    "noRecordings": "Aucun enregistrement pour l'instant",
+    "mediaFilter": "Audio/vidéo",
+    "featureDisabled": "L'édition n'est pas intégrée à cette version.",
+    "duration": "Durée",
+    "video": "vidéo",
+    "audioOnly": "audio seul",
+    "waveform": "Forme d'onde",
+    "noWaveform": "Pas encore de forme d'onde",
+    "loadPeaks": "Forme d'onde",
+    "detectSegments": "Détecter les segments",
+    "analyzeLoudness": "Mesurer le volume",
+    "peaksCount": "{{n}} points de forme d'onde",
+    "loudness": "Volume sonore",
+    "addCut": "Ajouter une coupe",
+    "cutRegion": "Coupe",
+    "cutStart": "Début (secondes)",
+    "cutEnd": "Fin (secondes)",
+    "format": "Format",
+    "preset": "Mastering",
+    "masterNone": "Aucun (inchangé)",
+    "masterPodcast": "Podcast (−16 LUFS)",
+    "masterStreaming": "Streaming (−14 LUFS)",
+    "masterNatural": "Naturel (−19 LUFS)",
+    "masterMusic": "Musique + parole (−16 LUFS)",
+    "export": "Exporter",
+    "exported": "Enregistré"
   },
   "master": {
     "title": "Mastering (préparation à la publication)",
@@ -740,7 +795,27 @@
     "back": "Retour",
     "finish": "✓ Terminé — activer l’application",
     "usbHint": "Branchez la table de mixage USB si elle n’apparaît pas ici",
-    "filenameExample": "Exemple de nom de fichier :"
+    "filenameExample": "Exemple de nom de fichier :",
+    "title": "Configuration",
+    "welcomeTitle": "Bienvenue dans SundayRec",
+    "welcomeBody": "Configurons l'application pour que tout soit prêt pour dimanche.",
+    "start": "Commencer →",
+    "skipAll": "Ignorer — configurer manuellement",
+    "deviceTitle": "Quel périphérique audio utilisez-vous ?",
+    "deviceBody": "Choisissez la table de mixage ou l'interface audio connectée à cet ordinateur.",
+    "deviceDefault": "Valeur par défaut du système",
+    "deviceMixer": "Table de mixage / interface audio",
+    "noDevices": "Aucun périphérique audio trouvé.",
+    "useDevice": "Utiliser le périphérique sélectionné →",
+    "pickDeviceFirst": "Choisissez un périphérique audio avant de continuer",
+    "skipStep": "Ignorer cette étape",
+    "testTitle": "Vérifiez que le son fonctionne",
+    "testBody": "Dites quelque chose dans le microphone — vérifiez que l'indicateur bouge.",
+    "waiting": "En attente du son…",
+    "audioWorks": "Le son fonctionne →",
+    "readyTitle": "Tout est prêt !",
+    "readyBody": "SundayRec est prêt à enregistrer les services. Vous pouvez modifier n'importe quel réglage depuis le menu à tout moment.",
+    "open": "Ouvrir SundayRec →"
   },
   "time": {
     "yr": "an",
@@ -857,7 +932,16 @@
     "enabled": "Activé",
     "streamConfirmDelete": "Supprimer cette destination ?",
     "streamKeyPlaceholder": "(coller la clé de stream)",
-    "streamNoneYet": "Aucune destination. Ajoutez-en une pour diffuser."
+    "streamNoneYet": "Aucune destination. Ajoutez-en une pour diffuser.",
+    "title": "Publication",
+    "featureDisabled": "La publication sur disque/cloud n'est pas intégrée à cette version. Vous pouvez tout de même prévisualiser le flux.",
+    "candidateCount": "{{n}} enregistrements dans le flux",
+    "previewFeed": "Prévisualiser le flux",
+    "noFolder": "Choisissez d'abord un dossier d'enregistrement dans les réglages.",
+    "generateFailed": "Impossible de générer le flux.",
+    "writtenTo": "Écrit dans : {{path}}",
+    "previewTitle": "Aperçu ({{n}} épisodes)",
+    "feedXml": "XML du flux"
   },
   "live": {
     "title": "Diffusion en direct",
@@ -932,7 +1016,8 @@
     "noTranscriptsTitle": "Aucune transcription",
     "noTranscriptsDesc": "Ouvrez un enregistrement dans l’éditeur et cliquez sur Transcrire pour construire une archive consultable.",
     "indexFailed": "Impossible de charger l’index",
-    "fileNotFound": "Fichier source introuvable. Il a peut-être été déplacé ou supprimé."
+    "fileNotFound": "Fichier source introuvable. Il a peut-être été déplacé ou supprimé.",
+    "empty": "Aucune transcription pour l'instant — transcrivez d'abord un enregistrement."
   },
   "thumbnail": {
     "section": {
@@ -964,5 +1049,61 @@
     "info": {
       "size": "{w}×{h} px · {size}"
     }
+  },
+  "email": {
+    "title": "Notifications par e-mail",
+    "method": "Méthode d'envoi",
+    "methodGmail": "Gmail (connecté)",
+    "methodGmailOff": "Gmail (non connecté)",
+    "methodSmtp": "SMTP",
+    "gmailHint": "Connectez Google sous Sauvegarde cloud pour envoyer via Gmail sans SMTP.",
+    "smtpHost": "Serveur SMTP (ex. smtp.gmail.com)",
+    "smtpPort": "Port",
+    "smtpUser": "Nom d'utilisateur (adresse e-mail)",
+    "smtpPass": "Mot de passe / mot de passe d'application",
+    "smtpFrom": "Adresse d'expéditeur",
+    "recipient": "Destinataire (adresse e-mail)",
+    "sendTest": "Envoyer une notification de test",
+    "testSent": "Notification de test envoyée.",
+    "testFailed": "Impossible d'envoyer la notification de test.",
+    "noConfig": "Renseignez un destinataire et la configuration e-mail.",
+    "featureDisabled": "Les notifications par e-mail ne sont pas intégrées à cette version. Les réglages peuvent tout de même être enregistrés."
+  },
+  "transcribe": {
+    "title": "Transcription",
+    "recording": "Enregistrement",
+    "noRecordings": "Aucun enregistrement pour l'instant",
+    "model": "Modèle",
+    "language": "Langue",
+    "langAuto": "Automatique",
+    "translate": "Traduire en anglais",
+    "start": "Transcrire",
+    "running": "Transcription en cours…",
+    "failed": "Échec de la transcription.",
+    "featureDisabled": "La transcription n'est pas intégrée à cette version.",
+    "result": "Transcription",
+    "segmentCount": "({{n}} segments)",
+    "empty": "Aucune parole trouvée dans l'enregistrement."
+  },
+  "integrations": {
+    "title": "Intégrations",
+    "peersTitle": "Les applications Sunday",
+    "peerPlan": "Planification et bénévoles",
+    "peerSong": "Cantiques et listes de chants",
+    "peerStage": "Grand écran en direct et cues",
+    "peerEdit": "Sous-titrage des enregistrements",
+    "peerStudio": "Édition de podcasts et de jingles",
+    "handoffHint": "Envoyez un enregistrement terminé vers SundayEdit ou SundayStudio depuis l'Historique.",
+    "connectionTitle": "Connexion",
+    "churchId": "ID de paroisse",
+    "serviceId": "ID de service (live)",
+    "songApiUrl": "URL de l'API SundaySong",
+    "planApiUrl": "URL de l'API SundayPlan",
+    "save": "Enregistrer la connexion",
+    "saved": "Connexion enregistrée.",
+    "bridgeTitle": "Pont de cues en direct (SundayStage)",
+    "bridgeDisabled": "Le pont en direct intégré n'est pas compilé dans cette version. Vous pouvez tout de même enregistrer la connexion et tester le nom du canal.",
+    "testChannel": "Afficher le nom du canal",
+    "channelError": "Renseignez l'ID de paroisse et l'ID de service."
   }
 }

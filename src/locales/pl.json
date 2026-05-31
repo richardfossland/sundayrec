@@ -13,7 +13,10 @@
     "general": "Ogólne",
     "editor": "Edycja",
     "live": "Na żywo",
-    "search": "Szukaj"
+    "search": "Szukaj",
+    "produceGroup": "Produkcja",
+    "distributeGroup": "Dystrybucja",
+    "systemGroup": "System"
   },
   "status": {
     "ready": "Wszystko gotowe",
@@ -21,7 +24,8 @@
     "recording": "Trwa nagrywanie",
     "ok": "GOTOWY DO NAGRYWANIA",
     "warn": "WYMAGANE DZIAŁANIE",
-    "noSchedule": "Brak zaplanowanego nagrania"
+    "noSchedule": "Brak zaplanowanego nagrania",
+    "recordingError": "Błąd nagrywania"
   },
   "home": {
     "greeting": "Dzień dobry",
@@ -77,7 +81,10 @@
     },
     "cloudLabel": "KOPIA W CHMURZE",
     "thumbLabel": "OKŁADKA ODCINKA",
-    "whisperLabel": "TRANSKRYPCJA"
+    "whisperLabel": "TRANSKRYPCJA",
+    "reviewQueueCount": "{{n}} odcinków gotowych",
+    "reviewQueueHint": "Oczekuje na przegląd przed publikacją",
+    "reviewOpen": "Otwórz →"
   },
   "update": {
     "available": "Dostępna nowa wersja {v} — pobieranie…",
@@ -123,7 +130,13 @@
     "editNote": "Edytuj notatkę",
     "notePlaceholder": "Wpisz notatkę…",
     "confirmDeleteErrors": "Usunąć wszystkie wpisy z błędami?",
-    "deleteEntry": "Usuń wpis"
+    "deleteEntry": "Usuń wpis",
+    "size": "Rozmiar",
+    "unknownDevice": "Nieznane urządzenie",
+    "revealInFolder": "Pokaż w folderze",
+    "revealError": "Nie udało się otworzyć folderu — plik mógł zostać usunięty",
+    "loadError": "Nie udało się wczytać historii",
+    "confirmDelete": "Usunąć to nagranie z historii?"
   },
   "review": {
     "queueTitle": "Gotowe do przeglądu i publikacji",
@@ -178,7 +191,15 @@
     "ageDayOne": "1 dzień temu",
     "ageDays": "{n} dni temu",
     "ageOldest": "Ponad 14 dni temu",
-    "confident": "pewności"
+    "confident": "pewności",
+    "title": "Przegląd",
+    "runReminders": "Uruchom przypomnienia",
+    "loadError": "Nie udało się odczytać kolejki przeglądu",
+    "queueEmpty": "Brak odcinków oczekujących na przegląd.",
+    "statusAnalyzing": "Analizowanie",
+    "statusReady": "Gotowe",
+    "statusDiscarded": "Odrzucone",
+    "sermonMinutes": "Szacowane kazanie: {{min}} min"
   },
   "schedule": {
     "title": "Harmonogram tygodniowy",
@@ -471,7 +492,10 @@
     "days": "dniach",
     "formatWavDesc": "Nieskompresowany, najwyższa jakość",
     "qualityHighest": "Najwyższa",
-    "qualityRecommendedDesc": "Zalecane do udostępniania i sieci"
+    "qualityRecommendedDesc": "Zalecane do udostępniania i sieci",
+    "preRoll": "Pre-roll (s)",
+    "preRollOff": "Wył.",
+    "preRollActive": "Pre-roll aktywny"
   },
   "general": {
     "title": "Ogólne",
@@ -632,7 +656,38 @@
     "errFileNotFound": "Plik oryginalny nie jest dostępny — czy dysk jest odłączony?",
     "errCutData": "Wewnętrzny błąd danych wycięć. Spróbuj ponownie wczytać plik.",
     "chaptersEmpty": "Brak rozdziałów. Kliknij \"+ Dodaj w pozycji odtwarzania\", aby zacząć.",
-    "chapterClickSeek": "Kliknij, aby przejść"
+    "chapterClickSeek": "Kliknij, aby przejść",
+    "minimap": "Przegląd",
+    "zoomIn": "Powiększ",
+    "zoomOut": "Pomniejsz",
+    "fitAll": "Pokaż wszystko",
+    "pickTitle": "Wybierz nagranie",
+    "noRecordings": "Brak nagrań",
+    "mediaFilter": "Audio/wideo",
+    "featureDisabled": "Edycja nie jest wbudowana w tę wersję.",
+    "duration": "Czas trwania",
+    "video": "wideo",
+    "audioOnly": "tylko audio",
+    "waveform": "Przebieg fali",
+    "noWaveform": "Brak przebiegu fali",
+    "loadPeaks": "Przebieg fali",
+    "detectSegments": "Znajdź segmenty",
+    "analyzeLoudness": "Zmierz głośność",
+    "peaksCount": "{{n}} punktów przebiegu",
+    "loudness": "Głośność",
+    "addCut": "Dodaj cięcie",
+    "cutRegion": "Cięcie",
+    "cutStart": "Początek (sekundy)",
+    "cutEnd": "Koniec (sekundy)",
+    "format": "Format",
+    "preset": "Mastering",
+    "masterNone": "Brak (bez zmian)",
+    "masterPodcast": "Podcast (−16 LUFS)",
+    "masterStreaming": "Streaming (−14 LUFS)",
+    "masterNatural": "Naturalny (−19 LUFS)",
+    "masterMusic": "Muzyka + mowa (−16 LUFS)",
+    "export": "Eksportuj",
+    "exported": "Zapisano"
   },
   "master": {
     "title": "Mastering (przygotuj do publikacji)",
@@ -740,7 +795,27 @@
     "back": "Wstecz",
     "finish": "✓ Gotowe — aktywuj aplikację",
     "usbHint": "Podłącz mikser USB, jeśli nie pojawia się na liście",
-    "filenameExample": "Przykładowa nazwa pliku:"
+    "filenameExample": "Przykładowa nazwa pliku:",
+    "title": "Konfiguracja",
+    "welcomeTitle": "Witamy w SundayRec",
+    "welcomeBody": "Skonfigurujmy aplikację, aby wszystko było gotowe na niedzielę.",
+    "start": "Rozpocznij →",
+    "skipAll": "Pomiń — skonfiguruj ręcznie",
+    "deviceTitle": "Jakiego urządzenia audio używasz?",
+    "deviceBody": "Wybierz mikser lub interfejs audio podłączony do tego komputera.",
+    "deviceDefault": "Domyślne systemowe",
+    "deviceMixer": "Mikser / interfejs audio",
+    "noDevices": "Nie znaleziono urządzeń audio.",
+    "useDevice": "Użyj wybranego urządzenia →",
+    "pickDeviceFirst": "Wybierz urządzenie audio przed kontynuowaniem",
+    "skipStep": "Pomiń ten krok",
+    "testTitle": "Sprawdź, czy dźwięk działa",
+    "testBody": "Powiedz coś do mikrofonu — sprawdź, czy wskaźnik się porusza.",
+    "waiting": "Oczekiwanie na dźwięk…",
+    "audioWorks": "Dźwięk działa →",
+    "readyTitle": "Wszystko gotowe!",
+    "readyBody": "SundayRec jest gotowy do nagrywania nabożeństw. W każdej chwili możesz zmienić dowolne ustawienie z menu.",
+    "open": "Otwórz SundayRec →"
   },
   "time": {
     "yr": "r",
@@ -857,7 +932,16 @@
     "enabled": "Włączone",
     "streamConfirmDelete": "Usunąć tę destynację?",
     "streamKeyPlaceholder": "(wklej klucz streamu)",
-    "streamNoneYet": "Brak destynacji. Dodaj jedną, aby transmitować."
+    "streamNoneYet": "Brak destynacji. Dodaj jedną, aby transmitować.",
+    "title": "Publikacja",
+    "featureDisabled": "Publikacja na dysk/do chmury nie jest wbudowana w tę wersję. Nadal możesz podejrzeć kanał.",
+    "candidateCount": "{{n}} nagrań w kanale",
+    "previewFeed": "Podejrzyj kanał",
+    "noFolder": "Najpierw wybierz folder zapisu w ustawieniach.",
+    "generateFailed": "Nie udało się wygenerować kanału.",
+    "writtenTo": "Zapisano w: {{path}}",
+    "previewTitle": "Podgląd ({{n}} odcinków)",
+    "feedXml": "XML kanału"
   },
   "live": {
     "title": "Transmisja na żywo",
@@ -932,7 +1016,8 @@
     "noTranscriptsTitle": "Brak transkrypcji",
     "noTranscriptsDesc": "Otwórz nagranie w edytorze i kliknij Transkrybuj, aby zbudować przeszukiwalne archiwum.",
     "indexFailed": "Nie można załadować indeksu",
-    "fileNotFound": "Plik źródłowy nie znaleziony. Mógł zostać przeniesiony lub usunięty."
+    "fileNotFound": "Plik źródłowy nie znaleziony. Mógł zostać przeniesiony lub usunięty.",
+    "empty": "Brak transkrypcji — najpierw transkrybuj nagranie."
   },
   "thumbnail": {
     "section": {
@@ -964,5 +1049,61 @@
     "info": {
       "size": "{w}×{h} px · {size}"
     }
+  },
+  "email": {
+    "title": "Powiadomienia e-mail",
+    "method": "Metoda wysyłki",
+    "methodGmail": "Gmail (połączony)",
+    "methodGmailOff": "Gmail (niepołączony)",
+    "methodSmtp": "SMTP",
+    "gmailHint": "Połącz Google w sekcji Kopia w chmurze, aby wysyłać przez Gmail bez SMTP.",
+    "smtpHost": "Serwer SMTP (np. smtp.gmail.com)",
+    "smtpPort": "Port",
+    "smtpUser": "Nazwa użytkownika (adres e-mail)",
+    "smtpPass": "Hasło / hasło aplikacji",
+    "smtpFrom": "Adres nadawcy",
+    "recipient": "Odbiorca (adres e-mail)",
+    "sendTest": "Wyślij powiadomienie testowe",
+    "testSent": "Powiadomienie testowe wysłane.",
+    "testFailed": "Nie udało się wysłać powiadomienia testowego.",
+    "noConfig": "Podaj odbiorcę i konfigurację e-mail.",
+    "featureDisabled": "Powiadomienia e-mail nie są wbudowane w tę wersję. Ustawienia można jednak zapisać."
+  },
+  "transcribe": {
+    "title": "Transkrypcja",
+    "recording": "Nagranie",
+    "noRecordings": "Brak nagrań",
+    "model": "Model",
+    "language": "Język",
+    "langAuto": "Automatycznie",
+    "translate": "Przetłumacz na angielski",
+    "start": "Transkrybuj",
+    "running": "Transkrybowanie…",
+    "failed": "Transkrypcja nie powiodła się.",
+    "featureDisabled": "Transkrypcja nie jest wbudowana w tę wersję.",
+    "result": "Transkrypcja",
+    "segmentCount": "({{n}} segmentów)",
+    "empty": "Nie znaleziono mowy w nagraniu."
+  },
+  "integrations": {
+    "title": "Integracje",
+    "peersTitle": "Aplikacje Sunday",
+    "peerPlan": "Planowanie i wolontariusze",
+    "peerSong": "Pieśni i listy utworów",
+    "peerStage": "Duży ekran na żywo i cue",
+    "peerEdit": "Napisy do nagrań",
+    "peerStudio": "Edycja podcastów i dżingli",
+    "handoffHint": "Wyślij gotowe nagranie do SundayEdit lub SundayStudio z Historii.",
+    "connectionTitle": "Połączenie",
+    "churchId": "ID parafii",
+    "serviceId": "ID nabożeństwa (na żywo)",
+    "songApiUrl": "URL API SundaySong",
+    "planApiUrl": "URL API SundayPlan",
+    "save": "Zapisz połączenie",
+    "saved": "Połączenie zapisane.",
+    "bridgeTitle": "Most cue na żywo (SundayStage)",
+    "bridgeDisabled": "Wbudowany most na żywo nie jest skompilowany w tej wersji. Nadal możesz zapisać połączenie i przetestować nazwę kanału.",
+    "testChannel": "Pokaż nazwę kanału",
+    "channelError": "Podaj zarówno ID parafii, jak i ID nabożeństwa."
   }
 }
