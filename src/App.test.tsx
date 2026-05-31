@@ -23,6 +23,8 @@ vi.mock("@tauri-apps/api/core", () => ({
     // PU-1: App mounts <EmailSettingsPanel/>, which reads the email status.
     if (cmd === "email_status")
       return { featureBuilt: false, gmailConnected: false };
+    // PU-6: App mounts <ReviewPanel/>, which reads the prep/review queue.
+    if (cmd === "review_queue_list") return [];
     // Fase 6: App mounts <CloudBackupPanel/>, which reads connection + queue.
     if (cmd === "cloud_connection_status") return [];
     if (cmd === "cloud_queue_status") return [];

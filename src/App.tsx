@@ -15,6 +15,7 @@ import { WakePanel } from "@/features/wake/WakePanel";
 import { HistoryPanel } from "@/features/history/HistoryPanel";
 import { EditorPanel } from "@/features/editor/EditorPanel";
 import { TranscribePanel } from "@/features/transcribe/TranscribePanel";
+import { ReviewPanel } from "@/features/review/ReviewPanel";
 import { CloudBackupPanel } from "@/features/cloud/CloudBackupPanel";
 import { EmailSettingsPanel } from "@/features/email/EmailSettingsPanel";
 import { StreamingPanel } from "@/features/streaming/StreamingPanel";
@@ -160,6 +161,19 @@ function App() {
             </summary>
             <div className="mt-3">
               <TranscribePanel />
+            </div>
+          </details>
+
+          {/* PU-6: episode-prep / human-review queue — list recordings queued
+              for review, show the detected sermon + attention reasons, and
+              approve/discard each (and run the reminder sweep). Same disclosure
+              pattern until the real shell/nav lands in Phase 8. */}
+          <details className="w-full max-w-md text-left">
+            <summary className="cursor-pointer text-sm font-medium">
+              {t("review.title", "Gjennomgang")}
+            </summary>
+            <div className="mt-3">
+              <ReviewPanel />
             </div>
           </details>
 

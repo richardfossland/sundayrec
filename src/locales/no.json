@@ -182,7 +182,15 @@
     "ageDayOne": "1 dag siden",
     "ageDays": "{n} dager siden",
     "ageOldest": "Over 14 dager siden",
-    "confident": "sikker"
+    "confident": "sikker",
+    "title": "Gjennomgang",
+    "runReminders": "Kjør påminnelser",
+    "loadError": "Kunne ikke lese gjennomgangskøen",
+    "queueEmpty": "Ingen episoder venter på gjennomgang.",
+    "statusAnalyzing": "Analyserer",
+    "statusReady": "Klar",
+    "statusDiscarded": "Forkastet",
+    "sermonMinutes": "Preken antatt: {{min}} min"
   },
   "schedule": {
     "title": "Ukentlig tidsplan",
