@@ -94,7 +94,9 @@
     "toastReadyText": "Version {v} has been downloaded",
     "availableMac": "Version {v} — click to download",
     "toastAvailableMac": "Version {v} — click to download",
-    "restartInstall": "↺ Restart and install"
+    "restartInstall": "↺ Restart and install",
+    "notBuilt": "Auto-update isn't built into this version.",
+    "downloadNow": "Download"
   },
   "history": {
     "title": "History",

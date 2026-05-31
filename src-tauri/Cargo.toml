@@ -57,6 +57,15 @@ ndi = []
 # so the wire is INFRA-UNVERIFIED. The LiveEvent→chapter mapping is the
 # unit-tested `sundayrec-core::integrations::live_bridge`.
 bridge = ["dep:tokio-tungstenite", "dep:futures-util"]
+# R7 auto-update: `tauri-plugin-updater` (pull API — check/download/install). The
+# `process` plugin (relaunch) is already a default dep. DEFAULT-OFF: a real
+# update needs a SIGNED release + an updater keypair in `tauri.conf.json` (see
+# docs/NEEDS-RICHARD.md), none of which exist in CI/dev, so the network fetch +
+# signature verify + relaunch are NETWORK/GUI-UNVERIFIED. The status model +
+# dev-check guard + semver decision are the unit-tested `sundayrec-core::update`.
+# When OFF the `update_*` commands return a clear `feature_disabled` error (same
+# idiom as `editor`/`streaming`).
+updater = ["dep:tauri-plugin-updater"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -166,6 +175,10 @@ futures-util = { version = "0.3", optional = true }
 # PU-5 whisper seam writes the 16 kHz WAV to a temp dir before inference. Pulled
 # only under `--features whisper` (also a dev-dep below for the storage tests).
 tempfile = { version = "3", optional = true }
+# R7 auto-update plugin (pull API). Pulled only under `--features updater`; a
+# real update needs a signed release + keypair, so it stays out of the default
+# build + CI gate. NETWORK/GUI-UNVERIFIED.
+tauri-plugin-updater = { version = "2", optional = true }
 
 [dev-dependencies]
 # Throwaway temp databases for the storage tests — no app, no device.

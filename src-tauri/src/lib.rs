@@ -60,6 +60,12 @@ pub mod streaming;
 // this seam maps them to tauri menu/tray + the scheme handler.
 #[cfg(feature = "tray")]
 pub mod tray;
+// R7 auto-update — default-off `updater` feature (NETWORK/GUI-UNVERIFIED). The
+// status model + dev-check guard + semver decision are `sundayrec_core::update`;
+// this seam drives `tauri-plugin-updater` (check/download/install) + relaunch.
+// The DTO + `UpdateEngine` compile in every build; `update_check`/
+// `update_download_install` return `feature_disabled` when the feature is off.
+pub mod update;
 pub mod wake;
 // PU-5 whisper transcription — default-off `whisper` feature (HARDWARE-UNVERIFIED).
 // The model registry/argv/normalise are `sundayrec_core::whisper`; this seam runs
@@ -76,11 +82,19 @@ pub fn run() {
         .with_target(false)
         .init();
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_notification::init());
+
+    // R7 auto-update: register the updater plugin only under `--features
+    // updater` (it needs a signed feed + the public key in tauri.conf.json).
+    // NETWORK/GUI-UNVERIFIED.
+    #[cfg(feature = "updater")]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+
+    builder
         // The VU engine holds at most one running cpal session; commands reach
         // it through managed state.
         .manage(audio::vu::VuEngine::new())
@@ -99,6 +113,10 @@ pub fn run() {
         // R3: the live-stream engine holds at most one running RTMP ffmpeg.
         // Compiles in every build; only the spawn is feature-gated.
         .manage(streaming::StreamEngine::new())
+        // R7: the update engine holds the live check/download status the
+        // renderer polls. Compiles in every build; the network/install seam is
+        // gated behind the default-off `updater` feature.
+        .manage(update::UpdateEngine::new())
         .setup(|app| {
             use tauri::Manager;
 
@@ -224,6 +242,11 @@ pub fn run() {
             commands::publish::publish_feed_status,
             commands::publish::publish_feed_preview,
             commands::publish::publish_generate_feed,
+            // R7 auto-update (status pure; check/download/relaunch gated by `updater`).
+            commands::update::update_status,
+            commands::update::update_check,
+            commands::update::update_download_install,
+            commands::update::update_relaunch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

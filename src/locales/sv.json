@@ -94,7 +94,9 @@
     "toastReadyText": "Version {v} har laddats ner",
     "availableMac": "Version {v} — klicka för att ladda ner",
     "toastAvailableMac": "Version {v} — klicka för att ladda ner",
-    "restartInstall": "↺ Starta om och installera"
+    "restartInstall": "↺ Starta om och installera",
+    "notBuilt": "Automatisk uppdatering är inte inbyggd i den här versionen.",
+    "downloadNow": "Ladda ner"
   },
   "history": {
     "title": "Historik",

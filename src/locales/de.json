@@ -94,7 +94,9 @@
     "toastReadyText": "Version {v} wurde heruntergeladen",
     "availableMac": "Version {v} — klicken Sie zum Herunterladen",
     "toastAvailableMac": "Version {v} — klicken Sie zum Herunterladen",
-    "restartInstall": "↺ Neu starten und installieren"
+    "restartInstall": "↺ Neu starten und installieren",
+    "notBuilt": "Automatische Updates sind in dieser Version nicht enthalten.",
+    "downloadNow": "Herunterladen"
   },
   "history": {
     "title": "Verlauf",

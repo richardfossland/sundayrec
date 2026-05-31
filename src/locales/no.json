@@ -94,7 +94,9 @@
     "toastReadyText": "Versjon {v} er lastet ned",
     "availableMac": "Versjon {v} — klikk for å laste ned",
     "toastAvailableMac": "Versjon {v} — klikk for å laste ned",
-    "restartInstall": "↺ Start på nytt og installer"
+    "restartInstall": "↺ Start på nytt og installer",
+    "notBuilt": "Automatisk oppdatering er ikke bygget inn i denne versjonen.",
+    "downloadNow": "Last ned"
   },
   "history": {
     "title": "Historikk",
@@ -202,15 +204,7 @@
     "max": "MAKS",
     "noLimit": "Ingen",
     "edit": "Rediger",
-    "days": [
-      "Man",
-      "Tir",
-      "Ons",
-      "Tor",
-      "Fre",
-      "Lør",
-      "Søn"
-    ],
+    "days": ["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"],
     "wakeTitle": "Vekk datamaskinen fra dvale",
     "wakeDesc": "Starter automatisk noen minutter før opptaket begynner",
     "wakeBtn": "Planlegg oppvåkning",
@@ -376,15 +370,7 @@
       "November",
       "Desember"
     ],
-    "weekdays": [
-      "Man",
-      "Tir",
-      "Ons",
-      "Tor",
-      "Fre",
-      "Lør",
-      "Søn"
-    ],
+    "weekdays": ["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"],
     "legendWeekly": "Ukentlig opptak",
     "legendSpecial": "Spesialopptak",
     "legendHoliday": "Kirkehøytid",

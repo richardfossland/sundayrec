@@ -21,6 +21,7 @@ import { PublishPanel } from "@/features/publish/PublishPanel";
 import { CloudBackupPanel } from "@/features/cloud/CloudBackupPanel";
 import { EmailSettingsPanel } from "@/features/email/EmailSettingsPanel";
 import { StreamingPanel } from "@/features/streaming/StreamingPanel";
+import { UpdatePanel } from "@/features/update/UpdatePanel";
 import { SETTINGS_QUERY_KEY } from "@/features/settings/queryKey";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { changeLanguage } from "@/i18n";
@@ -254,6 +255,20 @@ function App() {
             </summary>
             <div className="mt-3">
               <DiagnosticsPanel />
+            </div>
+          </details>
+
+          {/* R7: auto-update — "Se etter oppdateringer / last ned / installer".
+              The check/download/install path is behind the default-off `updater`
+              feature (needs a SIGNED release — see docs/NEEDS-RICHARD.md), so the
+              panel shows a calm "not built into this build" hint in the default
+              build (the status reads as `idle`). Same disclosure pattern. */}
+          <details className="w-full max-w-md text-left">
+            <summary className="cursor-pointer text-sm font-medium">
+              {t("general.updates", "Oppdateringer")}
+            </summary>
+            <div className="mt-3">
+              <UpdatePanel />
             </div>
           </details>
         </div>

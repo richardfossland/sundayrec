@@ -28,6 +28,7 @@
 //!   - [`wake`]         — wake-from-sleep capability/parse/schedule-command decisions (Fase 5)
 //!   - [`timeouts`]     — recording-pipeline timeout constants (one source of truth)
 //!   - [`two_process`]  — two-process audio+video fallback: per-process capture args + A/V mux/offset (Fase 3.3b)
+//!   - [`update`]       — auto-update status model + dev-check guard + semver "is newer" (R7)
 //!   - [`silence`]      — the silence-watcher *decision* state machine (no real timers)
 //!   - [`settings`]     — the typed/validated settings model + defaults (Fase 1)
 //!   - [`preflight`]    — the "ready-to-record" finding decisions (Fase 2)
@@ -77,5 +78,6 @@ pub mod streaming;
 pub mod timeouts;
 pub mod tray;
 pub mod two_process;
+pub mod update;
 pub mod wake;
 pub mod whisper;

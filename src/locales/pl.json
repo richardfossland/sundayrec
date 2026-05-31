@@ -94,7 +94,9 @@
     "toastReadyText": "Wersja {v} została pobrana",
     "availableMac": "Wersja {v} — kliknij, aby pobrać",
     "toastAvailableMac": "Wersja {v} — kliknij, aby pobrać",
-    "restartInstall": "↺ Uruchom ponownie i zainstaluj"
+    "restartInstall": "↺ Uruchom ponownie i zainstaluj",
+    "notBuilt": "Automatyczna aktualizacja nie jest wbudowana w tę wersję.",
+    "downloadNow": "Pobierz"
   },
   "history": {
     "title": "Historia",

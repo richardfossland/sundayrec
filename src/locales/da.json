@@ -94,7 +94,9 @@
     "toastReadyText": "Version {v} er hentet",
     "availableMac": "Version {v} — klik for at hente",
     "toastAvailableMac": "Version {v} — klik for at hente",
-    "restartInstall": "↺ Genstart og installer"
+    "restartInstall": "↺ Genstart og installer",
+    "notBuilt": "Automatisk opdatering er ikke indbygget i denne version.",
+    "downloadNow": "Hent"
   },
   "history": {
     "title": "Historik",
