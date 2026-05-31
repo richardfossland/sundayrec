@@ -211,3 +211,184 @@ pub async fn stage_import_manifest(
         service_link,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    //! Review-queue persistence over a temp sqlite store. The Tauri commands take
+    //! `State<Db>` (not constructible in a unit test), so these exercise the same
+    //! load/save seam the commands call, plus the core transitions they thread,
+    //! against a real (throwaway) database — no app, no clock prompts.
+    use super::*;
+    use sundayrec_core::prep::{build_episode_prep, EpisodePrepStatus, PrepDefaults};
+
+    /// A migrated temp-dir database wrapped in a [`Db`] handle.
+    async fn temp_db() -> (Db, tempfile::TempDir) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let pool = store::open_pool(&dir.path().join("test.sqlite"))
+            .await
+            .expect("open_pool");
+        (Db::new(pool), dir)
+    }
+
+    /// A ready-status episode prep with the given id/path, built through the core
+    /// so the fixture matches what `prep_build_episode` produces.
+    fn prep(id: &str, path: &str, now: i64) -> EpisodePrep {
+        build_episode_prep(
+            id.to_string(),
+            path.to_string(),
+            Vec::new(),
+            &PrepDefaults::default(),
+            now,
+        )
+    }
+
+    #[tokio::test]
+    async fn load_queue_is_empty_on_a_fresh_store() {
+        let (db, _d) = temp_db().await;
+        assert!(load_queue(&db).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn save_then_load_round_trips_an_entry() {
+        let (db, _d) = temp_db().await;
+        let entry = review_queue::ReviewQueueEntry {
+            id: "rec-1".into(),
+            prep: prep("rec-1", "/rec/a.m4a", 1_000),
+            added_at: 1_000,
+            reminded: 0,
+            age_in_days: 0.0,
+        };
+        save_queue(&db, std::slice::from_ref(&entry)).await.unwrap();
+
+        let back = load_queue(&db).await.unwrap();
+        assert_eq!(back.len(), 1);
+        assert_eq!(back[0].id, "rec-1");
+        assert_eq!(back[0].prep.recording_path, "/rec/a.m4a");
+    }
+
+    #[tokio::test]
+    async fn save_queue_strips_the_derived_age_before_persisting() {
+        let (db, _d) = temp_db().await;
+        let entry = review_queue::ReviewQueueEntry {
+            id: "rec-1".into(),
+            prep: prep("rec-1", "/rec/a.m4a", 1_000),
+            added_at: 1_000,
+            reminded: 0,
+            // A non-zero derived age must NOT survive the write (mirrors writeRaw).
+            age_in_days: 9.5,
+        };
+        save_queue(&db, std::slice::from_ref(&entry)).await.unwrap();
+        assert_eq!(load_queue(&db).await.unwrap()[0].age_in_days, 0.0);
+    }
+
+    #[tokio::test]
+    async fn enqueue_persists_and_dedupes_by_id() {
+        let (db, _d) = temp_db().await;
+        let q = load_queue(&db).await.unwrap();
+        let q = review_queue::enqueue(q, prep("rec-1", "/rec/a.m4a", 1_000), 1_000);
+        save_queue(&db, &q).await.unwrap();
+
+        // Re-enqueue the same id with a new path: replaces, never a second row.
+        let q = load_queue(&db).await.unwrap();
+        let q = review_queue::enqueue(q, prep("rec-1", "/rec/b.m4a", 2_000), 2_000);
+        save_queue(&db, &q).await.unwrap();
+
+        let back = load_queue(&db).await.unwrap();
+        assert_eq!(back.len(), 1);
+        assert_eq!(back[0].prep.recording_path, "/rec/b.m4a");
+    }
+
+    #[tokio::test]
+    async fn read_with_age_sorts_newest_first_and_fills_age() {
+        let (db, _d) = temp_db().await;
+        let mut q = Vec::new();
+        q = review_queue::enqueue(q, prep("old", "/rec/old.m4a", 1_000), 1_000);
+        q = review_queue::enqueue(q, prep("new", "/rec/new.m4a", 5_000), 5_000);
+        save_queue(&db, &q).await.unwrap();
+
+        // now is two days past the newest entry.
+        let now = 5_000 + 2 * 24 * 60 * 60 * 1_000;
+        let listed = review_queue::read_with_age(&load_queue(&db).await.unwrap(), now);
+        assert_eq!(listed[0].id, "new", "newest first");
+        assert_eq!(listed[1].id, "old");
+        assert!((listed[0].age_in_days - 2.0).abs() < 1e-9);
+    }
+
+    #[tokio::test]
+    async fn mark_published_persists_the_status_transition() {
+        let (db, _d) = temp_db().await;
+        let q = review_queue::enqueue(Vec::new(), prep("rec-1", "/rec/a.m4a", 1_000), 1_000);
+        save_queue(&db, &q).await.unwrap();
+
+        let mut loaded = load_queue(&db).await.unwrap();
+        assert!(review_queue::mark_published(&mut loaded, "rec-1", 2_000));
+        save_queue(&db, &loaded).await.unwrap();
+
+        let back = load_queue(&db).await.unwrap();
+        assert_eq!(back[0].prep.status, EpisodePrepStatus::Published);
+
+        // An unknown id is a no-op (no panic, returns false).
+        let mut loaded = load_queue(&db).await.unwrap();
+        assert!(!review_queue::mark_published(&mut loaded, "ghost", 3_000));
+    }
+
+    #[tokio::test]
+    async fn mark_discarded_persists_the_status_transition() {
+        let (db, _d) = temp_db().await;
+        let q = review_queue::enqueue(Vec::new(), prep("rec-1", "/rec/a.m4a", 1_000), 1_000);
+        save_queue(&db, &q).await.unwrap();
+
+        let mut loaded = load_queue(&db).await.unwrap();
+        assert!(review_queue::mark_discarded(&mut loaded, "rec-1", 2_000));
+        save_queue(&db, &loaded).await.unwrap();
+
+        assert_eq!(
+            load_queue(&db).await.unwrap()[0].prep.status,
+            EpisodePrepStatus::Discarded
+        );
+    }
+
+    #[tokio::test]
+    async fn load_queue_tolerates_a_corrupt_blob() {
+        let (db, _d) = temp_db().await;
+        // A non-array / malformed value must degrade to an empty queue, not error
+        // (mirrors the `unwrap_or_default` in load_queue).
+        store::set_setting(&db.pool, REVIEW_QUEUE_KEY, "not json at all")
+            .await
+            .unwrap();
+        assert!(load_queue(&db).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn reminder_action_dto_maps_every_channel_and_message() {
+        use review_queue::{ReminderAction, ReminderChannel as C, ReminderMessage as M};
+        let cases = [
+            (C::Notify, M::Day1, "notify", "day1"),
+            (C::NotifyEmail, M::Day2, "notify_email", "day2"),
+            (
+                C::NotifyEmailWebhook,
+                M::Day7,
+                "notify_email_webhook",
+                "day7",
+            ),
+            (
+                C::NotifyEmailWebhookWarning,
+                M::Day7,
+                "notify_email_webhook_warning",
+                "day7",
+            ),
+            (C::AutoDiscard, M::Discard, "auto_discard", "discard"),
+        ];
+        for (channel, message, want_channel, want_message) in cases {
+            let dto: ReminderActionDto = ReminderAction {
+                id: "x".into(),
+                channel,
+                message,
+            }
+            .into();
+            assert_eq!(dto.channel, want_channel);
+            assert_eq!(dto.message, want_message);
+            assert_eq!(dto.id, "x");
+        }
+    }
+}
