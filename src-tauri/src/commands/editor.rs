@@ -48,6 +48,13 @@ pub async fn editor_export(request: EditorExportRequest) -> AppResult<EditorExpo
     editor::export(&request).await
 }
 
+/// Extract a single video frame at `sec` seconds as a base64 JPEG (480px wide)
+/// for the editor's video-preview scrubber. HARDWARE-UNVERIFIED.
+#[tauri::command]
+pub async fn editor_extract_frame(input_path: String, sec: f64) -> AppResult<String> {
+    editor::extract_frame(&input_path, sec).await
+}
+
 // ── P1 parity: sidecars, probe, file guard, cleanup, mastering flow ──────────────
 
 /// Read a per-recording sidecar JSON (.meta / .cuts-draft / .transcript), or

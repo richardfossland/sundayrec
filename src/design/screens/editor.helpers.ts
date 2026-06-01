@@ -14,6 +14,70 @@ import type { EditorCutRegion } from "@/lib/bindings/EditorCutRegion";
 /** The number of bars the design's `Waveform` renders. */
 export const WAVE_BARS = 150;
 
+/** Smallest gap (seconds) the drag-trim handles may be pushed to — keeps the
+ *  KEEP region non-degenerate so an exported clip is never empty. */
+export const MIN_TRIM_GAP = 0.1;
+
+/**
+ * The effective trim window in seconds for the current file. Empty/invalid trim
+ * fields fall back to the file bounds (`0` / `duration`), and the two edges are
+ * ordered + clamped so callers always get `start ≤ end` inside `[0, duration]`.
+ * This is the single source of truth both the numeric readout and the draggable
+ * waveform markers read from. Pure.
+ */
+export function effectiveTrim(
+  trimStart: string,
+  trimEnd: string,
+  duration: number,
+): { start: number; end: number } {
+  const dur = duration > 0 ? duration : 0;
+  const clamp = (v: number) => Math.min(Math.max(v, 0), dur);
+  let start = clamp(parseHms(trimStart) ?? 0);
+  let end = clamp(parseHms(trimEnd) ?? dur);
+  if (end < start) [start, end] = [end, start];
+  return { start, end };
+}
+
+/**
+ * Move one trim edge to `sec`, keeping `start + MIN_TRIM_GAP ≤ end` and both
+ * inside `[0, duration]`. Dragging the start past the end (or vice-versa) is
+ * clamped to the minimum gap rather than crossing over. Returns the new
+ * `{ start, end }` window. Pure — the React handler just feeds the result back
+ * into the trim fields. Mirrors the handle-resize clamp in `editorGeometry`.
+ */
+export function moveTrimEdge(
+  edge: "start" | "end",
+  sec: number,
+  window: { start: number; end: number },
+  duration: number,
+): { start: number; end: number } {
+  const dur = duration > 0 ? duration : 0;
+  const clamp = (v: number) => Math.min(Math.max(v, 0), dur);
+  if (edge === "start") {
+    const start = Math.min(clamp(sec), window.end - MIN_TRIM_GAP);
+    return { start: Math.max(0, start), end: window.end };
+  }
+  const end = Math.max(clamp(sec), window.start + MIN_TRIM_GAP);
+  return { start: window.start, end: Math.min(dur, end) };
+}
+
+/**
+ * The fractional `[0, 1]` x-position of a second within the visible viewport
+ * `[viewStart, viewEnd]`, or `null` when it falls outside (so the caller can
+ * hide an off-screen handle). Pure px↔sec readout for the trim markers.
+ */
+export function secToViewFrac(
+  sec: number,
+  viewStart: number,
+  viewEnd: number,
+): number | null {
+  const span = viewEnd - viewStart;
+  if (!(span > 0)) return null;
+  const frac = (sec - viewStart) / span;
+  if (frac < 0 || frac > 1) return null;
+  return frac;
+}
+
 /** Tolerance (seconds) below which a trim edge is treated as "at the bound". */
 const TRIM_EPSILON = 0.05;
 

@@ -17,7 +17,12 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 # (`--features email`) once the network/GUI path is being smoke-tested on a real
 # rig. Each gates its impure I/O over the unit-tested `sundayrec-core` decisions.
 [features]
-default = []
+# The non-destructive editor (R1) ships in the default build: it adds NO heavy
+# native dep (ffmpeg is a sidecar, WAV/PCM parsed by hand), so the `editor`
+# commands run instead of returning `feature_disabled` in `tauri dev` + a normal
+# `tauri build` + the `npm run check` gate (which both use default features).
+# `whisper` deliberately stays OFF here (it compiles libwhisper from C/C++).
+default = ["editor"]
 # PU-1: SMTP/Gmail error+test alerts. Pulls `lettre` for the SMTP transport (the
 # Gmail-API path reuses the already-present `reqwest`).
 email = ["dep:lettre"]
@@ -26,12 +31,13 @@ tray = ["tauri/tray-icon", "dep:tauri-plugin-deep-link"]
 # PU-3: write/upload the podcast RSS feed (reuses `reqwest` + the cloud worker).
 publish = []
 # R1: non-destructive editor — ffmpeg-driven load/peaks/segments/mastering/
-# export over the unit-tested `sundayrec-core::{editor,mastering,audio_analysis}`
-# decisions. NO new native dep (ffmpeg is a sidecar; WAV/PCM parsed by hand), so
-# the feature gate only compiles the I/O seam in/out. DEFAULT-OFF: the ffmpeg
-# runs are HARDWARE-UNVERIFIED (need real media), and the shipping/CI gate stays
-# lean. When OFF the commands return a clear `feature_disabled` error (same idiom
-# as `whisper`).
+# export/frame-extract over the unit-tested
+# `sundayrec-core::{editor,mastering,audio_analysis}` decisions. NO new native dep
+# (ffmpeg is a sidecar; WAV/PCM parsed by hand), so the feature gate only compiles
+# the I/O seam in/out. NOW IN `default` (see above) so the Rediger screen is live:
+# the ffmpeg runs are still HARDWARE-UNVERIFIED (need real media). Build OFF
+# (`--no-default-features`) and the commands return a clear `feature_disabled`
+# error (same idiom as `whisper`).
 editor = []
 # PU-5: whisper.cpp transcription. Pulls `whisper-rs` (binds libwhisper) for the
 # actual inference; the model registry/argv/normalise decisions are in
@@ -74,7 +80,7 @@ tauri-build = { version = "2", features = [] }
 # Pure, GUI-free domain core — the recorder behaviour distilled from Electron.
 sundayrec-core = { path = "../crates/sundayrec-core" }
 
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-opener = "2"
 # Native file dialogs (open/save recordings) — needed from early phases.
 tauri-plugin-dialog = "2.7.1"

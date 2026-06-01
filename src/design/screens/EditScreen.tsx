@@ -22,7 +22,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
@@ -50,14 +51,21 @@ import type { EditorMasterPreviewResult } from "@/lib/bindings/EditorMasterPrevi
 import type { WhisperModelMeta } from "@/lib/bindings/WhisperModelMeta";
 import type { TranscriptData } from "@/lib/bindings/TranscriptData";
 import type { TranscriptExportFormat } from "@/lib/bindings/TranscriptExportFormat";
+import type { EditorMasterApplyRequest } from "@/lib/bindings/EditorMasterApplyRequest";
+import type { EditorMasterApplyResult } from "@/lib/bindings/EditorMasterApplyResult";
+import type { EditorMasterProgress } from "@/lib/bindings/EditorMasterProgress";
+import type { PreviewFrame } from "@/lib/bindings/PreviewFrame";
 import {
   buildTrimCuts,
   clock,
+  effectiveTrim,
   fileExt,
   fileName,
   formatHms,
   mediaMeta,
+  moveTrimEdge,
   peaksWindow,
+  secToViewFrac,
   variantForMedia,
   viewportTicks,
   WAVE_BARS,
@@ -68,6 +76,61 @@ import {
 function isFeatureDisabled(err: unknown): boolean {
   const msg = (err as { message?: string } | null)?.message ?? String(err);
   return msg.includes("feature_disabled");
+}
+
+/** `convertFileSrc`, but never throws — in dev/test (no Tauri host) it can be
+ *  absent or reject, so we fall back to the raw path. The <audio>/<img> tag then
+ *  fails to load gracefully (onError) rather than crashing the editor. */
+function safeConvertFileSrc(path: string): string {
+  try {
+    return convertFileSrc(path);
+  } catch {
+    return path;
+  }
+}
+
+/** A short id for a mastering-apply job, used to correlate progress events and
+ *  to cancel an in-flight apply. */
+function makeJobId(): string {
+  return `master-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** The `.cuts-draft` sidecar shape this screen persists (reopen-ability for the
+ *  Intro/Outro toggle + the trim bounds). Free JSON over the sidecar IPC. */
+interface DraftSidecar {
+  includeIntroOutro?: boolean;
+  trimStart?: string;
+  trimEnd?: string;
+}
+
+/** The `.meta` sidecar shape — the episode metadata form. */
+interface MetaSidecar {
+  title?: string;
+  speaker?: string;
+  description?: string;
+}
+
+/** Debounced (600 ms) write of a sidecar value for the loaded file. Skips the
+ *  hydrate-driven render (so loading a draft never echoes straight back out) and
+ *  swallows IPC rejection (the sidecar commands are infallible-ish but absent in
+ *  dev/test). Pure plumbing around editor_write_sidecar. */
+function useDebouncedSidecar(
+  mediaPath: string | null,
+  sidecar: "meta" | "cutsDraft",
+  value: DraftSidecar | MetaSidecar,
+  hydratingRef: React.MutableRefObject<boolean>,
+) {
+  useEffect(() => {
+    if (!mediaPath || hydratingRef.current) return;
+    const id = window.setTimeout(() => {
+      invoke<boolean>("editor_write_sidecar", {
+        mediaPath,
+        sidecar,
+        value,
+      }).catch(() => {});
+    }, 600);
+    return () => window.clearTimeout(id);
+  }, [mediaPath, sidecar, value, hydratingRef]);
 }
 
 /** The mastering presets the design's single <select> picks from. The first is
@@ -110,6 +173,27 @@ function useEditorModel() {
   // fit-all / 0 whenever a file loads or closes (the duration changes below).
   const [viewport, setViewport] = useState<Viewport>(() => fitAll(0));
   const [playheadSec, setPlayheadSec] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  // Intro/Outro "include on export" toggle (persisted in the .cuts-draft
+  // sidecar) and the Metadata form (persisted in the .meta sidecar).
+  const [includeIntroOutro, setIncludeIntroOutro] = useState(true);
+  const [metaTitle, setMetaTitle] = useState("");
+  const [metaSpeaker, setMetaSpeaker] = useState("");
+  const [metaDescription, setMetaDescription] = useState("");
+
+  // The hidden <audio> element that backs playback + the playhead. It is owned
+  // here (a ref) so play/pause/seek route through one source of truth and the
+  // waveform stays a thin view. convertFileSrc turns the local path into the
+  // asset:// URL the webview can load; if the asset protocol scope is closed it
+  // simply fails to load and we degrade to a silent (no-audio) playhead.
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // `true` once a load error fired (asset scope closed / unsupported) — keeps
+  // the play button from pretending it can play.
+  const [audioBroken, setAudioBroken] = useState(false);
+  const assetSrc = useMemo(
+    () => (selected ? safeConvertFileSrc(selected) : null),
+    [selected],
+  );
 
   const recordings = useQuery<RecordingRow[]>({
     queryKey: EDITOR_RECORDINGS_KEY,
@@ -150,16 +234,74 @@ function useEditorModel() {
       invoke<EditorExportResult>("editor_export", { request }),
   });
 
+  // Mastering APPLY (commit): the full two-pass render to a sibling
+  // `*_mastert.<ext>` file, emitting `editor-master-progress` ticks under a job
+  // id we own (so we can cancel). Distinct from the windowed preview above.
+  const [masterJobId, setMasterJobId] = useState<string | null>(null);
+  const [masterProgress, setMasterProgress] =
+    useState<EditorMasterProgress | null>(null);
+  const applyMutation = useMutation({
+    mutationFn: (request: EditorMasterApplyRequest) =>
+      invoke<EditorMasterApplyResult>("editor_master_apply", { request }),
+  });
+
+  const onMasterApply = useCallback(() => {
+    if (!selected) return;
+    const ext = fileExt(selected) || "mp3";
+    const outputPath = selected.replace(
+      /(\.[^./\\]+)?$/,
+      `_mastert.${ext === "mp4" || ext === "mkv" || ext === "mov" ? "mp3" : ext}`,
+    );
+    const jobId = makeJobId();
+    setMasterJobId(jobId);
+    setMasterProgress(null);
+    applyMutation.mutate(
+      { inputPath: selected, outputPath, presetId, jobId, bitrate: null },
+      { onSettled: () => setMasterJobId(null) },
+    );
+  }, [selected, presetId, applyMutation]);
+
+  const onMasterCancel = useCallback(() => {
+    if (masterJobId) {
+      invoke<boolean>("editor_master_cancel", { jobId: masterJobId }).catch(
+        () => {},
+      );
+    }
+  }, [masterJobId]);
+
+  // Live progress: subscribe to the apply ticks for the current job only.
+  useEffect(() => {
+    if (!masterJobId) return;
+    let unlisten: (() => void) | null = null;
+    let cancelled = false;
+    listen<EditorMasterProgress>("editor-master-progress", (e) => {
+      if (e.payload.jobId === masterJobId) setMasterProgress(e.payload);
+    })
+      .then((fn) => {
+        if (cancelled) fn();
+        else unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      if (unlisten) unlisten();
+    };
+  }, [masterJobId]);
+
   const onSelect = useCallback(
     (path: string) => {
       setSelected(path);
       setTrimStart("");
       setTrimEnd("");
+      setIsPlaying(false);
+      setAudioBroken(false);
+      setMasterProgress(null);
       peaksMutation.reset();
       segmentsMutation.reset();
       analyzeMutation.reset();
       previewMutation.reset();
       exportMutation.reset();
+      applyMutation.reset();
       // Probe (duration/streams) + waveform immediately on pick.
       loadMutation.mutate(path);
       peaksMutation.mutate(path);
@@ -171,6 +313,7 @@ function useEditorModel() {
       analyzeMutation,
       previewMutation,
       exportMutation,
+      applyMutation,
     ],
   );
 
@@ -205,12 +348,20 @@ function useEditorModel() {
     setSelected(null);
     setTrimStart("");
     setTrimEnd("");
+    setIsPlaying(false);
+    setAudioBroken(false);
+    setMasterProgress(null);
+    setMetaTitle("");
+    setMetaSpeaker("");
+    setMetaDescription("");
+    setIncludeIntroOutro(true);
     loadMutation.reset();
     peaksMutation.reset();
     segmentsMutation.reset();
     analyzeMutation.reset();
     previewMutation.reset();
     exportMutation.reset();
+    applyMutation.reset();
   }, [
     loadMutation,
     peaksMutation,
@@ -218,6 +369,7 @@ function useEditorModel() {
     analyzeMutation,
     previewMutation,
     exportMutation,
+    applyMutation,
   ]);
 
   const onNormalize = useCallback(() => {
@@ -320,10 +472,69 @@ function useEditorModel() {
   );
   const scrub = useCallback(
     (sec: number) => {
-      setPlayheadSec(clampMain(sec, duration));
+      const next = clampMain(sec, duration);
+      setPlayheadSec(next);
+      // Clicking/dragging the waveform seeks the backing audio so play resumes
+      // from where you dropped the playhead.
+      const a = audioRef.current;
+      if (a && Number.isFinite(next)) {
+        try {
+          a.currentTime = next;
+        } catch {
+          /* not seekable yet → ignore */
+        }
+      }
     },
     [duration],
   );
+
+  // Drag-to-trim on the waveform: move one KEEP-window edge to a second, then
+  // write it back through the numeric trim fields (which stay the readout +
+  // export source of truth). Clamped + ordered via the pure helpers.
+  const onTrimEdge = useCallback(
+    (edge: "start" | "end", sec: number) => {
+      const win = effectiveTrim(trimStart, trimEnd, duration);
+      const next = moveTrimEdge(edge, sec, win, duration);
+      if (edge === "start") setTrimStart(formatHms(next.start));
+      else setTrimEnd(formatHms(next.end));
+    },
+    [trimStart, trimEnd, duration],
+  );
+
+  // Play/pause the backing audio. Toggling sets `isPlaying`; the <audio>'s own
+  // play/pause/ended events keep it honest (see EditScreen's <audio> handlers).
+  const togglePlay = useCallback(() => {
+    const a = audioRef.current;
+    if (!a || audioBroken) return;
+    if (a.paused) {
+      // Resume from the current playhead so Space respects manual scrubs.
+      if (Math.abs(a.currentTime - playheadSec) > 0.25) {
+        try {
+          a.currentTime = playheadSec;
+        } catch {
+          /* ignore */
+        }
+      }
+      void a.play().catch(() => setAudioBroken(true));
+    } else {
+      a.pause();
+    }
+  }, [audioBroken, playheadSec]);
+
+  // While playing, follow the audio clock on the animation frame so the playhead
+  // glides smoothly rather than ticking on `timeupdate` (4 Hz). Parked when
+  // paused so we don't spin a rAF loop for nothing.
+  useEffect(() => {
+    if (!isPlaying) return;
+    let raf = 0;
+    const tick = () => {
+      const a = audioRef.current;
+      if (a && !a.paused) setPlayheadSec(a.currentTime);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [isPlaying]);
 
   // "Skip" → advance the playhead to the next segment boundary after the current
   // position (the start of the next detected segment), or to the file end when
@@ -339,6 +550,77 @@ function useEditorModel() {
   }, [segmentsMutation.data, playheadSec, duration]);
   const hasSegments = (segmentsMutation.data ?? []).length > 0;
 
+  // ── Sidecar persistence (reopen-ability) ──────────────────────────────────
+  // On file load, hydrate the Intro/Outro toggle + trim from `.cuts-draft` and
+  // the Metadata form from `.meta`. A `hydratingRef` gate stops the very first
+  // populated render from echoing straight back out through the debounced save.
+  const hydratingRef = useRef(false);
+  useEffect(() => {
+    if (!selected) return;
+    let cancelled = false;
+    hydratingRef.current = true;
+    Promise.all([
+      invoke<DraftSidecar | null>("editor_read_sidecar", {
+        mediaPath: selected,
+        sidecar: "cutsDraft",
+      }).catch(() => null),
+      invoke<MetaSidecar | null>("editor_read_sidecar", {
+        mediaPath: selected,
+        sidecar: "meta",
+      }).catch(() => null),
+    ]).then(([draft, meta]) => {
+      if (cancelled) return;
+      if (draft && typeof draft === "object") {
+        if (typeof draft.includeIntroOutro === "boolean") {
+          setIncludeIntroOutro(draft.includeIntroOutro);
+        }
+        if (typeof draft.trimStart === "string") setTrimStart(draft.trimStart);
+        if (typeof draft.trimEnd === "string") setTrimEnd(draft.trimEnd);
+      }
+      if (meta && typeof meta === "object") {
+        if (typeof meta.title === "string") setMetaTitle(meta.title);
+        if (typeof meta.speaker === "string") setMetaSpeaker(meta.speaker);
+        if (typeof meta.description === "string") {
+          setMetaDescription(meta.description);
+        }
+      }
+      // Let the next change-driven save through (after this render settles).
+      queueMicrotask(() => {
+        hydratingRef.current = false;
+      });
+    });
+    return () => {
+      cancelled = true;
+      hydratingRef.current = false;
+    };
+  }, [selected]);
+
+  // Debounced write of the `.cuts-draft` sidecar whenever the persisted bits of
+  // the cut plan change (intro/outro toggle + the trim bounds).
+  useDebouncedSidecar(
+    selected,
+    "cutsDraft",
+    useMemo<DraftSidecar>(
+      () => ({ includeIntroOutro, trimStart, trimEnd }),
+      [includeIntroOutro, trimStart, trimEnd],
+    ),
+    hydratingRef,
+  );
+  // Debounced write of the `.meta` sidecar whenever the metadata form changes.
+  useDebouncedSidecar(
+    selected,
+    "meta",
+    useMemo<MetaSidecar>(
+      () => ({
+        title: metaTitle,
+        speaker: metaSpeaker,
+        description: metaDescription,
+      }),
+      [metaTitle, metaSpeaker, metaDescription],
+    ),
+    hydratingRef,
+  );
+
   return {
     selected,
     presetId,
@@ -352,6 +634,32 @@ function useEditorModel() {
     zoom,
     pan,
     scrub,
+    onTrimEdge,
+    // Playback
+    audioRef,
+    assetSrc,
+    isPlaying,
+    setIsPlaying,
+    audioBroken,
+    setAudioBroken,
+    togglePlay,
+    // Intro/Outro + metadata sidecar state
+    includeIntroOutro,
+    setIncludeIntroOutro,
+    metaTitle,
+    setMetaTitle,
+    metaSpeaker,
+    setMetaSpeaker,
+    metaDescription,
+    setMetaDescription,
+    // Mastering apply (commit) + progress
+    onMasterApply,
+    onMasterCancel,
+    isApplyPending: applyMutation.isPending,
+    masterProgress,
+    applyResult: applyMutation.data ?? null,
+    applyError:
+      applyMutation.isError && !isFeatureDisabled(applyMutation.error),
     rows: recordings.data ?? [],
     info: loadMutation.data ?? null,
     peaks: peaksMutation.data ?? null,
@@ -461,6 +769,8 @@ function Waveform({
   onScrub,
   onZoom,
   onPan,
+  trim,
+  onTrimEdge,
 }: {
   peaks: number[] | null;
   durationSec: number;
@@ -469,10 +779,17 @@ function Waveform({
   onScrub: (sec: number) => void;
   onZoom: (factor: number, anchorSec?: number) => void;
   onPan: (deltaSec: number) => void;
+  /** The KEEP window in seconds; when present, two draggable handles + a gold
+   *  KEEP highlight (with dimmed cut regions either side) are drawn. */
+  trim?: { start: number; end: number };
+  /** Move one trim edge to a second (the screen clamps + writes it back). */
+  onTrimEdge?: (edge: "start" | "end", sec: number) => void;
 }) {
   const { t } = useTranslation();
   const barsRef = useRef<HTMLDivElement | null>(null);
   const pressed = useRef(false);
+  // Which trim handle (if any) the current pointer-drag is moving.
+  const draggingEdge = useRef<"start" | "end" | null>(null);
   const span = viewport.end - viewport.start;
   // Bars: window the peaks to the visible range, then downsample to WAVE_BARS.
   const bars = useMemo(
@@ -502,6 +819,15 @@ function Waveform({
   // view).
   const playFrac = span > 0 ? (playheadSec - viewport.start) / span : -1;
 
+  // Trim handle/highlight fractions across the viewport (null when off-screen).
+  const trimStartFrac = trim
+    ? secToViewFrac(trim.start, viewport.start, viewport.end)
+    : null;
+  const trimEndFrac = trim
+    ? secToViewFrac(trim.end, viewport.start, viewport.end)
+    : null;
+  const showTrim = !!trim && !!onTrimEdge && hasBars;
+
   // Map a pointer's clientX into a main-file second via the bars container box.
   const xToSecFromEvent = useCallback(
     (clientX: number): number | null => {
@@ -514,29 +840,62 @@ function Waveform({
     [viewport],
   );
 
+  // Which trim handle (if any) a clientX is within ~10 px of — handles win over
+  // a plain scrub so you can grab an edge sitting under the playhead.
+  const handleAtX = useCallback(
+    (clientX: number): "start" | "end" | null => {
+      if (!showTrim) return null;
+      const el = barsRef.current;
+      if (!el) return null;
+      const rect = el.getBoundingClientRect();
+      if (rect.width <= 0) return null;
+      const x = clientX - rect.left;
+      const startX = trimStartFrac != null ? trimStartFrac * rect.width : null;
+      const endX = trimEndFrac != null ? trimEndFrac * rect.width : null;
+      const dStart = startX != null ? Math.abs(x - startX) : Infinity;
+      const dEnd = endX != null ? Math.abs(x - endX) : Infinity;
+      if (dStart > 10 && dEnd > 10) return null;
+      return dStart <= dEnd ? "start" : "end";
+    },
+    [showTrim, trimStartFrac, trimEndFrac],
+  );
+
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!hasBars) return;
       const sec = xToSecFromEvent(e.clientX);
       if (sec == null) return;
+      const edge = handleAtX(e.clientX);
       pressed.current = true;
       barsRef.current?.setPointerCapture?.(e.pointerId);
-      onScrub(sec);
+      if (edge && onTrimEdge) {
+        draggingEdge.current = edge;
+        onTrimEdge(edge, sec);
+      } else {
+        draggingEdge.current = null;
+        onScrub(sec);
+      }
     },
-    [hasBars, xToSecFromEvent, onScrub],
+    [hasBars, xToSecFromEvent, handleAtX, onTrimEdge, onScrub],
   );
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!pressed.current) return;
       const sec = xToSecFromEvent(e.clientX);
-      if (sec != null) onScrub(sec);
+      if (sec == null) return;
+      if (draggingEdge.current && onTrimEdge) {
+        onTrimEdge(draggingEdge.current, sec);
+      } else {
+        onScrub(sec);
+      }
     },
-    [xToSecFromEvent, onScrub],
+    [xToSecFromEvent, onTrimEdge, onScrub],
   );
 
   const onPointerEnd = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     pressed.current = false;
+    draggingEdge.current = null;
     barsRef.current?.releasePointerCapture?.(e.pointerId);
   }, []);
 
@@ -653,6 +1012,97 @@ function Waveform({
             <polygon points={polyPath} fill="var(--sr-gold-bright)" />
           </svg>
         )}
+        {/* Drag-to-trim overlay: dim the CUT regions (before start / after end),
+            tint the KEEP window gold, and draw two draggable edge handles. The
+            container's pointer handlers own the drag; the handles are visual +
+            an enlarged grab cue only. */}
+        {showTrim && trimStartFrac != null && trimStartFrac > 0 && (
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: `${trimStartFrac * 100}%`,
+              background: "rgba(10,21,33,0.62)",
+              pointerEvents: "none",
+            }}
+          />
+        )}
+        {showTrim && trimEndFrac != null && trimEndFrac < 1 && (
+          <div
+            style={{
+              position: "absolute",
+              left: `${trimEndFrac * 100}%`,
+              top: 0,
+              bottom: 0,
+              right: 0,
+              background: "rgba(10,21,33,0.62)",
+              pointerEvents: "none",
+            }}
+          />
+        )}
+        {showTrim && trimStartFrac != null && trimEndFrac != null && (
+          <div
+            style={{
+              position: "absolute",
+              left: `${trimStartFrac * 100}%`,
+              width: `${(trimEndFrac - trimStartFrac) * 100}%`,
+              top: 0,
+              bottom: 0,
+              background: "rgba(240,187,71,0.08)",
+              borderTop: "2px solid var(--sr-gold)",
+              borderBottom: "2px solid var(--sr-gold)",
+              pointerEvents: "none",
+            }}
+          />
+        )}
+        {showTrim &&
+          (
+            [
+              ["start", trimStartFrac],
+              ["end", trimEndFrac],
+            ] as const
+          ).map(([edge, frac]) =>
+            frac == null ? null : (
+              <div
+                key={edge}
+                aria-label={
+                  edge === "start"
+                    ? t("editScreen.trimStartHandle", "Trim-start")
+                    : t("editScreen.trimEndHandle", "Trim-slutt")
+                }
+                style={{
+                  position: "absolute",
+                  left: `${frac * 100}%`,
+                  top: 0,
+                  bottom: 0,
+                  width: 3,
+                  marginLeft: -1.5,
+                  background: "var(--sr-gold)",
+                  cursor: "ew-resize",
+                  // The container handles the drag; let events fall through so a
+                  // grab anywhere near the edge starts the resize.
+                  pointerEvents: "none",
+                  boxShadow: "0 0 0 1px rgba(10,21,33,0.6)",
+                }}
+              >
+                <span
+                  style={{
+                    position: "absolute",
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%,-50%)",
+                    width: 9,
+                    height: 26,
+                    borderRadius: 3,
+                    background: "var(--sr-gold)",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.45)",
+                  }}
+                />
+              </div>
+            ),
+          )}
         {/* White playhead — only when it falls inside the current viewport. */}
         {playFrac >= 0 && playFrac <= 1 && (
           <div
@@ -813,6 +1263,345 @@ function TranscribeSection({ selected }: { selected: string | null }) {
   );
 }
 
+/** The hidden <audio> that backs playback + the playhead. Owned by the model
+ *  (audioRef); this just renders it with the asset:// src + the events that keep
+ *  isPlaying / audioBroken honest. Rendered once per variant near the file bar. */
+function BackingAudio({ m }: { m: EditorModel }) {
+  if (!m.assetSrc) return null;
+  return (
+    <audio
+      ref={m.audioRef}
+      src={m.assetSrc}
+      preload="metadata"
+      style={{ display: "none" }}
+      onPlay={() => m.setIsPlaying(true)}
+      onPause={() => m.setIsPlaying(false)}
+      onEnded={() => m.setIsPlaying(false)}
+      onError={() => {
+        m.setAudioBroken(true);
+        m.setIsPlaying(false);
+      }}
+    />
+  );
+}
+
+/** The round play/pause button in the file bar — toggles the backing audio. */
+function PlayButton({ m }: { m: EditorModel }) {
+  const { t } = useTranslation();
+  return (
+    <button
+      className="sr-btn gold sm"
+      style={{ width: 34, height: 34, padding: 0, borderRadius: "50%" }}
+      onClick={m.togglePlay}
+      disabled={!m.selected || m.audioBroken}
+      aria-label={
+        m.isPlaying
+          ? t("editScreen.kbdPause", "Pause")
+          : t("editScreen.kbdPlay", "Spill")
+      }
+      type="button"
+    >
+      {m.isPlaying ? (
+        // No "pause" glyph in the icon set → two CSS bars, sized like the icon.
+        <span
+          aria-hidden
+          style={{ display: "inline-flex", gap: 3, alignItems: "center" }}
+        >
+          <span
+            style={{ width: 3.5, height: 13, background: "currentColor" }}
+          />
+          <span
+            style={{ width: 3.5, height: 13, background: "currentColor" }}
+          />
+        </span>
+      ) : (
+        <Icon name="play" size={15} fill />
+      )}
+    </button>
+  );
+}
+
+/** The "Bruk mastering / Eksporter" commit button + progress bar + output path,
+ *  wired to editor_master_apply (+ editor-master-progress + cancel). */
+function MasterApplyControls({ m }: { m: EditorModel }) {
+  const { t } = useTranslation();
+  const p = m.masterProgress;
+  const pct =
+    p && p.totalSec > 0
+      ? Math.min(100, Math.max(0, (p.currentSec / p.totalSec) * 100))
+      : null;
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div className="sr-row" style={{ gap: 10 }}>
+        <button
+          className="sr-btn gold"
+          onClick={m.onMasterApply}
+          disabled={!m.selected || m.isApplyPending}
+          type="button"
+        >
+          <Icon name="check" size={15} strokeWidth={2.4} />
+          {m.isApplyPending
+            ? t("editScreen.applyingMaster", "Mastrer fil …")
+            : t("editScreen.applyMaster", "Bruk mastering / Eksporter")}
+        </button>
+        {m.isApplyPending && (
+          <button
+            className="sr-btn ghost sm"
+            onClick={m.onMasterCancel}
+            type="button"
+          >
+            {t("editScreen.cancel", "Avbryt")}
+          </button>
+        )}
+      </div>
+      {m.isApplyPending && (
+        <div style={{ marginTop: 12 }}>
+          <div
+            style={{
+              height: 8,
+              borderRadius: 4,
+              background: "var(--sr-ink-1000)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                height: "100%",
+                width: `${pct ?? 6}%`,
+                background: "var(--sr-gold)",
+                transition: "width 0.2s linear",
+              }}
+            />
+          </div>
+          <div
+            className="sr-mono sr-num"
+            style={{ fontSize: 11.5, color: "var(--sr-text-3)", marginTop: 5 }}
+          >
+            {pct != null
+              ? t("editScreen.masterProgress", "{{pct}}% · {{cur}} / {{tot}}", {
+                  pct: pct.toFixed(0),
+                  cur: clock(p!.currentSec),
+                  tot: clock(p!.totalSec),
+                })
+              : t("editScreen.preparingMaster", "Forbereder …")}
+          </div>
+        </div>
+      )}
+      {m.applyResult && !m.isApplyPending && (
+        <div
+          style={{ marginTop: 10, fontSize: 12.5, color: "var(--sr-green)" }}
+        >
+          {t("editScreen.masteredSavedAs", "Mastret fil lagret: {{name}}", {
+            name: fileName(m.applyResult.outputPath),
+          })}
+        </div>
+      )}
+      {m.applyError && !m.isApplyPending && (
+        <div style={{ marginTop: 10, fontSize: 12.5, color: "var(--sr-red)" }}>
+          {t("editScreen.applyError", "✕ Kunne ikke mastre filen")}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A clickable wrapper turning the presentational Toggle atom into a control. */
+function ToggleButton({
+  on,
+  onToggle,
+  label,
+}: {
+  on: boolean;
+  onToggle: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+      style={{
+        background: "none",
+        border: "none",
+        padding: 0,
+        cursor: "pointer",
+      }}
+    >
+      <Toggle on={on} />
+    </button>
+  );
+}
+
+/** The Intro & Outro Collapsible body — the include-on-export switch, persisted
+ *  in the .cuts-draft sidecar via the model. */
+function IntroOutroCard({ m }: { m: EditorModel }) {
+  const { t } = useTranslation();
+  return (
+    <Collapsible
+      icon="scissors"
+      title={t("editScreen.introOutro", "Intro & Outro")}
+      meta={
+        <>
+          <span
+            style={{
+              fontSize: 12.5,
+              color: "var(--sr-text-3)",
+              marginRight: 12,
+            }}
+          >
+            {t("editScreen.includeOnExport", "Inkluder ved eksport")}
+          </span>
+          <ToggleButton
+            on={m.includeIntroOutro}
+            onToggle={() => m.setIncludeIntroOutro(!m.includeIntroOutro)}
+            label={t("editScreen.includeOnExport", "Inkluder ved eksport")}
+          />
+        </>
+      }
+    />
+  );
+}
+
+/** The Metadata Collapsible body — title/speaker/description form persisted in
+ *  the .meta sidecar via the model. */
+function MetadataCard({ m }: { m: EditorModel }) {
+  const { t } = useTranslation();
+  return (
+    <Collapsible
+      icon="list"
+      title={t("editScreen.metadata", "Metadata")}
+      open
+      meta={
+        <span style={{ fontSize: 12.5, color: "var(--sr-text-3)" }}>
+          {m.metaTitle ||
+            t("editScreen.metadataHint", "Tittel, taler, beskrivelse")}
+        </span>
+      }
+    >
+      <div className="sr-stack-2">
+        <label className="sr-field">
+          <span className="sr-label">
+            {t("editScreen.metaTitle", "Tittel")}
+          </span>
+          <input
+            className="sr-input"
+            value={m.metaTitle}
+            onChange={(e) => m.setMetaTitle(e.target.value)}
+            placeholder={t(
+              "editScreen.metaTitlePlaceholder",
+              "Pinsegudstjeneste 24. mai",
+            )}
+            disabled={!m.selected}
+          />
+        </label>
+        <label className="sr-field">
+          <span className="sr-label">
+            {t("editScreen.metaSpeaker", "Taler")}
+          </span>
+          <input
+            className="sr-input"
+            value={m.metaSpeaker}
+            onChange={(e) => m.setMetaSpeaker(e.target.value)}
+            placeholder={t(
+              "editScreen.metaSpeakerPlaceholder",
+              "Navn på taler",
+            )}
+            disabled={!m.selected}
+          />
+        </label>
+        <label className="sr-field">
+          <span className="sr-label">
+            {t("editScreen.metaDescription", "Beskrivelse")}
+          </span>
+          <textarea
+            className="sr-input"
+            rows={3}
+            value={m.metaDescription}
+            onChange={(e) => m.setMetaDescription(e.target.value)}
+            placeholder={t(
+              "editScreen.metaDescriptionPlaceholder",
+              "Kort beskrivelse av episoden",
+            )}
+            disabled={!m.selected}
+            style={{ resize: "vertical" }}
+          />
+        </label>
+      </div>
+    </Collapsible>
+  );
+}
+
+/** The video variant's synced frame preview — extracts a JPEG at the playhead
+ *  (debounced ~150 ms) via editor_extract_frame and shows it. Falls back to the
+ *  design placeholder when no frame is available (no file / command absent). */
+function VideoFramePreview({ m }: { m: EditorModel }) {
+  const { t } = useTranslation();
+  const [frame, setFrame] = useState<string | null>(null);
+  const selected = m.selected;
+  const sec = m.playheadSec;
+
+  // Reset on file change so a stale frame never lingers on the new file.
+  useEffect(() => {
+    setFrame(null);
+  }, [selected]);
+
+  // Debounced extract at the current playhead (rounded to ¼ s so tiny rAF
+  // jitters during playback don't spam the backend).
+  const quantSec = Math.round(sec * 4) / 4;
+  useEffect(() => {
+    if (!selected) return;
+    let cancelled = false;
+    const id = window.setTimeout(() => {
+      invoke<PreviewFrame | string | null>("editor_extract_frame", {
+        inputPath: selected,
+        sec: quantSec,
+      })
+        .then((res) => {
+          if (cancelled || res == null) return;
+          // The sibling command may return a bare base64 string or a
+          // PreviewFrame { data }. Accept either.
+          const data = typeof res === "string" ? res : res.data;
+          if (data) setFrame(`data:image/jpeg;base64,${data}`);
+        })
+        .catch(() => {
+          /* command absent / disabled → keep the placeholder */
+        });
+    }, 150);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(id);
+    };
+  }, [selected, quantSec]);
+
+  return (
+    <div
+      className="sr-media"
+      style={{
+        aspectRatio: "16 / 9",
+        borderRadius: 0,
+        border: "none",
+        overflow: "hidden",
+        padding: 0,
+      }}
+    >
+      {frame ? (
+        <img
+          src={frame}
+          alt={t("editScreen.videoPreview", "Videoforhåndsvisning")}
+          style={{ width: "100%", height: "100%", objectFit: "contain" }}
+        />
+      ) : (
+        t("editScreen.followsPlayhead", "følger spillehodet · 720p")
+      )}
+    </div>
+  );
+}
+
 function EditAudio({ m }: { m: EditorModel }) {
   const { t } = useTranslation();
   const [format, setFormat] = useState("mp3");
@@ -840,9 +1629,16 @@ function EditAudio({ m }: { m: EditorModel }) {
     : "32 min 14 s · WAV · 48 kHz";
   const dur = m.info?.durationSec ?? 0;
   const segCount = m.segments.length;
+  // The KEEP window for the drag-trim markers (audio shows them only once a
+  // user has set a bound, so the default whole-file view stays uncluttered).
+  const trimWindow =
+    dur > 0 && (m.trimStart || m.trimEnd)
+      ? effectiveTrim(m.trimStart, m.trimEnd, dur)
+      : undefined;
 
   return (
     <>
+      <BackingAudio m={m} />
       {/* File bar */}
       <div className="sr-card pad" style={{ marginBottom: 14 }}>
         <div className="sr-row" style={{ gap: 12 }}>
@@ -872,12 +1668,7 @@ function EditAudio({ m }: { m: EditorModel }) {
             {t("editScreen.closeFile", "Lukk fil")}
           </button>
           <div className="sr-row" style={{ gap: 6, marginLeft: 8 }}>
-            <button
-              className="sr-btn gold sm"
-              style={{ width: 34, height: 34, padding: 0, borderRadius: "50%" }}
-            >
-              <Icon name="play" size={15} fill />
-            </button>
+            <PlayButton m={m} />
             <button
               className="sr-btn ghost sm"
               style={{ padding: 8 }}
@@ -914,6 +1705,8 @@ function EditAudio({ m }: { m: EditorModel }) {
           onScrub={m.scrub}
           onZoom={m.zoom}
           onPan={m.pan}
+          trim={trimWindow}
+          onTrimEdge={m.onTrimEdge}
         />
         <div
           className="sr-row"
@@ -984,33 +1777,8 @@ function EditAudio({ m }: { m: EditorModel }) {
           </div>
         </div>
 
-        <Collapsible
-          icon="scissors"
-          title={t("editScreen.introOutro", "Intro & Outro")}
-          meta={
-            <>
-              <span
-                style={{
-                  fontSize: 12.5,
-                  color: "var(--sr-text-3)",
-                  marginRight: 12,
-                }}
-              >
-                {t("editScreen.includeOnExport", "Inkluder ved eksport")}
-              </span>
-              <Toggle on />
-            </>
-          }
-        />
-        <Collapsible
-          icon="list"
-          title={t("editScreen.metadata", "Metadata")}
-          meta={
-            <span style={{ fontSize: 12.5, color: "var(--sr-text-3)" }}>
-              {t("editScreen.metadataHint", "Tittel, taler, beskrivelse")}
-            </span>
-          }
-        />
+        <IntroOutroCard m={m} />
+        <MetadataCard m={m} />
 
         {/* Analyze → editor_segments (tale/musikk/stillhet detection). */}
         <Collapsible
@@ -1159,11 +1927,13 @@ function EditAudio({ m }: { m: EditorModel }) {
           {m.preview && (
             <audio
               controls
-              src={m.preview.previewPath}
+              src={safeConvertFileSrc(m.preview.previewPath)}
               style={{ width: "100%", marginTop: 12 }}
               aria-label={t("editScreen.preview", "Forhåndsvisning")}
             />
           )}
+          {/* Commit the mastered result to disk (progress + cancel). */}
+          <MasterApplyControls m={m} />
         </Card>
 
         {/* Episode image + export */}
@@ -1287,9 +2057,14 @@ function EditVideo({ m }: { m: EditorModel }) {
     ? mediaMeta(m.info, m.selected ? fileExt(m.selected) : null)
     : "32 min 14 s · MP4 · 720p · 30 fps · H.264 + AAC";
   const dur = m.info?.durationSec ?? 0;
+  // Video always shows the drag-trim KEEP markers — trim is the primary edit on
+  // the video timeline. Defaults to the whole file until the user drags an edge.
+  const trimWindow =
+    dur > 0 ? effectiveTrim(m.trimStart, m.trimEnd, dur) : undefined;
 
   return (
     <>
+      <BackingAudio m={m} />
       {/* File bar */}
       <div className="sr-card pad" style={{ marginBottom: 14 }}>
         <div className="sr-row" style={{ gap: 12 }}>
@@ -1344,17 +2119,14 @@ function EditVideo({ m }: { m: EditorModel }) {
             onScrub={m.scrub}
             onZoom={m.zoom}
             onPan={m.pan}
+            trim={trimWindow}
+            onTrimEdge={m.onTrimEdge}
           />
           <div
             className="sr-row"
             style={{ gap: 7, marginTop: 14, flexWrap: "wrap" }}
           >
-            <button
-              className="sr-btn gold sm"
-              style={{ width: 34, height: 34, padding: 0, borderRadius: "50%" }}
-            >
-              <Icon name="play" size={15} fill />
-            </button>
+            <PlayButton m={m} />
             <button
               className="sr-btn ghost sm"
               style={{ padding: 8 }}
@@ -1419,15 +2191,10 @@ function EditVideo({ m }: { m: EditorModel }) {
               className="sr-mono sr-num"
               style={{ fontSize: 12, color: "var(--sr-text-3)" }}
             >
-              05:08
+              {dur > 0 ? clock(m.playheadSec) : "05:08"}
             </span>
           </div>
-          <div
-            className="sr-media"
-            style={{ aspectRatio: "16 / 9", borderRadius: 0, border: "none" }}
-          >
-            {t("editScreen.followsPlayhead", "følger spillehodet · 720p")}
-          </div>
+          <VideoFramePreview m={m} />
           <div
             className="sr-row"
             style={{
@@ -1480,9 +2247,10 @@ function EditVideo({ m }: { m: EditorModel }) {
           </div>
         </div>
 
-        {/* Trim → cut regions: Start/Slutt (HH:MM:SS) are removed before/after
-            on export (buildTrimCuts → editor_export.cutRegions). Empty = whole
-            file. Drag-on-waveform trim is a separate follow-up (C-7). */}
+        {/* Trim → cut regions: drag the gold edge handles on the waveform OR
+            type the Start/Slutt fields below (they stay in sync). Everything
+            before Start / after Slutt is removed on export (buildTrimCuts →
+            editor_export.cutRegions). Empty = whole file. */}
         <Collapsible
           icon="scissors"
           title={t("editScreen.trimStartEnd", "Trim — start & slutt")}
@@ -1496,8 +2264,8 @@ function EditVideo({ m }: { m: EditorModel }) {
         >
           <div className="sr-srow-d" style={{ marginTop: 0, marginBottom: 14 }}>
             {t(
-              "editScreen.trimDesc",
-              "Klipp bort dødtid før og etter gudstjenesten. Trim gjelder både bilde og lyd samtidig.",
+              "editScreen.trimDescDrag",
+              "Dra de gylne håndtakene på bølgeformen for å sette start og slutt — eller skriv tidene inn under. Trim gjelder både bilde og lyd samtidig.",
             )}
           </div>
           <div className="sr-row" style={{ gap: 12 }}>
@@ -1524,15 +2292,7 @@ function EditVideo({ m }: { m: EditorModel }) {
           </div>
         </Collapsible>
 
-        <Collapsible
-          icon="list"
-          title={t("editScreen.metadata", "Metadata")}
-          meta={
-            <span style={{ fontSize: 12.5, color: "var(--sr-text-3)" }}>
-              {t("editScreen.metadataHint", "Tittel, taler, beskrivelse")}
-            </span>
-          }
-        />
+        <MetadataCard m={m} />
         {/* Transcribe — real whisper models + run + SRT/VTT/TXT export. */}
         <TranscribeSection selected={m.selected} />
 
@@ -1615,6 +2375,9 @@ function EditVideo({ m }: { m: EditorModel }) {
               {t("editScreen.exportError", "✕ Feil ved eksport")}
             </div>
           )}
+          {/* Commit a mastered audio render (progress + cancel) alongside the
+              video export — the standalone two-pass apply seam. */}
+          <MasterApplyControls m={m} />
         </Card>
       </div>
     </>
@@ -1628,6 +2391,30 @@ export function EditScreen() {
   const [manualMode, setManualMode] = useState<"audio" | "video">("audio");
   const autoMode = variantForMedia(m.info);
   const mode = autoMode ?? manualMode;
+
+  // Keyboard transport: Space play/pauses (the design's kbd hint). Ignored while
+  // typing in a field so trim/metadata entry isn't hijacked.
+  const { selected, audioBroken, togglePlay } = m;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "Space") return;
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        el?.isContentEditable
+      ) {
+        return;
+      }
+      if (!selected || audioBroken) return;
+      e.preventDefault();
+      togglePlay();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected, audioBroken, togglePlay]);
 
   return (
     <div className={"sr-content" + (mode === "video" ? " wide" : "")}>

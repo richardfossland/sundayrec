@@ -34,6 +34,18 @@ const invoke = vi.fn(async (cmd: string, _args?: unknown): Promise<unknown> => {
       return { inputI: -18, inputLra: 7, inputTp: -1, targetLufs: -16 };
     case "editor_export":
       return { outputPath: "/x/out.mp4" };
+    case "editor_master_apply":
+      return { outputPath: "/x/out_mastert.mp3" };
+    case "editor_master_cancel":
+      return true;
+    case "editor_read_sidecar":
+      // No persisted draft/meta in the test fixtures.
+      return null;
+    case "editor_write_sidecar":
+      return true;
+    case "editor_extract_frame":
+      // PreviewFrame-shaped stub (a 1px base64 JPEG placeholder).
+      return { data: "AAAA", width: 1, height: 1, seq: 1 };
     case "whisper_list_models":
       return [];
     default:
@@ -43,6 +55,9 @@ const invoke = vi.fn(async (cmd: string, _args?: unknown): Promise<unknown> => {
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (cmd: string, args?: unknown) => invoke(cmd, args),
+  // The editor turns local paths into asset:// URLs for playback/frames; in the
+  // test host just echo the path back.
+  convertFileSrc: (p: string) => `asset://localhost/${p}`,
 }));
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
@@ -157,6 +172,65 @@ describe("EditScreen", () => {
       expect(invoke).toHaveBeenCalledWith("editor_load_recording", {
         inputPath: "/x/sermon.mp4",
       }),
+    );
+  });
+
+  it("hydrates from the sidecars on load and persists metadata edits", async () => {
+    renderEdit();
+    fireEvent.click(screen.getByText("Åpne annen fil"));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("editor_load_recording", {
+        inputPath: "/x/sermon.mp4",
+      }),
+    );
+    // The sidecars are read on load (cutsDraft + meta).
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("editor_read_sidecar", {
+        mediaPath: "/x/sermon.mp4",
+        sidecar: "meta",
+      }),
+    );
+
+    // The metadata form is now a real, editable field set.
+    const titleInput = await screen.findByPlaceholderText(
+      "Pinsegudstjeneste 24. mai",
+    );
+    fireEvent.change(titleInput, { target: { value: "Min episode" } });
+
+    // Debounced (600 ms) write of the .meta sidecar carrying the new title.
+    await waitFor(
+      () =>
+        expect(invoke).toHaveBeenCalledWith("editor_write_sidecar", {
+          mediaPath: "/x/sermon.mp4",
+          sidecar: "meta",
+          value: expect.objectContaining({ title: "Min episode" }),
+        }),
+      { timeout: 2000 },
+    );
+  });
+
+  it("commits the mastered result via editor_master_apply", async () => {
+    renderEdit();
+    fireEvent.click(screen.getByText("Åpne annen fil"));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("editor_load_recording", {
+        inputPath: "/x/sermon.mp4",
+      }),
+    );
+    // The mastered-apply commit button is present in both variants (here the
+    // auto-selected video variant's export card).
+    fireEvent.click(screen.getByText("Bruk mastering / Eksporter"));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith(
+        "editor_master_apply",
+        expect.objectContaining({
+          request: expect.objectContaining({
+            inputPath: "/x/sermon.mp4",
+            presetId: expect.any(String),
+            jobId: expect.any(String),
+          }),
+        }),
+      ),
     );
   });
 });

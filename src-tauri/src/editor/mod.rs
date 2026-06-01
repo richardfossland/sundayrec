@@ -498,6 +498,12 @@ pub async fn export(_req: &EditorExportRequest) -> AppResult<EditorExportResult>
     disabled("export")
 }
 
+/// Extract a single video frame at `sec` as a base64 JPEG for the video preview.
+#[cfg(not(feature = "editor"))]
+pub async fn extract_frame(_input_path: &str, _sec: f64) -> AppResult<String> {
+    disabled("extractFrame")
+}
+
 // ── HARDWARE-UNVERIFIED implementations (feature on) ─────────────────────────────
 
 /// Probe a recording: spawn ffprobe with the core's argv, parse its output with
@@ -927,6 +933,36 @@ pub async fn export(req: &EditorExportRequest) -> AppResult<EditorExportResult> 
     })
 }
 
+/// Extract a single video frame at `sec` seconds, scaled to 480px wide, and
+/// return it as a base64-encoded JPEG (the renderer drops it into
+/// `data:image/jpeg;base64,…`). The argv (`-ss` before `-i`, `scale=480:-2`,
+/// one MJPEG frame to `pipe:1`) is the core's tested
+/// [`frame_extract_args`](sundayrec_core::editor::frame_extract_args) decision;
+/// the seam only spawns ffmpeg, collects stdout, and base64-encodes it.
+/// HARDWARE-UNVERIFIED — needs real video media.
+#[cfg(feature = "editor")]
+pub async fn extract_frame(input_path: &str, sec: f64) -> AppResult<String> {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    use sundayrec_core::editor::frame_extract_args;
+
+    if !std::path::Path::new(input_path).exists() {
+        return Err(AppError::Validation("file_not_found".into()));
+    }
+    let args = frame_extract_args(input_path, sec);
+    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let child = crate::media::ffmpeg::spawn_ffmpeg(&arg_refs).await?;
+    let out = child
+        .wait_with_output()
+        .await
+        .map_err(|e| AppError::Recording(format!("frame extract wait: {e}")))?;
+    if !out.status.success() || out.stdout.is_empty() {
+        return Err(AppError::Recording(
+            "frame extract produced no image (no video stream or seek past end?)".into(),
+        ));
+    }
+    Ok(STANDARD.encode(&out.stdout))
+}
+
 // ── seam helpers (feature on) ────────────────────────────────────────────────────
 
 /// Measure loudness against `preset` (pass 1), returning the parsed measurement
@@ -1074,6 +1110,11 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("feature_disabled"));
+        assert!(extract_frame("/x.mp4", 1.0)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("feature_disabled"));
     }
 
     #[cfg(not(feature = "editor"))]
@@ -1205,5 +1246,144 @@ mod tests {
             .block_on(master_cancel(&engine, "never-started"))
             .unwrap();
         assert!(!was);
+    }
+
+    // ── Real-ffmpeg editor smoke test (feature-on; skips without the sidecar) ─────
+    //
+    // Generates a 2 s lavfi A/V file, then drives the editor's REAL `export` seam
+    // (cut + encode to mp3) against it and ffprobes the result is a valid,
+    // non-empty mp3 stream. Mirrors `format_matrix_produces_valid_files_or_skips`
+    // in `media/ffmpeg.rs`: it skips cleanly when the bundled sidecars aren't
+    // fetched (the sandboxed gate), so it never reddens CI. HARDWARE-FREE — lavfi
+    // needs no devices — but HARDWARE-UNVERIFIED in that it only runs where the
+    // real ffmpeg is present.
+    #[cfg(feature = "editor")]
+    mod ffmpeg_smoke {
+        use super::*;
+        use std::sync::Mutex;
+
+        // Serialise the `SUNDAYREC_*` env overrides against the parallel suite.
+        static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+        /// Path to the fetched dev sidecar, if `npm run ffmpeg` populated it.
+        /// Same lookup the `media::ffmpeg` integration tests use.
+        fn fetched_sidecar(name: &str) -> Option<std::path::PathBuf> {
+            let triple = env!("SUNDAYREC_TARGET_TRIPLE");
+            let ext = if cfg!(windows) { ".exe" } else { "" };
+            let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("binaries")
+                .join(format!("{name}-{triple}{ext}"));
+            p.is_file().then_some(p)
+        }
+
+        #[test]
+        fn export_cuts_and_encodes_mp3_or_skips() {
+            let (Some(ffmpeg), Some(ffprobe)) =
+                (fetched_sidecar("ffmpeg"), fetched_sidecar("ffprobe"))
+            else {
+                eprintln!("SKIP: no fetched ffmpeg/ffprobe sidecar (run `npm run ffmpeg`)");
+                return;
+            };
+
+            let dir = tempfile::tempdir().unwrap();
+            // 1. Generate a 2 s lavfi A/V source (testsrc video + sine audio).
+            let src = dir.path().join("source.mp4");
+            let src_s = src.to_string_lossy().into_owned();
+            let gen = std::process::Command::new(&ffmpeg)
+                .args([
+                    "-hide_banner",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "testsrc=size=320x240:rate=15:duration=2",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "sine=frequency=440:sample_rate=48000:duration=2",
+                    "-shortest",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-y",
+                ])
+                .arg(&src)
+                .output()
+                .expect("ffmpeg should run to generate the lavfi source");
+            assert!(
+                gen.status.success(),
+                "lavfi source generation failed: {}",
+                String::from_utf8_lossy(&gen.stderr)
+            );
+
+            // 2. Drive the editor's REAL export seam: cut the middle 0.5 s out and
+            //    encode the remainder to mp3. The seam resolves ffmpeg via the
+            //    SUNDAYREC_FFMPEG override (the production fallback path).
+            let req = EditorExportRequest {
+                input_path: src_s,
+                cut_regions: vec![EditorCutRegion {
+                    start: 0.75,
+                    end: 1.25,
+                }],
+                duration: 2.0,
+                format: "mp3".into(),
+                output_folder: dir.path().to_string_lossy().into_owned(),
+                bitrate: Some(128),
+                bit_depth: None,
+                master_preset: None,
+            };
+
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            let out_path = {
+                let _guard = ENV_LOCK.lock().unwrap();
+                // SAFETY: serialised by ENV_LOCK; removed before releasing it.
+                unsafe { std::env::set_var("SUNDAYREC_FFMPEG", &ffmpeg) };
+                let result = rt.block_on(export(&req));
+                unsafe { std::env::remove_var("SUNDAYREC_FFMPEG") };
+                result.expect("editor export should succeed against the lavfi source")
+            };
+
+            // 3. The output exists, is non-empty, and ffprobes as a real mp3 stream
+            //    shorter than the input (we cut 0.5 s out of 2 s ⇒ ~1.5 s).
+            let out = std::path::Path::new(&out_path.output_path);
+            let len = std::fs::metadata(out).expect("export output exists").len();
+            assert!(len > 0, "export produced an empty file");
+
+            let probe = std::process::Command::new(&ffprobe)
+                .args([
+                    "-v",
+                    "error",
+                    "-select_streams",
+                    "a:0",
+                    "-show_entries",
+                    "stream=codec_name:format=duration",
+                    "-of",
+                    "default=noprint_wrappers=1:nokey=1",
+                ])
+                .arg(out)
+                .output()
+                .expect("ffprobe should run on the export output");
+            assert!(
+                probe.status.success(),
+                "ffprobe failed on export output: {}",
+                String::from_utf8_lossy(&probe.stderr)
+            );
+            let report = String::from_utf8_lossy(&probe.stdout);
+            assert!(
+                report.contains("mp3"),
+                "export should be an mp3 stream; ffprobe: {report}"
+            );
+            // Duration should reflect the cut (input 2 s − 0.5 s cut ≈ 1.5 s).
+            let dur: f64 = report
+                .lines()
+                .find_map(|l| l.trim().parse::<f64>().ok())
+                .expect("ffprobe should report a numeric duration");
+            assert!(
+                (1.0..1.9).contains(&dur),
+                "cut export duration {dur}s should be ~1.5 s (2 s − 0.5 s cut)"
+            );
+            eprintln!(
+                "editor export smoke: wrote {} ({dur:.2}s mp3)",
+                out.display()
+            );
+        }
     }
 }

@@ -273,6 +273,7 @@ pub fn run() {
             commands::editor::editor_segments,
             commands::editor::editor_mastering_analyze,
             commands::editor::editor_export,
+            commands::editor::editor_extract_frame,
             // P1 parity: sidecar persistence, stream probe, inline guard,
             // temp-file cleanup, and the full mastering preview/apply/cancel flow.
             commands::editor::editor_read_sidecar,
