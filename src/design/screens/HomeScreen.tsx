@@ -166,6 +166,62 @@ function RecordRow({
   );
 }
 
+/** Navigate the shell to the Innstillinger view (used by the device cards'
+ *  "Endre" button so the user can actually change the device). */
+function navigateToSettings() {
+  window.dispatchEvent(
+    new CustomEvent("shell:navigate", { detail: "settings" }),
+  );
+}
+
+/**
+ * The camera <select> header. Isolated so the refresh button can re-enumerate
+ * cameras by remounting it (bumping a `key`), which re-runs `useVideoDevices()`
+ * — the same pattern SettingsScreen's `CameraSelect` uses. The selected camera
+ * + its addressable token are reported up via `onCameras` so the preview pane
+ * (rendered by the parent) drives the right device.
+ */
+function CameraSelectHeader({
+  selectedName,
+  onChange,
+}: {
+  selectedName: string | null;
+  onChange: (name: string) => void;
+}) {
+  const { t } = useTranslation();
+  const videoDevices = useVideoDevices();
+  return (
+    <select
+      className="sr-select"
+      aria-label={t("homeScreen.selectCamera", "Velg kamera")}
+      value={selectedName ?? ""}
+      onChange={(e) => onChange(e.target.value)}
+      style={{
+        width: 260,
+        padding: "7px 32px 7px 11px",
+        fontSize: 13,
+      }}
+    >
+      {videoDevices.length === 0 ? (
+        <option value="">FaceTime HD-kamera</option>
+      ) : (
+        <>
+          {selectedName == null && (
+            <option value="">
+              {t("homeScreen.selectCamera", "Velg kamera")}
+            </option>
+          )}
+          {videoDevices.map((d) => (
+            <option key={d.name} value={d.name}>
+              {d.name}
+            </option>
+          ))}
+        </>
+      )}
+    </select>
+  );
+}
+
 // Large live L/R meter row used when video is off.
 function BigMeterRow({
   ch,
@@ -253,6 +309,11 @@ export function HomeScreen({
 
   const [video, setVideo] = useState(true);
   const [videoSeeded, setVideoSeeded] = useState(false);
+  // Bumping this remounts <CameraSelectHeader>, re-running `useVideoDevices()`
+  // so the camera-bar refresh button re-enumerates cameras (same pattern as
+  // SettingsScreen). It also re-keys the camera-source DeviceCard so its name
+  // reflects a freshly enumerated list.
+  const [cameraRefreshKey, setCameraRefreshKey] = useState(0);
 
   // Initialise the local video toggle from persisted settings (once), then let
   // the user toggle freely.
@@ -361,35 +422,18 @@ export function HomeScreen({
                 size={17}
                 style={{ color: "var(--sr-text-3)" }}
               />
-              <select
-                className="sr-select"
-                aria-label={t("homeScreen.selectCamera", "Velg kamera")}
-                value={cameraName ?? ""}
-                onChange={(e) => onCameraChange(e.target.value)}
-                style={{
-                  width: 260,
-                  padding: "7px 32px 7px 11px",
-                  fontSize: 13,
-                }}
+              <CameraSelectHeader
+                key={cameraRefreshKey}
+                selectedName={cameraName}
+                onChange={onCameraChange}
+              />
+              <button
+                className="sr-btn ghost sm"
+                style={{ padding: 7 }}
+                onClick={() => setCameraRefreshKey((k) => k + 1)}
+                aria-label={t("homeScreen.refreshCameras", "Oppdater kameraer")}
+                type="button"
               >
-                {videoDevices.length === 0 ? (
-                  <option value="">FaceTime HD-kamera</option>
-                ) : (
-                  <>
-                    {cameraName == null && (
-                      <option value="">
-                        {t("homeScreen.selectCamera", "Velg kamera")}
-                      </option>
-                    )}
-                    {videoDevices.map((d) => (
-                      <option key={d.name} value={d.name}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </>
-                )}
-              </select>
-              <button className="sr-btn ghost sm" style={{ padding: 7 }}>
                 <Icon name="refresh" size={15} />
               </button>
               <div className="sr-grow" />
@@ -573,6 +617,7 @@ export function HomeScreen({
                 {t("homeScreen.connected", "Tilkoblet")}
               </Badge>
             }
+            onEdit={navigateToSettings}
           />
           {video ? (
             <>
@@ -585,12 +630,14 @@ export function HomeScreen({
                     ? t("homeScreen.sourceConfigured", "Kilde konfigurert")
                     : t("homeScreen.selectCamera", "Velg kamera")
                 }
+                onEdit={navigateToSettings}
               />
               <DeviceCard
                 icon="gear"
                 k={t("homeScreen.cardVideoQuality", "Videokvalitet")}
                 v="720p · 30 fps"
                 meta={t("homeScreen.combinedMp4", "Kombinert MP4")}
+                onEdit={navigateToSettings}
               />
               <DeviceCard
                 icon="disk"
@@ -598,6 +645,7 @@ export function HomeScreen({
                 v={diskV ?? "569 GB ledig"}
                 meta={storageMeta ?? "~38 timer opptak igjen"}
                 progress={diskPct ?? undefined}
+                onEdit={navigateToSettings}
               />
             </>
           ) : (
@@ -610,6 +658,7 @@ export function HomeScreen({
                   "homeScreen.formatMeta",
                   "Stereo · 48 kHz · høyest kvalitet",
                 )}
+                onEdit={navigateToSettings}
               />
               <DeviceCard
                 icon="disk"
@@ -617,6 +666,7 @@ export function HomeScreen({
                 v={diskV ?? "569 GB ledig"}
                 meta={storageMeta ?? "~95 timer kun-lyd igjen"}
                 progress={diskPct ?? undefined}
+                onEdit={navigateToSettings}
               />
             </>
           )}

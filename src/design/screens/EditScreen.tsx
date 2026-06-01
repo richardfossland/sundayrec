@@ -228,6 +228,28 @@ function useEditorModel() {
     if (selected) segmentsMutation.mutate(selected);
   }, [selected, segmentsMutation]);
 
+  // "Marker preken automatisk": pick the longest speech/sermon segment from the
+  // already-loaded analysis and mark it — move the playhead to its start and set
+  // the trim bounds to it (so a follow-up export keeps just the sermon). If the
+  // file hasn't been analysed yet, run the analysis first (the user can then
+  // press the button again on the populated segment list).
+  const onMarkSermon = useCallback(() => {
+    if (!selected) return;
+    const segs = segmentsMutation.data ?? [];
+    const speech = segs.filter(
+      (sg) => sg.kind === "speech" || sg.kind === "sermon",
+    );
+    if (speech.length === 0) {
+      // Nothing to mark yet → kick off detection.
+      segmentsMutation.mutate(selected);
+      return;
+    }
+    const longest = speech.reduce((a, b) => (b.duration > a.duration ? b : a));
+    setTrimStart(formatHms(longest.start));
+    setTrimEnd(formatHms(longest.end));
+    setPlayheadSec(longest.start);
+  }, [selected, segmentsMutation]);
+
   const onPreview = useCallback(() => {
     if (!selected) return;
     previewMutation.mutate({
@@ -303,6 +325,20 @@ function useEditorModel() {
     [duration],
   );
 
+  // "Skip" → advance the playhead to the next segment boundary after the current
+  // position (the start of the next detected segment), or to the file end when
+  // none remain. Falls back to a no-op when there are no segments to skip past.
+  const skipToNextBoundary = useCallback(() => {
+    const segs = segmentsMutation.data ?? [];
+    if (segs.length === 0) return;
+    const boundaries = Array.from(
+      new Set(segs.flatMap((sg) => [sg.start, sg.end])),
+    ).sort((a, b) => a - b);
+    const next = boundaries.find((b) => b > playheadSec + 0.001);
+    setPlayheadSec(clampMain(next ?? duration, duration));
+  }, [segmentsMutation.data, playheadSec, duration]);
+  const hasSegments = (segmentsMutation.data ?? []).length > 0;
+
   return {
     selected,
     presetId,
@@ -335,8 +371,11 @@ function useEditorModel() {
     onCloseFile,
     onNormalize,
     onAnalyze,
+    onMarkSermon,
     onPreview,
     runExport,
+    skipToNextBoundary,
+    hasSegments,
   };
 }
 
@@ -777,6 +816,22 @@ function TranscribeSection({ selected }: { selected: string | null }) {
 function EditAudio({ m }: { m: EditorModel }) {
   const { t } = useTranslation();
   const [format, setFormat] = useState("mp3");
+  // Per-episode cover art: no Settings/sidecar field in this Fase-1 model, so
+  // the chosen image path lives in local screen state.
+  const [coverPath, setCoverPath] = useState<string | null>(null);
+  const onPickCover = async () => {
+    try {
+      const picked = await open({
+        multiple: false,
+        filters: [
+          { name: "Bilde", extensions: ["png", "jpg", "jpeg", "webp"] },
+        ],
+      });
+      if (typeof picked === "string") setCoverPath(picked);
+    } catch {
+      /* dialog unavailable in dev/test → no-op */
+    }
+  };
   const name = m.selected
     ? fileName(m.selected)
     : "2026-05-17_pinse_mastert.mp3";
@@ -823,7 +878,14 @@ function EditAudio({ m }: { m: EditorModel }) {
             >
               <Icon name="play" size={15} fill />
             </button>
-            <button className="sr-btn ghost sm" style={{ padding: 8 }}>
+            <button
+              className="sr-btn ghost sm"
+              style={{ padding: 8 }}
+              onClick={m.skipToNextBoundary}
+              disabled={!m.hasSegments}
+              aria-label={t("editScreen.kbdNextCut", "Neste kutt")}
+              type="button"
+            >
               <Icon name="skip" size={15} />
             </button>
             <span
@@ -1028,7 +1090,12 @@ function EditAudio({ m }: { m: EditorModel }) {
               </span>
             ))}
           </div>
-          <button className="sr-btn ghost">
+          <button
+            className="sr-btn ghost"
+            onClick={m.onMarkSermon}
+            disabled={!m.selected || m.isSegmentsPending}
+            type="button"
+          >
             <Icon name="sparkle" size={15} />
             {t("editScreen.markSermonAuto", "Marker preken automatisk")}
           </button>
@@ -1116,8 +1183,13 @@ function EditAudio({ m }: { m: EditorModel }) {
                 cover
               </div>
               <div className="sr-grow">
-                <div style={{ fontSize: 13.5, fontWeight: 600 }}>
-                  {t("editScreen.usingDefaultImage", "Bruker standardbilde")}
+                <div
+                  style={{ fontSize: 13.5, fontWeight: 600 }}
+                  className={coverPath ? "sr-mono" : undefined}
+                >
+                  {coverPath
+                    ? (coverPath.split(/[/\\]/).pop() ?? coverPath)
+                    : t("editScreen.usingDefaultImage", "Bruker standardbilde")}
                 </div>
                 <div
                   style={{
@@ -1132,7 +1204,11 @@ function EditAudio({ m }: { m: EditorModel }) {
                   {t("editScreen.shouldBeSquare", "Bør være kvadratisk (1:1)")}
                 </Badge>
                 <div style={{ marginTop: 10 }}>
-                  <button className="sr-btn ghost sm">
+                  <button
+                    className="sr-btn ghost sm"
+                    type="button"
+                    onClick={() => void onPickCover()}
+                  >
                     {t("editScreen.changeImage", "Bytt bilde")}
                   </button>
                 </div>
@@ -1279,7 +1355,14 @@ function EditVideo({ m }: { m: EditorModel }) {
             >
               <Icon name="play" size={15} fill />
             </button>
-            <button className="sr-btn ghost sm" style={{ padding: 8 }}>
+            <button
+              className="sr-btn ghost sm"
+              style={{ padding: 8 }}
+              onClick={m.skipToNextBoundary}
+              disabled={!m.hasSegments}
+              aria-label={t("editScreen.kbdNextCut", "Neste kutt")}
+              type="button"
+            >
               <Icon name="skip" size={15} />
             </button>
             <span

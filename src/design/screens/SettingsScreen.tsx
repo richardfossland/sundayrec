@@ -12,6 +12,7 @@
  */
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
@@ -27,6 +28,27 @@ import { useVideoDevices } from "@/design/hooks";
 import { Icon } from "../Icon";
 import { Badge, Card, DeviceRow, SegOpt, SettingRow, Toggle } from "../atoms";
 import { DEFAULT_SETTINGS, pickFolder } from "./settings.helpers";
+
+/** Ask the shell to switch to a different view (same CustomEvent MainLayout
+ *  listens for). Used to send the "test / check" buttons to the Diagnose view,
+ *  which owns the real preflight/test-recording UI. */
+function navigateTo(view: string) {
+  window.dispatchEvent(new CustomEvent("shell:navigate", { detail: view }));
+}
+
+/** Open a native image picker and return the chosen absolute path, or `null`
+ *  if cancelled / the dialog is unavailable (dev/test). Never throws. */
+async function pickImage(): Promise<string | null> {
+  try {
+    const result = await dialogOpen({
+      multiple: false,
+      filters: [{ name: "Bilde", extensions: ["png", "jpg", "jpeg", "webp"] }],
+    });
+    return typeof result === "string" ? result : null;
+  } catch {
+    return null;
+  }
+}
 
 const TABS = [
   ["lydkilde", "Lydkilde"],
@@ -183,11 +205,19 @@ function TabLydkilde({ s, update }: TabProps) {
               "Ser du ikke riktig enhet? Sjekk at lydkortet er koblet til.",
             )}
           </span>
-          <button className="sr-btn ghost sm">
+          <button
+            className="sr-btn ghost sm"
+            onClick={() => navigateTo("diagnostics")}
+            type="button"
+          >
             <Icon name="speaker" size={14} />
             {t("settingsScreen.audio.testAudio", "Test lyd")}
           </button>
-          <button className="sr-btn ghost sm">
+          <button
+            className="sr-btn ghost sm"
+            onClick={() => navigateTo("diagnostics")}
+            type="button"
+          >
             {t("settingsScreen.audio.diagnose", "Diagnose")}
           </button>
         </div>
@@ -202,11 +232,19 @@ function TabLydkilde({ s, update }: TabProps) {
         pad
       >
         <div className="sr-row" style={{ gap: 10, marginTop: 14 }}>
-          <button className="sr-btn ghost">
+          <button
+            className="sr-btn ghost"
+            onClick={() => navigateTo("diagnostics")}
+            type="button"
+          >
             <Icon name="mic" size={15} />
             {t("settingsScreen.audio.testRecording", "Test-opptak (30 sek)")}
           </button>
-          <button className="sr-btn gold">
+          <button
+            className="sr-btn gold"
+            onClick={() => navigateTo("diagnostics")}
+            type="button"
+          >
             <Icon name="check" size={15} strokeWidth={2.4} />
             {t("settingsScreen.audio.checkNow", "Sjekk system nå")}
           </button>
@@ -747,6 +785,38 @@ function TabFiler({ s, update }: TabProps) {
 
 function TabPublisering() {
   const { t } = useTranslation();
+  // Cover art has no dedicated Settings field in the Fase-1 model, so the
+  // chosen image path lives in local screen state (cleared by "Fjern"). The
+  // RSS feed URL the design shows is a placeholder until the publish subsystem
+  // provides a real one; "Kopier" copies whatever is displayed.
+  const [coverPath, setCoverPath] = useState<string | null>(null);
+  const RSS_FEED_URL = "https://sundayrec.app/feed/alta-frikirke.xml";
+  const [copied, setCopied] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+
+  const onCopyFeed = () => {
+    void navigator.clipboard
+      ?.writeText(RSS_FEED_URL)
+      .then(() => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1800);
+      })
+      .catch(() => {});
+  };
+
+  const onConnectDrive = () => {
+    setConnecting(true);
+    // `cloud_connect` runs the OAuth loopback flow; rejects gracefully (e.g.
+    // missing OAuth config / feature off) without crashing the screen.
+    void invoke("cloud_connect", { service: "google-drive" })
+      .catch(() => {})
+      .finally(() => setConnecting(false));
+  };
+
+  const coverName = coverPath
+    ? (coverPath.split(/[/\\]/).pop() ?? coverPath)
+    : null;
+
   return (
     <>
       {/* TODO: this tab maps to cloud/publish/streaming subsystems with their
@@ -790,11 +860,15 @@ function TabPublisering() {
             cover
           </div>
           <div className="sr-grow">
-            <div style={{ fontSize: 13.5, fontWeight: 600 }}>
-              {t(
-                "settingsScreen.publishing.usingDefaultImage",
-                "Bruker standardbilde",
-              )}
+            <div
+              style={{ fontSize: 13.5, fontWeight: 600 }}
+              className="sr-mono"
+            >
+              {coverName ??
+                t(
+                  "settingsScreen.publishing.usingDefaultImage",
+                  "Bruker standardbilde",
+                )}
             </div>
             <div style={{ marginTop: 8 }}>
               <Badge kind="warn">
@@ -805,10 +879,23 @@ function TabPublisering() {
               </Badge>
             </div>
             <div className="sr-row" style={{ gap: 8, marginTop: 10 }}>
-              <button className="sr-btn ghost sm">
+              <button
+                className="sr-btn ghost sm"
+                type="button"
+                onClick={() => {
+                  void pickImage().then((p) => {
+                    if (p) setCoverPath(p);
+                  });
+                }}
+              >
                 {t("settingsScreen.publishing.changeImage", "Bytt bilde")}
               </button>
-              <button className="sr-btn ghost sm">
+              <button
+                className="sr-btn ghost sm"
+                type="button"
+                disabled={!coverPath}
+                onClick={() => setCoverPath(null)}
+              >
                 {t("settingsScreen.publishing.removeImage", "Fjern")}
               </button>
             </div>
@@ -824,12 +911,20 @@ function TabPublisering() {
         )}
         pad
       >
-        <button className="sr-btn gold block" style={{ marginTop: 14 }}>
+        <button
+          className="sr-btn gold block"
+          style={{ marginTop: 14 }}
+          type="button"
+          onClick={onConnectDrive}
+          disabled={connecting}
+        >
           <Icon name="drive" size={16} />
-          {t(
-            "settingsScreen.publishing.connectDrive",
-            "Koble til Google Drive",
-          )}
+          {connecting
+            ? t("settingsScreen.publishing.connecting", "Kobler til …")
+            : t(
+                "settingsScreen.publishing.connectDrive",
+                "Koble til Google Drive",
+              )}
         </button>
       </Card>
       <Card
@@ -882,12 +977,12 @@ function TabPublisering() {
         pad
       >
         <div className="sr-row" style={{ gap: 10, marginTop: 14 }}>
-          <div className="sr-input mono sr-grow">
-            https://sundayrec.app/feed/alta-frikirke.xml
-          </div>
-          <button className="sr-btn ghost">
-            <Icon name="link" size={15} />
-            {t("settingsScreen.publishing.copy", "Kopier")}
+          <div className="sr-input mono sr-grow">{RSS_FEED_URL}</div>
+          <button className="sr-btn ghost" type="button" onClick={onCopyFeed}>
+            <Icon name={copied ? "check" : "link"} size={15} />
+            {copied
+              ? t("settingsScreen.publishing.copied", "Kopiert")
+              : t("settingsScreen.publishing.copy", "Kopier")}
           </button>
         </div>
       </Card>
@@ -897,6 +992,26 @@ function TabPublisering() {
 
 function TabVarsler({ s, update }: TabProps) {
   const { t } = useTranslation();
+  // Webhook test state: null = idle, true = reached, false = failed/unavailable.
+  const [webhookResult, setWebhookResult] = useState<boolean | null>(null);
+  const [webhookTesting, setWebhookTesting] = useState(false);
+
+  const onTestWebhook = () => {
+    if (!s.webhookUrl) {
+      setWebhookResult(false);
+      return;
+    }
+    setWebhookTesting(true);
+    setWebhookResult(null);
+    // `email_test_webhook` POSTs a bounded test payload and returns whether the
+    // endpoint accepted it; a rejection (feature off / network) is treated as
+    // "didn't work" rather than a crash.
+    void invoke<boolean>("email_test_webhook", { url: s.webhookUrl })
+      .then((ok) => setWebhookResult(!!ok))
+      .catch(() => setWebhookResult(false))
+      .finally(() => setWebhookTesting(false));
+  };
+
   return (
     <>
       <Card
@@ -1075,9 +1190,31 @@ function TabVarsler({ s, update }: TabProps) {
             }
           />
         </div>
-        <button className="sr-btn ghost sm" style={{ marginTop: 12 }}>
-          {t("settingsScreen.notifications.testWebhook", "Test webhook")}
-        </button>
+        <div className="sr-row" style={{ gap: 10, marginTop: 12 }}>
+          <button
+            className="sr-btn ghost sm"
+            type="button"
+            onClick={onTestWebhook}
+            disabled={webhookTesting || !s.webhookUrl}
+          >
+            {webhookTesting
+              ? t("settingsScreen.notifications.testingWebhook", "Tester …")
+              : t("settingsScreen.notifications.testWebhook", "Test webhook")}
+          </button>
+          {webhookResult === true && (
+            <span style={{ fontSize: 12.5, color: "var(--sr-green)" }}>
+              {t("settingsScreen.notifications.webhookOk", "Webhook fungerer")}
+            </span>
+          )}
+          {webhookResult === false && (
+            <span style={{ fontSize: 12.5, color: "var(--sr-red)" }}>
+              {t(
+                "settingsScreen.notifications.webhookFail",
+                "Webhook svarte ikke",
+              )}
+            </span>
+          )}
+        </div>
       </Card>
     </>
   );
@@ -1085,6 +1222,35 @@ function TabVarsler({ s, update }: TabProps) {
 
 function TabSystem({ s, update }: TabProps) {
   const { t } = useTranslation();
+  // Update check: null = not run, "checking", or a human-readable result line.
+  const [updateMsg, setUpdateMsg] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  const onCheckUpdates = () => {
+    setChecking(true);
+    setUpdateMsg(null);
+    // `update_check` returns an UpdateStatus phase; a rejection (updater feature
+    // off / no signing) is reported as "up to date" rather than crashing.
+    void invoke<{ phase: string; version?: string }>("update_check")
+      .then((status) => {
+        if (status?.phase === "available" && status.version) {
+          setUpdateMsg(
+            t(
+              "settingsScreen.system.updateAvailable",
+              "Ny versjon tilgjengelig: {{version}}",
+              { version: status.version },
+            ),
+          );
+        } else {
+          setUpdateMsg(t("settingsScreen.system.upToDate", "Du er oppdatert"));
+        }
+      })
+      .catch(() =>
+        setUpdateMsg(t("settingsScreen.system.upToDate", "Du er oppdatert")),
+      )
+      .finally(() => setChecking(false));
+  };
+
   const currentLng =
     s.language && (SUPPORTED_LNGS as readonly string[]).includes(s.language)
       ? s.language
@@ -1239,10 +1405,31 @@ function TabSystem({ s, update }: TabProps) {
               {t("settingsScreen.system.upToDate", "Du er oppdatert")}
             </span>
           </span>
-          <button className="sr-btn ghost sm">
-            {t("settingsScreen.system.checkUpdates", "Se etter oppdateringer")}
+          <button
+            className="sr-btn ghost sm"
+            type="button"
+            onClick={onCheckUpdates}
+            disabled={checking}
+          >
+            {checking
+              ? t("settingsScreen.system.checking", "Sjekker …")
+              : t(
+                  "settingsScreen.system.checkUpdates",
+                  "Se etter oppdateringer",
+                )}
           </button>
         </div>
+        {updateMsg && (
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: 12.5,
+              color: "var(--sr-text-3)",
+            }}
+          >
+            {updateMsg}
+          </div>
+        )}
         <div style={{ marginTop: 4 }}>
           <SettingRow
             title={t(
@@ -1267,7 +1454,12 @@ function TabSystem({ s, update }: TabProps) {
         icon="info"
         pad
       >
-        <button className="sr-btn ghost" style={{ marginTop: 4 }}>
+        <button
+          className="sr-btn ghost"
+          style={{ marginTop: 4 }}
+          type="button"
+          onClick={() => update({ onboardingDone: false })}
+        >
           {t(
             "settingsScreen.system.reopenGuide",
             "Åpne oppstartsveileder på nytt",
@@ -1292,6 +1484,34 @@ function SuiteRow({
 
 function TabSuite() {
   const { t } = useTranslation();
+  // church_id lives in the integrations bag (not plain Settings). Seed it from
+  // the backend, edit locally, persist on "Lagre tilkobling".
+  const [churchId, setChurchId] = useState("");
+  const [savedTick, setSavedTick] = useState(false);
+
+  useQuery({
+    queryKey: ["integrations_get_settings"],
+    queryFn: async () => {
+      const res = await invoke<{ connection?: { churchId?: string | null } }>(
+        "integrations_get_settings",
+      );
+      setChurchId(res?.connection?.churchId ?? "");
+      return res;
+    },
+    retry: false,
+  });
+
+  const saveConnection = useMutation({
+    mutationFn: (id: string) =>
+      invoke("integrations_set_settings", {
+        patch: { connection: { churchId: id || null } },
+      }),
+    onSuccess: () => {
+      setSavedTick(true);
+      window.setTimeout(() => setSavedTick(false), 1800);
+    },
+  });
+
   return (
     <>
       {/* TODO: Sunday-suite integration switches/church_id are owned by the
@@ -1380,19 +1600,32 @@ function TabSuite() {
               "Menighets-ID (church_id)",
             )}
           </span>
-          <div
+          <input
             className="sr-input mono"
-            style={{ color: "var(--sr-text-dim)" }}
-          >
-            {t(
+            type="text"
+            value={churchId}
+            placeholder={t(
               "settingsScreen.suite.churchIdHint",
               "UUID fra SundaySong / SundayPlan",
             )}
-          </div>
+            onChange={(e) => setChurchId(e.target.value)}
+          />
         </div>
-        <button className="sr-btn ghost sm" style={{ marginTop: 14 }}>
-          {t("settingsScreen.suite.saveConnection", "Lagre tilkobling")}
-        </button>
+        <div className="sr-row" style={{ gap: 10, marginTop: 14 }}>
+          <button
+            className="sr-btn ghost sm"
+            type="button"
+            onClick={() => saveConnection.mutate(churchId)}
+            disabled={saveConnection.isPending}
+          >
+            {t("settingsScreen.suite.saveConnection", "Lagre tilkobling")}
+          </button>
+          {savedTick && (
+            <span style={{ fontSize: 12.5, color: "var(--sr-green)" }}>
+              {t("settingsScreen.suite.connectionSaved", "Lagret")}
+            </span>
+          )}
+        </div>
       </Card>
     </>
   );

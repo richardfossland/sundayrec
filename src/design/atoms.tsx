@@ -179,6 +179,7 @@ export function DeviceCard({
   meta,
   badge,
   progress,
+  onEdit,
 }: {
   icon: IconName;
   k: ReactNode;
@@ -186,6 +187,9 @@ export function DeviceCard({
   meta?: ReactNode;
   badge?: ReactNode;
   progress?: number;
+  /** When provided, renders the "Endre" button and calls this on click.
+   *  Omit it for a purely informational card (no dead button). */
+  onEdit?: () => void;
 }) {
   return (
     <div className="sr-device">
@@ -217,9 +221,16 @@ export function DeviceCard({
           </div>
         )}
       </div>
-      <button className="sr-btn ghost sm" style={{ flex: "0 0 auto" }}>
-        Endre
-      </button>
+      {onEdit && (
+        <button
+          className="sr-btn ghost sm"
+          style={{ flex: "0 0 auto" }}
+          onClick={onEdit}
+          type="button"
+        >
+          Endre
+        </button>
+      )}
     </div>
   );
 }
