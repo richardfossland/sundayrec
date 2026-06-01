@@ -40,13 +40,20 @@ export function jsDayToBackend(jsDay: number): number {
   return (jsDay + 6) % 7;
 }
 
-/** Human label for a slot's active weekdays, e.g. `Søn` or `Man, Ons`. */
-export function slotDayLabel(slot: ScheduleSlot): string {
+/**
+ * Human label for a slot's active weekdays, e.g. `Søn` or `Man, Ons`.
+ * Pass `labels` (a localized 7-entry weekday array, 0 = Monday … 6 = Sunday) to
+ * render translated abbreviations; falls back to Norwegian `WEEKDAY_SHORT`.
+ */
+export function slotDayLabel(
+  slot: ScheduleSlot,
+  labels: readonly string[] = WEEKDAY_SHORT,
+): string {
   if (!slot.days || slot.days.length === 0) return "—";
   return slot.days
     .slice()
     .sort((a, b) => a - b)
-    .map((d) => WEEKDAY_SHORT[d] ?? "?")
+    .map((d) => labels[d] ?? "?")
     .join(", ");
 }
 

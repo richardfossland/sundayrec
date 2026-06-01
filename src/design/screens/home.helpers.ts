@@ -89,12 +89,18 @@ export function recordingHoursLeft(
 export function storageEstimateLabel(
   freeBytes: number | null | undefined,
   video: boolean,
+  t: (key: string, fallback: string, opts?: Record<string, unknown>) => string,
 ): string | null {
   const hours = recordingHoursLeft(freeBytes, video);
   if (hours == null) return null;
   const rounded = hours >= 10 ? Math.round(hours) : Math.round(hours * 10) / 10;
-  const suffix = video ? "opptak igjen" : "kun-lyd igjen";
-  return `~${rounded} timer ${suffix}`;
+  return video
+    ? t("homeScreen.storageHoursVideo", "~{{hours}} timer opptak igjen", {
+        hours: rounded,
+      })
+    : t("homeScreen.storageHoursAudio", "~{{hours}} timer kun-lyd igjen", {
+        hours: rounded,
+      });
 }
 
 /**

@@ -14,6 +14,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import { Icon } from "../Icon";
 import { Badge, Card, SegOpt, Toggle } from "../atoms";
@@ -98,6 +99,7 @@ function HBar({ ch, on, db }: { ch: string; on: number; db: number | null }) {
 }
 
 export function LiveScreen() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
 
   // Same status poll as StreamingPanel — shared key, poll only while live.
@@ -238,7 +240,12 @@ export function LiveScreen() {
   const addOverlay = () =>
     setOverlays((rows) => [
       ...rows,
-      makeOverlayRow(`Logo ${rows.length + 1}`, "Velkommen til gudstjenesten"),
+      makeOverlayRow(
+        t("liveScreen.overlayDefaultLabel", "Logo {{n}}", {
+          n: rows.length + 1,
+        }),
+        t("liveScreen.overlayDefaultTitle", "Velkommen til gudstjenesten"),
+      ),
     ]);
 
   const removeOverlay = (id: string) =>
@@ -271,13 +278,20 @@ export function LiveScreen() {
     <div className="sr-content wide">
       <div className="sr-row" style={{ marginBottom: 22 }}>
         <div className="sr-grow">
-          <div className="sr-pagetitle">Direkte sending</div>
+          <div className="sr-pagetitle">
+            {t("liveScreen.title", "Direkte sending")}
+          </div>
           <div className="sr-pagesub">
-            Stream til YouTube, Facebook eller egen RTMP-server.
+            {t(
+              "liveScreen.subtitle",
+              "Stream til YouTube, Facebook eller egen RTMP-server.",
+            )}
           </div>
         </div>
         <Badge kind={active ? "err" : "ok"} dot>
-          {active ? "Sender" : "Klar"}
+          {active
+            ? t("liveScreen.badgeSending", "Sender")
+            : t("liveScreen.badgeReady", "Klar")}
         </Badge>
       </div>
 
@@ -295,7 +309,10 @@ export function LiveScreen() {
             className="sr-media"
             style={{ aspectRatio: "16 / 9", borderRadius: 0, border: "none" }}
           >
-            video-forhåndsvisning · det som sendes ut
+            {t(
+              "liveScreen.previewPlaceholder",
+              "video-forhåndsvisning · det som sendes ut",
+            )}
           </div>
           <div
             className="sr-col"
@@ -306,9 +323,13 @@ export function LiveScreen() {
             }}
           >
             <div className="sr-row">
-              <span className="sr-label sr-grow">Lydnivå — live</span>
+              <span className="sr-label sr-grow">
+                {t("liveScreen.audioLevelLive", "Lydnivå — live")}
+              </span>
               <Badge kind={hasSignal ? "ok" : "muted"} dot>
-                {hasSignal ? "Signal" : "Stille"}
+                {hasSignal
+                  ? t("liveScreen.badgeSignal", "Signal")
+                  : t("liveScreen.badgeSilent", "Stille")}
               </Badge>
             </div>
             <HBar ch="L" on={lOn} db={lDb} />
@@ -318,7 +339,7 @@ export function LiveScreen() {
 
         {/* Rail */}
         <div className="sr-stack-3">
-          <Card title="Statistikk" pad>
+          <Card title={t("liveScreen.statsTitle", "Statistikk")} pad>
             <div
               style={{
                 display: "grid",
@@ -326,24 +347,27 @@ export function LiveScreen() {
                 gap: 10,
               }}
             >
-              <Stat k="Tid" v={uptime} />
-              <Stat k="Bitrate" v={`${bitrate} kbps`} />
-              <Stat k="FPS" v={String(fps)} />
+              <Stat k={t("liveScreen.statTime", "Tid")} v={uptime} />
               <Stat
-                k="Tapte rammer"
+                k={t("liveScreen.statBitrate", "Bitrate")}
+                v={`${bitrate} kbps`}
+              />
+              <Stat k={t("liveScreen.statFps", "FPS")} v={String(fps)} />
+              <Stat
+                k={t("liveScreen.statDroppedFrames", "Tapte rammer")}
                 v={String(dropped)}
                 accent={dropped > 0 ? "var(--sr-red)" : "var(--sr-green)"}
               />
             </div>
           </Card>
           <Card
-            title="Destinasjoner"
+            title={t("liveScreen.destinationsTitle", "Destinasjoner")}
             pad
             action={
               <button
                 className="sr-btn ghost sm"
                 onClick={openEditor}
-                title="Legg til destinasjon"
+                title={t("liveScreen.addDestination", "Legg til destinasjon")}
               >
                 <Icon name="plus" size={14} />
               </button>
@@ -390,7 +414,11 @@ export function LiveScreen() {
                         style={{ cursor: "pointer", display: "inline-flex" }}
                         role="switch"
                         aria-checked={d.enabled}
-                        title={d.enabled ? "Aktiv" : "Av"}
+                        title={
+                          d.enabled
+                            ? t("liveScreen.destActive", "Aktiv")
+                            : t("liveScreen.destOff", "Av")
+                        }
                       >
                         <Toggle on={d.enabled} />
                       </span>
@@ -406,13 +434,13 @@ export function LiveScreen() {
                             className="sr-grow sr-mono"
                             style={{ fontSize: 11, color: "var(--sr-green)" }}
                           >
-                            •••• (lagret)
+                            {t("liveScreen.keySaved", "•••• (lagret)")}
                           </span>
                           <button
                             className="sr-btn ghost sm"
                             onClick={() => deleteKeyMutation.mutate(d.id)}
                           >
-                            Slett nøkkel
+                            {t("liveScreen.deleteKey", "Slett nøkkel")}
                           </button>
                         </>
                       ) : (
@@ -421,7 +449,10 @@ export function LiveScreen() {
                             type="password"
                             className="sr-input sr-grow"
                             style={{ minWidth: 0 }}
-                            placeholder="Strømnøkkel"
+                            placeholder={t(
+                              "liveScreen.streamKeyPlaceholder",
+                              "Strømnøkkel",
+                            )}
                             value={d.keyInput}
                             onChange={(e) => setKeyInput(d.id, e.target.value)}
                           />
@@ -437,14 +468,17 @@ export function LiveScreen() {
                               })
                             }
                           >
-                            Lagre
+                            {t("liveScreen.saveKey", "Lagre")}
                           </button>
                         </>
                       )}
                       <button
                         className="sr-btn ghost sm"
                         onClick={() => removeDestination(d.id)}
-                        title="Fjern destinasjon"
+                        title={t(
+                          "liveScreen.removeDestination",
+                          "Fjern destinasjon",
+                        )}
                       >
                         <Icon name="x" size={14} />
                       </button>
@@ -468,7 +502,10 @@ export function LiveScreen() {
               >
                 <input
                   className="sr-input"
-                  placeholder="Navn (f.eks. YouTube)"
+                  placeholder={t(
+                    "liveScreen.namePlaceholder",
+                    "Navn (f.eks. YouTube)",
+                  )}
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                 />
@@ -484,7 +521,7 @@ export function LiveScreen() {
                   onClick={addDestination}
                 >
                   <Icon name="plus" size={14} />
-                  Legg til destinasjon
+                  {t("liveScreen.addDestination", "Legg til destinasjon")}
                 </button>
               </div>
             )}
@@ -500,10 +537,16 @@ export function LiveScreen() {
                 cursor: "pointer",
               }}
             >
-              → Konfigurer destinasjoner
+              {t(
+                "liveScreen.configureDestinations",
+                "→ Konfigurer destinasjoner",
+              )}
             </a>
           </Card>
-          <Card title="Strøm-kvalitet" pad>
+          <Card
+            title={t("liveScreen.streamQualityTitle", "Strøm-kvalitet")}
+            pad
+          >
             <div className="sr-seg cols-3">
               {RESOLUTIONS.map((r) => (
                 <span
@@ -514,14 +557,20 @@ export function LiveScreen() {
                   <SegOpt
                     sel={resolution === r.value}
                     title={r.label}
-                    badge={r.badge}
+                    badge={
+                      r.badge
+                        ? t("liveScreen.recommended", "Anbefalt")
+                        : undefined
+                    }
                     sub={r.sub}
                   />
                 </span>
               ))}
             </div>
             <div className="sr-field" style={{ marginTop: 12 }}>
-              <span className="sr-label">Bilderate</span>
+              <span className="sr-label">
+                {t("liveScreen.frameRate", "Bilderate")}
+              </span>
               <select
                 className="sr-select"
                 value={framerate}
@@ -544,16 +593,21 @@ export function LiveScreen() {
           <div>
             <div className="sr-card-title">
               <Icon name="image" size={17} />
-              Overlays — grafikk og presentasjon
+              {t(
+                "liveScreen.overlaysTitle",
+                "Overlays — grafikk og presentasjon",
+              )}
             </div>
             <div className="sr-card-desc" style={{ marginTop: 6 }}>
-              Legg kirkens logo, sangtekster eller annen grafikk over sendingen.
-              Påvirker bare strømmen — opptak gjøres rent.
+              {t(
+                "liveScreen.overlaysDesc",
+                "Legg kirkens logo, sangtekster eller annen grafikk over sendingen. Påvirker bare strømmen — opptak gjøres rent.",
+              )}
             </div>
           </div>
           <button className="sr-btn ghost sm" onClick={addOverlay}>
             <Icon name="plus" size={14} />
-            Legg til overlay
+            {t("liveScreen.addOverlay", "Legg til overlay")}
           </button>
         </div>
         {overlays.length === 0 ? (
@@ -567,7 +621,7 @@ export function LiveScreen() {
               fontSize: 13,
             }}
           >
-            Ingen overlays ennå
+            {t("liveScreen.noOverlaysYet", "Ingen overlays ennå")}
           </div>
         ) : (
           <div
@@ -602,7 +656,7 @@ export function LiveScreen() {
                 <button
                   className="sr-btn ghost sm"
                   onClick={() => removeOverlay(o.id)}
-                  title="Fjern overlay"
+                  title={t("liveScreen.removeOverlay", "Fjern overlay")}
                 >
                   <Icon name="x" size={14} />
                 </button>
@@ -619,14 +673,22 @@ export function LiveScreen() {
           onClick={() => startStream(active ? alsoRecord : true)}
         >
           <span className="dot" />
-          {active ? "Stopp sending" : "Start direktesending + opptak"}
+          {active
+            ? t("liveScreen.stopStreaming", "Stopp sending")
+            : t(
+                "liveScreen.startStreamingAndRecording",
+                "Start direktesending + opptak",
+              )}
         </button>
         <button
           className="sr-record secondary"
           disabled={active}
           onClick={() => startStream(false)}
         >
-          Bare direktesending (uten lokal opptak)
+          {t(
+            "liveScreen.streamingOnly",
+            "Bare direktesending (uten lokal opptak)",
+          )}
         </button>
         <div
           style={{
@@ -635,8 +697,10 @@ export function LiveScreen() {
             color: "var(--sr-text-3)",
           }}
         >
-          Lokal opptaksfil havner i «Siste opptak» når strømmen stopper — høyere
-          kvalitet enn livestreamen.
+          {t(
+            "liveScreen.startHelpText",
+            "Lokal opptaksfil havner i «Siste opptak» når strømmen stopper — høyere kvalitet enn livestreamen.",
+          )}
         </div>
       </div>
     </div>

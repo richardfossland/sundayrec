@@ -16,6 +16,7 @@
  * which lives in the backend — here we pass best-effort opts and fail soft.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
@@ -231,12 +232,13 @@ function RecHeader({
   status: "starting" | "recording" | "reconnecting";
   weak: boolean;
 }) {
+  const { t } = useTranslation();
   const label =
     status === "reconnecting"
-      ? "Kobler til på nytt"
+      ? t("recordingScreen.statusReconnecting", "Kobler til på nytt")
       : status === "starting"
-        ? "Starter …"
-        : "Tar opp nå";
+        ? t("recordingScreen.statusStarting", "Starter …")
+        : t("recordingScreen.statusRecording", "Tar opp nå");
   return (
     <div
       className="sr-row"
@@ -288,7 +290,9 @@ function RecHeader({
             color: "var(--sr-text-2)",
           }}
         >
-          {weak ? "SVAK" : "OK"}
+          {weak
+            ? t("recordingScreen.signalWeak", "SVAK")
+            : t("recordingScreen.signalOk", "OK")}
         </span>
       </div>
       <div
@@ -321,7 +325,7 @@ function RecHeader({
           className="sr-mono"
           style={{ fontSize: 12, color: "var(--sr-text-dim)" }}
         >
-          dBFS
+          {t("recordingScreen.dbfs", "dBFS")}
         </span>
       </div>
     </div>
@@ -341,6 +345,7 @@ function RecFooter({
   savePath: string | null;
   onStop?: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <>
       <div className="sr-row" style={{ alignItems: "flex-end", marginTop: 30 }}>
@@ -358,7 +363,9 @@ function RecFooter({
           </div>
           <div className="sr-row" style={{ gap: 40, marginTop: 16 }}>
             <div>
-              <div className="sr-label">Filstørrelse</div>
+              <div className="sr-label">
+                {t("recordingScreen.fileSize", "Filstørrelse")}
+              </div>
               <div
                 className="sr-num"
                 style={{ fontSize: 17, fontWeight: 600, marginTop: 4 }}
@@ -367,7 +374,9 @@ function RecFooter({
               </div>
             </div>
             <div>
-              <div className="sr-label">Diskplass igjen</div>
+              <div className="sr-label">
+                {t("recordingScreen.diskFree", "Diskplass igjen")}
+              </div>
               <div
                 className="sr-num"
                 style={{ fontSize: 17, fontWeight: 600, marginTop: 4 }}
@@ -397,7 +406,7 @@ function RecFooter({
               background: "var(--sr-red-bright)",
             }}
           />
-          Trykk for å stoppe opptaket
+          {t("recordingScreen.stopButton", "Trykk for å stoppe opptaket")}
         </button>
       </div>
       <div
@@ -412,7 +421,7 @@ function RecFooter({
           border: "1px solid var(--sr-line)",
         }}
       >
-        Lagres som:{" "}
+        {t("recordingScreen.savedAs", "Lagres som:")}{" "}
         {savePath ?? "/Users/richardfossland/Music/SundayRec/2026-06-01.wav"}
       </div>
     </>
@@ -426,6 +435,7 @@ export function RecordingScreen({
   video?: boolean;
   onStop?: () => void;
 }) {
+  const { t } = useTranslation();
   const { started, bytes, elapsed, silence, error, state, savePath, stop } =
     useRecordingSession(video);
   const diskFree = useDiskSpace();
@@ -449,7 +459,9 @@ export function RecordingScreen({
           <span className="sr-light y" />
           <span className="sr-light g" />
         </div>
-        <div className="sr-wintitle">SundayRec — tar opp</div>
+        <div className="sr-wintitle">
+          {t("recordingScreen.titlebar", "SundayRec — tar opp")}
+        </div>
       </div>
       <div
         style={{
@@ -486,7 +498,7 @@ export function RecordingScreen({
                   className="sr-label"
                   style={{ color: "rgba(255,255,255,0.85)" }}
                 >
-                  Kamera
+                  {t("recordingScreen.camera", "Kamera")}
                 </span>
                 <span
                   className="sr-mono sr-num"
@@ -507,7 +519,10 @@ export function RecordingScreen({
                   border: "none",
                 }}
               >
-                kamera tar opp · 720p · 30 fps
+                {t(
+                  "recordingScreen.cameraRecordingMeta",
+                  "kamera tar opp · 720p · 30 fps",
+                )}
               </div>
             </div>
           )}
@@ -540,7 +555,10 @@ export function RecordingScreen({
                 border: "1px solid var(--sr-red)",
               }}
             >
-              Feil ({error.code}): {error.message}
+              {t("recordingScreen.errorPrefix", "Feil ({{code}})", {
+                code: error.code,
+              })}
+              : {error.message}
             </div>
           )}
         </div>

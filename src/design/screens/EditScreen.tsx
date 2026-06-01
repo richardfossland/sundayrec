@@ -21,6 +21,7 @@
  * and the action buttons are wired.
  */
 import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -62,10 +63,26 @@ function isFeatureDisabled(err: unknown): boolean {
 /** The mastering presets the design's single <select> picks from. The first is
  *  the "recommended" option shown by default; each maps to a core preset id. */
 const MASTER_PRESETS = [
-  { id: "speech-clear", label: "Tale — tydelig (anbefalt)" },
-  { id: "speech-punchy", label: "Strømming (−14 LUFS)" },
-  { id: "speech-natural", label: "Naturlig (−19 LUFS)" },
-  { id: "music-speech", label: "Musikk + tale (−16 LUFS)" },
+  {
+    id: "speech-clear",
+    labelKey: "editScreen.presetSpeechClear",
+    label: "Tale — tydelig (anbefalt)",
+  },
+  {
+    id: "speech-punchy",
+    labelKey: "editScreen.presetStreaming",
+    label: "Strømming (−14 LUFS)",
+  },
+  {
+    id: "speech-natural",
+    labelKey: "editScreen.presetNatural",
+    label: "Naturlig (−19 LUFS)",
+  },
+  {
+    id: "music-speech",
+    labelKey: "editScreen.presetMusicSpeech",
+    label: "Musikk + tale (−16 LUFS)",
+  },
 ] as const;
 
 /** Everything the editor screen + its two variants need, owned here so the
@@ -322,6 +339,7 @@ function Waveform({
   peaks: number[] | null;
   durationSec: number;
 }) {
+  const { t } = useTranslation();
   const bars = useMemo(
     () => (peaks && peaks.length > 0 ? peaksToBars(peaks, WAVE_BARS) : null),
     [peaks],
@@ -346,11 +364,19 @@ function Waveform({
           color: "var(--sr-text-3)",
         }}
       >
-        <span style={{ color: "#9CC4E8", fontWeight: 600 }}>Intro · 30.8s</span>
-        <span style={{ color: "var(--sr-gold)", fontWeight: 600 }}>
-          Hovedopptak
+        <span style={{ color: "#9CC4E8", fontWeight: 600 }}>
+          {t("editScreen.waveIntro", "Intro · {{seconds}}s", {
+            seconds: "30.8",
+          })}
         </span>
-        <span style={{ color: "#9CC4E8", fontWeight: 600 }}>Outro · 30.8s</span>
+        <span style={{ color: "var(--sr-gold)", fontWeight: 600 }}>
+          {t("editScreen.waveMain", "Hovedopptak")}
+        </span>
+        <span style={{ color: "#9CC4E8", fontWeight: 600 }}>
+          {t("editScreen.waveOutro", "Outro · {{seconds}}s", {
+            seconds: "30.8",
+          })}
+        </span>
       </div>
       <div
         style={{
@@ -395,7 +421,7 @@ function Waveform({
               color: "var(--sr-text-dim)",
             }}
           >
-            Ingen bølgeform ennå
+            {t("editScreen.noWaveformYet", "Ingen bølgeform ennå")}
           </div>
         )}
         {/* GUI-UNVERIFIED centre band from the shared waveformPath geometry. */}
@@ -438,7 +464,9 @@ function Waveform({
             border: "1px solid var(--sr-gold-line)",
           }}
         >
-          ★ Antatt preken — 28 min
+          {t("editScreen.assumedSermon", "★ Antatt preken — {{minutes}} min", {
+            minutes: 28,
+          })}
         </div>
       </div>
       <div
@@ -466,6 +494,7 @@ function ModeSwitch({
   mode: "audio" | "video";
   onChange: (m: "audio" | "video") => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div
       className="sr-row"
@@ -476,13 +505,13 @@ function ModeSwitch({
           className={"sr-tab" + (mode === "audio" ? " is-active" : "")}
           onClick={() => onChange("audio")}
         >
-          Lydfil
+          {t("editScreen.modeAudio", "Lydfil")}
         </div>
         <div
           className={"sr-tab" + (mode === "video" ? " is-active" : "")}
           onClick={() => onChange("video")}
         >
-          Videofil
+          {t("editScreen.modeVideo", "Videofil")}
         </div>
       </div>
     </div>
@@ -491,6 +520,7 @@ function ModeSwitch({
 
 /** The Transkribering Collapsible body — real models + run + SRT/VTT/TXT. */
 function TranscribeSection({ selected }: { selected: string | null }) {
+  const { t } = useTranslation();
   const m = useTranscribeModel(selected);
   const segs = m.transcript?.segments ?? [];
   // Show the first two transcript lines (the design shows two) or the original
@@ -509,7 +539,7 @@ function TranscribeSection({ selected }: { selected: string | null }) {
   return (
     <Collapsible
       icon="list"
-      title="Transkribering"
+      title={t("editScreen.transcription", "Transkribering")}
       open
       meta={
         <div className="sr-row" style={{ gap: 8 }}>
@@ -519,7 +549,7 @@ function TranscribeSection({ selected }: { selected: string | null }) {
               style={{ fontSize: 12, padding: "4px 8px" }}
               value={m.modelId || m.effectiveModel}
               onChange={(e) => m.setModelId(e.target.value)}
-              aria-label="Modell"
+              aria-label={t("editScreen.model", "Modell")}
               onClick={(e) => e.stopPropagation()}
             >
               {m.modelList.map((mm) => (
@@ -535,7 +565,9 @@ function TranscribeSection({ selected }: { selected: string | null }) {
             onClick={m.onTranscribe}
           >
             <Icon name="play" size={13} fill />
-            {m.isPending ? "Transkriberer …" : "Transkriber"}
+            {m.isPending
+              ? t("editScreen.transcribing", "Transkriberer …")
+              : t("editScreen.transcribe", "Transkriber")}
           </button>
         </div>
       }
@@ -583,6 +615,7 @@ function TranscribeSection({ selected }: { selected: string | null }) {
 }
 
 function EditAudio({ m }: { m: EditorModel }) {
+  const { t } = useTranslation();
   const [format, setFormat] = useState("mp3");
   const name = m.selected
     ? fileName(m.selected)
@@ -614,14 +647,14 @@ function EditAudio({ m }: { m: EditorModel }) {
             className="sr-btn ghost sm"
             onClick={() => void m.onPickFile()}
           >
-            Åpne annen fil
+            {t("editScreen.openOtherFile", "Åpne annen fil")}
           </button>
           <button
             className="sr-btn ghost sm"
             onClick={m.onCloseFile}
             disabled={!m.selected}
           >
-            Lukk fil
+            {t("editScreen.closeFile", "Lukk fil")}
           </button>
           <div className="sr-row" style={{ gap: 6, marginLeft: 8 }}>
             <button
@@ -665,10 +698,10 @@ function EditAudio({ m }: { m: EditorModel }) {
           </button>
           <div className="sr-grow" />
           {[
-            ["Space", "Spill"],
-            ["Tab", "Neste kutt"],
-            ["P", "Hopp til preken"],
-            ["⌘Z", "Angre"],
+            ["Space", t("editScreen.kbdPlay", "Spill")],
+            ["Tab", t("editScreen.kbdNextCut", "Neste kutt")],
+            ["P", t("editScreen.kbdJumpToSermon", "Hopp til preken")],
+            ["⌘Z", t("editScreen.kbdUndo", "Angre")],
           ].map(([k, l]) => (
             <span
               key={k}
@@ -691,19 +724,32 @@ function EditAudio({ m }: { m: EditorModel }) {
               disabled={!m.selected || m.isAnalyzePending}
             >
               <Icon name="normalize" size={16} />
-              {m.isAnalyzePending ? "Måler …" : "Normaliser lydnivå"}
+              {m.isAnalyzePending
+                ? t("editScreen.measuring", "Måler …")
+                : t("editScreen.normalizeLevel", "Normaliser lydnivå")}
             </button>
             <span className="sr-grow sr-srow-d" style={{ marginTop: 0 }}>
               {m.loudness
-                ? `Målt ${m.loudness.inputI.toFixed(1)} LUFS → mål ${m.loudness.targetLufs.toFixed(0)} LUFS · topp ${m.loudness.inputTp.toFixed(1)} dBTP.`
-                : "Justerer toppunktet til −1 dBFS for trygg sluttmiks."}
+                ? t(
+                    "editScreen.loudnessMeasured",
+                    "Målt {{input}} LUFS → mål {{target}} LUFS · topp {{peak}} dBTP.",
+                    {
+                      input: m.loudness.inputI.toFixed(1),
+                      target: m.loudness.targetLufs.toFixed(0),
+                      peak: m.loudness.inputTp.toFixed(1),
+                    },
+                  )
+                : t(
+                    "editScreen.normalizeDescAudio",
+                    "Justerer toppunktet til −1 dBFS for trygg sluttmiks.",
+                  )}
             </span>
           </div>
         </div>
 
         <Collapsible
           icon="scissors"
-          title="Intro & Outro"
+          title={t("editScreen.introOutro", "Intro & Outro")}
           meta={
             <>
               <span
@@ -713,7 +759,7 @@ function EditAudio({ m }: { m: EditorModel }) {
                   marginRight: 12,
                 }}
               >
-                Inkluder ved eksport
+                {t("editScreen.includeOnExport", "Inkluder ved eksport")}
               </span>
               <Toggle on />
             </>
@@ -721,10 +767,10 @@ function EditAudio({ m }: { m: EditorModel }) {
         />
         <Collapsible
           icon="list"
-          title="Metadata"
+          title={t("editScreen.metadata", "Metadata")}
           meta={
             <span style={{ fontSize: 12.5, color: "var(--sr-text-3)" }}>
-              Tittel, taler, beskrivelse
+              {t("editScreen.metadataHint", "Tittel, taler, beskrivelse")}
             </span>
           }
         />
@@ -732,7 +778,7 @@ function EditAudio({ m }: { m: EditorModel }) {
         {/* Analyze → editor_segments (tale/musikk/stillhet detection). */}
         <Collapsible
           icon="wave"
-          title="Analyser opptak"
+          title={t("editScreen.analyzeRecording", "Analyser opptak")}
           open
           meta={
             <button
@@ -741,24 +787,40 @@ function EditAudio({ m }: { m: EditorModel }) {
               disabled={!m.selected || m.isSegmentsPending}
             >
               <Icon name="play" size={13} fill />
-              {m.isSegmentsPending ? "Analyserer …" : "Analyser"}
+              {m.isSegmentsPending
+                ? t("editScreen.analyzing", "Analyserer …")
+                : t("editScreen.analyze", "Analyser")}
             </button>
           }
         >
           <div className="sr-srow-d" style={{ marginTop: 0, marginBottom: 14 }}>
             {segCount > 0
-              ? `${segCount} segmenter funnet`
+              ? t("editScreen.segmentsFound", "{{count}} segmenter funnet", {
+                  count: segCount,
+                })
               : "Sist analysert: 31.5 20:35 · 3 tale-segmenter funnet"}
           </div>
           <div className="sr-label" style={{ marginBottom: 10 }}>
-            På tidslinjen vises
+            {t("editScreen.shownOnTimeline", "På tidslinjen vises")}
           </div>
           <div className="sr-row" style={{ gap: 18, marginBottom: 16 }}>
             {(
               [
-                ["Tale-segmenter", "var(--sr-green)", true],
-                ["Musikk-segmenter", "var(--sr-blue)", true],
-                ["Stillhet", "var(--sr-text-3)", false],
+                [
+                  t("editScreen.speechSegments", "Tale-segmenter"),
+                  "var(--sr-green)",
+                  true,
+                ],
+                [
+                  t("editScreen.musicSegments", "Musikk-segmenter"),
+                  "var(--sr-blue)",
+                  true,
+                ],
+                [
+                  t("editScreen.silence", "Stillhet"),
+                  "var(--sr-text-3)",
+                  false,
+                ],
               ] as const
             ).map(([l, c, on]) => (
               <span
@@ -793,7 +855,7 @@ function EditAudio({ m }: { m: EditorModel }) {
           </div>
           <button className="sr-btn ghost">
             <Icon name="sparkle" size={15} />
-            Marker preken automatisk
+            {t("editScreen.markSermonAuto", "Marker preken automatisk")}
           </button>
         </Collapsible>
 
@@ -802,22 +864,30 @@ function EditAudio({ m }: { m: EditorModel }) {
 
         {/* Mastering */}
         <Card
-          title="Mastering — klargjør for publisering"
+          title={t(
+            "editScreen.masteringTitle",
+            "Mastering — klargjør for publisering",
+          )}
           icon="eq"
           pad
-          desc="Standardiserer lydstyrke og lydkvalitet for podkast og streaming. Bruker EBU R128-normalisering."
+          desc={t(
+            "editScreen.masteringDesc",
+            "Standardiserer lydstyrke og lydkvalitet for podkast og streaming. Bruker EBU R128-normalisering.",
+          )}
         >
           <div className="sr-field" style={{ marginTop: 16, maxWidth: 360 }}>
-            <span className="sr-label">Forhåndsinnstilling</span>
+            <span className="sr-label">
+              {t("editScreen.preset", "Forhåndsinnstilling")}
+            </span>
             <select
               className="sr-select"
               value={m.presetId}
               onChange={(e) => m.setPresetId(e.target.value)}
-              aria-label="Forhåndsinnstilling"
+              aria-label={t("editScreen.preset", "Forhåndsinnstilling")}
             >
               {MASTER_PRESETS.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.label}
+                  {t(p.labelKey, p.label)}
                 </option>
               ))}
             </select>
@@ -830,8 +900,8 @@ function EditAudio({ m }: { m: EditorModel }) {
             >
               <Icon name="speaker" size={15} />
               {m.isPreviewPending
-                ? "Lager forhåndsvisning …"
-                : "Lytt på forhåndsvisning"}
+                ? t("editScreen.makingPreview", "Lager forhåndsvisning …")
+                : t("editScreen.listenPreview", "Lytt på forhåndsvisning")}
             </button>
             <button
               className="sr-btn gold"
@@ -839,7 +909,9 @@ function EditAudio({ m }: { m: EditorModel }) {
               disabled={!m.selected || m.isExportPending}
             >
               <Icon name="check" size={15} strokeWidth={2.4} />
-              {m.isExportPending ? "Mastrer …" : "Mastre fil"}
+              {m.isExportPending
+                ? t("editScreen.mastering", "Mastrer …")
+                : t("editScreen.masterFile", "Mastre fil")}
             </button>
           </div>
           {m.preview && (
@@ -847,7 +919,7 @@ function EditAudio({ m }: { m: EditorModel }) {
               controls
               src={m.preview.previewPath}
               style={{ width: "100%", marginTop: 12 }}
-              aria-label="Forhåndsvisning"
+              aria-label={t("editScreen.preview", "Forhåndsvisning")}
             />
           )}
         </Card>
@@ -856,7 +928,11 @@ function EditAudio({ m }: { m: EditorModel }) {
         <div
           style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}
         >
-          <Card title="Episodebilde" icon="image" pad>
+          <Card
+            title={t("editScreen.episodeImage", "Episodebilde")}
+            icon="image"
+            pad
+          >
             <div className="sr-row" style={{ gap: 14, marginTop: 14 }}>
               <div
                 className="sr-media"
@@ -866,7 +942,7 @@ function EditAudio({ m }: { m: EditorModel }) {
               </div>
               <div className="sr-grow">
                 <div style={{ fontSize: 13.5, fontWeight: 600 }}>
-                  Bruker standardbilde
+                  {t("editScreen.usingDefaultImage", "Bruker standardbilde")}
                 </div>
                 <div
                   style={{
@@ -877,16 +953,26 @@ function EditAudio({ m }: { m: EditorModel }) {
                 >
                   2400×1601 px
                 </div>
-                <Badge kind="warn">Bør være kvadratisk (1:1)</Badge>
+                <Badge kind="warn">
+                  {t("editScreen.shouldBeSquare", "Bør være kvadratisk (1:1)")}
+                </Badge>
                 <div style={{ marginTop: 10 }}>
-                  <button className="sr-btn ghost sm">Bytt bilde</button>
+                  <button className="sr-btn ghost sm">
+                    {t("editScreen.changeImage", "Bytt bilde")}
+                  </button>
                 </div>
               </div>
             </div>
           </Card>
-          <Card title="Eksporter episode" icon="download" pad>
+          <Card
+            title={t("editScreen.exportEpisode", "Eksporter episode")}
+            icon="download"
+            pad
+          >
             <div className="sr-field" style={{ marginTop: 14 }}>
-              <span className="sr-label">Format</span>
+              <span className="sr-label">
+                {t("editScreen.format", "Format")}
+              </span>
               <div className="sr-seg cols-3" style={{ marginTop: 2 }}>
                 {(["mp3", "wav", "mp4"] as const).map((f) => (
                   <div key={f} onClick={() => setFormat(f)}>
@@ -902,7 +988,12 @@ function EditAudio({ m }: { m: EditorModel }) {
               disabled={!m.selected || m.isExportPending}
             >
               <Icon name="download" size={15} />
-              {m.isExportPending ? "Eksporterer …" : "Eksporter ferdig episode"}
+              {m.isExportPending
+                ? t("editScreen.exporting", "Eksporterer …")
+                : t(
+                    "editScreen.exportFinishedEpisode",
+                    "Eksporter ferdig episode",
+                  )}
             </button>
             {m.exportResult && (
               <div
@@ -912,7 +1003,9 @@ function EditAudio({ m }: { m: EditorModel }) {
                   color: "var(--sr-green)",
                 }}
               >
-                Lagret: {fileName(m.exportResult.outputPath)}
+                {t("editScreen.savedAs", "Lagret: {{name}}", {
+                  name: fileName(m.exportResult.outputPath),
+                })}
               </div>
             )}
             {m.exportError && (
@@ -923,7 +1016,7 @@ function EditAudio({ m }: { m: EditorModel }) {
                   color: "var(--sr-red)",
                 }}
               >
-                ✕ Feil ved eksport
+                {t("editScreen.exportError", "✕ Feil ved eksport")}
               </div>
             )}
           </Card>
@@ -934,6 +1027,7 @@ function EditAudio({ m }: { m: EditorModel }) {
 }
 
 function EditVideo({ m }: { m: EditorModel }) {
+  const { t } = useTranslation();
   const [format, setFormat] = useState("mp4");
   const name = m.selected
     ? fileName(m.selected)
@@ -962,20 +1056,20 @@ function EditVideo({ m }: { m: EditorModel }) {
           </div>
           <Badge kind="muted">
             <Icon name="video" size={12} style={{ marginRight: 3 }} />
-            Video + lyd
+            {t("editScreen.videoAndAudio", "Video + lyd")}
           </Badge>
           <button
             className="sr-btn ghost sm"
             onClick={() => void m.onPickFile()}
           >
-            Åpne annen fil
+            {t("editScreen.openOtherFile", "Åpne annen fil")}
           </button>
           <button
             className="sr-btn ghost sm"
             onClick={m.onCloseFile}
             disabled={!m.selected}
           >
-            Lukk fil
+            {t("editScreen.closeFile", "Lukk fil")}
           </button>
         </div>
       </div>
@@ -1043,7 +1137,7 @@ function EditVideo({ m }: { m: EditorModel }) {
               className="sr-grow"
               style={{ fontSize: 13.5, fontWeight: 600 }}
             >
-              Videoforhåndsvisning
+              {t("editScreen.videoPreview", "Videoforhåndsvisning")}
             </span>
             <span
               className="sr-mono sr-num"
@@ -1056,7 +1150,7 @@ function EditVideo({ m }: { m: EditorModel }) {
             className="sr-media"
             style={{ aspectRatio: "16 / 9", borderRadius: 0, border: "none" }}
           >
-            følger spillehodet · 720p
+            {t("editScreen.followsPlayhead", "følger spillehodet · 720p")}
           </div>
           <div
             className="sr-row"
@@ -1088,12 +1182,24 @@ function EditVideo({ m }: { m: EditorModel }) {
               disabled={!m.selected || m.isAnalyzePending}
             >
               <Icon name="normalize" size={16} />
-              {m.isAnalyzePending ? "Måler …" : "Normaliser lydnivå"}
+              {m.isAnalyzePending
+                ? t("editScreen.measuring", "Måler …")
+                : t("editScreen.normalizeLevel", "Normaliser lydnivå")}
             </button>
             <span className="sr-grow sr-srow-d" style={{ marginTop: 0 }}>
               {m.loudness
-                ? `Målt ${m.loudness.inputI.toFixed(1)} LUFS → mål ${m.loudness.targetLufs.toFixed(0)} LUFS. Bildet røres ikke.`
-                : "Justerer lyden i videoen til −1 dBFS. Bildet røres ikke."}
+                ? t(
+                    "editScreen.loudnessMeasuredVideo",
+                    "Målt {{input}} LUFS → mål {{target}} LUFS. Bildet røres ikke.",
+                    {
+                      input: m.loudness.inputI.toFixed(1),
+                      target: m.loudness.targetLufs.toFixed(0),
+                    },
+                  )
+                : t(
+                    "editScreen.normalizeDescVideo",
+                    "Justerer lyden i videoen til −1 dBFS. Bildet røres ikke.",
+                  )}
             </span>
           </div>
         </div>
@@ -1103,7 +1209,7 @@ function EditVideo({ m }: { m: EditorModel }) {
             follow-up (export currently sends no cut regions). */}
         <Collapsible
           icon="scissors"
-          title="Trim — start & slutt"
+          title={t("editScreen.trimStartEnd", "Trim — start & slutt")}
           open
           meta={
             <span style={{ fontSize: 12.5, color: "var(--sr-text-3)" }}>
@@ -1112,16 +1218,18 @@ function EditVideo({ m }: { m: EditorModel }) {
           }
         >
           <div className="sr-srow-d" style={{ marginTop: 0, marginBottom: 14 }}>
-            Klipp bort dødtid før og etter gudstjenesten. Trim gjelder både
-            bilde og lyd samtidig.
+            {t(
+              "editScreen.trimDesc",
+              "Klipp bort dødtid før og etter gudstjenesten. Trim gjelder både bilde og lyd samtidig.",
+            )}
           </div>
           <div className="sr-row" style={{ gap: 12 }}>
             <div className="sr-field sr-grow">
-              <span className="sr-label">Start</span>
+              <span className="sr-label">{t("editScreen.start", "Start")}</span>
               <div className="sr-input mono">00:00:31</div>
             </div>
             <div className="sr-field sr-grow">
-              <span className="sr-label">Slutt</span>
+              <span className="sr-label">{t("editScreen.end", "Slutt")}</span>
               <div className="sr-input mono">00:31:48</div>
             </div>
           </div>
@@ -1129,10 +1237,10 @@ function EditVideo({ m }: { m: EditorModel }) {
 
         <Collapsible
           icon="list"
-          title="Metadata"
+          title={t("editScreen.metadata", "Metadata")}
           meta={
             <span style={{ fontSize: 12.5, color: "var(--sr-text-3)" }}>
-              Tittel, taler, beskrivelse
+              {t("editScreen.metadataHint", "Tittel, taler, beskrivelse")}
             </span>
           }
         />
@@ -1141,25 +1249,40 @@ function EditVideo({ m }: { m: EditorModel }) {
 
         {/* Export — video formats */}
         <Card
-          title="Eksporter episode"
+          title={t("editScreen.exportEpisode", "Eksporter episode")}
           icon="download"
           pad
-          desc="Med video lastet kan du eksportere ferdig MP4 til YouTube, eller hente ut bare lyden til podkast."
+          desc={t(
+            "editScreen.exportVideoDesc",
+            "Med video lastet kan du eksportere ferdig MP4 til YouTube, eller hente ut bare lyden til podkast.",
+          )}
         >
           <div className="sr-field" style={{ marginTop: 16 }}>
-            <span className="sr-label">Format</span>
+            <span className="sr-label">{t("editScreen.format", "Format")}</span>
             <div className="sr-seg cols-4" style={{ marginTop: 2 }}>
               <div onClick={() => setFormat("mp4")}>
-                <SegOpt sel={format === "mp4"} title="MP4" sub="Video + lyd" />
+                <SegOpt
+                  sel={format === "mp4"}
+                  title="MP4"
+                  sub={t("editScreen.videoAndAudio", "Video + lyd")}
+                />
               </div>
               <div onClick={() => setFormat("mp3")}>
-                <SegOpt sel={format === "mp3"} title="MP3" sub="Kun lyd" />
+                <SegOpt
+                  sel={format === "mp3"}
+                  title="MP3"
+                  sub={t("editScreen.audioOnly", "Kun lyd")}
+                />
               </div>
               <div onClick={() => setFormat("wav")}>
-                <SegOpt sel={format === "wav"} title="WAV" sub="Kun lyd" />
+                <SegOpt
+                  sel={format === "wav"}
+                  title="WAV"
+                  sub={t("editScreen.audioOnly", "Kun lyd")}
+                />
               </div>
               {/* "Begge" (MP4 + MP3) needs two export passes — // TODO. */}
-              <SegOpt title="Begge" sub="MP4 + MP3" />
+              <SegOpt title={t("editScreen.both", "Begge")} sub="MP4 + MP3" />
             </div>
           </div>
           <button
@@ -1169,7 +1292,12 @@ function EditVideo({ m }: { m: EditorModel }) {
             disabled={!m.selected || m.isExportPending}
           >
             <Icon name="download" size={15} />
-            {m.isExportPending ? "Eksporterer …" : "Eksporter ferdig episode"}
+            {m.isExportPending
+              ? t("editScreen.exporting", "Eksporterer …")
+              : t(
+                  "editScreen.exportFinishedEpisode",
+                  "Eksporter ferdig episode",
+                )}
           </button>
           {m.exportResult && (
             <div
@@ -1179,14 +1307,16 @@ function EditVideo({ m }: { m: EditorModel }) {
                 color: "var(--sr-green)",
               }}
             >
-              Lagret: {fileName(m.exportResult.outputPath)}
+              {t("editScreen.savedAs", "Lagret: {{name}}", {
+                name: fileName(m.exportResult.outputPath),
+              })}
             </div>
           )}
           {m.exportError && (
             <div
               style={{ marginTop: 10, fontSize: 12.5, color: "var(--sr-red)" }}
             >
-              ✕ Feil ved eksport
+              {t("editScreen.exportError", "✕ Feil ved eksport")}
             </div>
           )}
         </Card>

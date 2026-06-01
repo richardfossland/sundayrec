@@ -13,6 +13,7 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import type { Settings } from "@/lib/bindings/Settings";
 import type { ChannelMode } from "@/lib/bindings/ChannelMode";
@@ -37,6 +38,17 @@ const TABS = [
   ["suite", "Sunday-suite"],
 ] as const;
 type TabId = (typeof TABS)[number][0];
+
+/** i18n key suffix for each tab label, keyed by tab id. */
+const TAB_LABEL_KEYS: Record<TabId, string> = {
+  lydkilde: "tabAudio",
+  video: "tabVideo",
+  filer: "tabFiles",
+  publisering: "tabPublishing",
+  varsler: "tabNotifications",
+  system: "tabSystem",
+  suite: "tabSuite",
+};
 
 /** Mutate-then-save helper passed into every tab. */
 type Update = (patch: Partial<Settings>) => void;
@@ -114,12 +126,16 @@ function LiveSegOpt({
 }
 
 function TabLydkilde({ s, update }: TabProps) {
+  const { t } = useTranslation();
   return (
     <>
       <Card
-        title="Tilgjengelige enheter"
+        title={t("settingsScreen.audio.devicesTitle", "Tilgjengelige enheter")}
         icon="mic"
-        desc="Velg mikseren eller lydkortet som tar opp lyden i kirken. USB-mikser anbefales fremfor innebygd mikrofon."
+        desc={t(
+          "settingsScreen.audio.devicesDesc",
+          "Velg mikseren eller lydkortet som tar opp lyden i kirken. USB-mikser anbefales fremfor innebygd mikrofon.",
+        )}
         pad
       >
         {/* TODO: device list — no single Settings field; real device picker
@@ -132,7 +148,7 @@ function TabLydkilde({ s, update }: TabProps) {
             sel
             badge={
               <Badge kind="ok" dot>
-                Tilkoblet
+                {t("settingsScreen.audio.badgeConnected", "Tilkoblet")}
               </Badge>
             }
           />
@@ -140,7 +156,11 @@ function TabLydkilde({ s, update }: TabProps) {
             icon="mic"
             name="MacBook Pro-mikrofon (innebygd)"
             meta="Intern · mono"
-            badge={<Badge kind="warn">Ikke anbefalt</Badge>}
+            badge={
+              <Badge kind="warn">
+                {t("settingsScreen.audio.badgeNotRecommended", "Ikke anbefalt")}
+              </Badge>
+            }
           />
           <DeviceRow
             icon="mic"
@@ -148,7 +168,7 @@ function TabLydkilde({ s, update }: TabProps) {
             meta="USB / ekstern"
             badge={
               <Badge kind="ok" dot>
-                Tilkoblet
+                {t("settingsScreen.audio.badgeConnected", "Tilkoblet")}
               </Badge>
             }
           />
@@ -158,89 +178,109 @@ function TabLydkilde({ s, update }: TabProps) {
             className="sr-grow"
             style={{ fontSize: 13, color: "var(--sr-text-3)" }}
           >
-            Ser du ikke riktig enhet? Sjekk at lydkortet er koblet til.
+            {t(
+              "settingsScreen.audio.deviceHelp",
+              "Ser du ikke riktig enhet? Sjekk at lydkortet er koblet til.",
+            )}
           </span>
           <button className="sr-btn ghost sm">
             <Icon name="speaker" size={14} />
-            Test lyd
+            {t("settingsScreen.audio.testAudio", "Test lyd")}
           </button>
-          <button className="sr-btn ghost sm">Diagnose</button>
+          <button className="sr-btn ghost sm">
+            {t("settingsScreen.audio.diagnose", "Diagnose")}
+          </button>
         </div>
       </Card>
       <Card
-        title="Sjekk at alt fungerer"
+        title={t("settingsScreen.audio.checkTitle", "Sjekk at alt fungerer")}
         icon="shield"
-        desc="Kjør disse før en gudstjeneste for å være sikker på at opptaket starter uten problemer."
+        desc={t(
+          "settingsScreen.audio.checkDesc",
+          "Kjør disse før en gudstjeneste for å være sikker på at opptaket starter uten problemer.",
+        )}
         pad
       >
         <div className="sr-row" style={{ gap: 10, marginTop: 14 }}>
           <button className="sr-btn ghost">
             <Icon name="mic" size={15} />
-            Test-opptak (30 sek)
+            {t("settingsScreen.audio.testRecording", "Test-opptak (30 sek)")}
           </button>
           <button className="sr-btn gold">
             <Icon name="check" size={15} strokeWidth={2.4} />
-            Sjekk system nå
+            {t("settingsScreen.audio.checkNow", "Sjekk system nå")}
           </button>
         </div>
       </Card>
-      <Card title="Kanaler" pad>
+      <Card title={t("settingsScreen.audio.channelsTitle", "Kanaler")} pad>
         <div className="sr-seg cols-4" style={{ marginTop: 4 }}>
           <LiveSegOpt
             sel={s.channels === "stereo"}
-            title="Stereo"
-            badge="Anbefalt"
+            title={t("settingsScreen.audio.channelStereo", "Stereo")}
+            badge={t("settingsScreen.recommended", "Anbefalt")}
             onSelect={() => update({ channels: "stereo" as ChannelMode })}
           />
           <LiveSegOpt
             sel={s.channels === "monoMix"}
-            title="Mono"
-            sub="Miks L+R"
+            title={t("settingsScreen.audio.channelMono", "Mono")}
+            sub={t("settingsScreen.audio.channelMonoSub", "Miks L+R")}
             onSelect={() => update({ channels: "monoMix" as ChannelMode })}
           />
           <LiveSegOpt
             sel={s.channels === "monoL"}
-            title="Mono L"
-            sub="Kun venstre"
+            title={t("settingsScreen.audio.channelMonoL", "Mono L")}
+            sub={t("settingsScreen.audio.channelMonoLSub", "Kun venstre")}
             onSelect={() => update({ channels: "monoL" as ChannelMode })}
           />
           <LiveSegOpt
             sel={s.channels === "monoR"}
-            title="Mono R"
-            sub="Kun høyre"
+            title={t("settingsScreen.audio.channelMonoR", "Mono R")}
+            sub={t("settingsScreen.audio.channelMonoRSub", "Kun høyre")}
             onSelect={() => update({ channels: "monoR" as ChannelMode })}
           />
         </div>
       </Card>
-      <Card title="Samplingsrate" pad>
+      <Card
+        title={t("settingsScreen.audio.sampleRateTitle", "Samplingsrate")}
+        pad
+      >
         <div className="sr-seg cols-2" style={{ marginTop: 4 }}>
           <LiveSegOpt
             sel={s.sampleRate === 44100}
             title="44 100 Hz"
-            sub="Musikk, CD og podkast"
+            sub={t("settingsScreen.audio.sr44Sub", "Musikk, CD og podkast")}
             onSelect={() => update({ sampleRate: 44100 })}
           />
           <LiveSegOpt
             sel={s.sampleRate === 48000}
             title="48 000 Hz"
-            badge="Anbefalt"
-            sub="Video, Zoom og TV-utstyr"
+            badge={t("settingsScreen.recommended", "Anbefalt")}
+            sub={t("settingsScreen.audio.sr48Sub", "Video, Zoom og TV-utstyr")}
             onSelect={() => update({ sampleRate: 48000 })}
           />
         </div>
       </Card>
       <Card
-        title="Lyd-prosessering"
+        title={t("settingsScreen.audio.processingTitle", "Lyd-prosessering")}
         icon="eq"
-        desc="Valgfritt. Standard er av — rått opptak gir mest fleksibilitet i etterkant."
+        desc={t(
+          "settingsScreen.audio.processingDesc",
+          "Valgfritt. Standard er av — rått opptak gir mest fleksibilitet i etterkant.",
+        )}
         pad
       >
         {/* NOTE: `inputVolume` (input gain %) is a real Settings field but the
             redesign has no gain slider on this tab, so it stays at its
             persisted/default value — left static. */}
         <SettingRow
-          title="Equalizer (bass / mid / diskant)"
-          desc="Lett tonejustering på vei inn."
+          title={t(
+            "settingsScreen.audio.eqTitle",
+            "Equalizer (bass / mid / diskant)",
+          )}
+          desc={t(
+            "settingsScreen.audio.eqDesc",
+            "Lett tonejustering på vei inn.",
+          )}
           control={
             <LiveToggle
               on={s.eqEnabled}
@@ -249,8 +289,11 @@ function TabLydkilde({ s, update }: TabProps) {
           }
         />
         <SettingRow
-          title="Kompressor"
-          desc="Jevner ut svingninger i stemmestyrke."
+          title={t("settingsScreen.audio.compTitle", "Kompressor")}
+          desc={t(
+            "settingsScreen.audio.compDesc",
+            "Jevner ut svingninger i stemmestyrke.",
+          )}
           control={
             <LiveToggle
               on={s.compEnabled}
@@ -259,8 +302,14 @@ function TabLydkilde({ s, update }: TabProps) {
           }
         />
         <SettingRow
-          title="Limiter (klippe-vern)"
-          desc="Hindrer at plutselig høy lyd overstyrer."
+          title={t(
+            "settingsScreen.audio.limiterTitle",
+            "Limiter (klippe-vern)",
+          )}
+          desc={t(
+            "settingsScreen.audio.limiterDesc",
+            "Hindrer at plutselig høy lyd overstyrer.",
+          )}
           control={
             <LiveToggle
               on={s.limiterEnabled}
@@ -309,6 +358,7 @@ function CameraSelect({ s, update }: TabProps) {
 }
 
 function TabVideo({ s, update }: TabProps) {
+  const { t } = useTranslation();
   // Bumping `refreshKey` remounts <CameraSelect> so the "Oppdater" button
   // re-enumerates cameras through `useVideoDevices()`.
   const [refreshKey, setRefreshKey] = useState(0);
@@ -316,8 +366,11 @@ function TabVideo({ s, update }: TabProps) {
     <>
       <Card pad>
         <SettingRow
-          title="Aktiver videoopptak"
-          desc="Tar opp video i tillegg til lyd ved hvert opptak."
+          title={t("settingsScreen.video.enableTitle", "Aktiver videoopptak")}
+          desc={t(
+            "settingsScreen.video.enableDesc",
+            "Tar opp video i tillegg til lyd ved hvert opptak.",
+          )}
           control={
             <LiveToggle
               on={s.videoEnabled}
@@ -326,7 +379,11 @@ function TabVideo({ s, update }: TabProps) {
           }
         />
       </Card>
-      <Card title="Kamera" icon="camera" pad>
+      <Card
+        title={t("settingsScreen.video.cameraTitle", "Kamera")}
+        icon="camera"
+        pad
+      >
         {/* Live camera enumeration via `useVideoDevices()`. The chosen camera
             persists both `videoDeviceName` and `videoDeviceIndex` (avfoundation
             index; null for dshow, addressed by name). When no devices are
@@ -339,18 +396,21 @@ function TabVideo({ s, update }: TabProps) {
             onClick={() => setRefreshKey((k) => k + 1)}
           >
             <Icon name="refresh" size={15} />
-            Oppdater
+            {t("settingsScreen.video.refresh", "Oppdater")}
           </button>
         </div>
         <div
           style={{ fontSize: 12.5, color: "var(--sr-text-3)", marginTop: 10 }}
         >
-          USB-webkamera og HDMI-opptakskort støttes på macOS og Windows.
+          {t(
+            "settingsScreen.video.cameraHelp",
+            "USB-webkamera og HDMI-opptakskort støttes på macOS og Windows.",
+          )}
         </div>
       </Card>
-      <Card title="Kvalitet" pad>
+      <Card title={t("settingsScreen.video.qualityTitle", "Kvalitet")} pad>
         <div className="sr-label" style={{ marginBottom: 10 }}>
-          Oppløsning
+          {t("settingsScreen.video.resolutionLabel", "Oppløsning")}
         </div>
         <div className="sr-seg cols-3">
           <LiveSegOpt
@@ -362,7 +422,7 @@ function TabVideo({ s, update }: TabProps) {
           <LiveSegOpt
             sel={s.videoResolution === "720p"}
             title="720p"
-            badge="Anbefalt"
+            badge={t("settingsScreen.recommended", "Anbefalt")}
             sub="~3.5 GB / t"
             onSelect={() => update({ videoResolution: "720p" })}
           />
@@ -374,40 +434,59 @@ function TabVideo({ s, update }: TabProps) {
           />
         </div>
         <div className="sr-field" style={{ marginTop: 16, maxWidth: 220 }}>
-          <span className="sr-label">Bilderate</span>
+          <span className="sr-label">
+            {t("settingsScreen.video.framerateLabel", "Bilderate")}
+          </span>
           <select
             className="sr-select"
             value={s.videoFramerate}
             onChange={(e) => update({ videoFramerate: Number(e.target.value) })}
           >
             <option value={25}>25 fps</option>
-            <option value={30}>30 fps (anbefalt)</option>
+            <option value={30}>
+              {t("settingsScreen.video.fps30", "30 fps (anbefalt)")}
+            </option>
           </select>
         </div>
       </Card>
       <Card
-        title="Utdataformat"
-        desc="Velg om lyd og video skal kombineres til én fil eller lagres separat."
+        title={t("settingsScreen.video.outputTitle", "Utdataformat")}
+        desc={t(
+          "settingsScreen.video.outputDesc",
+          "Velg om lyd og video skal kombineres til én fil eller lagres separat.",
+        )}
         pad
       >
         <div className="sr-seg cols-2" style={{ marginTop: 14 }}>
           <LiveSegOpt
             sel={s.outputMode === "combined"}
-            title="Kombinert MP4"
-            sub="Lyd + video i én fil — klar for YouTube"
+            title={t("settingsScreen.video.combinedTitle", "Kombinert MP4")}
+            sub={t(
+              "settingsScreen.video.combinedSub",
+              "Lyd + video i én fil — klar for YouTube",
+            )}
             onSelect={() => update({ outputMode: "combined" })}
           />
           <LiveSegOpt
             sel={s.outputMode === "separate"}
-            title="Separate filer"
-            sub="Lyd og video lagres hver for seg"
+            title={t("settingsScreen.video.separateTitle", "Separate filer")}
+            sub={t(
+              "settingsScreen.video.separateSub",
+              "Lyd og video lagres hver for seg",
+            )}
             onSelect={() => update({ outputMode: "separate" })}
           />
         </div>
         <div style={{ marginTop: 6 }}>
           <SettingRow
-            title="Behold separat lydfil"
-            desc="Lagrer også den høykvalitets lydfilen ved siden av MP4."
+            title={t(
+              "settingsScreen.video.keepAudioTitle",
+              "Behold separat lydfil",
+            )}
+            desc={t(
+              "settingsScreen.video.keepAudioDesc",
+              "Lagrer også den høykvalitets lydfilen ved siden av MP4.",
+            )}
             control={
               <LiveToggle
                 on={s.keepSeparateAudio}
@@ -416,8 +495,11 @@ function TabVideo({ s, update }: TabProps) {
             }
           />
           <SettingRow
-            title="Perfekt A/V-synk"
-            desc="Bruker én ffmpeg-prosess for både lyd og bilde — eliminerer sync-drift."
+            title={t("settingsScreen.video.avSyncTitle", "Perfekt A/V-synk")}
+            desc={t(
+              "settingsScreen.video.avSyncDesc",
+              "Bruker én ffmpeg-prosess for både lyd og bilde — eliminerer sync-drift.",
+            )}
             control={
               <LiveToggle
                 on={s.avSync}
@@ -455,12 +537,16 @@ function FilenamePreview({ s }: { s: Settings }) {
 }
 
 function TabFiler({ s, update }: TabProps) {
+  const { t } = useTranslation();
   return (
     <>
       <Card
-        title="Lagringsmappe"
+        title={t("settingsScreen.files.folderTitle", "Lagringsmappe")}
         icon="folder"
-        desc="Alle opptak havner her som lokale filer."
+        desc={t(
+          "settingsScreen.files.folderDesc",
+          "Alle opptak havner her som lokale filer.",
+        )}
         pad
       >
         <div className="sr-row" style={{ gap: 10, marginTop: 14 }}>
@@ -475,17 +561,22 @@ function TabFiler({ s, update }: TabProps) {
               });
             }}
           >
-            Velg mappe
+            {t("settingsScreen.files.chooseFolder", "Velg mappe")}
           </button>
         </div>
       </Card>
       <Card
-        title="Navnmønster"
-        desc="Programmet gjenkjenner kirkelige høytider og bruker det riktige norske navnet automatisk."
+        title={t("settingsScreen.files.patternTitle", "Navnmønster")}
+        desc={t(
+          "settingsScreen.files.patternDesc",
+          "Programmet gjenkjenner kirkelige høytider og bruker det riktige norske navnet automatisk.",
+        )}
         pad
       >
         <div className="sr-field" style={{ marginTop: 14, maxWidth: 320 }}>
-          <span className="sr-label">Navneformat</span>
+          <span className="sr-label">
+            {t("settingsScreen.files.formatLabel", "Navneformat")}
+          </span>
           {/* SegOpt-style picker would change the layout; keep the native
               select look but drive it from the real filenamePattern field. */}
           <select
@@ -495,18 +586,34 @@ function TabFiler({ s, update }: TabProps) {
               update({ filenamePattern: e.target.value as FilenamePattern })
             }
           >
-            <option value="date">Dato</option>
-            <option value="church">Kirkelig navn + dato</option>
-            <option value="plain">Gudstjeneste + dato</option>
-            <option value="datetime">Dato + klokkeslett</option>
+            <option value="date">
+              {t("settingsScreen.files.patternDate", "Dato")}
+            </option>
+            <option value="church">
+              {t("settingsScreen.files.patternChurch", "Kirkelig navn + dato")}
+            </option>
+            <option value="plain">
+              {t("settingsScreen.files.patternPlain", "Gudstjeneste + dato")}
+            </option>
+            <option value="datetime">
+              {t("settingsScreen.files.patternDatetime", "Dato + klokkeslett")}
+            </option>
           </select>
         </div>
         <div className="sr-field" style={{ marginTop: 14 }}>
-          <span className="sr-label">Forhåndsvisning</span>
+          <span className="sr-label">
+            {t("settingsScreen.files.previewLabel", "Forhåndsvisning")}
+          </span>
           <FilenamePreview s={s} />
         </div>
       </Card>
-      <Card title="Format & kvalitet" pad>
+      <Card
+        title={t(
+          "settingsScreen.files.formatQualityTitle",
+          "Format & kvalitet",
+        )}
+        pad
+      >
         {/* NOTE: `bitrate` is a real Settings field but the redesign exposes no
             bitrate selector (only the MP3/FLAC/WAV format picker below), so it
             stays at its persisted/default value — left static. */}
@@ -514,32 +621,44 @@ function TabFiler({ s, update }: TabProps) {
           <LiveSegOpt
             sel={s.format === "mp3"}
             title="MP3"
-            sub="~85 MB / t · for deling"
+            sub={t("settingsScreen.files.mp3Sub", "~85 MB / t · for deling")}
             onSelect={() => update({ format: "mp3" as FileFormat })}
           />
           <LiveSegOpt
             sel={s.format === "flac"}
             title="FLAC"
-            sub="~300 MB / t · tapsfri"
+            sub={t("settingsScreen.files.flacSub", "~300 MB / t · tapsfri")}
             onSelect={() => update({ format: "flac" as FileFormat })}
           />
           <LiveSegOpt
             sel={s.format === "wav"}
             title="WAV"
-            sub="~635 MB / t · høyest kvalitet"
+            sub={t(
+              "settingsScreen.files.wavSub",
+              "~635 MB / t · høyest kvalitet",
+            )}
             onSelect={() => update({ format: "wav" as FileFormat })}
           />
         </div>
       </Card>
       <Card
-        title="Opptaksoppførsel"
+        title={t("settingsScreen.files.behaviorTitle", "Opptaksoppførsel")}
         icon="shield"
-        desc="Finjuster hvordan opptaket starter, beskyttes og deles opp."
+        desc={t(
+          "settingsScreen.files.behaviorDesc",
+          "Finjuster hvordan opptaket starter, beskyttes og deles opp.",
+        )}
         pad
       >
         <SettingRow
-          title="Slett automatisk gamle opptak"
-          desc="Frigjør diskplass ved å slette opptak eldre enn 90 dager."
+          title={t(
+            "settingsScreen.files.autoDeleteTitle",
+            "Slett automatisk gamle opptak",
+          )}
+          desc={t(
+            "settingsScreen.files.autoDeleteDesc",
+            "Frigjør diskplass ved å slette opptak eldre enn 90 dager.",
+          )}
           control={
             <LiveToggle
               on={s.autoDeleteDays > 0}
@@ -548,8 +667,14 @@ function TabFiler({ s, update }: TabProps) {
           }
         />
         <SettingRow
-          title="Beskytt pågående opptak"
-          desc="Krever bekreftelse for å stoppe et pågående opptak."
+          title={t(
+            "settingsScreen.files.protectTitle",
+            "Beskytt pågående opptak",
+          )}
+          desc={t(
+            "settingsScreen.files.protectDesc",
+            "Krever bekreftelse for å stoppe et pågående opptak.",
+          )}
           control={
             <LiveToggle
               on={s.protectRecording}
@@ -561,8 +686,14 @@ function TabFiler({ s, update }: TabProps) {
             from `stopOnSilence` below) is a real Settings field with no row in
             this redesign — left static. */}
         <SettingRow
-          title="Stopp ved vedvarende stillhet"
-          desc="Avslutter opptaket hvis lyden er stille i mer enn 5 minutter."
+          title={t(
+            "settingsScreen.files.stopSilenceTitle",
+            "Stopp ved vedvarende stillhet",
+          )}
+          desc={t(
+            "settingsScreen.files.stopSilenceDesc",
+            "Avslutter opptaket hvis lyden er stille i mer enn 5 minutter.",
+          )}
           control={
             <LiveToggle
               on={s.stopOnSilence}
@@ -571,8 +702,11 @@ function TabFiler({ s, update }: TabProps) {
           }
         />
         <SettingRow
-          title="Pre-roll buffer"
-          desc="Starter opptak noen sekunder bakover i tid — fanger begynnelsen selv om du trykker litt for sent."
+          title={t("settingsScreen.files.preRollTitle", "Pre-roll buffer")}
+          desc={t(
+            "settingsScreen.files.preRollDesc",
+            "Starter opptak noen sekunder bakover i tid — fanger begynnelsen selv om du trykker litt for sent.",
+          )}
           control={
             <select
               className="sr-select"
@@ -582,15 +716,18 @@ function TabFiler({ s, update }: TabProps) {
                 update({ preRollSeconds: Number(e.target.value) })
               }
             >
-              <option value={0}>Av</option>
+              <option value={0}>{t("settingsScreen.off", "Av")}</option>
               <option value={15}>15 s</option>
               <option value={30}>30 s</option>
             </select>
           }
         />
         <SettingRow
-          title="Del opp filer per time"
-          desc="Lager ny fil for hver time — enklere å redigere etterpå."
+          title={t("settingsScreen.files.splitTitle", "Del opp filer per time")}
+          desc={t(
+            "settingsScreen.files.splitDesc",
+            "Lager ny fil for hver time — enklere å redigere etterpå.",
+          )}
           control={
             <select
               className="sr-select"
@@ -598,7 +735,7 @@ function TabFiler({ s, update }: TabProps) {
               value={s.splitMinutes}
               onChange={(e) => update({ splitMinutes: Number(e.target.value) })}
             >
-              <option value={0}>Av</option>
+              <option value={0}>{t("settingsScreen.off", "Av")}</option>
               <option value={60}>60 min</option>
             </select>
           }
@@ -609,6 +746,7 @@ function TabFiler({ s, update }: TabProps) {
 }
 
 function TabPublisering() {
+  const { t } = useTranslation();
   return (
     <>
       {/* TODO: this tab maps to cloud/publish/streaming subsystems with their
@@ -618,19 +756,30 @@ function TabPublisering() {
           <Icon name="upload" size={18} style={{ color: "var(--sr-gold)" }} />
           <div>
             <div style={{ fontSize: 14.5, fontWeight: 600 }}>
-              Del opptakene utenfor kirken
+              {t(
+                "settingsScreen.publishing.heroTitle",
+                "Del opptakene utenfor kirken",
+              )}
             </div>
             <div className="sr-srow-d">
-              Sett opp automatisk sky-backup og — hvis dere ønsker — en podkast
-              i Spotify og Apple Podcasts. Alt er valgfritt.
+              {t(
+                "settingsScreen.publishing.heroDesc",
+                "Sett opp automatisk sky-backup og — hvis dere ønsker — en podkast i Spotify og Apple Podcasts. Alt er valgfritt.",
+              )}
             </div>
           </div>
         </div>
       </div>
       <Card
-        title="Standard episodebilde"
+        title={t(
+          "settingsScreen.publishing.coverTitle",
+          "Standard episodebilde",
+        )}
         icon="image"
-        desc="Brukes som cover art for alle prekener med mindre du overstyrer per episode."
+        desc={t(
+          "settingsScreen.publishing.coverDesc",
+          "Brukes som cover art for alle prekener med mindre du overstyrer per episode.",
+        )}
         pad
       >
         <div className="sr-row" style={{ gap: 14, marginTop: 14 }}>
@@ -642,33 +791,54 @@ function TabPublisering() {
           </div>
           <div className="sr-grow">
             <div style={{ fontSize: 13.5, fontWeight: 600 }}>
-              Bruker standardbilde
+              {t(
+                "settingsScreen.publishing.usingDefaultImage",
+                "Bruker standardbilde",
+              )}
             </div>
             <div style={{ marginTop: 8 }}>
-              <Badge kind="warn">Cover art bør være kvadratisk (1:1)</Badge>
+              <Badge kind="warn">
+                {t(
+                  "settingsScreen.publishing.coverSquareHint",
+                  "Cover art bør være kvadratisk (1:1)",
+                )}
+              </Badge>
             </div>
             <div className="sr-row" style={{ gap: 8, marginTop: 10 }}>
-              <button className="sr-btn ghost sm">Bytt bilde</button>
-              <button className="sr-btn ghost sm">Fjern</button>
+              <button className="sr-btn ghost sm">
+                {t("settingsScreen.publishing.changeImage", "Bytt bilde")}
+              </button>
+              <button className="sr-btn ghost sm">
+                {t("settingsScreen.publishing.removeImage", "Fjern")}
+              </button>
             </div>
           </div>
         </div>
       </Card>
       <Card
-        title="Sky-backup"
+        title={t("settingsScreen.publishing.cloudTitle", "Sky-backup")}
         icon="drive"
-        desc="Last opp opptakene automatisk til Google Drive — ekstra sikkerhet og enkel deling."
+        desc={t(
+          "settingsScreen.publishing.cloudDesc",
+          "Last opp opptakene automatisk til Google Drive — ekstra sikkerhet og enkel deling.",
+        )}
         pad
       >
         <button className="sr-btn gold block" style={{ marginTop: 14 }}>
           <Icon name="drive" size={16} />
-          Koble til Google Drive
+          {t(
+            "settingsScreen.publishing.connectDrive",
+            "Koble til Google Drive",
+          )}
         </button>
       </Card>
       <Card
-        title="Direktesending"
+        title={t("settingsScreen.publishing.streamTitle", "Direktesending")}
         icon="live"
-        desc="Stream gudstjenester live til YouTube, Facebook eller egen RTMP-server."
+        desc={t(
+          "settingsScreen.publishing.streamDesc",
+          "Stream gudstjenester live til YouTube, Facebook eller egen RTMP-server.",
+        )}
         pad
       >
         <div
@@ -680,25 +850,35 @@ function TabPublisering() {
           }}
         >
           <div className="sr-field">
-            <span className="sr-label">Navn</span>
+            <span className="sr-label">
+              {t("settingsScreen.publishing.nameLabel", "Navn")}
+            </span>
             <div className="sr-input">YouTube · SundayRec</div>
           </div>
           <div className="sr-field">
-            <span className="sr-label">RTMP-URL</span>
+            <span className="sr-label">
+              {t("settingsScreen.publishing.rtmpLabel", "RTMP-URL")}
+            </span>
             <div className="sr-input mono">rtmp://a.rtmp.youtube.com/live2</div>
           </div>
         </div>
         <div className="sr-row" style={{ marginTop: 12 }}>
           <span className="sr-grow" style={{ fontSize: 13.5, fontWeight: 600 }}>
-            Aktivert
+            {t("settingsScreen.publishing.enabled", "Aktivert")}
           </span>
           <Toggle on />
         </div>
       </Card>
       <Card
-        title="Podkast (RSS-feed)"
+        title={t(
+          "settingsScreen.publishing.podcastTitle",
+          "Podkast (RSS-feed)",
+        )}
         icon="list"
-        desc="Genererer en RSS-feed automatisk etter hvert opptak. Send feed-URL-en én gang til Spotify og Apple Podcasts."
+        desc={t(
+          "settingsScreen.publishing.podcastDesc",
+          "Genererer en RSS-feed automatisk etter hvert opptak. Send feed-URL-en én gang til Spotify og Apple Podcasts.",
+        )}
         pad
       >
         <div className="sr-row" style={{ gap: 10, marginTop: 14 }}>
@@ -707,7 +887,7 @@ function TabPublisering() {
           </div>
           <button className="sr-btn ghost">
             <Icon name="link" size={15} />
-            Kopier
+            {t("settingsScreen.publishing.copy", "Kopier")}
           </button>
         </div>
       </Card>
@@ -716,12 +896,23 @@ function TabPublisering() {
 }
 
 function TabVarsler({ s, update }: TabProps) {
+  const { t } = useTranslation();
   return (
     <>
-      <Card title="Systemvarsler" icon="bell" pad>
+      <Card
+        title={t("settingsScreen.notifications.systemTitle", "Systemvarsler")}
+        icon="bell"
+        pad
+      >
         <SettingRow
-          title="Varsel når opptak starter"
-          desc="Vises som systemvarsel når en planlagt session begynner."
+          title={t(
+            "settingsScreen.notifications.onStartTitle",
+            "Varsel når opptak starter",
+          )}
+          desc={t(
+            "settingsScreen.notifications.onStartDesc",
+            "Vises som systemvarsel når en planlagt session begynner.",
+          )}
           control={
             <LiveToggle
               on={s.notifyStart}
@@ -730,8 +921,14 @@ function TabVarsler({ s, update }: TabProps) {
           }
         />
         <SettingRow
-          title="Varsel når opptak avsluttes"
-          desc="Klikk varselet for å gå rett til filen."
+          title={t(
+            "settingsScreen.notifications.onStopTitle",
+            "Varsel når opptak avsluttes",
+          )}
+          desc={t(
+            "settingsScreen.notifications.onStopDesc",
+            "Klikk varselet for å gå rett til filen.",
+          )}
           control={
             <LiveToggle
               on={s.notifyStop}
@@ -740,8 +937,14 @@ function TabVarsler({ s, update }: TabProps) {
           }
         />
         <SettingRow
-          title="Påminnelse før opptak"
-          desc="Systemvarsel N minutter før planlagt opptak starter."
+          title={t(
+            "settingsScreen.notifications.reminderTitle",
+            "Påminnelse før opptak",
+          )}
+          desc={t(
+            "settingsScreen.notifications.reminderDesc",
+            "Systemvarsel N minutter før planlagt opptak starter.",
+          )}
           control={
             <select
               className="sr-select"
@@ -751,23 +954,65 @@ function TabVarsler({ s, update }: TabProps) {
                 update({ reminderMinutes: Number(e.target.value) })
               }
             >
-              <option value={0}>Av</option>
-              <option value={5}>5 min før</option>
-              <option value={10}>10 min før</option>
-              <option value={15}>15 min før</option>
-              <option value={30}>30 min før</option>
+              <option value={0}>{t("settingsScreen.off", "Av")}</option>
+              <option value={5}>
+                {t(
+                  "settingsScreen.notifications.minBefore",
+                  "{{count}} min før",
+                  {
+                    count: 5,
+                  },
+                )}
+              </option>
+              <option value={10}>
+                {t(
+                  "settingsScreen.notifications.minBefore",
+                  "{{count}} min før",
+                  {
+                    count: 10,
+                  },
+                )}
+              </option>
+              <option value={15}>
+                {t(
+                  "settingsScreen.notifications.minBefore",
+                  "{{count}} min før",
+                  {
+                    count: 15,
+                  },
+                )}
+              </option>
+              <option value={30}>
+                {t(
+                  "settingsScreen.notifications.minBefore",
+                  "{{count}} min før",
+                  {
+                    count: 30,
+                  },
+                )}
+              </option>
             </select>
           }
         />
       </Card>
-      <Card title="E-postvarsler" icon="mail" pad>
+      <Card
+        title={t("settingsScreen.notifications.emailTitle", "E-postvarsler")}
+        icon="mail"
+        pad
+      >
         {/* NOTE: `emailSmtp` / `emailSmtpPort` / `emailSmtpUser` are real
             Settings fields but this redesign has no SMTP host/port/user inputs
             (only the recipient). Wiring them would require adding controls and
             changing the layout, which is out of scope here — left static. */}
         <SettingRow
-          title="Send e-post ved feil"
-          desc="Sender e-post til ansvarlig hvis opptaket mislykkes."
+          title={t(
+            "settingsScreen.notifications.emailOnErrorTitle",
+            "Send e-post ved feil",
+          )}
+          desc={t(
+            "settingsScreen.notifications.emailOnErrorDesc",
+            "Sender e-post til ansvarlig hvis opptaket mislykkes.",
+          )}
           control={
             <LiveToggle
               on={s.emailOnError}
@@ -776,7 +1021,9 @@ function TabVarsler({ s, update }: TabProps) {
           }
         />
         <div className="sr-field" style={{ marginTop: 8 }}>
-          <span className="sr-label">Mottaker</span>
+          <span className="sr-label">
+            {t("settingsScreen.notifications.recipientLabel", "Mottaker")}
+          </span>
           <input
             className="sr-input mono"
             type="email"
@@ -787,13 +1034,21 @@ function TabVarsler({ s, update }: TabProps) {
         </div>
       </Card>
       <Card
-        title="Webhook (Slack / Discord / Teams)"
+        title={t(
+          "settingsScreen.notifications.webhookTitle",
+          "Webhook (Slack / Discord / Teams)",
+        )}
         icon="webhook"
-        desc="Send varsler til en chat-kanal i tillegg til e-post."
+        desc={t(
+          "settingsScreen.notifications.webhookDesc",
+          "Send varsler til en chat-kanal i tillegg til e-post.",
+        )}
         pad
       >
         <div className="sr-field" style={{ marginTop: 14 }}>
-          <span className="sr-label">Webhook-URL</span>
+          <span className="sr-label">
+            {t("settingsScreen.notifications.webhookUrlLabel", "Webhook-URL")}
+          </span>
           <input
             className="sr-input mono"
             type="url"
@@ -804,8 +1059,14 @@ function TabVarsler({ s, update }: TabProps) {
         </div>
         <div style={{ marginTop: 6 }}>
           <SettingRow
-            title="Send også på advarsler"
-            desc="Som standard sendes kun feilmeldinger."
+            title={t(
+              "settingsScreen.notifications.webhookWarningTitle",
+              "Send også på advarsler",
+            )}
+            desc={t(
+              "settingsScreen.notifications.webhookWarningDesc",
+              "Som standard sendes kun feilmeldinger.",
+            )}
             control={
               <LiveToggle
                 on={s.webhookOnWarning}
@@ -815,7 +1076,7 @@ function TabVarsler({ s, update }: TabProps) {
           />
         </div>
         <button className="sr-btn ghost sm" style={{ marginTop: 12 }}>
-          Test webhook
+          {t("settingsScreen.notifications.testWebhook", "Test webhook")}
         </button>
       </Card>
     </>
@@ -823,6 +1084,7 @@ function TabVarsler({ s, update }: TabProps) {
 }
 
 function TabSystem({ s, update }: TabProps) {
+  const { t } = useTranslation();
   const currentLng =
     s.language && (SUPPORTED_LNGS as readonly string[]).includes(s.language)
       ? s.language
@@ -830,13 +1092,18 @@ function TabSystem({ s, update }: TabProps) {
   return (
     <>
       <Card
-        title="Språk"
+        title={t("settingsScreen.system.languageTitle", "Språk")}
         icon="globe"
-        desc="SundayRec støtter syv språk — alle menyer og varsler tilpasses umiddelbart."
+        desc={t(
+          "settingsScreen.system.languageDesc",
+          "SundayRec støtter syv språk — alle menyer og varsler tilpasses umiddelbart.",
+        )}
         pad
       >
         <div className="sr-field" style={{ marginTop: 14, maxWidth: 260 }}>
-          <span className="sr-label">Appspråk</span>
+          <span className="sr-label">
+            {t("settingsScreen.system.appLanguageLabel", "Appspråk")}
+          </span>
           <select
             className="sr-select"
             value={currentLng}
@@ -855,13 +1122,18 @@ function TabSystem({ s, update }: TabProps) {
         </div>
       </Card>
       <Card
-        title="Kirkeprofil"
+        title={t("settingsScreen.system.churchProfileTitle", "Kirkeprofil")}
         icon="church"
-        desc="Brukes i filnavn, varslings-e-poster og podkast-RSS."
+        desc={t(
+          "settingsScreen.system.churchProfileDesc",
+          "Brukes i filnavn, varslings-e-poster og podkast-RSS.",
+        )}
         pad
       >
         <div className="sr-field" style={{ marginTop: 14 }}>
-          <span className="sr-label">Menighet / kirke</span>
+          <span className="sr-label">
+            {t("settingsScreen.system.churchNameLabel", "Menighet / kirke")}
+          </span>
           <input
             className="sr-input"
             type="text"
@@ -871,7 +1143,12 @@ function TabSystem({ s, update }: TabProps) {
           />
         </div>
         <div className="sr-field" style={{ marginTop: 14 }}>
-          <span className="sr-label">Ansvarlig person</span>
+          <span className="sr-label">
+            {t(
+              "settingsScreen.system.responsiblePersonLabel",
+              "Ansvarlig person",
+            )}
+          </span>
           <input
             className="sr-input"
             type="text"
@@ -881,14 +1158,24 @@ function TabSystem({ s, update }: TabProps) {
           />
         </div>
       </Card>
-      <Card title="System" icon="gear" pad>
+      <Card
+        title={t("settingsScreen.system.systemTitle", "System")}
+        icon="gear"
+        pad
+      >
         {/* NOTE: `minimizeToTray` and `wakeFromSleep` are real Settings fields
             with no matching row in this redesign's System card (only
             launch-at-login / show-on-startup / ask-open-editor). Adding rows
             would alter the layout, so they're left static here. */}
         <SettingRow
-          title="Start automatisk med Windows / Mac"
-          desc="Kjører stille i bakgrunnen — ingen handling nødvendig."
+          title={t(
+            "settingsScreen.system.launchTitle",
+            "Start automatisk med Windows / Mac",
+          )}
+          desc={t(
+            "settingsScreen.system.launchDesc",
+            "Kjører stille i bakgrunnen — ingen handling nødvendig.",
+          )}
           control={
             <LiveToggle
               on={s.launchAtLogin}
@@ -897,8 +1184,14 @@ function TabSystem({ s, update }: TabProps) {
           }
         />
         <SettingRow
-          title="Vis vindu ved oppstart"
-          desc="Åpner vinduet automatisk. Ellers starter det diskret i systemfeltet."
+          title={t(
+            "settingsScreen.system.showOnStartupTitle",
+            "Vis vindu ved oppstart",
+          )}
+          desc={t(
+            "settingsScreen.system.showOnStartupDesc",
+            "Åpner vinduet automatisk. Ellers starter det diskret i systemfeltet.",
+          )}
           control={
             <LiveToggle
               on={s.showOnStartup}
@@ -907,8 +1200,14 @@ function TabSystem({ s, update }: TabProps) {
           }
         />
         <SettingRow
-          title="Spør om redigering etter opptak"
-          desc="Foreslår å åpne filen i Rediger når opptaket er fullført."
+          title={t(
+            "settingsScreen.system.askEditorTitle",
+            "Spør om redigering etter opptak",
+          )}
+          desc={t(
+            "settingsScreen.system.askEditorDesc",
+            "Foreslår å åpne filen i Rediger når opptaket er fullført.",
+          )}
           control={
             <LiveToggle
               on={s.askOpenEditor}
@@ -917,7 +1216,11 @@ function TabSystem({ s, update }: TabProps) {
           }
         />
       </Card>
-      <Card title="Oppdateringer" icon="update" pad>
+      <Card
+        title={t("settingsScreen.system.updatesTitle", "Oppdateringer")}
+        icon="update"
+        pad
+      >
         <div className="sr-row" style={{ marginTop: 4 }}>
           <span className="sr-grow sr-row" style={{ gap: 10 }}>
             <Badge kind="muted">v5.0.0</Badge>
@@ -933,15 +1236,23 @@ function TabSystem({ s, update }: TabProps) {
                   background: "var(--sr-green)",
                 }}
               />
-              Du er oppdatert
+              {t("settingsScreen.system.upToDate", "Du er oppdatert")}
             </span>
           </span>
-          <button className="sr-btn ghost sm">Se etter oppdateringer</button>
+          <button className="sr-btn ghost sm">
+            {t("settingsScreen.system.checkUpdates", "Se etter oppdateringer")}
+          </button>
         </div>
         <div style={{ marginTop: 4 }}>
           <SettingRow
-            title="Oppdater automatisk"
-            desc="Laster ned og installerer nye versjoner stille i bakgrunnen."
+            title={t(
+              "settingsScreen.system.autoUpdateTitle",
+              "Oppdater automatisk",
+            )}
+            desc={t(
+              "settingsScreen.system.autoUpdateDesc",
+              "Laster ned og installerer nye versjoner stille i bakgrunnen.",
+            )}
             control={
               <LiveToggle
                 on={s.autoUpdate}
@@ -951,9 +1262,16 @@ function TabSystem({ s, update }: TabProps) {
           />
         </div>
       </Card>
-      <Card title="Hjelp og opplæring" icon="info" pad>
+      <Card
+        title={t("settingsScreen.system.helpTitle", "Hjelp og opplæring")}
+        icon="info"
+        pad
+      >
         <button className="sr-btn ghost" style={{ marginTop: 4 }}>
-          Åpne oppstartsveileder på nytt
+          {t(
+            "settingsScreen.system.reopenGuide",
+            "Åpne oppstartsveileder på nytt",
+          )}
         </button>
       </Card>
     </>
@@ -973,6 +1291,7 @@ function SuiteRow({
 }
 
 function TabSuite() {
+  const { t } = useTranslation();
   return (
     <>
       {/* TODO: Sunday-suite integration switches/church_id are owned by the
@@ -980,52 +1299,99 @@ function TabSuite() {
       <Card
         title="Sunday-suite"
         icon="sparkle"
-        desc="Koble SundayRec til søsterappene i Sunday-suiten. Alt er valgfritt og av som standard — SundayRec fungerer akkurat som før uten dette."
+        desc={t(
+          "settingsScreen.suite.introDesc",
+          "Koble SundayRec til søsterappene i Sunday-suiten. Alt er valgfritt og av som standard — SundayRec fungerer akkurat som før uten dette.",
+        )}
         pad
       >
         <div style={{ marginTop: 6 }}>
           <SettingRow
-            title="Aktiver Sunday-suite-integrasjoner"
-            desc="Hovedbryter. Når den er av kjøres ingen integrasjonskode."
+            title={t(
+              "settingsScreen.suite.enableTitle",
+              "Aktiver Sunday-suite-integrasjoner",
+            )}
+            desc={t(
+              "settingsScreen.suite.enableDesc",
+              "Hovedbryter. Når den er av kjøres ingen integrasjonskode.",
+            )}
             control={<Toggle />}
           />
         </div>
       </Card>
-      <Card title="Integrasjoner" pad>
+      <Card
+        title={t("settingsScreen.suite.integrationsTitle", "Integrasjoner")}
+        pad
+      >
         <SuiteRow
-          name="Verbatim — pro-teksting"
-          desc="Send et videoopptak til Verbatim for profesjonell teksting; kommer tilbake som transkripsjon."
+          name={t(
+            "settingsScreen.suite.verbatimName",
+            "Verbatim — pro-teksting",
+          )}
+          desc={t(
+            "settingsScreen.suite.verbatimDesc",
+            "Send et videoopptak til Verbatim for profesjonell teksting; kommer tilbake som transkripsjon.",
+          )}
         />
         <SuiteRow
-          name="SundaySong — CCLI/TONO-rapportering"
-          desc="Send sanglisten til SundaySong for automatiske lisensrapporter."
+          name={t(
+            "settingsScreen.suite.songName",
+            "SundaySong — CCLI/TONO-rapportering",
+          )}
+          desc={t(
+            "settingsScreen.suite.songDesc",
+            "Send sanglisten til SundaySong for automatiske lisensrapporter.",
+          )}
         />
         <SuiteRow
-          name="SundayPlan — tjeneste-bevisst opptak"
-          desc="Henter kommende tjenester og fyller inn tittel og taler automatisk."
+          name={t(
+            "settingsScreen.suite.planName",
+            "SundayPlan — tjeneste-bevisst opptak",
+          )}
+          desc={t(
+            "settingsScreen.suite.planDesc",
+            "Henter kommende tjenester og fyller inn tittel og taler automatisk.",
+          )}
         />
         <SuiteRow
-          name="SundayStage — auto-kapitler"
-          desc="Importer Stage sin cue-logg for å sette kapittelmarkører automatisk."
+          name={t(
+            "settingsScreen.suite.stageName",
+            "SundayStage — auto-kapitler",
+          )}
+          desc={t(
+            "settingsScreen.suite.stageDesc",
+            "Importer Stage sin cue-logg for å sette kapittelmarkører automatisk.",
+          )}
         />
       </Card>
       <Card
-        title="Tilkobling"
+        title={t("settingsScreen.suite.connectionTitle", "Tilkobling")}
         icon="link"
-        desc="Delte felt brukt av Song- og Plan-integrasjonene."
+        desc={t(
+          "settingsScreen.suite.connectionDesc",
+          "Delte felt brukt av Song- og Plan-integrasjonene.",
+        )}
         pad
       >
         <div className="sr-field" style={{ marginTop: 14 }}>
-          <span className="sr-label">Menighets-ID (church_id)</span>
+          <span className="sr-label">
+            {t(
+              "settingsScreen.suite.churchIdLabel",
+              "Menighets-ID (church_id)",
+            )}
+          </span>
           <div
             className="sr-input mono"
             style={{ color: "var(--sr-text-dim)" }}
           >
-            UUID fra SundaySong / SundayPlan
+            {t(
+              "settingsScreen.suite.churchIdHint",
+              "UUID fra SundaySong / SundayPlan",
+            )}
           </div>
         </div>
         <button className="sr-btn ghost sm" style={{ marginTop: 14 }}>
-          Lagre tilkobling
+          {t("settingsScreen.suite.saveConnection", "Lagre tilkobling")}
         </button>
       </Card>
     </>
@@ -1033,6 +1399,7 @@ function TabSuite() {
 }
 
 export function SettingsScreen() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<TabId>("lydkilde");
   const queryClient = useQueryClient();
 
@@ -1067,9 +1434,14 @@ export function SettingsScreen() {
   return (
     <div className="sr-content cozy">
       <div className="sr-pagehead">
-        <div className="sr-pagetitle">Innstillinger</div>
+        <div className="sr-pagetitle">
+          {t("settingsScreen.pageTitle", "Innstillinger")}
+        </div>
         <div className="sr-pagesub">
-          Alt det avanserte bor her — samlet, sentrert og rolig.
+          {t(
+            "settingsScreen.pageSubtitle",
+            "Alt det avanserte bor her — samlet, sentrert og rolig.",
+          )}
         </div>
       </div>
       <div style={{ marginBottom: 22, overflow: "auto" }}>
@@ -1080,7 +1452,7 @@ export function SettingsScreen() {
               className={"sr-tab" + (tab === id ? " is-active" : "")}
               onClick={() => setTab(id)}
             >
-              {label}
+              {t(`settingsScreen.${TAB_LABEL_KEYS[id]}`, label)}
             </div>
           ))}
         </div>

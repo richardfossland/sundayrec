@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import { Icon } from "../Icon";
 import { Badge, DeviceCard, Meter, ReadyChip, Toggle } from "../atoms";
@@ -37,6 +38,7 @@ import type { ScheduleStatus } from "@/lib/bindings/ScheduleStatus";
 import type { Settings } from "@/lib/bindings/Settings";
 
 function TrustBanner() {
+  const { t } = useTranslation();
   const { data: status } = useQuery<ScheduleStatus>({
     queryKey: ["scheduler_status"],
     queryFn: () => invoke<ScheduleStatus>("scheduler_status"),
@@ -61,7 +63,7 @@ function TrustBanner() {
       </div>
       <div className="sr-grow">
         <div className="sr-label" style={{ color: "var(--sr-green)" }}>
-          Klar for opptak
+          {t("homeScreen.readyForRecording", "Klar for opptak")}
         </div>
         <div
           style={{
@@ -71,7 +73,7 @@ function TrustBanner() {
             marginTop: 2,
           }}
         >
-          Alt er klart
+          {t("homeScreen.allReady", "Alt er klart")}
         </div>
       </div>
       <div
@@ -81,7 +83,9 @@ function TrustBanner() {
           paddingLeft: 22,
         }}
       >
-        <div className="sr-label">Neste opptak</div>
+        <div className="sr-label">
+          {t("homeScreen.nextRecording", "Neste opptak")}
+        </div>
         <div
           style={{
             fontSize: 18,
@@ -90,13 +94,13 @@ function TrustBanner() {
             marginTop: 2,
           }}
         >
-          {nextDate ?? "Alt er klart"}
+          {nextDate ?? t("homeScreen.allReady", "Alt er klart")}
         </div>
         {nextTime && (
           <div
             style={{ fontSize: 12.5, color: "var(--sr-text-3)", marginTop: 2 }}
           >
-            kl. {nextTime}
+            {t("homeScreen.atTime", "kl. {{time}}", { time: nextTime })}
           </div>
         )}
       </div>
@@ -113,6 +117,7 @@ function RecordRow({
   onRecord?: () => void;
   onToggleVideo: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div
       className="sr-row"
@@ -124,7 +129,7 @@ function RecordRow({
         onClick={onRecord}
       >
         <span className="dot" />
-        Start opptak nå
+        {t("homeScreen.startRecordingNow", "Start opptak nå")}
       </button>
       <button
         className="sr-card"
@@ -151,7 +156,9 @@ function RecordRow({
             color: video ? "var(--sr-text)" : "var(--sr-text-2)",
           }}
         >
-          {video ? "Video på" : "Video av"}
+          {video
+            ? t("homeScreen.videoOn", "Video på")
+            : t("homeScreen.videoOff", "Video av")}
         </span>
         <Toggle on={video} />
       </button>
@@ -230,6 +237,7 @@ export function HomeScreen({
 }: {
   onRecord?: (video: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { data: settings } = useQuery<Settings>({
     queryKey: SETTINGS_QUERY_KEY,
@@ -292,7 +300,12 @@ export function HomeScreen({
   const hasInput = (devices?.inputs.length ?? 0) > 0;
   const hasVideoDevice = videoDevices.length > 0;
   const freeBytes = useDiskSpace();
-  const diskV = freeBytes != null ? `${formatBytes(freeBytes)} ledig` : null;
+  const diskV =
+    freeBytes != null
+      ? t("homeScreen.diskFree", "{{size}} ledig", {
+          size: formatBytes(freeBytes),
+        })
+      : null;
   const diskOk = freeBytes != null && freeBytes > DISK_LOW_BYTES;
 
   // Network readiness (live).
@@ -311,7 +324,7 @@ export function HomeScreen({
   }, []);
 
   // Storage estimate + bar derived from real free space.
-  const storageMeta = storageEstimateLabel(freeBytes, video);
+  const storageMeta = storageEstimateLabel(freeBytes, video, t);
   const diskPct = diskUsedPercent(freeBytes);
   const cameraName = selectedCamera?.name ?? null;
 
@@ -350,7 +363,7 @@ export function HomeScreen({
               />
               <select
                 className="sr-select"
-                aria-label="Velg kamera"
+                aria-label={t("homeScreen.selectCamera", "Velg kamera")}
                 value={cameraName ?? ""}
                 onChange={(e) => onCameraChange(e.target.value)}
                 style={{
@@ -364,7 +377,9 @@ export function HomeScreen({
                 ) : (
                   <>
                     {cameraName == null && (
-                      <option value="">Velg kamera</option>
+                      <option value="">
+                        {t("homeScreen.selectCamera", "Velg kamera")}
+                      </option>
                     )}
                     {videoDevices.map((d) => (
                       <option key={d.name} value={d.name}>
@@ -379,7 +394,7 @@ export function HomeScreen({
               </button>
               <div className="sr-grow" />
               <Badge kind="err" dot>
-                ● Live
+                {t("homeScreen.liveBadge", "● Live")}
               </Badge>
             </div>
             <div
@@ -389,7 +404,10 @@ export function HomeScreen({
               {preview.dataUrl ? (
                 <img
                   src={preview.dataUrl}
-                  alt="kamera-forhåndsvisning"
+                  alt={t(
+                    "homeScreen.cameraPreviewAlt",
+                    "kamera-forhåndsvisning",
+                  )}
                   style={{
                     width: "100%",
                     height: "100%",
@@ -398,7 +416,10 @@ export function HomeScreen({
                   }}
                 />
               ) : (
-                "kamera-forhåndsvisning · 16:9"
+                t(
+                  "homeScreen.cameraPreviewPlaceholder",
+                  "kamera-forhåndsvisning · 16:9",
+                )
               )}
             </div>
             <div
@@ -410,7 +431,7 @@ export function HomeScreen({
               }}
             >
               <span className="sr-label" style={{ flex: "0 0 auto" }}>
-                Lydnivå
+                {t("homeScreen.audioLevel", "Lydnivå")}
               </span>
               <div className="sr-grow">
                 <Meter on={peakL != null ? dbfsToLit(peakL, 14) : 5} />
@@ -443,13 +464,13 @@ export function HomeScreen({
                 className="sr-grow"
                 style={{ fontSize: 14.5, fontWeight: 600 }}
               >
-                Lydnivå — live
+                {t("homeScreen.audioLevelLive", "Lydnivå — live")}
               </span>
               <span
                 className="sr-mono sr-num"
                 style={{ fontSize: 12.5, color: "var(--sr-text-3)" }}
               >
-                Maks:{" "}
+                {t("homeScreen.maxLabel", "Maks:")}{" "}
                 {peakMax != null && Number.isFinite(peakMax)
                   ? formatDbfs(peakMax)
                   : "−38.1"}{" "}
@@ -477,11 +498,11 @@ export function HomeScreen({
                   padding: "0 26px",
                 }}
               >
-                <span>Stille</span>
+                <span>{t("homeScreen.scaleSilent", "Stille")}</span>
                 <span>−24</span>
                 <span>−12</span>
                 <span>−6</span>
-                <span>Maks</span>
+                <span>{t("homeScreen.scaleMax", "Maks")}</span>
               </div>
             </div>
             <div
@@ -509,10 +530,10 @@ export function HomeScreen({
                   cursor: "pointer",
                 }}
               >
-                Test og sjekk system →
+                {t("homeScreen.testAndCheckSystem", "Test og sjekk system →")}
               </a>
               <span style={{ fontSize: 12.5, color: "var(--sr-text-3)" }}>
-                Opptak blir kun lyd · WAV
+                {t("homeScreen.audioOnlyWav", "Opptak blir kun lyd · WAV")}
               </span>
             </div>
           </div>
@@ -522,25 +543,34 @@ export function HomeScreen({
         <div className="sr-stack-3">
           <div className="sr-card pad" style={{ padding: 16 }}>
             <div className="sr-label" style={{ marginBottom: 11 }}>
-              Klar til opptak
+              {t("homeScreen.readyToRecord", "Klar til opptak")}
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-              <ReadyChip ok={hasInput} label="Lyd" />
+              <ReadyChip
+                ok={hasInput}
+                label={t("homeScreen.chipAudio", "Lyd")}
+              />
               {video && (
-                <ReadyChip ok={hasVideoDevice && video} label="Kamera" />
+                <ReadyChip
+                  ok={hasVideoDevice && video}
+                  label={t("homeScreen.chipCamera", "Kamera")}
+                />
               )}
-              <ReadyChip ok={diskOk} label="Disk" />
-              <ReadyChip ok={online} label="Nett" />
+              <ReadyChip ok={diskOk} label={t("homeScreen.chipDisk", "Disk")} />
+              <ReadyChip
+                ok={online}
+                label={t("homeScreen.chipNetwork", "Nett")}
+              />
             </div>
           </div>
           <DeviceCard
             icon="mic"
-            k="Lydkilde"
+            k={t("homeScreen.cardAudioSource", "Lydkilde")}
             v={micName ?? "MacBook Pro-mikrofon"}
             meta={micMeta ?? "Innebygd · stereo · 48 kHz"}
             badge={
               <Badge kind="ok" dot>
-                Tilkoblet
+                {t("homeScreen.connected", "Tilkoblet")}
               </Badge>
             }
           />
@@ -548,19 +578,23 @@ export function HomeScreen({
             <>
               <DeviceCard
                 icon="camera"
-                k="Kamera"
+                k={t("homeScreen.chipCamera", "Kamera")}
                 v={cameraName ?? "FaceTime HD-kamera"}
-                meta={cameraName ? "Kilde konfigurert" : "Velg kamera"}
+                meta={
+                  cameraName
+                    ? t("homeScreen.sourceConfigured", "Kilde konfigurert")
+                    : t("homeScreen.selectCamera", "Velg kamera")
+                }
               />
               <DeviceCard
                 icon="gear"
-                k="Videokvalitet"
+                k={t("homeScreen.cardVideoQuality", "Videokvalitet")}
                 v="720p · 30 fps"
-                meta="Kombinert MP4"
+                meta={t("homeScreen.combinedMp4", "Kombinert MP4")}
               />
               <DeviceCard
                 icon="disk"
-                k="Lagring"
+                k={t("homeScreen.cardStorage", "Lagring")}
                 v={diskV ?? "569 GB ledig"}
                 meta={storageMeta ?? "~38 timer opptak igjen"}
                 progress={diskPct ?? undefined}
@@ -570,13 +604,16 @@ export function HomeScreen({
             <>
               <DeviceCard
                 icon="file"
-                k="Format"
+                k={t("homeScreen.cardFormat", "Format")}
                 v="WAV"
-                meta="Stereo · 48 kHz · høyest kvalitet"
+                meta={t(
+                  "homeScreen.formatMeta",
+                  "Stereo · 48 kHz · høyest kvalitet",
+                )}
               />
               <DeviceCard
                 icon="disk"
-                k="Lagring"
+                k={t("homeScreen.cardStorage", "Lagring")}
                 v={diskV ?? "569 GB ledig"}
                 meta={storageMeta ?? "~95 timer kun-lyd igjen"}
                 progress={diskPct ?? undefined}

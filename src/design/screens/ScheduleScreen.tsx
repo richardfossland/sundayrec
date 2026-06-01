@@ -9,12 +9,12 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import { Icon } from "../Icon";
 import { Badge, Card } from "../atoms";
 import {
   MONTH_NAMES,
-  WEEKDAY_SHORT,
   buildMonthEvents,
   buildWeeksFor,
   emptySlot,
@@ -88,12 +88,17 @@ function CalCell({
   today: boolean;
   onClick?: () => void;
 }) {
+  const { t } = useTranslation();
   const evs = day ? events : [];
   const clickable = day != null && onClick != null;
   return (
     <div
       onClick={clickable ? onClick : undefined}
-      title={clickable ? "Legg til spesialopptak" : undefined}
+      title={
+        clickable
+          ? t("scheduleScreen.addSpecialTitle", "Legg til spesialopptak")
+          : undefined
+      }
       style={{
         minHeight: 86,
         padding: 8,
@@ -173,7 +178,16 @@ function CalCell({
 }
 
 export function ScheduleScreen() {
-  const dows = ["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"];
+  const { t } = useTranslation();
+  const dows = [
+    t("scheduleScreen.dowMon", "Man"),
+    t("scheduleScreen.dowTue", "Tir"),
+    t("scheduleScreen.dowWed", "Ons"),
+    t("scheduleScreen.dowThu", "Tor"),
+    t("scheduleScreen.dowFri", "Fre"),
+    t("scheduleScreen.dowSat", "Lør"),
+    t("scheduleScreen.dowSun", "Søn"),
+  ];
   const queryClient = useQueryClient();
 
   // Live data — same query keys as SchedulePage / WakePanel so the cache is
@@ -319,7 +333,11 @@ export function ScheduleScreen() {
     ? buildMonthEvents(year, month, slots, specials)
     : null;
   const weeks = liveWeeks ?? buildSampleWeeks();
-  const monthLabel = haveLive ? `${MONTH_NAMES[month]} ${year}` : "Mai 2026";
+  const monthName = t(
+    `scheduleScreen.month.${month}` as const,
+    MONTH_NAMES[month] ?? "",
+  );
+  const monthLabel = haveLive ? `${monthName} ${year}` : "Mai 2026";
 
   const eventsForDay = (day: number | null): { t: string; k: EvKind }[] => {
     if (!day) return [];
@@ -333,10 +351,14 @@ export function ScheduleScreen() {
   return (
     <div className="sr-content wide">
       <div className="sr-pagehead">
-        <div className="sr-pagetitle">Tidsplan</div>
+        <div className="sr-pagetitle">
+          {t("scheduleScreen.pageTitle", "Tidsplan")}
+        </div>
         <div className="sr-pagesub">
-          Faste opptak som gjentas automatisk — maskinen starter og stopper
-          selv, også når ingen er til stede.
+          {t(
+            "scheduleScreen.pageSubtitle",
+            "Faste opptak som gjentas automatisk — maskinen starter og stopper selv, også når ingen er til stede.",
+          )}
         </div>
       </div>
 
@@ -355,7 +377,7 @@ export function ScheduleScreen() {
               className="sr-btn ghost sm"
               onClick={() => goMonth(-1)}
               disabled={!haveLive}
-              title="Forrige måned"
+              title={t("scheduleScreen.prevMonth", "Forrige måned")}
             >
               <Icon
                 name="chevR"
@@ -368,7 +390,7 @@ export function ScheduleScreen() {
               onClick={goToday}
               disabled={!haveLive}
             >
-              I dag
+              {t("scheduleScreen.today", "I dag")}
             </button>
             <div
               className="sr-grow"
@@ -383,13 +405,13 @@ export function ScheduleScreen() {
               style={{ color: "var(--sr-gold-bright)" }}
             >
               <Icon name="sparkle" size={14} />
-              Kirkehøytider
+              {t("scheduleScreen.churchFeasts", "Kirkehøytider")}
             </button>
             <button
               className="sr-btn ghost sm"
               onClick={() => goMonth(1)}
               disabled={!haveLive}
-              title="Neste måned"
+              title={t("scheduleScreen.nextMonth", "Neste måned")}
             >
               <Icon name="chevR" size={14} />
             </button>
@@ -441,9 +463,18 @@ export function ScheduleScreen() {
           </div>
           <div className="sr-row" style={{ gap: 18, marginTop: 14 }}>
             {[
-              ["Ukentlig opptak", "var(--sr-gold)"],
-              ["Spesialopptak", "var(--sr-red)"],
-              ["Kirkehøytid", "var(--sr-blue)"],
+              [
+                t("scheduleScreen.legendWeekly", "Ukentlig opptak"),
+                "var(--sr-gold)",
+              ],
+              [
+                t("scheduleScreen.legendSpecial", "Spesialopptak"),
+                "var(--sr-red)",
+              ],
+              [
+                t("scheduleScreen.legendFeast", "Kirkehøytid"),
+                "var(--sr-blue)",
+              ],
             ].map(([label, c]) => (
               <span
                 key={label}
@@ -489,11 +520,20 @@ export function ScheduleScreen() {
                   color: "var(--sr-gold-bright)",
                 }}
               >
-                Klikk på en dag for å legge til opptak
+                {t(
+                  "scheduleScreen.clickDayHint",
+                  "Klikk på en dag for å legge til opptak",
+                )}
               </span>
             </div>
           </div>
-          <Card title="Planlagte spesialopptak" pad>
+          <Card
+            title={t(
+              "scheduleScreen.plannedSpecials",
+              "Planlagte spesialopptak",
+            )}
+            pad
+          >
             {specials.length === 0 ? (
               <div
                 style={{
@@ -504,7 +544,12 @@ export function ScheduleScreen() {
                 }}
               >
                 <Icon name="calendar" size={26} style={{ opacity: 0.4 }} />
-                <div style={{ marginTop: 8 }}>Ingen kommende spesialopptak</div>
+                <div style={{ marginTop: 8 }}>
+                  {t(
+                    "scheduleScreen.noUpcomingSpecials",
+                    "Ingen kommende spesialopptak",
+                  )}
+                </div>
               </div>
             ) : (
               <div
@@ -523,7 +568,8 @@ export function ScheduleScreen() {
                   >
                     <div className="sr-grow">
                       <div style={{ fontSize: 13.5, fontWeight: 600 }}>
-                        {sp.name || "Spesialopptak"}
+                        {sp.name ||
+                          t("scheduleScreen.specialFallback", "Spesialopptak")}
                       </div>
                       <div
                         style={{
@@ -540,7 +586,10 @@ export function ScheduleScreen() {
                       style={{ padding: 7, flex: "0 0 auto" }}
                       onClick={() => removeSpecial(i)}
                       disabled={!haveLive}
-                      title="Fjern spesialopptak"
+                      title={t(
+                        "scheduleScreen.removeSpecial",
+                        "Fjern spesialopptak",
+                      )}
                     >
                       <Icon name="x" size={14} />
                     </button>
@@ -556,11 +605,13 @@ export function ScheduleScreen() {
       <div className="sr-card pad" style={{ marginTop: 16 }}>
         <div className="sr-card-title" style={{ marginBottom: 6 }}>
           <Icon name="clock" size={17} />
-          Ukentlig tidsplan
+          {t("scheduleScreen.weeklyTitle", "Ukentlig tidsplan")}
         </div>
         <div className="sr-card-desc" style={{ marginBottom: 16 }}>
-          Faste opptak som gjentas hver uke — for eksempel gudstjeneste hver
-          søndag.
+          {t(
+            "scheduleScreen.weeklyDesc",
+            "Faste opptak som gjentas hver uke — for eksempel gudstjeneste hver søndag.",
+          )}
         </div>
         {slots.length === 0 ? (
           <div
@@ -573,7 +624,10 @@ export function ScheduleScreen() {
           >
             <Icon name="clock" size={26} style={{ opacity: 0.4 }} />
             <div style={{ marginTop: 8 }}>
-              Ingen ukentlige opptak ennå. Legg til et tidspunkt under.
+              {t(
+                "scheduleScreen.noWeeklySlots",
+                "Ingen ukentlige opptak ennå. Legg til et tidspunkt under.",
+              )}
             </div>
           </div>
         ) : (
@@ -592,7 +646,7 @@ export function ScheduleScreen() {
                 >
                   <div className="sr-row" style={{ padding: 14 }}>
                     <div style={{ fontSize: 15, fontWeight: 700, width: 48 }}>
-                      {slotDayLabel(slot)}
+                      {slotDayLabel(slot, dows)}
                     </div>
                     <div className="sr-grow">
                       <div style={{ fontSize: 14, fontWeight: 600 }}>
@@ -602,7 +656,13 @@ export function ScheduleScreen() {
                         <div
                           style={{ fontSize: 12.5, color: "var(--sr-gold)" }}
                         >
-                          Neste opptak: {next}
+                          {t(
+                            "scheduleScreen.nextAt",
+                            "Neste opptak: {{when}}",
+                            {
+                              when: next,
+                            },
+                          )}
                         </div>
                       )}
                     </div>
@@ -611,14 +671,16 @@ export function ScheduleScreen() {
                       onClick={() => setEditingSlot(editing ? null : i)}
                       disabled={!haveLive}
                     >
-                      {editing ? "Ferdig" : "Rediger"}
+                      {editing
+                        ? t("scheduleScreen.done", "Ferdig")
+                        : t("scheduleScreen.edit", "Rediger")}
                     </button>
                     <button
                       className="sr-btn ghost sm"
                       style={{ padding: 7 }}
                       onClick={() => removeSlot(i)}
                       disabled={!haveLive}
-                      title="Fjern tidspunkt"
+                      title={t("scheduleScreen.removeSlot", "Fjern tidspunkt")}
                     >
                       <Icon name="x" size={14} />
                     </button>
@@ -637,11 +699,11 @@ export function ScheduleScreen() {
                         className="sr-row"
                         style={{ gap: 6, flexWrap: "wrap" }}
                       >
-                        {WEEKDAY_SHORT.map((label, day) => {
+                        {dows.map((label, day) => {
                           const on = slot.days.includes(day);
                           return (
                             <button
-                              key={label}
+                              key={day}
                               className={
                                 "sr-btn sm" + (on ? " gold" : " ghost")
                               }
@@ -662,7 +724,7 @@ export function ScheduleScreen() {
                           type="time"
                           className="sr-input"
                           style={{ width: 120 }}
-                          aria-label="Start"
+                          aria-label={t("scheduleScreen.start", "Start")}
                           value={slot.start}
                           onChange={(e) =>
                             updateSlot(i, { start: e.target.value })
@@ -673,7 +735,7 @@ export function ScheduleScreen() {
                           type="time"
                           className="sr-input"
                           style={{ width: 120 }}
-                          aria-label="Stopp"
+                          aria-label={t("scheduleScreen.stop", "Stopp")}
                           value={slot.stop}
                           onChange={(e) =>
                             updateSlot(i, { stop: e.target.value })
@@ -694,7 +756,7 @@ export function ScheduleScreen() {
           disabled={!haveLive}
         >
           <Icon name="plus" size={15} />
-          Legg til tidspunkt
+          {t("scheduleScreen.addSlot", "Legg til tidspunkt")}
         </button>
       </div>
 
@@ -704,15 +766,19 @@ export function ScheduleScreen() {
           <Icon name="power" size={18} style={{ color: "var(--sr-text-3)" }} />
           <div className="sr-grow">
             <div style={{ fontSize: 14.5, fontWeight: 600 }}>
-              Vekk maskin fra dvale
+              {t("scheduleScreen.wakeTitle", "Vekk maskin fra dvale")}
             </div>
             <div className="sr-srow-d">
-              Lar maskinen våkne i tide til opptak og verifiserer at det
-              fungerer.
+              {t(
+                "scheduleScreen.wakeDesc",
+                "Lar maskinen våkne i tide til opptak og verifiserer at det fungerer.",
+              )}
             </div>
           </div>
           <Badge kind={wakeActive ? "ok" : "muted"} dot>
-            {wakeActive ? "Aktiv" : "Inaktiv"}
+            {wakeActive
+              ? t("scheduleScreen.active", "Aktiv")
+              : t("scheduleScreen.inactive", "Inaktiv")}
           </Badge>
           <Icon name="chevD" size={18} style={{ color: "var(--sr-text-3)" }} />
         </div>
@@ -741,15 +807,20 @@ export function ScheduleScreen() {
           >
             <div className="sr-card-title" style={{ marginBottom: 14 }}>
               <Icon name="calendar" size={17} />
-              Nytt spesialopptak
+              {t("scheduleScreen.newSpecial", "Nytt spesialopptak")}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div className="sr-field">
-                <label className="sr-label">Navn</label>
+                <label className="sr-label">
+                  {t("scheduleScreen.fieldName", "Navn")}
+                </label>
                 <input
                   className="sr-input"
                   type="text"
-                  placeholder="F.eks. Julegudstjeneste"
+                  placeholder={t(
+                    "scheduleScreen.namePlaceholder",
+                    "F.eks. Julegudstjeneste",
+                  )}
                   value={draftSpecial.name}
                   onChange={(e) =>
                     setDraftSpecial({ ...draftSpecial, name: e.target.value })
@@ -757,7 +828,9 @@ export function ScheduleScreen() {
                 />
               </div>
               <div className="sr-field">
-                <label className="sr-label">Dato</label>
+                <label className="sr-label">
+                  {t("scheduleScreen.fieldDate", "Dato")}
+                </label>
                 <input
                   className="sr-input"
                   type="date"
@@ -769,7 +842,9 @@ export function ScheduleScreen() {
               </div>
               <div className="sr-row" style={{ gap: 10 }}>
                 <div className="sr-field sr-grow">
-                  <label className="sr-label">Start</label>
+                  <label className="sr-label">
+                    {t("scheduleScreen.start", "Start")}
+                  </label>
                   <input
                     className="sr-input"
                     type="time"
@@ -783,7 +858,9 @@ export function ScheduleScreen() {
                   />
                 </div>
                 <div className="sr-field sr-grow">
-                  <label className="sr-label">Stopp</label>
+                  <label className="sr-label">
+                    {t("scheduleScreen.stop", "Stopp")}
+                  </label>
                   <input
                     className="sr-input"
                     type="time"
@@ -806,7 +883,7 @@ export function ScheduleScreen() {
                 className="sr-btn ghost"
                 onClick={() => setDraftSpecial(null)}
               >
-                Avbryt
+                {t("scheduleScreen.cancel", "Avbryt")}
               </button>
               <button
                 className="sr-btn gold"
@@ -814,7 +891,7 @@ export function ScheduleScreen() {
                 disabled={!haveLive || !draftSpecial.date}
               >
                 <Icon name="plus" size={15} />
-                Legg til
+                {t("scheduleScreen.add", "Legg til")}
               </button>
             </div>
           </div>

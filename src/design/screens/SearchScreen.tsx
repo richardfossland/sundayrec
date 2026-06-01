@@ -15,6 +15,7 @@
  * empty-state instead.
  */
 import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -56,6 +57,7 @@ function SearchHit({
   time: string;
   onOpen?: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="sr-card pad" style={{ cursor: "pointer" }} onClick={onOpen}>
       <div className="sr-row" style={{ marginBottom: 8 }}>
@@ -72,7 +74,7 @@ function SearchHit({
       <div className="sr-row" style={{ gap: 8, marginTop: 10 }}>
         <Badge kind="muted">
           <Icon name="play" size={11} fill style={{ marginRight: 2 }} />
-          Åpne på {time}
+          {t("searchScreen.openAt", "Åpne på {{time}}", { time })}
         </Badge>
       </div>
     </div>
@@ -113,6 +115,7 @@ function openHit(basePath: string): void {
 }
 
 export function SearchScreen() {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const { sidecars, recordingCount } = useTranscriptSidecars();
 
@@ -147,10 +150,14 @@ export function SearchScreen() {
   return (
     <div className="sr-content cozy">
       <div className="sr-pagehead">
-        <div className="sr-pagetitle">Søk i prekener</div>
+        <div className="sr-pagetitle">
+          {t("searchScreen.title", "Søk i prekener")}
+        </div>
         <div className="sr-pagesub">
-          Søk på tvers av alle transkriberte opptak. Klikk på et treff for å
-          åpne opptaket på det punktet.
+          {t(
+            "searchScreen.subtitle",
+            "Søk på tvers av alle transkriberte opptak. Klikk på et treff for å åpne opptaket på det punktet.",
+          )}
         </div>
       </div>
       <div className="sr-row" style={{ gap: 10, marginBottom: 20 }}>
@@ -160,8 +167,11 @@ export function SearchScreen() {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Søk etter ord eller fraser…"
-            aria-label="Søk i prekener"
+            placeholder={t(
+              "searchScreen.placeholder",
+              "Søk etter ord eller fraser…",
+            )}
+            aria-label={t("searchScreen.title", "Søk i prekener")}
             className="sr-grow"
             style={{
               background: "transparent",
@@ -180,15 +190,27 @@ export function SearchScreen() {
           disabled={reindexing}
         >
           <Icon name="refresh" size={15} />
-          {reindexing ? "Oppdaterer…" : "Oppdater indeks"}
+          {reindexing
+            ? t("searchScreen.reindexing", "Oppdaterer…")
+            : t("searchScreen.reindex", "Oppdater indeks")}
         </button>
       </div>
       <div
         style={{ fontSize: 12.5, color: "var(--sr-text-3)", marginBottom: 12 }}
       >
         {hasQuery
-          ? `${totalHits} treff i ${groups.length} opptak`
-          : "Skriv minst to tegn for å søke i transkripsjonene."}
+          ? t(
+              "searchScreen.hitsCount",
+              "{{hits}} treff i {{recordings}} opptak",
+              {
+                hits: totalHits,
+                recordings: groups.length,
+              },
+            )
+          : t(
+              "searchScreen.minQuery",
+              "Skriv minst to tegn for å søke i transkripsjonene.",
+            )}
       </div>
       {!hasQuery ? null : groups.length === 0 ? (
         <div
@@ -197,9 +219,17 @@ export function SearchScreen() {
         >
           {stats.transcriptCount === 0
             ? recordingCount > 0
-              ? "Ingen transkripsjoner ennå — åpne et opptak i Rediger og klikk Transkriber for å bygge opp et søkbart arkiv."
-              : "Ingen transkripsjoner ennå — transkriber et opptak først."
-            : `Ingen treff for «${trimmed}».`}
+              ? t(
+                  "searchScreen.emptyNoTranscripts",
+                  "Ingen transkripsjoner ennå — åpne et opptak i Rediger og klikk Transkriber for å bygge opp et søkbart arkiv.",
+                )
+              : t(
+                  "searchScreen.emptyNoRecordings",
+                  "Ingen transkripsjoner ennå — transkriber et opptak først.",
+                )
+            : t("searchScreen.noHits", "Ingen treff for «{{query}}».", {
+                query: trimmed,
+              })}
         </div>
       ) : (
         <div className="sr-stack-3">
