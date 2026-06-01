@@ -4,15 +4,31 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { StreamingPanel } from "./StreamingPanel";
 import type { StreamStatus } from "@/lib/bindings/StreamStatus";
+import type { PreviewFrame } from "@/lib/bindings/PreviewFrame";
 import i18n from "@/i18n";
 
 // --- Tauri bridge mock ------------------------------------------------------
 
-const h = vi.hoisted(() => ({ invoke: vi.fn() }));
+const h = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  // Registry of event listeners so a test can push a `preview://frame`.
+  listeners: new Map<string, (e: { payload: unknown }) => void>(),
+}));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => h.invoke(...args),
 }));
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: (event: string, cb: (e: { payload: unknown }) => void) => {
+    h.listeners.set(event, cb);
+    return Promise.resolve(() => h.listeners.delete(event));
+  },
+}));
 const invoke = h.invoke;
+
+/** Push a `preview://frame` payload to the panel's listener. */
+function emitFrame(frame: PreviewFrame) {
+  h.listeners.get("preview://frame")?.({ payload: frame });
+}
 
 const IDLE: StreamStatus = {
   active: false,
@@ -83,6 +99,7 @@ async function addDestination(name = "YouTube", url = "rtmp://a/live2") {
 
 beforeEach(() => {
   invoke.mockReset();
+  h.listeners.clear();
   routeInvoke();
   i18n.changeLanguage("no");
 });
@@ -92,10 +109,10 @@ afterEach(() => {
 });
 
 describe("StreamingPanel", () => {
-  it("shows idle status with a Start button", async () => {
+  it("shows idle status with a 'Bare direktesending' start button", async () => {
     renderPanel();
     expect(await screen.findByText("Av")).toBeInTheDocument();
-    expect(screen.getByText("Start")).toBeInTheDocument();
+    expect(screen.getByText("Bare direktesending")).toBeInTheDocument();
   });
 
   it("shows live status + stats + a Stop button when streaming", async () => {
@@ -104,6 +121,120 @@ describe("StreamingPanel", () => {
     expect(await screen.findByText("Sender direkte")).toBeInTheDocument();
     expect(screen.getByText("4500 kbps · 30 fps")).toBeInTheDocument();
     expect(screen.getByText("Stopp")).toBeInTheDocument();
+  });
+
+  it("renders the live-stats dashboard with bitrate and fps when streaming", async () => {
+    routeInvoke({ status: LIVE });
+    renderPanel();
+    await screen.findByText("Sender direkte");
+    const dash = screen.getByLabelText("Sendestatistikk");
+    // Bitrate + fps values surface inside the dashboard.
+    expect(dash).toHaveTextContent("4500");
+    expect(dash).toHaveTextContent("30");
+    // Uptime cell is present and shows a clock-formatted value.
+    expect(screen.getByText("Sendetid")).toBeInTheDocument();
+  });
+
+  it("shows zeroed stats when idle", async () => {
+    renderPanel();
+    await screen.findByText("Av");
+    expect(screen.getByText("Sendetid")).toBeInTheDocument();
+    // Uptime defaults to 00:00 while not live.
+    expect(screen.getByText("00:00")).toBeInTheDocument();
+  });
+
+  it("toggles 'Direktesending + opptak' and starts with alsoRecordPath set", async () => {
+    renderPanel();
+    await screen.findByText("Av");
+    // Toggle the also-record checkbox → the start button label flips.
+    fireEvent.click(screen.getByLabelText("Ta også opp lokalt"));
+    expect(
+      screen.getByText("Start direktesending + opptak"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Start direktesending + opptak"));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith(
+        "stream_start",
+        expect.objectContaining({ alsoRecordPath: "auto" }),
+      ),
+    );
+  });
+
+  it("starts with alsoRecordPath null when the record toggle is off", async () => {
+    renderPanel();
+    await screen.findByText("Av");
+    fireEvent.click(screen.getByText("Bare direktesending"));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith(
+        "stream_start",
+        expect.objectContaining({ alsoRecordPath: null }),
+      ),
+    );
+  });
+
+  it("renders a preview frame from preview://frame", async () => {
+    renderPanel();
+    await screen.findByText("Av");
+    fireEvent.click(screen.getByText("Start forhåndsvisning"));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("start_preview", {
+        device: null,
+        fps: null,
+      }),
+    );
+    emitFrame({ data: "AAAA", width: 1280, height: 720, seq: 1 });
+    const img = await screen.findByAltText("Forhåndsvisning");
+    expect(img).toHaveAttribute("src", "data:image/jpeg;base64,AAAA");
+    // Frame dimensions surface as an overlay badge.
+    expect(screen.getByText("1280×720")).toBeInTheDocument();
+  });
+
+  it("stops the preview over IPC", async () => {
+    renderPanel();
+    await screen.findByText("Av");
+    fireEvent.click(screen.getByText("Start forhåndsvisning"));
+    const stopBtn = await screen.findByText("Stopp forhåndsvisning");
+    fireEvent.click(stopBtn);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("stop_preview"),
+    );
+  });
+
+  it("passes the selected video + audio bitrate to stream_start", async () => {
+    renderPanel();
+    await screen.findByText("Av");
+    fireEvent.change(screen.getByLabelText("Videobitrate"), {
+      target: { value: "6000" },
+    });
+    fireEvent.change(screen.getByLabelText("Lydbitrate"), {
+      target: { value: "256" },
+    });
+    fireEvent.click(screen.getByText("Bare direktesending"));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith(
+        "stream_start",
+        expect.objectContaining({
+          videoBitrateKbps: 6000,
+          audioBitrateKbps: 256,
+        }),
+      ),
+    );
+  });
+
+  it("passes null bitrate when 'Auto' is selected", async () => {
+    renderPanel();
+    await screen.findByText("Av");
+    fireEvent.change(screen.getByLabelText("Videobitrate"), {
+      target: { value: "" },
+    });
+    fireEvent.click(screen.getByText("Bare direktesending"));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith(
+        "stream_start",
+        expect.objectContaining({ videoBitrateKbps: null }),
+      ),
+    );
   });
 
   it("adds a destination and shows its name + url", async () => {
@@ -142,7 +273,7 @@ describe("StreamingPanel", () => {
     fireEvent.change(screen.getByLabelText("Tittel"), {
       target: { value: "Pastor Ola" },
     });
-    fireEvent.click(screen.getByText("Start"));
+    fireEvent.click(screen.getByText("Bare direktesending"));
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith(
         "stream_start",
@@ -170,7 +301,7 @@ describe("StreamingPanel", () => {
     fireEvent.change(screen.getByLabelText("Sti til bilde (PNG)"), {
       target: { value: "/tmp/lower.png" },
     });
-    fireEvent.click(screen.getByText("Start"));
+    fireEvent.click(screen.getByText("Bare direktesending"));
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith(
         "stream_start",
@@ -192,7 +323,7 @@ describe("StreamingPanel", () => {
     fireEvent.change(screen.getByLabelText("Tittel"), {
       target: { value: "Pastor Ola" },
     });
-    fireEvent.click(screen.getByText("Start"));
+    fireEvent.click(screen.getByText("Bare direktesending"));
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith(
         "stream_start",
@@ -238,18 +369,19 @@ describe("StreamingPanel", () => {
     renderPanel();
     await screen.findByText("Sender direkte");
     fireEvent.click(screen.getByText("Stopp"));
-    await waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith("stream_stop"),
-    );
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("stream_stop"));
   });
 
   it("shows the feature-disabled hint when start rejects with feature_disabled", async () => {
     routeInvoke({
-      startError: { code: "validation", message: "feature_disabled: streaming.start …" },
+      startError: {
+        code: "validation",
+        message: "feature_disabled: streaming.start …",
+      },
     });
     renderPanel();
     await screen.findByText("Av");
-    fireEvent.click(screen.getByText("Start"));
+    fireEvent.click(screen.getByText("Bare direktesending"));
     expect(
       await screen.findByText(
         "Direktesending er ikke bygd inn i denne versjonen. Nøkler kan likevel lagres.",
@@ -264,7 +396,7 @@ describe("StreamingPanel", () => {
     fireEvent.change(resSelect, { target: { value: "p1080" } });
     expect(resSelect.value).toBe("p1080");
 
-    fireEvent.click(screen.getByText("Start"));
+    fireEvent.click(screen.getByText("Bare direktesending"));
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith(
         "stream_start",
