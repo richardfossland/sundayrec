@@ -17,12 +17,14 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 # (`--features email`) once the network/GUI path is being smoke-tested on a real
 # rig. Each gates its impure I/O over the unit-tested `sundayrec-core` decisions.
 [features]
-# The non-destructive editor (R1) ships in the default build: it adds NO heavy
-# native dep (ffmpeg is a sidecar, WAV/PCM parsed by hand), so the `editor`
-# commands run instead of returning `feature_disabled` in `tauri dev` + a normal
-# `tauri build` + the `npm run check` gate (which both use default features).
-# `whisper` deliberately stays OFF here (it compiles libwhisper from C/C++).
-default = ["editor"]
+# The non-destructive editor (R1) AND whisper transcription (PU-5) ship in the
+# default build so the Rediger screen + "transkriber tale" work out of the box.
+# `editor` adds no native dep (ffmpeg is a sidecar). `whisper` links libwhisper
+# (whisper-rs) — verified to build in ~16s on Apple silicon and cached after, so
+# the cost is acceptable for the value; the model is downloaded at runtime via the
+# UI (`whisper_download_model`). Both run real ffmpeg/inference (HARDWARE-
+# UNVERIFIED). Build with `--no-default-features` and they return `feature_disabled`.
+default = ["editor", "whisper"]
 # PU-1: SMTP/Gmail error+test alerts. Pulls `lettre` for the SMTP transport (the
 # Gmail-API path reuses the already-present `reqwest`).
 email = ["dep:lettre"]
