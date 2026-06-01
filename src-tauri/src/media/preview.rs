@@ -21,20 +21,34 @@
 //! graceful stdin `q` so it can finalise its output container — Spike B.)
 
 use std::sync::Mutex;
+use std::time::Duration;
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
+use sundayrec_core::device_enum::find_best_video_device_match;
 use sundayrec_core::ffmpeg::Platform;
 use sundayrec_core::mjpeg::{read_jpeg_dimensions, MjpegFrameSplitter};
 use tauri::{AppHandle, Emitter};
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use ts_rs::TS;
 
+use crate::audio::device_enum::enumerate_ffmpeg_devices;
 use crate::error::{AppError, AppResult};
 use crate::media::ffmpeg::spawn_ffmpeg;
 
 /// The Tauri event channel the renderer listens on for preview frames.
 pub const PREVIEW_EVENT: &str = "preview://frame";
+
+/// The Tauri event channel the renderer listens on for a preview *failure*
+/// (no camera, permission denied, device error). Lets the UI replace the dead
+/// placeholder with a real message instead of a silently-blank preview.
+pub const PREVIEW_ERROR_EVENT: &str = "preview://error";
+
+/// How long after ffmpeg spawns we wait for the first frame before declaring the
+/// preview dead. macOS camera negotiation + the first MJPEG frame comfortably
+/// fits in a couple of seconds; 6s leaves slack for a slow USB camera while still
+/// failing fast enough that the user isn't left staring at a blank box.
+const FIRST_FRAME_TIMEOUT: Duration = Duration::from_secs(6);
 
 /// Default preview frame-rate. Low on purpose: a preview only needs to look
 /// live, and a low rate keeps both the camera negotiation and the base64/IPC
@@ -59,6 +73,16 @@ pub struct PreviewFrame {
     /// Monotonic frame counter since this preview session started (1-based).
     #[ts(type = "number")]
     pub seq: u64,
+}
+
+/// A preview failure surfaced to the renderer over [`PREVIEW_ERROR_EVENT`]. The
+/// `message` is already user-facing (Norwegian) so the UI can show it verbatim
+/// instead of the silent dead-placeholder the old preview left behind.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "../../src/lib/bindings/PreviewError.ts")]
+pub struct PreviewError {
+    /// User-facing failure message.
+    pub message: String,
 }
 
 /// Build the ffmpeg arguments for an MJPEG camera-preview stream on `platform`.
@@ -183,9 +207,16 @@ impl PreviewEngine {
     ) -> AppResult<()> {
         self.stop();
 
+        // Resolve the camera token the SAME way the recorder does: a stored
+        // camera *name* (e.g. "FaceTime HD Camera") is not what avfoundation's
+        // `-i` accepts on macOS — it needs the device *index*. Feeding ffmpeg the
+        // raw name produced an invalid input and zero frames (the silent dead
+        // preview). We enumerate + fuzzy-match to the avfoundation index here.
+        let resolved = resolve_preview_device(device).await;
+
         let args = build_preview_args(
             current_platform(),
-            device.as_deref(),
+            resolved.as_deref(),
             fps.unwrap_or(DEFAULT_FPS),
             None,
         );
@@ -231,6 +262,70 @@ impl PreviewEngine {
     }
 }
 
+/// Resolve a stored camera identifier into the token ffmpeg's `-i` accepts: on
+/// macOS the avfoundation *index*, on Windows/dshow the device *name*. Mirrors
+/// the recorder (`RecorderEngine::start`): enumerate, fuzzy-match with
+/// [`find_best_video_device_match`], then take the matched device's
+/// index-or-name token.
+///
+/// Pass-through cases (no enumeration needed):
+///   * `None` → `None` (the arg builder falls back to avfoundation `"0"`).
+///   * an all-digit string (already an index, e.g. `"0"`) → unchanged.
+///
+/// Resilient by design: enumeration failure or a non-matching name falls back to
+/// index `"0"` (the default camera) rather than erroring — a wrong-but-present
+/// preview is recoverable, and the no-frames watchdog will surface a real error
+/// if `"0"` also yields nothing.
+async fn resolve_preview_device(device: Option<String>) -> Option<String> {
+    let name = device?;
+    // Already a pure index — leave it. (Also covers an empty string defensively.)
+    if name.is_empty() || name.chars().all(|c| c.is_ascii_digit()) {
+        return Some(name);
+    }
+
+    match enumerate_ffmpeg_devices().await {
+        Ok(inv) => match find_best_video_device_match(&inv.video_inputs, &name) {
+            // avfoundation index when known; dshow falls back to the name.
+            Some(dev) => Some(
+                dev.index
+                    .map_or_else(|| dev.name.clone(), |i| i.to_string()),
+            ),
+            None => {
+                tracing::warn!(
+                    requested = %name,
+                    "preview: no camera matched stored name; falling back to index 0"
+                );
+                Some("0".into())
+            }
+        },
+        Err(e) => {
+            tracing::warn!("preview: device enumeration failed ({e}); falling back to index 0");
+            Some("0".into())
+        }
+    }
+}
+
+/// Classify an ffmpeg avfoundation/dshow stderr line as a fatal camera error and,
+/// if so, return a user-facing (Norwegian) message. Best-effort and conservative:
+/// only lines that clearly indicate "no camera / access denied / cannot open"
+/// trip it, so a benign warning never kills a working preview.
+fn classify_camera_error(line: &str) -> Option<&'static str> {
+    let l = line.to_lowercase();
+    if l.contains("permission") || l.contains("not authorized") || l.contains("denied") {
+        Some("Kameratilgang nektet. Gi appen tilgang til kameraet i Systemvalg.")
+    } else if l.contains("input/output error")
+        || l.contains("could not open")
+        || l.contains("cannot open")
+        || l.contains("no such")
+        || l.contains("error opening input")
+        || l.contains("input device")
+    {
+        Some("Fant ikke kameraet. Sjekk at det er tilkoblet og ikke i bruk.")
+    } else {
+        None
+    }
+}
+
 /// The reader task body: spawn ffmpeg, signal readiness, then pump stdout
 /// through the frame splitter and emit each completed JPEG to the renderer.
 ///
@@ -261,19 +356,68 @@ async fn run_preview(
     // We're live.
     let _ = ready.send(Ok(()));
 
+    // Drain stderr in the background so we can (a) classify a fatal camera error
+    // into a user-facing `preview://error`, and (b) not let a full stderr pipe
+    // stall ffmpeg. Non-blocking and best-effort. The first classified error
+    // wins and is forwarded back to the reader loop so it can surface it once and
+    // stop. We also keep the raw lines in the logs for diagnostics.
+    let (err_tx, mut err_rx) = tokio::sync::mpsc::channel::<&'static str>(1);
+    if let Some(stderr) = child.stderr.take() {
+        tokio::spawn(async move {
+            let mut lines = BufReader::new(stderr).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                tracing::debug!(target: "preview_ffmpeg", "{line}");
+                if let Some(msg) = classify_camera_error(&line) {
+                    // Best-effort: if the channel is full/closed the first error
+                    // already won, so dropping this one is fine.
+                    let _ = err_tx.try_send(msg);
+                }
+            }
+        });
+    }
+
     let b64 = base64::engine::general_purpose::STANDARD;
     let mut splitter = MjpegFrameSplitter::new();
     let mut read_buf = vec![0u8; 64 * 1024];
     let mut seq: u64 = 0;
+    // The no-frames watchdog: if no frame arrives before this fires, the camera
+    // is dead/blocked even though ffmpeg "spawned". We then emit `preview://error`
+    // so the UI shows a message instead of a silently-blank box. Disarmed (set to
+    // `None`) once the first frame lands.
+    let mut first_frame_deadline = Some(Box::pin(tokio::time::sleep(FIRST_FRAME_TIMEOUT)));
 
     loop {
-        let n = match stdout.read(&mut read_buf).await {
-            Ok(0) => break, // ffmpeg closed stdout — stream ended
-            Ok(n) => n,
-            Err(e) => {
-                tracing::warn!("preview stdout read error: {e}");
-                break;
+        let n = tokio::select! {
+            // A classified stderr error: surface it immediately and stop.
+            Some(msg) = err_rx.recv() => {
+                let _ = app.emit(
+                    PREVIEW_ERROR_EVENT,
+                    PreviewError { message: msg.into() },
+                );
+                return;
             }
+            // No first frame within the timeout: the preview is dead.
+            () = async { first_frame_deadline.as_mut().unwrap().as_mut().await },
+                if first_frame_deadline.is_some() =>
+            {
+                tracing::warn!("preview: no frame within {FIRST_FRAME_TIMEOUT:?}");
+                let _ = app.emit(
+                    PREVIEW_ERROR_EVENT,
+                    PreviewError {
+                        message: "Ingen videostrøm fra kameraet. Sjekk tilkobling og tilgang."
+                            .into(),
+                    },
+                );
+                return;
+            }
+            read = stdout.read(&mut read_buf) => match read {
+                Ok(0) => break, // ffmpeg closed stdout — stream ended
+                Ok(n) => n,
+                Err(e) => {
+                    tracing::warn!("preview stdout read error: {e}");
+                    break;
+                }
+            },
         };
 
         for frame in splitter.push(&read_buf[..n]) {
@@ -282,6 +426,8 @@ async fn run_preview(
                 None => (None, None),
             };
             seq += 1;
+            // First frame in: disarm the no-frames watchdog.
+            first_frame_deadline = None;
             let payload = PreviewFrame {
                 data: b64.encode(&frame),
                 width,
@@ -345,5 +491,51 @@ mod tests {
         let engine = PreviewEngine::new();
         engine.stop();
         engine.stop();
+    }
+
+    #[test]
+    fn error_event_name_is_stable() {
+        assert_eq!(PREVIEW_ERROR_EVENT, "preview://error");
+    }
+
+    #[tokio::test]
+    async fn resolve_passes_through_none() {
+        assert_eq!(resolve_preview_device(None).await, None);
+    }
+
+    #[tokio::test]
+    async fn resolve_passes_through_numeric_index_without_enumerating() {
+        // A pure index is already what avfoundation accepts — must be returned
+        // verbatim and must NOT touch ffmpeg enumeration.
+        assert_eq!(
+            resolve_preview_device(Some("0".into())).await,
+            Some("0".into())
+        );
+        assert_eq!(
+            resolve_preview_device(Some("2".into())).await,
+            Some("2".into())
+        );
+    }
+
+    #[test]
+    fn classify_camera_error_flags_permission_denied() {
+        assert!(
+            classify_camera_error("[avfoundation] permission to capture video was denied")
+                .is_some()
+        );
+        assert!(classify_camera_error("Operation not authorized").is_some());
+    }
+
+    #[test]
+    fn classify_camera_error_flags_open_failure() {
+        assert!(classify_camera_error("Error opening input: Input/output error").is_some());
+        assert!(classify_camera_error("Could not open video device").is_some());
+    }
+
+    #[test]
+    fn classify_camera_error_ignores_benign_lines() {
+        // Routine ffmpeg banner / progress lines must NOT trip the error path.
+        assert!(classify_camera_error("frame=  120 fps= 15 q=8.0 size=…").is_none());
+        assert!(classify_camera_error("Stream #0:0: Video: mjpeg").is_none());
     }
 }
