@@ -37,7 +37,9 @@ vi.mock("@tauri-apps/api/core", () => ({
           silence_threshold_db: null,
           silence_timeout_minutes: 0,
           framerate: 0,
-          stereo: false,
+          channel_mode: "stereo",
+          sample_rate: 48000,
+          bitrate_kbps: 192,
           split_minutes: 0,
           manual_max_minutes: 0,
         } satisfies RecordingOpts;

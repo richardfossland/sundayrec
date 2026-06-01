@@ -67,25 +67,38 @@ pub async fn start_recording(
         let settings = crate::settings::load(&db.pool).await?;
         match (settings.pre_roll_seconds, preroll.is_active()) {
             (secs, true) if secs > 0 => {
-                let channels = match settings.channels {
+                // Match the recording's REAL codec + container so the F3.3a prepend
+                // concat is a lossless `-c copy`. The codec is derived from the
+                // recording's own output extension (mp3→libmp3lame, wav→pcm_s16le,
+                // flac→flac, m4a/aac→aac) — NOT hardcoded to AAC, which would mux an
+                // AAC clip onto a non-AAC recording and corrupt the file. Channels
+                // and sample rate mirror the recording's resolved opts.
+                let channels = match opts.channel_mode {
                     sundayrec_core::settings::ChannelMode::Stereo => 2,
                     _ => 1,
                 };
-                // Match the recording's codec + container so the F3.3a prepend
-                // concat is a lossless `-c copy`. The unified recorder always
-                // encodes AAC; the container extension comes from the recording's
-                // output path (e.g. `m4a`, `mp4`).
                 let container_ext = std::path::Path::new(&opts.output_path)
                     .extension()
                     .map(|e| e.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| "m4a".to_string());
+                    .unwrap_or_default();
+                let codec = sundayrec_core::capture::codec_for_extension(&container_ext);
+                // Empty/unknown extension → use the fallback codec's own container
+                // so codec and container always agree.
+                let harvest_ext = if container_ext.is_empty() {
+                    codec.default_extension().to_string()
+                } else {
+                    container_ext
+                };
+                // Lossy codecs carry the recording's bitrate; PCM/FLAC must omit it.
+                let bitrate = codec.uses_bitrate().then_some(opts.bitrate_kbps);
                 preroll
                     .harvest(
                         secs as u32,
-                        settings.sample_rate.max(8_000) as u32,
+                        opts.sample_rate.max(8_000),
                         channels,
-                        "aac",
-                        &container_ext,
+                        codec.ffmpeg_name(),
+                        bitrate,
+                        &harvest_ext,
                     )
                     .await
             }

@@ -523,6 +523,20 @@ impl Settings {
         self
     }
 
+    /// The lossy-codec bitrate in kbps, parsed from the Electron-heritage
+    /// `bitrate` String and clamped to a sane CBR range. Any unparseable / empty /
+    /// out-of-range value falls back to 192 kbps so the recorder never receives a
+    /// nonsense `-b:a`. (PCM/FLAC ignore this entirely.)
+    pub fn bitrate_kbps(&self) -> u32 {
+        self.bitrate
+            .trim()
+            .trim_end_matches(['k', 'K'])
+            .parse::<u32>()
+            .ok()
+            .map(|k| k.clamp(32, 320))
+            .unwrap_or(192)
+    }
+
     /// Parse a (possibly partial or older) settings JSON blob, MERGING it over
     /// the defaults: any missing or unknown field falls back to its default,
     /// matching the Electron `store.get(key, default)` semantics. A malformed
@@ -667,6 +681,21 @@ mod tests {
         };
         under.validate();
         assert_eq!(under.sample_rate, 8_000);
+    }
+
+    #[test]
+    fn bitrate_kbps_parses_clamps_and_defaults() {
+        let mk = |b: &str| Settings {
+            bitrate: b.into(),
+            ..Default::default()
+        };
+        assert_eq!(mk("192").bitrate_kbps(), 192);
+        assert_eq!(mk("320").bitrate_kbps(), 320);
+        assert_eq!(mk("256k").bitrate_kbps(), 256, "tolerates a trailing k");
+        assert_eq!(mk("999").bitrate_kbps(), 320, "clamps above the ceiling");
+        assert_eq!(mk("16").bitrate_kbps(), 32, "clamps below the floor");
+        assert_eq!(mk("").bitrate_kbps(), 192, "empty → safe default");
+        assert_eq!(mk("abc").bitrate_kbps(), 192, "garbage → safe default");
     }
 
     #[test]

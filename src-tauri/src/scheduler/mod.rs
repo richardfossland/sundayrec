@@ -54,7 +54,7 @@ use sundayrec_core::schedule::{
     active_within, missed_recordings, next_recording, prune_specials, upcoming_dates,
     upcoming_events, ScheduledEvent, ScheduledEventKind, TriggerKind, MISSED_WINDOW_MS,
 };
-use sundayrec_core::settings::{ChannelMode, FileFormat, Settings};
+use sundayrec_core::settings::{FileFormat, Settings};
 
 use crate::db::Db;
 use crate::error::AppResult;
@@ -315,7 +315,9 @@ pub(crate) fn build_opts(
         silence_threshold_db: Some(settings.silence_threshold),
         silence_timeout_minutes: settings.silence_timeout_minutes.max(1) as u32,
         framerate: settings.video_framerate.clamp(1, 120) as u32,
-        stereo: matches!(settings.channels, ChannelMode::Stereo),
+        channel_mode: settings.channels,
+        sample_rate: settings.sample_rate.clamp(8_000, 192_000) as u32,
+        bitrate_kbps: settings.bitrate_kbps(),
         split_minutes: settings.split_minutes.max(0) as u32,
         manual_max_minutes: max_minutes,
     })

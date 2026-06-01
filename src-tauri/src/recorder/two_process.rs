@@ -132,7 +132,10 @@ pub async fn run_two_process_session(
     let video_temp = derive_temp_path(&opts.output_path, "_vtmp", "mp4");
     let audio_temp = derive_temp_path(&opts.output_path, "_atmp", "m4a");
 
-    let channels: u8 = if opts.stereo { 2 } else { 1 };
+    let channels: u8 = match opts.channel_mode {
+        sundayrec_core::settings::ChannelMode::Stereo => 2,
+        _ => 1,
+    };
     let video_args =
         build_video_capture_args(platform, &device_token(&video), &video_temp, opts.framerate);
     let audio_args =

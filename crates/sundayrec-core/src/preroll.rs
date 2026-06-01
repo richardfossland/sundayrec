@@ -143,14 +143,19 @@ pub fn build_preroll_capture_args(
 /// **re-encoding to the recording's own audio codec** so the trimmed clip can be
 /// concatenated in front of the recording with a lossless `-c copy` (Fase 3.3a).
 ///
-/// `audio_codec` MUST match the recording's audio codec (the unified recorder
-/// uses `aac`), and `output_path` MUST carry the recording's container extension
-/// — then the F3.3a concat is a true stream-copy of the (untouched) main
-/// recording, and only the short pre-roll clip is ever re-encoded.
+/// `audio_codec` MUST match the recording's audio codec, and `output_path` MUST
+/// carry the recording's container extension — then the F3.3a concat is a true
+/// stream-copy of the (untouched) main recording, and only the short pre-roll clip
+/// is ever re-encoded. `bitrate_kbps` is `Some(k)` for the lossy codecs (mp3/aac)
+/// and `None` for the lossless ones (pcm/flac) — emitting `-b:a` on PCM/FLAC makes
+/// ffmpeg reject the trim, which previously broke pre-roll for wav/flac recordings.
 ///
 /// `-ss` BEFORE `-i` is an (accurate, for WAV) input seek; `-t` bounds the
 /// output duration. `-ss`/`-t` are given in seconds (with millisecond
 /// precision) — ffmpeg accepts fractional seconds.
+// The args mirror ffmpeg's positional shape (seek, duration, codec, rate,
+// channels, output); bundling them into a struct would only obscure that.
+#[allow(clippy::too_many_arguments)]
 pub fn build_preroll_trim_args(
     raw_path: &str,
     start_offset_ms: u64,
@@ -158,9 +163,10 @@ pub fn build_preroll_trim_args(
     sample_rate: u32,
     channels: u8,
     audio_codec: &str,
+    bitrate_kbps: Option<u32>,
     output_path: &str,
 ) -> Vec<String> {
-    vec![
+    let mut args: Vec<String> = vec![
         "-hide_banner".into(),
         // Accurate input seek to the start of the kept window.
         "-ss".into(),
@@ -172,17 +178,20 @@ pub fn build_preroll_trim_args(
         // Match the recording's codec so the later concat is `-c copy`.
         "-c:a".into(),
         audio_codec.into(),
-        "-b:a".into(),
-        "192k".into(),
-        "-ar".into(),
-        sample_rate.to_string(),
-        "-ac".into(),
-        channels.to_string(),
-        "-avoid_negative_ts".into(),
-        "make_zero".into(),
-        "-y".into(),
-        output_path.into(),
-    ]
+    ];
+    if let Some(kbps) = bitrate_kbps {
+        args.push("-b:a".into());
+        args.push(format!("{kbps}k"));
+    }
+    args.push("-ar".into());
+    args.push(sample_rate.to_string());
+    args.push("-ac".into());
+    args.push(channels.to_string());
+    args.push("-avoid_negative_ts".into());
+    args.push("make_zero".into());
+    args.push("-y".into());
+    args.push(output_path.into());
+    args
 }
 
 /// Format a millisecond duration as a seconds string with millisecond precision
@@ -326,6 +335,7 @@ mod tests {
             48_000,
             2,
             "aac",
+            Some(192),
             "/tmp/pre.m4a",
         );
         // -ss BEFORE -i (input seek).
@@ -343,12 +353,55 @@ mod tests {
     fn trim_args_use_the_passed_codec_for_concat_copy() {
         // The codec must be threaded through so the clip matches the recording's
         // codec → the F3.3a concat is a lossless `-c copy`.
-        let args =
-            build_preroll_trim_args("/tmp/pre.wav", 0, 5_000, 44_100, 1, "aac", "/tmp/pre.mp4");
+        let args = build_preroll_trim_args(
+            "/tmp/pre.wav",
+            0,
+            5_000,
+            44_100,
+            1,
+            "aac",
+            Some(192),
+            "/tmp/pre.mp4",
+        );
         assert!(args.windows(2).any(|w| w == ["-c:a", "aac"]));
         assert!(args.windows(2).any(|w| w == ["-ar", "44100"]));
         assert!(args.windows(2).any(|w| w == ["-ac", "1"]));
         assert_eq!(args.last().unwrap(), "/tmp/pre.mp4");
+    }
+
+    #[test]
+    fn trim_args_omit_bitrate_for_pcm_and_flac() {
+        // Lossy codecs carry -b:a; lossless ones MUST NOT (ffmpeg rejects it →
+        // pre-roll harvest failed for wav/flac recordings before this).
+        let aac = build_preroll_trim_args(
+            "/tmp/p.wav",
+            0,
+            5_000,
+            48_000,
+            2,
+            "aac",
+            Some(256),
+            "/tmp/p.m4a",
+        );
+        assert!(aac.windows(2).any(|w| w == ["-b:a", "256k"]));
+        for codec in ["pcm_s16le", "flac"] {
+            let ext = if codec == "flac" { "flac" } else { "wav" };
+            let args = build_preroll_trim_args(
+                "/tmp/p.wav",
+                0,
+                5_000,
+                48_000,
+                2,
+                codec,
+                None,
+                &format!("/tmp/p.{ext}"),
+            );
+            assert!(args.windows(2).any(|w| w == ["-c:a", codec]));
+            assert!(
+                !args.iter().any(|a| a == "-b:a"),
+                "{codec} must omit -b:a; got: {args:?}"
+            );
+        }
     }
 
     #[test]

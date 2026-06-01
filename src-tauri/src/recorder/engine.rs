@@ -74,7 +74,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
-use sundayrec_core::capture::{build_unified_capture_args, CaptureOpts, Channels};
+use sundayrec_core::capture::{build_unified_capture_args, CaptureOpts};
 use sundayrec_core::device_match::{find_best_device_match, FfmpegDevice};
 use sundayrec_core::errors::{classify_recording_error, RecordingErrorCode};
 use sundayrec_core::ffmpeg::Platform;
@@ -82,6 +82,7 @@ use sundayrec_core::levels::{parse_ametadata_peak, ChannelLevels, SILENCE_FLOOR_
 use sundayrec_core::progress::{parse_size_kb, StartupResolver};
 use sundayrec_core::reconnect::{WatchdogState, WatchdogVerdict};
 use sundayrec_core::recorder::{RecorderState, RecordingSession, RecoveryDecision};
+use sundayrec_core::settings::ChannelMode;
 use sundayrec_core::silence::{SilenceAction, SilenceEvent, SilenceWatcher};
 use sundayrec_core::timeouts::RecorderTimeouts;
 use tauri::{AppHandle, Emitter};
@@ -131,8 +132,12 @@ pub struct RecordingOpts {
     pub silence_timeout_minutes: u32,
     /// Capture framerate.
     pub framerate: u32,
-    /// `true` → stereo, `false` → mono.
-    pub stereo: bool,
+    /// Output channel layout / downmix mode (stereo, mono-L, mono-R, mono-mix).
+    pub channel_mode: ChannelMode,
+    /// Output sample rate in Hz (clamped to the validated 8–192 kHz range).
+    pub sample_rate: u32,
+    /// Output bitrate in kbps for lossy codecs (mp3/aac); ignored by wav/flac.
+    pub bitrate_kbps: u32,
     /// Rotate to a fresh segment every N minutes (0 = off).
     pub split_minutes: u32,
     /// Auto-stop the whole session after N minutes (0 = off).
@@ -223,11 +228,9 @@ pub fn build_record_args(
         stop_on_silence: opts.stop_on_silence,
         silence_threshold_db: opts.silence_threshold_db,
         framerate: opts.framerate,
-        channels: if opts.stereo {
-            Channels::Stereo
-        } else {
-            Channels::Mono
-        },
+        channel_mode: opts.channel_mode,
+        sample_rate: opts.sample_rate,
+        bitrate_kbps: opts.bitrate_kbps,
     };
     build_unified_capture_args(
         platform,
@@ -1333,7 +1336,9 @@ mod tests {
             silence_threshold_db: None,
             silence_timeout_minutes: 5,
             framerate: 30,
-            stereo: true,
+            channel_mode: ChannelMode::Stereo,
+            sample_rate: 48_000,
+            bitrate_kbps: 192,
             split_minutes: 0,
             manual_max_minutes: 0,
         }
@@ -1486,7 +1491,7 @@ mod tests {
     #[test]
     fn build_record_args_mono_has_no_stereo_channel_flag() {
         let mut o = opts();
-        o.stereo = false;
+        o.channel_mode = ChannelMode::MonoMix;
         let audio = FfmpegDevice::new("Built-in Mic", "avfoundation", Some(0));
         let args = build_record_args(Platform::MacOS, &audio, None, &o, "/tmp/mono.m4a");
         // Mono maps to `-ac 1`; stereo would request 2 channels.
@@ -1500,7 +1505,7 @@ mod tests {
     #[test]
     fn build_record_args_stereo_requests_two_channels() {
         let mut o = opts();
-        o.stereo = true;
+        o.channel_mode = ChannelMode::Stereo;
         let audio = FfmpegDevice::new("Built-in Mic", "avfoundation", Some(0));
         let args = build_record_args(Platform::MacOS, &audio, None, &o, "/tmp/st.m4a");
         let ac = args
@@ -1689,7 +1694,9 @@ mod tests {
             silence_threshold_db: Some(-50),
             silence_timeout_minutes: 7,
             framerate: 25,
-            stereo: false,
+            channel_mode: ChannelMode::MonoL,
+            sample_rate: 44_100,
+            bitrate_kbps: 256,
             split_minutes: 30,
             manual_max_minutes: 120,
         };

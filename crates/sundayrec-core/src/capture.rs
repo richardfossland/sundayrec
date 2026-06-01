@@ -45,25 +45,124 @@
 use crate::ffmpeg::{
     build_levels_detect_filter, build_silence_detect_filter, unified_audio_drift_filter, Platform,
 };
+use crate::settings::ChannelMode;
 
-/// Audio channel layout for the captured output.
+/// The audio codec selected from an output container extension. The ONE place
+/// extension→codec is decided, so the main recorder and the pre-roll harvest can
+/// never disagree (a mismatch there muxes an AAC pre-roll onto an mp3/wav/flac
+/// recording → corrupt `-c copy` concat).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Channels {
-    Mono,
-    Stereo,
+pub enum AudioCodec {
+    Mp3,
+    PcmS16le,
+    Flac,
+    Aac,
 }
 
-impl Channels {
-    fn count(self) -> u8 {
+impl AudioCodec {
+    /// The ffmpeg `-c:a` codec name.
+    pub fn ffmpeg_name(self) -> &'static str {
         match self {
-            Channels::Mono => 1,
-            Channels::Stereo => 2,
+            AudioCodec::Mp3 => "libmp3lame",
+            AudioCodec::PcmS16le => "pcm_s16le",
+            AudioCodec::Flac => "flac",
+            AudioCodec::Aac => "aac",
+        }
+    }
+
+    /// Whether this codec takes a `-b:a` bitrate. PCM and FLAC are lossless and
+    /// REJECT a bitrate argument, so it must be omitted for them.
+    pub fn uses_bitrate(self) -> bool {
+        matches!(self, AudioCodec::Mp3 | AudioCodec::Aac)
+    }
+
+    /// The container extension this codec belongs in when none is supplied (used
+    /// to normalise an empty/unknown extension so codec and container always
+    /// agree). AAC lives in m4a; the others share their own name.
+    pub fn default_extension(self) -> &'static str {
+        match self {
+            AudioCodec::Mp3 => "mp3",
+            AudioCodec::PcmS16le => "wav",
+            AudioCodec::Flac => "flac",
+            AudioCodec::Aac => "m4a",
         }
     }
 }
 
-/// Tunables for [`build_unified_capture_args`]. Kept small for the spike; Phase 3
-/// expands this into the full settings surface (bitrate, resolution, flip, …).
+/// Map an output file extension (with or without a leading dot, any case) to its
+/// codec. Unknown / empty extensions fall back to AAC (the safe, widely-muxable
+/// default). This is the single source of truth shared by the recorder and the
+/// pre-roll path.
+pub fn codec_for_extension(extension: &str) -> AudioCodec {
+    match extension
+        .trim_start_matches('.')
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "mp3" => AudioCodec::Mp3,
+        "wav" => AudioCodec::PcmS16le,
+        "flac" => AudioCodec::Flac,
+        // aac / m4a / mp4 / unknown / empty → AAC.
+        _ => AudioCodec::Aac,
+    }
+}
+
+/// The full `-c:a … [-b:a …k] -ar … -ac …` argument run for an output extension.
+/// Codec comes from [`codec_for_extension`]; `sample_rate`/`bitrate_kbps` come
+/// from validated settings. `-b:a` is omitted for the lossless codecs.
+pub fn audio_encode_args(
+    extension: &str,
+    channels: u8,
+    sample_rate: u32,
+    bitrate_kbps: u32,
+) -> Vec<String> {
+    let codec = codec_for_extension(extension);
+    let mut a: Vec<String> = vec!["-c:a".into(), codec.ffmpeg_name().into()];
+    if codec.uses_bitrate() {
+        a.push("-b:a".into());
+        a.push(format!("{bitrate_kbps}k"));
+    }
+    a.push("-ar".into());
+    a.push(sample_rate.to_string());
+    a.push("-ac".into());
+    a.push(channels.to_string());
+    a
+}
+
+/// The channel-select `pan` filter for a capture, or `None` for plain stereo (no
+/// remap). MonoL/MonoR pick ONE source channel; MonoMix averages both. Without
+/// this, every non-stereo mode collapsed to a bare `-ac 1` that let ffmpeg
+/// downmix arbitrarily — MonoL/MonoR produced the wrong channel or silence.
+pub fn channel_map_filter(mode: ChannelMode) -> Option<String> {
+    match mode {
+        ChannelMode::Stereo => None,
+        ChannelMode::MonoL => Some("pan=mono|c0=c0".into()),
+        ChannelMode::MonoR => Some("pan=mono|c0=c1".into()),
+        ChannelMode::MonoMix => Some("pan=mono|c0=0.5*c0+0.5*c1".into()),
+    }
+}
+
+/// Output channel count for an `-ac` argument: stereo keeps both, every mono mode
+/// downmixes to one (the [`channel_map_filter`] selects WHICH signal).
+fn ac_count(mode: ChannelMode) -> u8 {
+    match mode {
+        ChannelMode::Stereo => 2,
+        _ => 1,
+    }
+}
+
+/// The output file's extension (lower-cased by the codec mapper later), parsed
+/// from the basename so a dotted directory can't be mistaken for an extension.
+fn ext_of(output_path: &str) -> &str {
+    output_path
+        .rsplit(['/', '\\'])
+        .next()
+        .and_then(|name| name.rsplit_once('.').map(|(_, e)| e))
+        .unwrap_or_default()
+}
+
+/// Tunables for [`build_unified_capture_args`] — the audio settings surface that
+/// actually reaches ffmpeg (format/codec is derived from the output extension).
 #[derive(Debug, Clone)]
 pub struct CaptureOpts {
     /// User opted into stop-on-silence (drives the silencedetect threshold).
@@ -72,8 +171,12 @@ pub struct CaptureOpts {
     pub silence_threshold_db: Option<i32>,
     /// Capture framerate (video), e.g. 30.
     pub framerate: u32,
-    /// Output audio channel layout.
-    pub channels: Channels,
+    /// Output channel layout / downmix mode.
+    pub channel_mode: ChannelMode,
+    /// Output sample rate in Hz (already clamped by the caller).
+    pub sample_rate: u32,
+    /// Output bitrate in kbps for lossy codecs (ignored by PCM/FLAC).
+    pub bitrate_kbps: u32,
 }
 
 impl Default for CaptureOpts {
@@ -82,7 +185,9 @@ impl Default for CaptureOpts {
             stop_on_silence: false,
             silence_threshold_db: None,
             framerate: 30,
-            channels: Channels::Stereo,
+            channel_mode: ChannelMode::Stereo,
+            sample_rate: 48_000,
+            bitrate_kbps: 192,
         }
     }
 }
@@ -110,16 +215,20 @@ pub fn build_unified_capture_args(
 ) -> Vec<String> {
     let mut args: Vec<String> = vec!["-hide_banner".into()];
 
-    // Build the audio filter chain shared by every platform: optional drift
-    // correction first (Windows only), then silencedetect, then the per-channel
-    // peak-levels astats pass-through (drives the live UI meters). Comma-join
-    // only the NON-EMPTY filters (the drift slot is empty on mac/linux). `astats`
-    // is pass-through — it never alters the recorded audio, only emits telemetry
-    // to stderr.
+    // Build the audio filter chain shared by every platform, IN ORDER:
+    //   1. drift correction (`aresample`, Windows only — two device clocks),
+    //   2. channel `pan` (MonoL/MonoR/MonoMix downmix; empty for stereo),
+    //   3. silencedetect, then 4. the per-channel peak-levels astats pass-through.
+    // The pan comes BEFORE silencedetect + astats so the meters and the
+    // silence/auto-stop logic measure the POST-downmix signal the user actually
+    // records (on a MonoL take the meter then shows the one kept channel). Comma-
+    // join only the NON-EMPTY filters. `astats` is pass-through — it never alters
+    // the recorded audio, only emits telemetry to stderr.
     let drift = unified_audio_drift_filter(platform);
+    let pan = channel_map_filter(opts.channel_mode).unwrap_or_default();
     let silence = build_silence_detect_filter(opts.stop_on_silence, opts.silence_threshold_db);
     let levels = build_levels_detect_filter();
-    let af_chain = [drift.to_string(), silence, levels]
+    let af_chain = [drift.to_string(), pan, silence, levels]
         .into_iter()
         .filter(|f| !f.is_empty())
         .collect::<Vec<_>>()
@@ -195,11 +304,12 @@ pub fn build_unified_capture_args(
     }
 
     // Codecs. The audio codec is chosen from the OUTPUT extension (see
-    // `audio_codec_args`) so the encoded stream matches the chosen container —
+    // `codec_for_extension`) so the encoded stream matches the chosen container —
     // mp3→libmp3lame, wav→pcm_s16le, flac→flac, m4a/mp4/aac→aac. (Previously this
     // hardcoded AAC, which ffmpeg rejects when muxing into a .mp3/.wav/.flac
-    // container — the default `Mp3` format never recorded.) Always 48 kHz with the
-    // requested channel count. Video (when present) stays a simple libx264.
+    // container — the default `Mp3` format never recorded.) Sample rate, bitrate
+    // and channel count come from validated settings. Video (when present) stays a
+    // simple libx264.
     if has_video {
         args.push("-c:v".into());
         args.push("libx264".into());
@@ -208,7 +318,12 @@ pub fn build_unified_capture_args(
         args.push("-pix_fmt".into());
         args.push("yuv420p".into());
     }
-    args.extend(audio_codec_args(output_path, opts.channels.count()));
+    args.extend(audio_encode_args(
+        ext_of(output_path),
+        ac_count(opts.channel_mode),
+        opts.sample_rate,
+        opts.bitrate_kbps,
+    ));
 
     // Normalise leading timestamps so the file plays from t=0 in every player.
     args.push("-avoid_negative_ts".into());
@@ -222,40 +337,6 @@ pub fn build_unified_capture_args(
     args.push("-y".into());
     args.push(output_path.into());
     args
-}
-
-/// Audio codec + bitrate/sample-rate/channel args, chosen from the OUTPUT file's
-/// extension so the encoded stream is valid for its container. AAC only muxes
-/// into m4a/mp4/aac; an `.mp3`/`.wav`/`.flac` output needs its own codec, or
-/// ffmpeg refuses to write the file. Unknown extensions fall back to AAC.
-fn audio_codec_args(output_path: &str, channels: u8) -> Vec<String> {
-    let ext = output_path
-        .rsplit(['/', '\\'])
-        .next()
-        .and_then(|name| name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()))
-        .unwrap_or_default();
-
-    let mut a: Vec<String> = vec!["-c:a".into()];
-    match ext.as_str() {
-        "mp3" => {
-            a.push("libmp3lame".into());
-            a.push("-b:a".into());
-            a.push("192k".into());
-        }
-        "wav" => a.push("pcm_s16le".into()), // lossless PCM — no bitrate
-        "flac" => a.push("flac".into()),     // lossless — no bitrate
-        // aac / m4a / mp4 / unknown → AAC (the safe, widely-muxable default).
-        _ => {
-            a.push("aac".into());
-            a.push("-b:a".into());
-            a.push("192k".into());
-        }
-    }
-    a.push("-ar".into());
-    a.push("48000".into());
-    a.push("-ac".into());
-    a.push(channels.to_string());
-    a
 }
 
 #[cfg(test)]
@@ -537,7 +618,7 @@ mod tests {
     #[test]
     fn channels_and_framerate_are_honoured() {
         let opts = CaptureOpts {
-            channels: Channels::Mono,
+            channel_mode: ChannelMode::MonoMix,
             framerate: 25,
             ..CaptureOpts::default()
         };
@@ -545,5 +626,142 @@ mod tests {
             build_unified_capture_args(Platform::Windows, Some("Cam"), "Mic", "out.mp4", &opts);
         assert!(has_pair(&args, "-ac", "1"), "mono → -ac 1");
         assert!(has_pair(&args, "-framerate", "25"));
+    }
+
+    #[test]
+    fn codec_for_extension_normalises_case_and_dot() {
+        assert_eq!(codec_for_extension("mp3"), AudioCodec::Mp3);
+        assert_eq!(codec_for_extension(".MP3"), AudioCodec::Mp3);
+        assert_eq!(codec_for_extension("WAV"), AudioCodec::PcmS16le);
+        assert_eq!(codec_for_extension(".Flac"), AudioCodec::Flac);
+        assert_eq!(codec_for_extension("m4a"), AudioCodec::Aac);
+        assert_eq!(codec_for_extension("mp4"), AudioCodec::Aac);
+        assert_eq!(codec_for_extension("aac"), AudioCodec::Aac);
+        // Unknown / empty → AAC (never panics, always a valid codec).
+        assert_eq!(codec_for_extension("ogg"), AudioCodec::Aac);
+        assert_eq!(codec_for_extension(""), AudioCodec::Aac);
+    }
+
+    #[test]
+    fn audio_encode_args_emit_bitrate_only_for_lossy() {
+        // mp3/aac carry -b:a; pcm/flac must NOT (ffmpeg rejects it).
+        let mp3 = audio_encode_args("mp3", 2, 48_000, 192);
+        assert!(has_pair(&mp3, "-c:a", "libmp3lame"));
+        assert!(has_pair(&mp3, "-b:a", "192k"));
+        let aac = audio_encode_args("m4a", 2, 48_000, 256);
+        assert!(has_pair(&aac, "-c:a", "aac"));
+        assert!(has_pair(&aac, "-b:a", "256k"));
+        let wav = audio_encode_args("wav", 1, 48_000, 192);
+        assert!(has_pair(&wav, "-c:a", "pcm_s16le"));
+        assert!(!wav.iter().any(|a| a == "-b:a"));
+        let flac = audio_encode_args("flac", 2, 48_000, 192);
+        assert!(has_pair(&flac, "-c:a", "flac"));
+        assert!(!flac.iter().any(|a| a == "-b:a"));
+    }
+
+    #[test]
+    fn sample_rate_and_bitrate_flow_into_args() {
+        let opts = CaptureOpts {
+            sample_rate: 44_100,
+            bitrate_kbps: 256,
+            ..CaptureOpts::default()
+        };
+        let mp3 = build_unified_capture_args(Platform::MacOS, None, "1", "/tmp/x.mp3", &opts);
+        assert!(has_pair(&mp3, "-ar", "44100"), "sample rate reaches ffmpeg");
+        assert!(has_pair(&mp3, "-b:a", "256k"), "bitrate reaches ffmpeg");
+        // FLAC ignores the bitrate but still honours the sample rate.
+        let flac_opts = CaptureOpts {
+            sample_rate: 96_000,
+            ..CaptureOpts::default()
+        };
+        let flac =
+            build_unified_capture_args(Platform::MacOS, None, "1", "/tmp/x.flac", &flac_opts);
+        assert!(has_pair(&flac, "-ar", "96000"));
+        assert!(!flac.iter().any(|a| a == "-b:a"));
+    }
+
+    #[test]
+    fn channel_map_filter_strings() {
+        assert_eq!(channel_map_filter(ChannelMode::Stereo), None);
+        assert_eq!(
+            channel_map_filter(ChannelMode::MonoL).as_deref(),
+            Some("pan=mono|c0=c0")
+        );
+        assert_eq!(
+            channel_map_filter(ChannelMode::MonoR).as_deref(),
+            Some("pan=mono|c0=c1")
+        );
+        assert_eq!(
+            channel_map_filter(ChannelMode::MonoMix).as_deref(),
+            Some("pan=mono|c0=0.5*c0+0.5*c1")
+        );
+    }
+
+    #[test]
+    fn stereo_emits_ac_2_and_no_pan() {
+        let args = build_unified_capture_args(
+            Platform::MacOS,
+            None,
+            "1",
+            "/tmp/x.mp3",
+            &CaptureOpts::default(),
+        );
+        assert!(has_pair(&args, "-ac", "2"));
+        let af = args
+            .iter()
+            .position(|a| a == "-af")
+            .map(|i| args[i + 1].clone())
+            .unwrap();
+        assert!(!af.contains("pan="), "stereo needs no pan; got: {af}");
+    }
+
+    #[test]
+    fn mono_modes_emit_ac_1_and_pan() {
+        for (mode, expected) in [
+            (ChannelMode::MonoL, "pan=mono|c0=c0"),
+            (ChannelMode::MonoR, "pan=mono|c0=c1"),
+            (ChannelMode::MonoMix, "pan=mono|c0=0.5*c0+0.5*c1"),
+        ] {
+            let opts = CaptureOpts {
+                channel_mode: mode,
+                ..CaptureOpts::default()
+            };
+            let args = build_unified_capture_args(Platform::MacOS, None, "1", "/tmp/x.mp3", &opts);
+            assert!(has_pair(&args, "-ac", "1"), "{mode:?} → -ac 1");
+            let af = args
+                .iter()
+                .position(|a| a == "-af")
+                .map(|i| args[i + 1].clone())
+                .unwrap();
+            assert!(
+                af.contains(expected),
+                "{mode:?} needs {expected}; got: {af}"
+            );
+        }
+    }
+
+    #[test]
+    fn pan_slots_after_drift_before_silencedetect() {
+        // Windows MonoMix: the chain order must be aresample, pan, silencedetect,
+        // astats — so the meters/silence see the post-downmix signal.
+        let opts = CaptureOpts {
+            channel_mode: ChannelMode::MonoMix,
+            stop_on_silence: true,
+            ..CaptureOpts::default()
+        };
+        let args =
+            build_unified_capture_args(Platform::Windows, Some("Cam"), "Mic", "out.mp4", &opts);
+        let af = args
+            .iter()
+            .position(|a| a == "-af")
+            .map(|i| args[i + 1].clone())
+            .unwrap();
+        let drift = af.find("aresample").unwrap();
+        let pan = af.find("pan=").unwrap();
+        let sil = af.find("silencedetect").unwrap();
+        let lvl = af.find("astats").unwrap();
+        assert!(drift < pan, "pan after drift; got: {af}");
+        assert!(pan < sil, "pan before silencedetect; got: {af}");
+        assert!(sil < lvl, "silencedetect before astats; got: {af}");
     }
 }

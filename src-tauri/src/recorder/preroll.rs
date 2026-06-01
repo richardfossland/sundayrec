@@ -206,6 +206,7 @@ impl PrerollEngine {
         sample_rate: u32,
         channels: u8,
         audio_codec: &str,
+        bitrate_kbps: Option<u32>,
         container_ext: &str,
     ) -> Option<PrerollClip> {
         // Flip active off FIRST so the loop's exit handler won't restart it.
@@ -244,6 +245,7 @@ impl PrerollEngine {
             sample_rate,
             channels,
             audio_codec,
+            bitrate_kbps,
             &out.to_string_lossy(),
         );
         let trimmed_ok = run_to_completion(&trim_args).await;

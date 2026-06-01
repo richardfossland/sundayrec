@@ -111,7 +111,12 @@ function useRecordingSession(video: boolean) {
           silence_threshold_db: s?.silenceThreshold ?? null,
           silence_timeout_minutes: s?.silenceTimeoutMinutes ?? 5,
           framerate: 30,
-          stereo: (s?.channels ?? "stereo") === "stereo",
+          channel_mode: s?.channels ?? "stereo",
+          sample_rate: Math.min(Math.max(s?.sampleRate ?? 48000, 8000), 192000),
+          bitrate_kbps: Math.min(
+            Math.max(Number.parseInt(s?.bitrate ?? "192", 10) || 192, 32),
+            320,
+          ),
           split_minutes: s?.splitMinutes ?? 0,
           manual_max_minutes: s?.manualMaxMinutes ?? 0,
         };

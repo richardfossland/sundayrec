@@ -208,7 +208,10 @@ mod tests {
             None
         );
         // ametadata's interleaved frame headers carry no peak level.
-        assert_eq!(parse_ametadata_peak("frame:42 pts:512 pts_time:0.0106667"), None);
+        assert_eq!(
+            parse_ametadata_peak("frame:42 pts:512 pts_time:0.0106667"),
+            None
+        );
         assert_eq!(
             parse_ametadata_peak("size=    1024kB time=00:00:05.00 bitrate=..."),
             None
