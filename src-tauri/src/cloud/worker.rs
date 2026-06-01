@@ -237,7 +237,15 @@ pub async fn process_once(pool: &SqlitePool, config: &GoogleOAuthConfig) -> AppR
 /// configured or the queue is empty; otherwise drains and re-schedules itself
 /// off `queue::next_wakeup_delay_ms`.
 pub fn spawn(pool: SqlitePool, config: Option<GoogleOAuthConfig>) {
-    tokio::spawn(async move {
+    // Use Tauri's async runtime handle, not bare `tokio::spawn`: this is called
+    // from the synchronous `setup` hook on the main thread, where no tokio
+    // runtime is *entered*, so `tokio::spawn` would panic ("must be called from
+    // the context of a Tokio runtime"). Inside `setup` that panic crosses the
+    // non-unwinding `did_finish_launching` ObjC callback and aborts the process
+    // before the window ever opens. `tauri::async_runtime::spawn` holds a live
+    // handle and works regardless of the current thread's context — matching
+    // every other spawn in this crate (scheduler/preroll/engine/preview).
+    tauri::async_runtime::spawn(async move {
         if config.is_none() {
             tracing::info!("cloud upload worker idle: Google OAuth client not configured");
         }
