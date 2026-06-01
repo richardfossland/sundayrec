@@ -111,7 +111,10 @@ pub async fn check(app: &AppHandle, engine: &UpdateEngine) -> AppResult<UpdateSt
 /// Download + install the pending update. `feature_disabled` in the default build.
 #[cfg(not(feature = "updater"))]
 #[cfg_attr(not(feature = "updater"), allow(unused_variables))]
-pub async fn download_and_install(app: &AppHandle, engine: &UpdateEngine) -> AppResult<UpdateStatus> {
+pub async fn download_and_install(
+    app: &AppHandle,
+    engine: &UpdateEngine,
+) -> AppResult<UpdateStatus> {
     let _ = (app, engine);
     Err(feature_disabled())
 }
@@ -234,8 +237,8 @@ pub async fn download_and_install(
                 // long enough; we only read/write the Mutex behind it.
                 move |chunk_len, content_length| {
                     let total = content_length.unwrap_or(0);
-                    let so_far = downloaded.fetch_add(chunk_len as u64, Ordering::SeqCst)
-                        + chunk_len as u64;
+                    let so_far =
+                        downloaded.fetch_add(chunk_len as u64, Ordering::SeqCst) + chunk_len as u64;
                     engine_ptr.set(UpdateStatus::Downloading {
                         version: ver_for_progress.clone(),
                         percent: download_percent(so_far, total),

@@ -179,7 +179,8 @@ pub async fn publish_generate_feed(db: State<'_, Db>) -> AppResult<FeedPreview> 
     #[cfg(not(feature = "publish"))]
     {
         Err(crate::error::AppError::Validation(
-            "feature_disabled: podcast publishing requires a build with `--features publish`".into(),
+            "feature_disabled: podcast publishing requires a build with `--features publish`"
+                .into(),
         ))
     }
 

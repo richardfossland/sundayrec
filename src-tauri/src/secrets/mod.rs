@@ -201,10 +201,7 @@ mod tests {
         assert_eq!(stream_key_account("yt"), "stream.key.yt");
         assert_ne!(stream_key_account("a"), stream_key_account("b"));
         // Must not collide with the single OAuth StreamKey slot's account.
-        assert_ne!(
-            stream_key_account("x"),
-            SecretProvider::StreamKey.account()
-        );
+        assert_ne!(stream_key_account("x"), SecretProvider::StreamKey.account());
     }
 
     // Tolerant: exercise the REAL keychain for a per-destination key when one is

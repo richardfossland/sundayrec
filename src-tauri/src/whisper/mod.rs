@@ -67,9 +67,8 @@ pub fn delete_model(models_dir: &std::path::Path, id: &str) -> bool {
 /// `modelDownloads` map of abort callbacks (one entry per active model id).
 #[derive(Default)]
 pub struct DownloadGuard {
-    notify: std::sync::Mutex<
-        std::collections::HashMap<String, std::sync::Arc<tokio::sync::Notify>>,
-    >,
+    notify:
+        std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<tokio::sync::Notify>>>,
 }
 
 impl DownloadGuard {
@@ -105,10 +104,7 @@ impl DownloadGuard {
 
     /// Drop `id`'s signal once its download finished (success, error, or cancel).
     pub fn clear(&self, id: &str) {
-        self.notify
-            .lock()
-            .expect("download-guard mutex")
-            .remove(id);
+        self.notify.lock().expect("download-guard mutex").remove(id);
     }
 }
 
@@ -265,8 +261,8 @@ pub async fn download_model(
     use tokio::io::AsyncWriteExt;
 
     // 0. The core knows the URL, expected size + SHA for this id.
-    let meta = model_meta(id)
-        .ok_or_else(|| AppError::Validation(format!("unknown_model: {id}")))?;
+    let meta =
+        model_meta(id).ok_or_else(|| AppError::Validation(format!("unknown_model: {id}")))?;
     std::fs::create_dir_all(models_dir)?;
     let dest = model_file(models_dir, id);
     let partial = dest.with_extension("bin.partial");
@@ -309,8 +305,7 @@ pub async fn download_model(
             .await
             .map_err(|e| AppError::Internal(format!("write chunk: {e}")))?;
         downloaded += bytes.len() as u64;
-        let progress =
-            whisper::download_progress(id, downloaded, header_total, meta.size_bytes);
+        let progress = whisper::download_progress(id, downloaded, header_total, meta.size_bytes);
         let _ = app.emit("whisper://model-progress", &progress);
     }
     file.flush()

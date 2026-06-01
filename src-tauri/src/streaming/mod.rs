@@ -221,9 +221,7 @@ fn strip_quotes(s: &str) -> String {
 /// Validate every pushable destination's key + URL before a launch. Returns the
 /// first failure (with the destination id) so the renderer can point at the bad
 /// row. Pure — used by the seam before spawning and unit-tested here.
-pub fn validate_destinations(
-    dests: &[StreamDestination],
-) -> Result<(), (String, StreamKeyError)> {
+pub fn validate_destinations(dests: &[StreamDestination]) -> Result<(), (String, StreamKeyError)> {
     for d in dests.iter().filter(|d| d.enabled) {
         validate_rtmp_url(&d.rtmp_url).map_err(|e| (d.id.clone(), e))?;
         validate_stream_key(&d.stream_key).map_err(|e| (d.id.clone(), e))?;

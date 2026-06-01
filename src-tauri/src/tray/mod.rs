@@ -116,7 +116,8 @@ pub fn emit_action<R: Runtime>(app: &AppHandle<R>, action: TrayAction) {
         TrayAction::StopRecording => {
             // Wire straight to the recorder command's effect — `RecorderEngine`
             // is managed state, and `stop()` is safe when nothing is running.
-            app.state::<crate::recorder::engine::RecorderEngine>().stop();
+            app.state::<crate::recorder::engine::RecorderEngine>()
+                .stop();
             // Still surface the event so the renderer can refresh its UI state.
             let _ = app.emit(TRAY_ACTION_EVENT, action_id(action));
         }

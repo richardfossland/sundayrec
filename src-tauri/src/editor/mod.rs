@@ -215,7 +215,10 @@ fn resolve_sidecar(media_path: &str, sidecar: EditorSidecar) -> Option<String> {
 /// unparseable (the editor treats "no sidecar" and "corrupt sidecar" the same —
 /// start fresh). The returned value is the raw `serde_json::Value` the renderer
 /// shapes per sidecar.
-pub fn read_sidecar(media_path: &str, sidecar: EditorSidecar) -> AppResult<Option<serde_json::Value>> {
+pub fn read_sidecar(
+    media_path: &str,
+    sidecar: EditorSidecar,
+) -> AppResult<Option<serde_json::Value>> {
     let Some(path) = resolve_sidecar(media_path, sidecar) else {
         return Ok(None);
     };
@@ -306,7 +309,10 @@ pub fn cleanup_temp_files(folders: &[String]) -> usize {
 /// of `inputPath` through the preset's single-pass chain to a temp mp3 the
 /// renderer can `<audio>`-play A/B against the original. Mirrors `master-preview`.
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
-#[ts(export, export_to = "../../src/lib/bindings/EditorMasterPreviewRequest.ts")]
+#[ts(
+    export,
+    export_to = "../../src/lib/bindings/EditorMasterPreviewRequest.ts"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct EditorMasterPreviewRequest {
     pub input_path: String,
@@ -317,7 +323,10 @@ pub struct EditorMasterPreviewRequest {
 
 /// Where the rendered preview mp3 landed (a temp file the renderer plays).
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
-#[ts(export, export_to = "../../src/lib/bindings/EditorMasterPreviewResult.ts")]
+#[ts(
+    export,
+    export_to = "../../src/lib/bindings/EditorMasterPreviewResult.ts"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct EditorMasterPreviewResult {
     pub preview_path: String,
@@ -327,7 +336,10 @@ pub struct EditorMasterPreviewResult {
 /// from the preset) then apply (pass 2) `inputPath` to `outputPath`, tracked by
 /// `jobId` so the UI can [`master_cancel`] it. Mirrors `master-apply`.
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
-#[ts(export, export_to = "../../src/lib/bindings/EditorMasterApplyRequest.ts")]
+#[ts(
+    export,
+    export_to = "../../src/lib/bindings/EditorMasterApplyRequest.ts"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct EditorMasterApplyRequest {
     pub input_path: String,
@@ -342,7 +354,10 @@ pub struct EditorMasterApplyRequest {
 
 /// Where the mastered file landed.
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
-#[ts(export, export_to = "../../src/lib/bindings/EditorMasterApplyResult.ts")]
+#[ts(
+    export,
+    export_to = "../../src/lib/bindings/EditorMasterApplyResult.ts"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct EditorMasterApplyResult {
     pub output_path: String,
@@ -647,7 +662,9 @@ pub async fn master_preview(
     let args = preview_args(&req.input_path, &preset, start, dur, &out_str);
     run_ffmpeg(&args).await?;
     if !out_path.exists() {
-        return Err(AppError::Recording("master preview produced no file".into()));
+        return Err(AppError::Recording(
+            "master preview produced no file".into(),
+        ));
     }
     Ok(EditorMasterPreviewResult {
         preview_path: out_str,
@@ -716,7 +733,9 @@ async fn master_apply_inner<F>(
 where
     F: Fn(f64, f64),
 {
-    use sundayrec_core::mastering::{build_apply_pass_filters, master_codec_args, parse_progress_time};
+    use sundayrec_core::mastering::{
+        build_apply_pass_filters, master_codec_args, parse_progress_time,
+    };
     use tokio::io::AsyncReadExt;
 
     // 1. Measure (pass 1) for the linear-mode apply chain.
@@ -1129,7 +1148,11 @@ mod tests {
         let cuts = serde_json::json!({ "cuts": [{ "start": 1.0, "end": 2.0 }], "ts": 5 });
         let transcript = serde_json::json!({ "segments": [] });
         assert!(write_sidecar(&media, EditorSidecar::CutsDraft, &cuts));
-        assert!(write_sidecar(&media, EditorSidecar::Transcript, &transcript));
+        assert!(write_sidecar(
+            &media,
+            EditorSidecar::Transcript,
+            &transcript
+        ));
         assert_eq!(
             read_sidecar(&media, EditorSidecar::CutsDraft)
                 .unwrap()
