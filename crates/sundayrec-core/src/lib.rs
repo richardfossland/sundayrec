@@ -48,6 +48,7 @@
 pub mod audio;
 pub mod audio_analysis;
 pub mod capture;
+pub mod church_calendar;
 pub mod cloud;
 pub mod device_enum;
 pub mod device_match;

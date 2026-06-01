@@ -8,16 +8,16 @@
 //! closed when a scheduled recording fires). It's pure and reusable, so manual
 //! recording can adopt it too.
 //!
-//! ## `church` pattern — honest partial
+//! ## `church` pattern
 //!
 //! The Electron `church` pattern names the file after the liturgical day via
-//! `shared/church-calendar.ts` (an Easter-computus + Norwegian holiday table).
-//! That ~110-line module is **not yet ported** — it belongs with a dedicated
-//! recorder-utils/metadata port, not bolted onto Fase 5. So [`build_filename`]
-//! takes an OPTIONAL precomputed `church_name`: pass `Some(name)` once the
-//! calendar lands, or `None` to fall back to the `plain` wording
+//! `shared/church-calendar.ts` (an Easter-computus + Norwegian holiday table),
+//! now ported as [`crate::church_calendar`]. [`build_filename`] still accepts an
+//! OPTIONAL precomputed `church_name` (an explicit override always wins); when
+//! it is `None` the calendar resolves the liturgical day for the recording date.
+//! Ordinary days (no known feast/holiday) fall back to the `plain` wording
 //! (`"gudstjeneste"`). The fallback only affects the `church` pattern; every
-//! other pattern is a faithful port today.
+//! other pattern is a faithful port.
 
 use chrono::{Datelike, NaiveDateTime, Timelike};
 
@@ -97,8 +97,16 @@ pub fn build_filename(p: &FilenameParams) -> String {
 
     match p.pattern {
         FilenamePattern::Church => {
-            let name = p.church_name.unwrap_or("gudstjeneste");
-            format!("{name}{ts}_{date}.{ext}")
+            // Explicit override wins; otherwise resolve the liturgical day from
+            // the Norwegian church calendar and sanitise it; ordinary days fall
+            // back to the `plain` wording.
+            let resolved = p
+                .church_name
+                .map(|n| n.to_string())
+                .or_else(|| crate::church_calendar::liturgical_day_name(p.now.date()))
+                .map(|n| sanitize_filename(&n))
+                .unwrap_or_else(|| "gudstjeneste".to_string());
+            format!("{resolved}{ts}_{date}.{ext}")
         }
         FilenamePattern::Plain => format!("gudstjeneste{ts}_{date}.{ext}"),
         FilenamePattern::Datetime => {
@@ -188,7 +196,7 @@ mod tests {
             "1. søndag i advent_2026-11-29.mp3"
         );
 
-        // No precomputed name → falls back to the plain wording.
+        // No precomputed name, ordinary day → falls back to the plain wording.
         let fallback = FilenameParams {
             church_name: None,
             ..base_like(dt("2026-11-29 11:00"))
@@ -198,6 +206,32 @@ mod tests {
             ..fallback
         };
         assert_eq!(build_filename(&fallback), "gudstjeneste_2026-11-29.mp3");
+    }
+
+    #[test]
+    fn church_pattern_resolves_from_calendar() {
+        // No explicit name on a known liturgical day → calendar resolves it.
+        // 2026-04-05 is 1. påskedag (Easter Sunday 2026).
+        let easter = FilenameParams {
+            pattern: FilenamePattern::Church,
+            ..base_like(dt("2026-04-05 11:00"))
+        };
+        assert_eq!(build_filename(&easter), "1. påskedag_2026-04-05.mp3");
+
+        // 2026-12-25 is 1. juledag.
+        let christmas = FilenameParams {
+            pattern: FilenamePattern::Church,
+            ..base_like(dt("2026-12-25 11:00"))
+        };
+        assert_eq!(build_filename(&christmas), "1. juledag_2026-12-25.mp3");
+
+        // Explicit church_name still overrides the calendar.
+        let override_name = FilenameParams {
+            pattern: FilenamePattern::Church,
+            church_name: Some("Spesial"),
+            ..base_like(dt("2026-04-05 11:00"))
+        };
+        assert_eq!(build_filename(&override_name), "Spesial_2026-04-05.mp3");
     }
 
     #[test]
