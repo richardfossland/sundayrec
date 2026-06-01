@@ -238,17 +238,13 @@ function TabLydkilde({ s, update }: TabProps) {
         {/* NOTE: `inputVolume` (input gain %) is a real Settings field but the
             redesign has no gain slider on this tab, so it stays at its
             persisted/default value — left static. */}
-        {/* TODO: no single EQ on/off Settings field (only per-band gains
-            eqBass/eqMid/eqTreble). Reflect "active" when any band is non-zero;
-            turning it off zeroes the bands. There is no UI here to dial in a
-            non-zero curve, so the toggle only clears an existing EQ. */}
         <SettingRow
           title="Equalizer (bass / mid / diskant)"
           desc="Lett tonejustering på vei inn."
           control={
             <LiveToggle
-              on={s.eqBass !== 0 || s.eqMid !== 0 || s.eqTreble !== 0}
-              onChange={() => update({ eqBass: 0, eqMid: 0, eqTreble: 0 })}
+              on={s.eqEnabled}
+              onChange={(next) => update({ eqEnabled: next })}
             />
           }
         />
@@ -353,19 +349,40 @@ function TabVideo({ s, update }: TabProps) {
         </div>
       </Card>
       <Card title="Kvalitet" pad>
-        {/* TODO: resolution/fps have no Settings fields — kept static. */}
         <div className="sr-label" style={{ marginBottom: 10 }}>
           Oppløsning
         </div>
         <div className="sr-seg cols-3">
-          <SegOpt title="480p" sub="~1.5 GB / t" />
-          <SegOpt sel title="720p" badge="Anbefalt" sub="~3.5 GB / t" />
-          <SegOpt title="1080p" sub="~7 GB / t" />
+          <LiveSegOpt
+            sel={s.videoResolution === "480p"}
+            title="480p"
+            sub="~1.5 GB / t"
+            onSelect={() => update({ videoResolution: "480p" })}
+          />
+          <LiveSegOpt
+            sel={s.videoResolution === "720p"}
+            title="720p"
+            badge="Anbefalt"
+            sub="~3.5 GB / t"
+            onSelect={() => update({ videoResolution: "720p" })}
+          />
+          <LiveSegOpt
+            sel={s.videoResolution === "1080p"}
+            title="1080p"
+            sub="~7 GB / t"
+            onSelect={() => update({ videoResolution: "1080p" })}
+          />
         </div>
         <div className="sr-field" style={{ marginTop: 16, maxWidth: 220 }}>
           <span className="sr-label">Bilderate</span>
-          {/* TODO: no fps Settings field */}
-          <div className="sr-select">30 fps (anbefalt)</div>
+          <select
+            className="sr-select"
+            value={s.videoFramerate}
+            onChange={(e) => update({ videoFramerate: Number(e.target.value) })}
+          >
+            <option value={25}>25 fps</option>
+            <option value={30}>30 fps (anbefalt)</option>
+          </select>
         </div>
       </Card>
       <Card
@@ -373,31 +390,40 @@ function TabVideo({ s, update }: TabProps) {
         desc="Velg om lyd og video skal kombineres til én fil eller lagres separat."
         pad
       >
-        {/* TODO: combined-vs-separate output has no Settings field — kept static. */}
         <div className="sr-seg cols-2" style={{ marginTop: 14 }}>
-          <SegOpt
-            sel
+          <LiveSegOpt
+            sel={s.outputMode === "combined"}
             title="Kombinert MP4"
             sub="Lyd + video i én fil — klar for YouTube"
+            onSelect={() => update({ outputMode: "combined" })}
           />
-          <SegOpt
+          <LiveSegOpt
+            sel={s.outputMode === "separate"}
             title="Separate filer"
             sub="Lyd og video lagres hver for seg"
+            onSelect={() => update({ outputMode: "separate" })}
           />
         </div>
         <div style={{ marginTop: 6 }}>
-          {/* TODO: "behold separat lydfil" has no Settings field — kept static. */}
           <SettingRow
             title="Behold separat lydfil"
             desc="Lagrer også den høykvalitets lydfilen ved siden av MP4."
-            control={<Toggle />}
+            control={
+              <LiveToggle
+                on={s.keepSeparateAudio}
+                onChange={(next) => update({ keepSeparateAudio: next })}
+              />
+            }
           />
-          {/* TODO: "perfekt A/V-synk" has no dedicated Settings field (the
-              single-process A/V path is backend policy) — kept static. */}
           <SettingRow
             title="Perfekt A/V-synk"
             desc="Bruker én ffmpeg-prosess for både lyd og bilde — eliminerer sync-drift."
-            control={<Toggle on />}
+            control={
+              <LiveToggle
+                on={s.avSync}
+                onChange={(next) => update({ avSync: next })}
+              />
+            }
           />
         </div>
       </Card>
@@ -766,21 +792,26 @@ function TabVarsler({ s, update }: TabProps) {
         desc="Send varsler til en chat-kanal i tillegg til e-post."
         pad
       >
-        {/* TODO: webhook URL + "send på advarsler" have no Settings fields. */}
         <div className="sr-field" style={{ marginTop: 14 }}>
           <span className="sr-label">Webhook-URL</span>
-          <div
+          <input
             className="sr-input mono"
-            style={{ color: "var(--sr-text-dim)" }}
-          >
-            https://hooks.slack.com/services/…
-          </div>
+            type="url"
+            value={s.webhookUrl}
+            placeholder="https://hooks.slack.com/services/…"
+            onChange={(e) => update({ webhookUrl: e.target.value })}
+          />
         </div>
         <div style={{ marginTop: 6 }}>
           <SettingRow
             title="Send også på advarsler"
             desc="Som standard sendes kun feilmeldinger."
-            control={<Toggle />}
+            control={
+              <LiveToggle
+                on={s.webhookOnWarning}
+                onChange={(next) => update({ webhookOnWarning: next })}
+              />
+            }
           />
         </div>
         <button className="sr-btn ghost sm" style={{ marginTop: 12 }}>

@@ -314,7 +314,7 @@ pub(crate) fn build_opts(
         stop_on_silence: settings.stop_on_silence,
         silence_threshold_db: Some(settings.silence_threshold),
         silence_timeout_minutes: settings.silence_timeout_minutes.max(1) as u32,
-        framerate: 30,
+        framerate: settings.video_framerate.clamp(1, 120) as u32,
         stereo: matches!(settings.channels, ChannelMode::Stereo),
         split_minutes: settings.split_minutes.max(0) as u32,
         manual_max_minutes: max_minutes,

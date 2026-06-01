@@ -51,6 +51,27 @@ videoDeviceName: string | null,
  */
 videoDeviceIndex: number | null, 
 /**
+ * Capture resolution tag: `"480p"` | `"720p"` | `"1080p"`. Default `"720p"`.
+ */
+videoResolution: string, 
+/**
+ * Capture frame rate (fps). Valid 1..=120, default 30.
+ */
+videoFramerate: number, 
+/**
+ * Output muxing: `"combined"` (one A/V file) | `"separate"` (split files).
+ * Default `"combined"`.
+ */
+outputMode: string, 
+/**
+ * Also keep the standalone high-quality audio file next to a combined MP4?
+ */
+keepSeparateAudio: boolean, 
+/**
+ * Use a single ffmpeg process for A/V to eliminate sync drift? Default true.
+ */
+avSync: boolean, 
+/**
  * Input channel layout.
  */
 channels: ChannelMode, 
@@ -62,6 +83,10 @@ sampleRate: number,
  * Input gain as a percentage. Valid 0..=200, default 100.
  */
 inputVolume: number, 
+/**
+ * Is the equalizer enabled?
+ */
+eqEnabled: boolean, 
 /**
  * Bass EQ gain in dB. Valid -24..=24, default 0.
  */
@@ -205,6 +230,14 @@ notifyStart: boolean,
  * Fire a native notification when a recording stops? Default true.
  */
 notifyStop: boolean, 
+/**
+ * Chat webhook URL (Slack/Discord/Teams). Empty = unset.
+ */
+webhookUrl: string, 
+/**
+ * Also POST the webhook on warnings (not just errors)? Default false.
+ */
+webhookOnWarning: boolean, 
 /**
  * Send an email when a recording fails / a scheduled one is missed?
  */

@@ -121,6 +121,22 @@ pub struct Settings {
     /// it succeeds. dshow cameras are addressed by name, so this stays `None`.
     #[serde(default)]
     pub video_device_index: Option<i32>,
+    /// Capture resolution tag: `"480p"` | `"720p"` | `"1080p"`. Default `"720p"`.
+    #[serde(default = "default_video_resolution")]
+    pub video_resolution: String,
+    /// Capture frame rate (fps). Valid 1..=120, default 30.
+    #[serde(default = "default_video_framerate")]
+    pub video_framerate: i32,
+    /// Output muxing: `"combined"` (one A/V file) | `"separate"` (split files).
+    /// Default `"combined"`.
+    #[serde(default = "default_output_mode")]
+    pub output_mode: String,
+    /// Also keep the standalone high-quality audio file next to a combined MP4?
+    #[serde(default)]
+    pub keep_separate_audio: bool,
+    /// Use a single ffmpeg process for A/V to eliminate sync drift? Default true.
+    #[serde(default = "default_true")]
+    pub av_sync: bool,
 
     // ── Audio processing ───────────────────────────────────────────────────────
     /// Input channel layout.
@@ -132,6 +148,9 @@ pub struct Settings {
     /// Input gain as a percentage. Valid 0..=200, default 100.
     #[serde(default = "default_input_volume")]
     pub input_volume: i32,
+    /// Is the equalizer enabled?
+    #[serde(default)]
+    pub eq_enabled: bool,
     /// Bass EQ gain in dB. Valid -24..=24, default 0.
     #[serde(default)]
     pub eq_bass: i32,
@@ -253,6 +272,12 @@ pub struct Settings {
     /// Fire a native notification when a recording stops? Default true.
     #[serde(default = "default_true")]
     pub notify_stop: bool,
+    /// Chat webhook URL (Slack/Discord/Teams). Empty = unset.
+    #[serde(default)]
+    pub webhook_url: String,
+    /// Also POST the webhook on warnings (not just errors)? Default false.
+    #[serde(default)]
+    pub webhook_on_warning: bool,
 
     // ── Email alerts (R7 — Electron `email*`; the SMTP pass lives in the OS ────
     //    keychain, NEVER here — mirrors `store.ts` `setSmtpPassword`) ───────────
@@ -343,6 +368,15 @@ fn default_true() -> bool {
 fn default_smtp_port() -> i32 {
     587
 }
+fn default_video_resolution() -> String {
+    "720p".to_string()
+}
+fn default_video_framerate() -> i32 {
+    30
+}
+fn default_output_mode() -> String {
+    "combined".to_string()
+}
 
 impl Default for Settings {
     /// The Electron `defaults` object (`store.ts` lines 6+), field-for-field.
@@ -358,10 +392,16 @@ impl Default for Settings {
             video_enabled: false,
             video_device_name: None,
             video_device_index: None,
+            video_resolution: default_video_resolution(),
+            video_framerate: default_video_framerate(),
+            output_mode: default_output_mode(),
+            keep_separate_audio: false,
+            av_sync: true,
 
             channels: default_channels(),
             sample_rate: default_sample_rate(),
             input_volume: default_input_volume(),
+            eq_enabled: false,
             eq_bass: 0,
             eq_mid: 0,
             eq_treble: 0,
@@ -402,6 +442,8 @@ impl Default for Settings {
 
             notify_start: true,
             notify_stop: true,
+            webhook_url: String::new(),
+            webhook_on_warning: false,
 
             email_on_error: false,
             email_address: String::new(),
@@ -458,6 +500,9 @@ impl Settings {
         // Output
         self.auto_delete_days = clamp_i32(self.auto_delete_days, 0, 3650);
 
+        // Video capture
+        self.video_framerate = clamp_i32(self.video_framerate, 1, 120);
+
         // Recording behaviour
         self.silence_threshold = clamp_i32(self.silence_threshold, -90, 0);
         self.silence_timeout_minutes = clamp_i32(self.silence_timeout_minutes, 1, 120);
@@ -509,7 +554,13 @@ mod tests {
         assert!(!s.video_enabled);
         assert_eq!(s.video_device_name, None);
         assert_eq!(s.video_device_index, None);
+        assert_eq!(s.video_resolution, "720p");
+        assert_eq!(s.video_framerate, 30);
+        assert_eq!(s.output_mode, "combined");
+        assert!(!s.keep_separate_audio);
+        assert!(s.av_sync);
         // Audio processing
+        assert!(!s.eq_enabled);
         assert_eq!(s.channels, ChannelMode::Stereo);
         assert_eq!(s.sample_rate, 48_000);
         assert_eq!(s.input_volume, 100);
@@ -553,6 +604,8 @@ mod tests {
         // Notifications (R7)
         assert!(s.notify_start);
         assert!(s.notify_stop);
+        assert_eq!(s.webhook_url, "");
+        assert!(!s.webhook_on_warning);
         // Email (R7)
         assert!(!s.email_on_error);
         assert_eq!(s.email_address, "");
@@ -731,6 +784,23 @@ mod tests {
         assert_eq!(s.manual_max_minutes, 1440);
         assert_eq!(s.pre_roll_seconds, 60);
         assert_eq!(s.reminder_minutes, 60);
+    }
+
+    #[test]
+    fn validate_clamps_video_framerate() {
+        let mut over = Settings {
+            video_framerate: 9_999,
+            ..Default::default()
+        };
+        over.validate();
+        assert_eq!(over.video_framerate, 120);
+
+        let mut under = Settings {
+            video_framerate: 0,
+            ..Default::default()
+        };
+        under.validate();
+        assert_eq!(under.video_framerate, 1);
     }
 
     #[test]
