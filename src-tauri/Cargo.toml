@@ -107,7 +107,10 @@ base64 = "0.22"
 # stderr/stdout line-by-line in real time (parsing `size=`/`silence_*` progress)
 # while the process keeps running, and to send a graceful `q` on stdin to stop
 # encoding cleanly. `std::process` only gives us a blocking `wait()`/`output()`.
-tokio = { version = "1", features = ["full"] }
+# `test-util` powers the `#[tokio::test(start_paused = true)]` time-paused unit
+# tests (worker/preroll timeouts). It used to ride in via a transitive dev path;
+# declared explicitly so the test gate stays green independent of the lock graph.
+tokio = { version = "1", features = ["full", "test-util"] }
 thiserror = "2"
 # Wall-clock → local civil time for the scheduler shell. The pure decisions live
 # in `sundayrec-core::schedule` (clock-free); this crate owns `Local::now()` and
@@ -188,6 +191,22 @@ sha2 = { version = "0.10", optional = true }
 # real update needs a signed release + keypair, so it stays out of the default
 # build + CI gate. NETWORK/GUI-UNVERIFIED.
 tauri-plugin-updater = { version = "2", optional = true }
+
+# ── macOS-only: trackpad haptics (Force Touch) ───────────────────────────────
+# The editor fires subtle haptic taps via `NSHapticFeedbackManager`. These are
+# the same `objc2` 0.6 lineage Tauri (muda) already vendors, declared directly
+# here only so the macOS command can name them; `dispatch2` hops the one-shot tap
+# onto the main thread. macOS-gated so no other platform pulls AppKit bindings.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+    "std",
+    "NSHapticFeedback",
+    "NSResponder",
+] }
+objc2-foundation = { version = "0.3", default-features = false, features = [
+    "std",
+] }
+dispatch2 = { version = "0.3", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 # Throwaway temp databases for the storage tests — no app, no device.

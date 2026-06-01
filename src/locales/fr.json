@@ -1350,7 +1350,26 @@
     "namePlaceholder": "Ex. culte de Noël",
     "fieldDate": "Date",
     "cancel": "Annuler",
-    "add": "Ajouter"
+    "add": "Ajouter",
+    "confidence": {
+      "nextLabel": "Prochain enregistrement",
+      "nextNone": "Aucun enregistrement programmé",
+      "chipReady": "Prêt à enregistrer automatiquement",
+      "chipNeedsOn": "Nécessite que la machine reste allumée",
+      "chipNone": "Aucun enregistrement programmé",
+      "inDays": "dans {{count}} jours",
+      "inHours": "dans {{count}} heures",
+      "inMinutes": "dans {{count}} min",
+      "now": "maintenant",
+      "wakeReady": "La machine sortira automatiquement de veille à {{wakeAt}} et démarrera l'enregistrement à {{recAt}}.",
+      "wakeNeedsOn": "La machine doit rester ALLUMÉE (pas en veille) pour que l'enregistrement démarre.",
+      "wakeCaveatCan": "Activez le réveil automatique et laissez la machine branchée sur secteur et uniquement en veille (pas complètement éteinte). Le capot peut être fermé.",
+      "wakeCaveatCannot": "Cette machine ne peut pas être réveillée automatiquement. Laissez-la allumée et branchée sur secteur jusqu'à l'enregistrement.",
+      "leadNote": "Se réveille {{lead}} min avant chaque enregistrement.",
+      "enableWake": "Activer le réveil automatique",
+      "enabling": "Activation…",
+      "thenLabel": "Ensuite"
+    }
   },
   "searchScreen": {
     "title": "Rechercher dans les sermons",

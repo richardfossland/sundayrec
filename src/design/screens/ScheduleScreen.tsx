@@ -19,6 +19,7 @@ import {
   buildWeeksFor,
   emptySlot,
   emptySpecial,
+  formatNextRecording,
   formatSpecialDate,
   isoDate,
   mergeFeastEvents,
@@ -27,6 +28,14 @@ import {
   slotTimeRange,
   type DayEvent,
 } from "./schedule.helpers";
+import {
+  WAKE_LEAD_MINUTES,
+  confidenceLevel,
+  startTime as confidenceStartTime,
+  timeUntil,
+  wakeTime,
+  type TimeUntil,
+} from "./schedule.confidence";
 import { SETTINGS_QUERY_KEY } from "@/features/settings/queryKey";
 import type { Settings } from "@/lib/bindings/Settings";
 import type { ScheduleStatus } from "@/lib/bindings/ScheduleStatus";
@@ -179,6 +188,324 @@ function CalCell({
   );
 }
 
+/* ── "Vil maskinen ta opp?" confidence panel ────────────────────────────────
+   The reassuring banner a volunteer scans first: WHEN the next recording is
+   (in plain language) and WHETHER the Mac will wake itself to do it. All facts
+   come from data the renderer already holds — no new backend. */
+function humanizeUntil(
+  tu: TimeUntil | null,
+  t: (k: string, d: string, o?: Record<string, unknown>) => string,
+): string | null {
+  if (!tu) return null;
+  switch (tu.unit) {
+    case "days":
+      return t("scheduleScreen.confidence.inDays", "om {{count}} dager", {
+        count: tu.value,
+      });
+    case "hours":
+      return t("scheduleScreen.confidence.inHours", "om {{count}} timer", {
+        count: tu.value,
+      });
+    case "minutes":
+      return t("scheduleScreen.confidence.inMinutes", "om {{count}} min", {
+        count: tu.value,
+      });
+    case "now":
+      return t("scheduleScreen.confidence.now", "nå");
+    case "past":
+      return null;
+  }
+}
+
+/** A friendly "søndag 1. juni, 11:00" for the next-recording line. */
+function longWhen(nextIso: string | null | undefined): string | null {
+  if (!nextIso) return null;
+  const d = new Date(nextIso);
+  if (Number.isNaN(d.getTime())) return formatNextRecording(nextIso);
+  const date = d.toLocaleDateString("nb-NO", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+  const time = d.toLocaleTimeString("nb-NO", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return `${date}, ${time}`;
+}
+
+function ConfidencePanel({
+  nextIso,
+  upcoming,
+  wakeEnabled,
+  canWake,
+  haveLive,
+  onEnableWake,
+  enabling,
+}: {
+  nextIso: string | null | undefined;
+  upcoming: string[] | undefined;
+  wakeEnabled: boolean;
+  canWake: boolean;
+  haveLive: boolean;
+  onEnableWake: () => void;
+  enabling: boolean;
+}) {
+  const { t } = useTranslation();
+  const level = confidenceLevel({ nextIso, wakeEnabled, canWake });
+
+  const chip =
+    level === "ready"
+      ? {
+          kind: "ok" as const,
+          icon: "check" as const,
+          text: t(
+            "scheduleScreen.confidence.chipReady",
+            "Klart til å ta opp automatisk",
+          ),
+        }
+      : level === "needsOn"
+        ? {
+            kind: "warn" as const,
+            icon: "warn" as const,
+            text: t(
+              "scheduleScreen.confidence.chipNeedsOn",
+              "Krever at maskinen står på",
+            ),
+          }
+        : {
+            kind: "muted" as const,
+            icon: "calendar" as const,
+            text: t(
+              "scheduleScreen.confidence.chipNone",
+              "Ingen planlagte opptak",
+            ),
+          };
+
+  const when = longWhen(nextIso);
+  const until = humanizeUntil(timeUntil(nextIso), t);
+  const wakeAt = wakeTime(nextIso);
+  const recAt = confidenceStartTime(nextIso);
+
+  // Up to three upcoming recordings (the next is shown in the headline already,
+  // so list the following ones). Falls back gracefully when status is absent.
+  const nextList = (upcoming ?? [])
+    .filter((iso) => iso !== nextIso)
+    .slice(0, 3)
+    .map((iso) => ({ iso, label: longWhen(iso) }))
+    .filter((x) => x.label != null);
+
+  const accent =
+    level === "ready"
+      ? "var(--sr-green)"
+      : level === "needsOn"
+        ? "var(--sr-gold-bright)"
+        : "var(--sr-text-3)";
+  const bg =
+    level === "ready"
+      ? "var(--sr-green-tint)"
+      : level === "needsOn"
+        ? "var(--sr-gold-tint)"
+        : "var(--sr-ink-750)";
+  const border =
+    level === "ready"
+      ? "var(--sr-green)"
+      : level === "needsOn"
+        ? "var(--sr-gold-line)"
+        : "var(--sr-line)";
+
+  return (
+    <div
+      className="sr-card"
+      data-testid="confidence-panel"
+      style={{
+        padding: 18,
+        marginBottom: 16,
+        background: bg,
+        borderColor: border,
+      }}
+    >
+      <div className="sr-row" style={{ alignItems: "flex-start", gap: 16 }}>
+        <div className="sr-grow">
+          {/* Big status chip */}
+          <span
+            className="sr-row"
+            style={{
+              gap: 8,
+              padding: "7px 14px",
+              borderRadius: 999,
+              fontSize: 14,
+              fontWeight: 700,
+              background: "rgba(0,0,0,0.18)",
+              color: accent,
+            }}
+          >
+            <Icon name={chip.icon} size={16} />
+            {chip.text}
+          </span>
+
+          {/* Next recording, in plain language */}
+          <div style={{ marginTop: 14 }}>
+            <div
+              className="sr-label"
+              style={{ marginBottom: 3, textTransform: "none" }}
+            >
+              {t("scheduleScreen.confidence.nextLabel", "Neste opptak")}
+            </div>
+            {when ? (
+              <div style={{ fontSize: 17, fontWeight: 650 }}>
+                {when}
+                {until && (
+                  <span
+                    style={{
+                      color: "var(--sr-text-3)",
+                      fontWeight: 500,
+                      marginLeft: 8,
+                    }}
+                  >
+                    — {until}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div
+                style={{
+                  fontSize: 16,
+                  fontWeight: 600,
+                  color: "var(--sr-text-2)",
+                }}
+              >
+                {t(
+                  "scheduleScreen.confidence.nextNone",
+                  "Ingen planlagte opptak",
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Wake-confidence line */}
+          {nextIso && (
+            <div
+              className="sr-row"
+              style={{ marginTop: 12, gap: 8, alignItems: "flex-start" }}
+            >
+              <Icon
+                name={level === "ready" ? "check" : "warn"}
+                size={16}
+                style={{ color: accent, marginTop: 2, flex: "0 0 auto" }}
+              />
+              <div style={{ fontSize: 13.5, lineHeight: 1.5 }}>
+                {level === "ready" ? (
+                  <span>
+                    {t(
+                      "scheduleScreen.confidence.wakeReady",
+                      "Maskinen vil våkne automatisk kl. {{wakeAt}} og starte opptaket {{recAt}}.",
+                      { wakeAt: wakeAt ?? "", recAt: recAt ?? "" },
+                    )}
+                  </span>
+                ) : (
+                  <span>
+                    <span
+                      style={{
+                        color: "var(--sr-gold-bright)",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {t(
+                        "scheduleScreen.confidence.wakeNeedsOn",
+                        "Maskinen må stå PÅ (ikke i dvale) for at opptaket skal starte.",
+                      )}
+                    </span>{" "}
+                    {canWake
+                      ? t(
+                          "scheduleScreen.confidence.wakeCaveatCan",
+                          "Slå på automatisk vekking, og la maskinen være koblet til strøm og kun i dvale (ikke helt avslått). Lokket kan være lukket.",
+                        )
+                      : t(
+                          "scheduleScreen.confidence.wakeCaveatCannot",
+                          "Denne maskinen kan ikke vekkes automatisk. La den stå på og koblet til strøm fram til opptaket.",
+                        )}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Lead-time note + enable button */}
+          <div
+            className="sr-row"
+            style={{ marginTop: 12, gap: 12, flexWrap: "wrap" }}
+          >
+            {level === "ready" && (
+              <span style={{ fontSize: 12.5, color: "var(--sr-text-3)" }}>
+                {t(
+                  "scheduleScreen.confidence.leadNote",
+                  "Våkner {{lead}} min før hvert opptak.",
+                  { lead: WAKE_LEAD_MINUTES },
+                )}
+              </span>
+            )}
+            {level === "needsOn" && canWake && nextIso && (
+              <button
+                className="sr-btn gold sm"
+                onClick={onEnableWake}
+                disabled={!haveLive || enabling}
+                data-testid="enable-wake"
+              >
+                <Icon name="power" size={14} />
+                {enabling
+                  ? t("scheduleScreen.confidence.enabling", "Slår på…")
+                  : t(
+                      "scheduleScreen.confidence.enableWake",
+                      "Slå på automatisk vekking",
+                    )}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Upcoming list */}
+        {nextList.length > 0 && (
+          <div
+            style={{
+              flex: "0 0 220px",
+              borderLeft: "1px solid var(--sr-line)",
+              paddingLeft: 16,
+            }}
+          >
+            <div
+              className="sr-label"
+              style={{ marginBottom: 8, textTransform: "none" }}
+            >
+              {t("scheduleScreen.confidence.thenLabel", "Deretter")}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {nextList.map((u) => (
+                <div
+                  key={u.iso}
+                  className="sr-row"
+                  style={{ gap: 8, fontSize: 12.5, color: "var(--sr-text-2)" }}
+                >
+                  <span
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      background: "var(--sr-gold)",
+                      flex: "0 0 auto",
+                    }}
+                  />
+                  {u.label}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ScheduleScreen() {
   const { t } = useTranslation();
   const dows = [
@@ -210,8 +537,37 @@ export function ScheduleScreen() {
   const slots: ScheduleSlot[] = settings?.slots ?? [];
   const specials: SpecialRecording[] = settings?.specialRecordings ?? [];
   const upcoming = status?.upcoming;
-  const wakeActive = caps?.canWakeFromSleep ?? false;
+  const nextRecording = status?.next ?? null;
+  // `canWakeFromSleep` = the HOST is physically capable; `wakeFromSleep` = the
+  // user has turned the feature on. Both must hold for "will record" confidence.
+  const canWake = caps?.canWakeFromSleep ?? false;
+  const wakeEnabled = settings?.wakeFromSleep ?? false;
+  // The collapsible wake-card badge reflects the HOST's capability (unchanged).
+  const wakeActive = canWake;
   const haveLive = settings != null;
+
+  /* ── Enable wake-from-sleep from the confidence panel ───────────────────
+     Persist `wakeFromSleep = true` into Settings, then ask the wake backend to
+     (re)register the OS wake timers now. Both steps are guarded so dev/test
+     (where IPC errors) simply no-op. */
+  const enableWakeMutation = useMutation({
+    mutationFn: async () => {
+      if (!settings) return null;
+      const updated: Settings = { ...settings, wakeFromSleep: true };
+      const saved = await invoke<Settings>("settings_save", {
+        settings: updated,
+      });
+      try {
+        await invoke("wake_reschedule");
+      } catch {
+        // Reschedule may prompt/fail; the setting is persisted regardless.
+      }
+      return saved;
+    },
+    onSuccess: (saved) => {
+      if (saved) queryClient.setQueryData(SETTINGS_QUERY_KEY, saved);
+    },
+  });
 
   /* ── Persistence (mirrors features/schedule/SchedulePage) ───────────────
      Save the updated slots/specials into Settings via `settings_save`, then
@@ -383,6 +739,17 @@ export function ScheduleScreen() {
           )}
         </div>
       </div>
+
+      {/* "Vil maskinen ta opp?" — the volunteer's first scan. */}
+      <ConfidencePanel
+        nextIso={nextRecording}
+        upcoming={upcoming}
+        wakeEnabled={wakeEnabled}
+        canWake={canWake}
+        haveLive={haveLive}
+        onEnableWake={() => enableWakeMutation.mutate()}
+        enabling={enableWakeMutation.isPending}
+      />
 
       <div
         style={{

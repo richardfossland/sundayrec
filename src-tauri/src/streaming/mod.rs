@@ -30,7 +30,7 @@
 //! need a real camera, a real RTMP endpoint and a key. Only the
 //! `sundayrec-core` decisions are unit-tested. See docs/SMOKE-TEST.md §R3.
 
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -47,6 +47,17 @@ use sundayrec_core::streaming::{
 };
 
 use crate::error::{AppError, AppResult};
+
+/// Lock a `Mutex`, recovering the guard if a previous holder panicked.
+///
+/// These mutexes guard simple bookkeeping (the last-known `StreamStatus`, the
+/// running child handle) with no invariant a panic could half-break, so taking
+/// the poisoned inner guard is correct and strictly safer than `.expect()`-ing:
+/// a panic in the spawn path must not cascade into every later status read and
+/// crash the app. Identical to `.lock().unwrap()` on the happy path.
+fn lock_recover<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 // ── IPC DTOs (compile regardless of the feature) ────────────────────────────────
 
@@ -126,12 +137,12 @@ impl StreamEngine {
 
     /// Current status snapshot.
     pub fn status(&self) -> StreamStatus {
-        self.status.lock().expect("stream status mutex").clone()
+        lock_recover(&self.status).clone()
     }
 
     #[cfg(feature = "streaming")]
     fn set_status(&self, s: StreamStatus) {
-        *self.status.lock().expect("stream status mutex") = s;
+        *lock_recover(&self.status) = s;
     }
 }
 
@@ -346,7 +357,7 @@ pub async fn start(
         .spawn()
         .map_err(|e| AppError::Recording(format!("stream ffmpeg spawn: {e}")))?;
 
-    *engine.child.lock().expect("stream child mutex") = Some(child);
+    *lock_recover(&engine.child) = Some(child);
     let status = StreamStatus {
         active: true,
         started_at: Some(now_ms),
@@ -368,7 +379,7 @@ pub async fn stop(_engine: &StreamEngine) -> AppResult<bool> {
 /// Stop the running stream by killing the ffmpeg child. NETWORK/HARDWARE-UNVERIFIED.
 #[cfg(feature = "streaming")]
 pub async fn stop(engine: &StreamEngine) -> AppResult<bool> {
-    let child = engine.child.lock().expect("stream child mutex").take();
+    let child = lock_recover(&engine.child).take();
     let was_active = child.is_some();
     if let Some(mut c) = child {
         // kill_on_drop is set, but kill explicitly so we await the exit.
@@ -384,6 +395,23 @@ mod tests {
 
     fn res() -> StreamResolution {
         StreamResolution::P720
+    }
+
+    #[test]
+    fn lock_recover_returns_inner_after_poison() {
+        use std::sync::{Arc, Mutex};
+        // A poisoned status/child mutex must still hand back its inner guard so a
+        // single panicked thread can't crash every later status read.
+        let m = Arc::new(Mutex::new(1u8));
+        let m2 = Arc::clone(&m);
+        let _ = std::thread::spawn(move || {
+            let _g = m2.lock().unwrap();
+            panic!("poison");
+        })
+        .join();
+        assert!(m.lock().is_err(), "precondition: poisoned");
+        *lock_recover(&m) = 42;
+        assert_eq!(*lock_recover(&m), 42);
     }
 
     // ── camera input args ──

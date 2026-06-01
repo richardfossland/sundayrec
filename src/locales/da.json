@@ -1350,7 +1350,26 @@
     "namePlaceholder": "F.eks. julegudstjeneste",
     "fieldDate": "Dato",
     "cancel": "Annuller",
-    "add": "Tilføj"
+    "add": "Tilføj",
+    "confidence": {
+      "nextLabel": "Næste optagelse",
+      "nextNone": "Ingen planlagte optagelser",
+      "chipReady": "Klar til at optage automatisk",
+      "chipNeedsOn": "Kræver, at maskinen er tændt",
+      "chipNone": "Ingen planlagte optagelser",
+      "inDays": "om {{count}} dage",
+      "inHours": "om {{count}} timer",
+      "inMinutes": "om {{count}} min",
+      "now": "nu",
+      "wakeReady": "Maskinen vågner automatisk kl. {{wakeAt}} og starter optagelsen {{recAt}}.",
+      "wakeNeedsOn": "Maskinen skal være TÆNDT (ikke i dvale), for at optagelsen kan starte.",
+      "wakeCaveatCan": "Slå automatisk vækning til, og lad maskinen være tilsluttet strøm og kun i dvale (ikke helt slukket). Låget må gerne være lukket.",
+      "wakeCaveatCannot": "Denne maskine kan ikke vækkes automatisk. Lad den være tændt og tilsluttet strøm indtil optagelsen.",
+      "leadNote": "Vågner {{lead}} min før hver optagelse.",
+      "enableWake": "Slå automatisk vækning til",
+      "enabling": "Slår til…",
+      "thenLabel": "Derefter"
+    }
   },
   "searchScreen": {
     "title": "Søg i prædikener",

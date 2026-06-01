@@ -14,6 +14,7 @@ pub mod db;
 pub mod diagnostics;
 pub mod editor;
 pub mod email;
+pub mod haptics;
 pub mod integrations;
 pub mod media;
 pub mod ndi;

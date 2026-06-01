@@ -1350,7 +1350,26 @@
     "namePlaceholder": "Np. nabożeństwo bożonarodzeniowe",
     "fieldDate": "Data",
     "cancel": "Anuluj",
-    "add": "Dodaj"
+    "add": "Dodaj",
+    "confidence": {
+      "nextLabel": "Następne nagranie",
+      "nextNone": "Brak zaplanowanych nagrań",
+      "chipReady": "Gotowe do automatycznego nagrywania",
+      "chipNeedsOn": "Wymaga, aby komputer był włączony",
+      "chipNone": "Brak zaplanowanych nagrań",
+      "inDays": "za {{count}} dni",
+      "inHours": "za {{count}} godz.",
+      "inMinutes": "za {{count}} min",
+      "now": "teraz",
+      "wakeReady": "Komputer obudzi się automatycznie o {{wakeAt}} i rozpocznie nagrywanie o {{recAt}}.",
+      "wakeNeedsOn": "Komputer musi być WŁĄCZONY (nie w trybie uśpienia), aby nagrywanie się rozpoczęło.",
+      "wakeCaveatCan": "Włącz automatyczne wybudzanie i pozostaw komputer podłączony do zasilania oraz wyłącznie w trybie uśpienia (nie całkowicie wyłączony). Pokrywa może być zamknięta.",
+      "wakeCaveatCannot": "Tego komputera nie można wybudzić automatycznie. Pozostaw go włączonego i podłączonego do zasilania aż do nagrania.",
+      "leadNote": "Wybudza się {{lead}} min przed każdym nagraniem.",
+      "enableWake": "Włącz automatyczne wybudzanie",
+      "enabling": "Włączanie…",
+      "thenLabel": "Następnie"
+    }
   },
   "searchScreen": {
     "title": "Przeszukaj kazania",

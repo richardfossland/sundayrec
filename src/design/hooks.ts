@@ -67,7 +67,7 @@ export function useInputDevices(): AudioDeviceList | null {
     let alive = true;
     invoke<AudioDeviceList>("list_input_devices")
       .then((d) => alive && setDevices(d))
-      .catch(() => {});
+      .catch((e) => console.warn("list_input_devices failed", e));
     return () => {
       alive = false;
     };
@@ -97,9 +97,11 @@ export function useVuLevels(
 
   useEffect(() => {
     if (!active) return;
-    void invoke("start_vu", { deviceName: deviceName ?? null }).catch(() => {});
+    void invoke("start_vu", { deviceName: deviceName ?? null }).catch((e) =>
+      console.warn("start_vu failed", e),
+    );
     return () => {
-      void invoke("stop_vu").catch(() => {});
+      void invoke("stop_vu").catch((e) => console.warn("stop_vu failed", e));
       setLevels(null);
     };
   }, [active, deviceName]);
@@ -148,10 +150,12 @@ export function useCameraPreview(
     // Re-arm: a fresh start should not show the previous session's error.
     setError(null);
     void invoke("start_preview", { device: device ?? null, fps: null }).catch(
-      () => {},
+      (e) => console.warn("start_preview failed", e),
     );
     return () => {
-      void invoke("stop_preview").catch(() => {});
+      void invoke("stop_preview").catch((e) =>
+        console.warn("stop_preview failed", e),
+      );
       setFrame(null);
       setError(null);
     };
@@ -179,7 +183,7 @@ export function useVideoDevices(): FfmpegDevice[] {
     let alive = true;
     invoke<DeviceInventory>("list_devices")
       .then((inv) => alive && setDevices(inv.video_inputs ?? []))
-      .catch(() => {});
+      .catch((e) => console.warn("list_devices failed", e));
     return () => {
       alive = false;
     };
@@ -199,7 +203,7 @@ export function useDiskSpace(): number | null {
     let alive = true;
     invoke<DiskSpace>("get_disk_space")
       .then((d) => alive && setFreeBytes(d.freeBytes))
-      .catch(() => {});
+      .catch((e) => console.warn("get_disk_space failed", e));
     return () => {
       alive = false;
     };

@@ -267,6 +267,9 @@ pub fn run() {
             commands::settings::settings_import_from_file,
             commands::diagnostics::run_preflight,
             commands::diagnostics::run_diagnostics,
+            // Trackpad haptics (macOS Force Touch; no-op elsewhere). The editor
+            // fires subtle, throttled taps on snap / limit / marker-crossing.
+            commands::haptics::haptic_perform,
             // R1 non-destructive editor (DTOs pure; ffmpeg runs gated by `editor`).
             commands::editor::editor_load_recording,
             commands::editor::editor_peaks,

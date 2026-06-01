@@ -117,6 +117,53 @@ export function panBy(
   return { start, end: start + span };
 }
 
+/**
+ * Ease a raw wheel `deltaY` into a multiplicative zoom factor for smooth,
+ * pressure-proportional wheel-zoom. A small notch nudges gently; a hard flick
+ * zooms faster — but always clamped to a sane band so one big trackpad swipe
+ * can't teleport the zoom. `deltaY < 0` (scroll up / pinch out) zooms IN
+ * (factor < 1); `deltaY > 0` zooms OUT (factor > 1). Pure.
+ *
+ * The factor is `exp(deltaY * sensitivity)` clamped to `[1/maxStep, maxStep]`,
+ * so successive frames compose into smooth exponential zoom toward the cursor.
+ */
+export function wheelZoomFactor(
+  deltaY: number,
+  sensitivity = 0.0015,
+  maxStep = 1.25,
+): number {
+  if (!Number.isFinite(deltaY) || deltaY === 0) return 1;
+  const raw = Math.exp(deltaY * sensitivity);
+  return Math.max(1 / maxStep, Math.min(maxStep, raw));
+}
+
+// ── Marker-crossing detection (for scrub haptics) ────────────────────────────
+
+/**
+ * Whether moving the playhead from `prevSec` to `nextSec` crossed at least one
+ * of the given `markers` (segment/chapter boundaries). Direction-agnostic — a
+ * forward scrub past a marker and a backward scrub past it both count. Used to
+ * fire a subtle, throttled haptic tick exactly once per boundary the playhead
+ * sweeps over while scrubbing. Pure; no DOM, no timers.
+ *
+ * A marker exactly equal to `nextSec` counts as crossed (you've landed on it);
+ * one exactly equal to `prevSec` does not (you started there, already ticked).
+ */
+export function crossedMarker(
+  prevSec: number,
+  nextSec: number,
+  markers: number[],
+): boolean {
+  if (prevSec === nextSec || markers.length === 0) return false;
+  const lo = Math.min(prevSec, nextSec);
+  const hi = Math.max(prevSec, nextSec);
+  for (const m of markers) {
+    // Half-open on the start so re-ticking the marker you're parked on is avoided.
+    if (m > lo && m <= hi) return true;
+  }
+  return false;
+}
+
 // ── Snap-to-segment ───────────────────────────────────────────────────────────
 
 /** Per-kind visibility — sermon always snaps; the rest honour the toggles.
@@ -166,6 +213,24 @@ export function snapToSegmentBoundary(
     }
   }
   return closest;
+}
+
+/**
+ * Like {@link snapToSegmentBoundary} but also reports whether a snap happened —
+ * so the caller can fire an `alignment` haptic exactly when a trim handle clicks
+ * onto a boundary (and stay quiet on the frames it's dragging free). `snapped`
+ * is true only when the result moved to a real boundary different from the input.
+ * Pure.
+ */
+export function snapWithFeedback(
+  sec: number,
+  segments: Segment[],
+  vp: Viewport,
+  w: number,
+  toggles: SegmentToggles,
+): { sec: number; snapped: boolean } {
+  const snappedSec = snapToSegmentBoundary(sec, segments, vp, w, toggles);
+  return { sec: snappedSec, snapped: snappedSec !== sec };
 }
 
 /**

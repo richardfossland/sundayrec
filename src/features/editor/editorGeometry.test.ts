@@ -5,6 +5,7 @@ import {
   clampMain,
   clearAll,
   commitResize,
+  crossedMarker,
   deleteCut,
   emptyCutState,
   fitAll,
@@ -19,7 +20,9 @@ import {
   shouldSnapSegment,
   snapOutOfCut,
   snapToSegmentBoundary,
+  snapWithFeedback,
   undo,
+  wheelZoomFactor,
   xToSec,
   zoomBy,
   MAX_HISTORY,
@@ -356,5 +359,81 @@ describe("keep-segment maths", () => {
   it("remaining duration subtracts the cuts", () => {
     const cuts: Cut[] = [{ start: 10, end: 30 }];
     expect(getRemainingDuration(cuts, 100)).toBe(80);
+  });
+});
+
+describe("wheelZoomFactor (eased wheel-zoom)", () => {
+  it("returns 1 (no-op) for a zero / non-finite delta", () => {
+    expect(wheelZoomFactor(0)).toBe(1);
+    expect(wheelZoomFactor(Number.NaN)).toBe(1);
+    expect(wheelZoomFactor(Infinity)).toBe(1);
+  });
+
+  it("zooms IN (factor < 1) on a negative delta, OUT (>1) on positive", () => {
+    expect(wheelZoomFactor(-100)).toBeLessThan(1);
+    expect(wheelZoomFactor(100)).toBeGreaterThan(1);
+  });
+
+  it("is symmetric: opposite deltas are reciprocal factors", () => {
+    const inF = wheelZoomFactor(-80);
+    const outF = wheelZoomFactor(80);
+    expect(inF * outF).toBeCloseTo(1, 10);
+  });
+
+  it("scales with pressure — a bigger flick zooms more, up to the clamp", () => {
+    expect(wheelZoomFactor(50)).toBeLessThan(wheelZoomFactor(150));
+    // A huge flick is clamped so one swipe can't teleport the zoom.
+    expect(wheelZoomFactor(100000)).toBe(1.25);
+    expect(wheelZoomFactor(-100000)).toBeCloseTo(1 / 1.25, 10);
+  });
+
+  it("respects custom sensitivity + clamp", () => {
+    expect(wheelZoomFactor(1000, 0.01, 2)).toBe(2);
+    expect(wheelZoomFactor(-1000, 0.01, 2)).toBe(0.5);
+  });
+});
+
+describe("crossedMarker (scrub-haptic boundary detection)", () => {
+  const markers = [10, 20, 30];
+
+  it("no markers / no movement → never crossed", () => {
+    expect(crossedMarker(5, 25, [])).toBe(false);
+    expect(crossedMarker(15, 15, markers)).toBe(false);
+  });
+
+  it("detects a forward sweep across a marker", () => {
+    expect(crossedMarker(8, 12, markers)).toBe(true); // crossed 10
+    expect(crossedMarker(11, 14, markers)).toBe(false); // between 10 and 20
+  });
+
+  it("detects a backward sweep across a marker (direction-agnostic)", () => {
+    expect(crossedMarker(22, 18, markers)).toBe(true); // crossed 20
+  });
+
+  it("landing exactly on a marker counts; starting on it does not", () => {
+    expect(crossedMarker(15, 20, markers)).toBe(true); // land on 20
+    expect(crossedMarker(20, 25, markers)).toBe(false); // start on 20 only
+  });
+
+  it("a sweep spanning several markers still reports a single crossing", () => {
+    expect(crossedMarker(5, 35, markers)).toBe(true);
+  });
+});
+
+describe("snapWithFeedback", () => {
+  const segs: Segment[] = [{ start: 10, end: 20, kind: "speech" }];
+  const all = { speech: true, music: true, silence: true };
+
+  it("reports snapped=true when it clicks onto a boundary", () => {
+    // ~8 px threshold over a 100 s viewport @ 1000 px ≈ 0.8 s window.
+    const r = snapWithFeedback(10.3, segs, VP, 1000, all);
+    expect(r.sec).toBe(10);
+    expect(r.snapped).toBe(true);
+  });
+
+  it("reports snapped=false when nothing is close enough", () => {
+    const r = snapWithFeedback(50, segs, VP, 1000, all);
+    expect(r.sec).toBe(50);
+    expect(r.snapped).toBe(false);
   });
 });

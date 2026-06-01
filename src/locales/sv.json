@@ -1350,7 +1350,26 @@
     "namePlaceholder": "T.ex. julgudstjänst",
     "fieldDate": "Datum",
     "cancel": "Avbryt",
-    "add": "Lägg till"
+    "add": "Lägg till",
+    "confidence": {
+      "nextLabel": "Nästa inspelning",
+      "nextNone": "Inga schemalagda inspelningar",
+      "chipReady": "Klar att spela in automatiskt",
+      "chipNeedsOn": "Kräver att maskinen är på",
+      "chipNone": "Inga schemalagda inspelningar",
+      "inDays": "om {{count}} dagar",
+      "inHours": "om {{count}} timmar",
+      "inMinutes": "om {{count}} min",
+      "now": "nu",
+      "wakeReady": "Maskinen vaknar automatiskt kl. {{wakeAt}} och startar inspelningen {{recAt}}.",
+      "wakeNeedsOn": "Maskinen måste vara PÅ (inte i viloläge) för att inspelningen ska starta.",
+      "wakeCaveatCan": "Slå på automatisk väckning och låt maskinen vara ansluten till ström och endast i viloläge (inte helt avstängd). Locket kan vara stängt.",
+      "wakeCaveatCannot": "Den här maskinen kan inte väckas automatiskt. Låt den vara på och ansluten till ström fram till inspelningen.",
+      "leadNote": "Vaknar {{lead}} min före varje inspelning.",
+      "enableWake": "Slå på automatisk väckning",
+      "enabling": "Slår på…",
+      "thenLabel": "Därefter"
+    }
   },
   "searchScreen": {
     "title": "Sök i predikningar",

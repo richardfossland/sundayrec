@@ -27,6 +27,16 @@ const UPLOAD_INIT_URL: &str =
 /// How long the worker sleeps when there's nothing to do (or it's unconfigured).
 const IDLE_SLEEP: Duration = Duration::from_secs(3600);
 
+/// Hard ceiling on a single file's resumable chunk loop. Drive resumable
+/// sessions can stall indefinitely — a server that keeps answering `308 Resume
+/// Incomplete` without ever advancing the offset, or a connection that hangs
+/// mid-PUT — and without a bound the worker loops forever on one entry and
+/// drains nothing else. 10 minutes is comfortably longer than any legitimate
+/// recording upload on a usable connection; exceeding it aborts the attempt so
+/// the entry fails *retryably* and the durable queue's existing backoff retries
+/// it later (a fresh resumable session) instead of wedging the whole worker.
+const UPLOAD_DEADLINE: Duration = Duration::from_secs(600);
+
 /// The result of trying to mint an access token for a service.
 pub(crate) enum TokenOutcome {
     Ok(String),
@@ -214,7 +224,21 @@ pub async fn process_once(pool: &SqlitePool, config: &GoogleOAuthConfig) -> AppR
         }
     };
 
-    match upload_file(&token, &file_path).await {
+    // Bound the whole resumable upload: a Drive session that stalls (308 forever
+    // / a hung PUT) must give up rather than loop on this one entry indefinitely.
+    // A timeout is treated as a retryable failure so the queue's backoff retries
+    // it later with a fresh session.
+    let outcome = match tokio::time::timeout(UPLOAD_DEADLINE, upload_file(&token, &file_path)).await
+    {
+        Ok(res) => res,
+        Err(_) => {
+            tracing::warn!("cloud upload worker: upload exceeded {UPLOAD_DEADLINE:?}; will retry");
+            Err(AppError::Internal(format!(
+                "upload exceeded {UPLOAD_DEADLINE:?}"
+            )))
+        }
+    };
+    match outcome {
         Ok(()) => {
             queue::on_success(&mut entries, &id);
             store::delete_entry(pool, &id).await?;
@@ -270,4 +294,30 @@ pub fn spawn(pool: SqlitePool, config: Option<GoogleOAuthConfig>) {
             tokio::time::sleep(sleep).await;
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn upload_deadline_is_bounded_and_generous() {
+        // The per-upload ceiling must be finite (so a stalled 308-forever session
+        // can't wedge the worker on one entry) yet far longer than any legitimate
+        // recording upload on a usable connection.
+        assert!(UPLOAD_DEADLINE >= Duration::from_secs(60));
+        assert!(UPLOAD_DEADLINE <= Duration::from_secs(3600));
+    }
+
+    #[tokio::test]
+    async fn timeout_fires_on_a_stalled_upload() {
+        // Model the "308 Resume Incomplete forever" stall: a future that never
+        // completes must be cut off by the deadline and surface as an error
+        // (which `process_once` maps to a retryable failure). Uses a tiny real
+        // deadline so the test is fast; the production constant is the same
+        // `tokio::time::timeout` wrapper, just longer.
+        let stalled = std::future::pending::<AppResult<()>>();
+        let res = tokio::time::timeout(Duration::from_millis(20), stalled).await;
+        assert!(res.is_err(), "a never-completing upload must time out");
+    }
 }

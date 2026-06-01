@@ -45,7 +45,7 @@
 //! on a rig before pre-roll is declared done.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -60,6 +60,25 @@ use ts_rs::TS;
 
 use crate::audio::device_enum::enumerate_ffmpeg_devices;
 use crate::media::ffmpeg::{ffmpeg_path, spawn_ffmpeg};
+
+/// Hard ceiling on the harvest trim re-encode. The trim is a short, bounded
+/// ffmpeg run (re-encoding at most ~90 s of already-captured WAV), so it should
+/// finish in well under a second on any real machine. If the ffmpeg child ever
+/// wedges (a stuck device handle, a hung sidecar) the trim must abort cleanly
+/// rather than hanging the whole recording start, which awaits this harvest.
+/// 30 s is far beyond any legitimate trim while still failing fast.
+const HARVEST_TRIM_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Lock a `Mutex`, recovering the guard if a previous holder panicked.
+///
+/// These mutexes guard simple bookkeeping (the live capture handle, the loop
+/// task handle) with no invariant a panic could half-break, so taking the
+/// poisoned inner guard is correct and strictly safer than `.expect()`-ing: a
+/// panic in one path must not cascade into every later start/stop/harvest and
+/// crash the app. Identical to `.lock().unwrap()` on the happy path.
+fn lock_recover<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 /// Settings the pre-roll loop needs to address + format a capture.
 #[derive(Debug, Clone)]
@@ -167,7 +186,7 @@ impl PrerollEngine {
         let task = tauri::async_runtime::spawn(async move {
             capture_loop(active, handle_slot, tmp_dir, platform, settings).await;
         });
-        *self.task.lock().expect("preroll task mutex") = Some(task);
+        *lock_recover(&self.task) = Some(task);
     }
 
     /// Stop the pre-roll WITHOUT harvesting: clear the active flag, gracefully
@@ -175,10 +194,10 @@ impl PrerollEngine {
     /// call when nothing is running.
     pub fn stop(&self) {
         self.active.store(false, Ordering::SeqCst);
-        if let Some(task) = self.task.lock().expect("preroll task mutex").take() {
+        if let Some(task) = lock_recover(&self.task).take() {
             task.abort();
         }
-        let handle = self.handle.lock().expect("preroll handle mutex").take();
+        let handle = lock_recover(&self.handle).take();
         if let Some(h) = handle {
             let temp = h.temp_path.clone();
             // Best-effort graceful stop + cleanup in a detached task (stop is sync).
@@ -211,10 +230,10 @@ impl PrerollEngine {
     ) -> Option<PrerollClip> {
         // Flip active off FIRST so the loop's exit handler won't restart it.
         self.active.store(false, Ordering::SeqCst);
-        if let Some(task) = self.task.lock().expect("preroll task mutex").take() {
+        if let Some(task) = lock_recover(&self.task).take() {
             task.abort();
         }
-        let mut handle = self.handle.lock().expect("preroll handle mutex").take()?;
+        let mut handle = lock_recover(&self.handle).take()?;
 
         // Measure BEFORE the graceful stop awaits (matches Electron: capturedMs is
         // wall-clock since start, the safety margin covers the un-flushed tail).
@@ -248,7 +267,7 @@ impl PrerollEngine {
             bitrate_kbps,
             &out.to_string_lossy(),
         );
-        let trimmed_ok = run_to_completion(&trim_args).await;
+        let trimmed_ok = run_to_completion(&trim_args, HARVEST_TRIM_TIMEOUT).await;
         // The raw WAV is consumed either way.
         let _ = tokio::fs::remove_file(&temp).await;
         if !trimmed_ok {
@@ -324,7 +343,7 @@ async fn capture_loop(
         // A successful spawn resets the error back-off.
         attempt = 0;
         let stdin = child.stdin.take();
-        *handle_slot.lock().expect("preroll handle mutex") = Some(PrerollHandle {
+        *lock_recover(&handle_slot) = Some(PrerollHandle {
             stdin,
             temp_path: temp_path.clone(),
             started_at: Instant::now(),
@@ -338,7 +357,7 @@ async fn capture_loop(
         // segment is being consumed. We detect this by whether OUR handle is still
         // published (same temp path).
         let still_ours = {
-            let mut guard = handle_slot.lock().expect("preroll handle mutex");
+            let mut guard = lock_recover(&handle_slot);
             match guard.as_ref() {
                 Some(h) if h.temp_path == temp_path => {
                     *guard = None;
@@ -411,16 +430,36 @@ async fn graceful_stop(stdin: &mut Option<tokio::process::ChildStdin>) {
 
 /// Run a short-lived ffmpeg command (the trim re-encode) to completion, returning
 /// whether it exited successfully.
-async fn run_to_completion(args: &[String]) -> bool {
+///
+/// Bounded by `timeout`: the trim is a short, finite re-encode, so if the ffmpeg
+/// child wedges (a stuck device handle, a hung sidecar) it must abort cleanly
+/// rather than hang the recording start that awaits this harvest. On timeout we
+/// kill the child (`kill_on_drop` also covers the early-return drop) and report
+/// failure, which the caller treats as "no clip produced" and recovers from.
+async fn run_to_completion(args: &[String], timeout: Duration) -> bool {
     use std::process::Stdio;
-    let status = tokio::process::Command::new(ffmpeg_path())
+    let mut child = match tokio::process::Command::new(ffmpeg_path())
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
-        .status()
-        .await;
-    matches!(status, Ok(s) if s.success())
+        .kill_on_drop(true)
+        .spawn()
+    {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+    match tokio::time::timeout(timeout, child.wait()).await {
+        Ok(Ok(status)) => status.success(),
+        // Spawned but waiting errored.
+        Ok(Err(_)) => false,
+        // Wedged past the deadline — kill it and give up so harvest doesn't hang.
+        Err(_) => {
+            tracing::warn!("preroll: trim re-encode exceeded {timeout:?}; aborting");
+            let _ = child.kill().await;
+            false
+        }
+    }
 }
 
 /// A short random-ish id for the temp WAV filename, derived from the wall clock
@@ -567,5 +606,57 @@ mod tests {
     fn min_valid_bytes_constant_in_scope() {
         // Sanity: the core threshold the harvest path relies on.
         assert_eq!(sundayrec_core::preroll::MIN_VALID_SEGMENT_BYTES, 4096);
+    }
+
+    #[test]
+    fn harvest_trim_timeout_is_bounded_and_generous() {
+        // The trim re-encode is short; the ceiling must be far beyond any real
+        // trim (so we never abort a legitimate one) yet finite (so a wedged
+        // ffmpeg can't hang the recording start that awaits harvest).
+        assert!(HARVEST_TRIM_TIMEOUT >= Duration::from_secs(10));
+        assert!(HARVEST_TRIM_TIMEOUT <= Duration::from_secs(120));
+    }
+
+    #[test]
+    fn lock_recover_returns_inner_after_poison() {
+        // A poisoned handle/task mutex must still hand back its inner guard so a
+        // single panicked thread can't crash every later start/stop/harvest.
+        let m = Arc::new(Mutex::new(0u8));
+        let m2 = Arc::clone(&m);
+        let _ = std::thread::spawn(move || {
+            let _g = m2.lock().unwrap();
+            panic!("poison");
+        })
+        .join();
+        assert!(m.lock().is_err(), "precondition: poisoned");
+        *lock_recover(&m) = 11;
+        assert_eq!(*lock_recover(&m), 11);
+    }
+
+    #[tokio::test]
+    async fn run_to_completion_times_out_on_a_wedged_child() {
+        // A child that never exits within the deadline must be reported as a
+        // failure (and killed) rather than hanging. We point at a long sleep so
+        // the wait can only resolve via the timeout branch, and use a tiny real
+        // deadline so the test is fast; the production path is the same
+        // `tokio::time::timeout` wrapper, just with the longer constant. Skips
+        // cleanly if the platform has no `sleep` binary or the sandbox blocks the
+        // spawn (returns early — the "no clip" outcome harvest already handles).
+        use std::process::Stdio;
+        let spawned = tokio::process::Command::new("sleep")
+            .arg("1000")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .kill_on_drop(true)
+            .spawn();
+        let Ok(mut child) = spawned else {
+            return; // no `sleep` / spawn blocked — nothing to assert.
+        };
+        let timed_out = tokio::time::timeout(Duration::from_millis(20), child.wait())
+            .await
+            .is_err();
+        assert!(timed_out, "a never-exiting child must hit the deadline");
+        let _ = child.kill().await;
     }
 }

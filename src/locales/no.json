@@ -1350,7 +1350,26 @@
     "namePlaceholder": "F.eks. Julegudstjeneste",
     "fieldDate": "Dato",
     "cancel": "Avbryt",
-    "add": "Legg til"
+    "add": "Legg til",
+    "confidence": {
+      "nextLabel": "Neste opptak",
+      "nextNone": "Ingen planlagte opptak",
+      "chipReady": "Klart til å ta opp automatisk",
+      "chipNeedsOn": "Krever at maskinen står på",
+      "chipNone": "Ingen planlagte opptak",
+      "inDays": "om {{count}} dager",
+      "inHours": "om {{count}} timer",
+      "inMinutes": "om {{count}} min",
+      "now": "nå",
+      "wakeReady": "Maskinen vil våkne automatisk kl. {{wakeAt}} og starte opptaket {{recAt}}.",
+      "wakeNeedsOn": "Maskinen må stå PÅ (ikke i dvale) for at opptaket skal starte.",
+      "wakeCaveatCan": "Slå på automatisk vekking, og la maskinen være koblet til strøm og kun i dvale (ikke helt avslått). Lokket kan være lukket.",
+      "wakeCaveatCannot": "Denne maskinen kan ikke vekkes automatisk. La den stå på og koblet til strøm fram til opptaket.",
+      "leadNote": "Våkner {{lead}} min før hvert opptak.",
+      "enableWake": "Slå på automatisk vekking",
+      "enabling": "Slår på…",
+      "thenLabel": "Deretter"
+    }
   },
   "searchScreen": {
     "title": "Søk i prekener",

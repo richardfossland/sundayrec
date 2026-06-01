@@ -1350,7 +1350,26 @@
     "namePlaceholder": "Z. B. Weihnachtsgottesdienst",
     "fieldDate": "Datum",
     "cancel": "Abbrechen",
-    "add": "Hinzufügen"
+    "add": "Hinzufügen",
+    "confidence": {
+      "nextLabel": "Nächste Aufnahme",
+      "nextNone": "Keine geplanten Aufnahmen",
+      "chipReady": "Bereit zur automatischen Aufnahme",
+      "chipNeedsOn": "Erfordert, dass der Computer eingeschaltet bleibt",
+      "chipNone": "Keine geplanten Aufnahmen",
+      "inDays": "in {{count}} Tagen",
+      "inHours": "in {{count}} Stunden",
+      "inMinutes": "in {{count}} Min.",
+      "now": "jetzt",
+      "wakeReady": "Der Computer wacht automatisch um {{wakeAt}} Uhr auf und startet die Aufnahme um {{recAt}} Uhr.",
+      "wakeNeedsOn": "Der Computer muss EINGESCHALTET sein (nicht im Ruhezustand), damit die Aufnahme startet.",
+      "wakeCaveatCan": "Schalte das automatische Aufwecken ein und lass den Computer am Strom angeschlossen und nur im Ruhezustand (nicht vollständig ausgeschaltet). Der Deckel darf geschlossen sein.",
+      "wakeCaveatCannot": "Dieser Computer kann nicht automatisch geweckt werden. Lass ihn bis zur Aufnahme eingeschaltet und am Strom angeschlossen.",
+      "leadNote": "Wacht {{lead}} Min. vor jeder Aufnahme auf.",
+      "enableWake": "Automatisches Aufwecken einschalten",
+      "enabling": "Wird eingeschaltet…",
+      "thenLabel": "Danach"
+    }
   },
   "searchScreen": {
     "title": "Predigten durchsuchen",

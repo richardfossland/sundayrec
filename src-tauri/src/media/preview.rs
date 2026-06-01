@@ -20,7 +20,7 @@
 //! `kill_on_drop` terminate ffmpeg. (The recorder, by contrast, will send a
 //! graceful stdin `q` so it can finalise its output container — Spike B.)
 
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
 use base64::Engine;
@@ -38,6 +38,17 @@ use crate::media::ffmpeg::spawn_ffmpeg;
 
 /// The Tauri event channel the renderer listens on for preview frames.
 pub const PREVIEW_EVENT: &str = "preview://frame";
+
+/// Lock a `Mutex`, recovering the guard if a previous holder panicked.
+///
+/// The session mutex guards only an `Option<PreviewSession>` (a join handle) —
+/// no invariant a panic could half-break — so taking the poisoned inner guard
+/// is correct and strictly safer than `.expect()`-ing: a panic in one path must
+/// not cascade into every later start/stop and crash the app. Identical to
+/// `.lock().unwrap()` on the happy path.
+fn lock_recover<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 /// The Tauri event channel the renderer listens on for a preview *failure*
 /// (no camera, permission denied, device error). Lets the UI replace the dead
@@ -375,7 +386,7 @@ impl PreviewEngine {
 
         match ready_rx.await {
             Ok(Ok(())) => {
-                *self.session.lock().expect("preview mutex") = Some(PreviewSession { task });
+                *lock_recover(&self.session) = Some(PreviewSession { task });
                 Ok(())
             }
             Ok(Err(e)) => {
@@ -393,7 +404,7 @@ impl PreviewEngine {
 
     /// Stop the current preview, if any. Safe to call when nothing is running.
     pub fn stop(&self) {
-        let session = self.session.lock().expect("preview mutex").take();
+        let session = lock_recover(&self.session).take();
         if let Some(session) = session {
             // Aborting drops the future → drops the ffmpeg `Child` →
             // `kill_on_drop` terminates the process.
@@ -416,7 +427,7 @@ impl PreviewEngine {
     ///
     /// ⚠️ HARDWARE-UNVERIFIED — the actual camera-release timing needs a real rig.
     pub async fn stop_and_release(&self) {
-        let session = self.session.lock().expect("preview mutex").take();
+        let session = lock_recover(&self.session).take();
         if let Some(session) = session {
             session.task.abort();
             // Await the aborted task: it resolves once the future — and the owned
@@ -1064,6 +1075,23 @@ mod tests {
     #[test]
     fn error_event_name_is_stable() {
         assert_eq!(PREVIEW_ERROR_EVENT, "preview://error");
+    }
+
+    #[test]
+    fn lock_recover_returns_inner_after_poison() {
+        use std::sync::Arc;
+        // A poisoned session mutex must still hand back its inner guard so a
+        // single panicked thread can't crash every later preview start/stop.
+        let m = Arc::new(Mutex::new(0u8));
+        let m2 = Arc::clone(&m);
+        let _ = std::thread::spawn(move || {
+            let _g = m2.lock().unwrap();
+            panic!("poison");
+        })
+        .join();
+        assert!(m.lock().is_err(), "precondition: poisoned");
+        *lock_recover(&m) = 3;
+        assert_eq!(*lock_recover(&m), 3);
     }
 
     fn cam(name: &str, index: Option<u32>) -> FfmpegDevice {

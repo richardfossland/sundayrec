@@ -1350,7 +1350,26 @@
     "namePlaceholder": "E.g. Christmas service",
     "fieldDate": "Date",
     "cancel": "Cancel",
-    "add": "Add"
+    "add": "Add",
+    "confidence": {
+      "nextLabel": "Next recording",
+      "nextNone": "No scheduled recordings",
+      "chipReady": "Ready to record automatically",
+      "chipNeedsOn": "Requires the machine to stay on",
+      "chipNone": "No scheduled recordings",
+      "inDays": "in {{count}} days",
+      "inHours": "in {{count}} hours",
+      "inMinutes": "in {{count}} min",
+      "now": "now",
+      "wakeReady": "The machine will wake automatically at {{wakeAt}} and start recording at {{recAt}}.",
+      "wakeNeedsOn": "The machine must stay ON (not asleep) for the recording to start.",
+      "wakeCaveatCan": "Turn on automatic wake, and keep the machine plugged into power and only asleep (not fully shut down). The lid may be closed.",
+      "wakeCaveatCannot": "This machine cannot be woken automatically. Leave it on and plugged into power until the recording.",
+      "leadNote": "Wakes {{lead}} min before each recording.",
+      "enableWake": "Turn on automatic wake",
+      "enabling": "Turning on…",
+      "thenLabel": "Then"
+    }
   },
   "searchScreen": {
     "title": "Search sermons",

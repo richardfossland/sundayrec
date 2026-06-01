@@ -20,7 +20,7 @@
  * preserved verbatim; only hardcoded sample values are swapped for live data
  * and the action buttons are wired.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -32,12 +32,17 @@ import { Badge, Card, Collapsible, Meter, SegOpt, Toggle } from "../atoms";
 import { waveformPath } from "@/features/editor/waveform";
 import {
   clampMain,
+  crossedMarker,
   fitAll,
   panBy,
+  snapWithFeedback,
+  wheelZoomFactor,
   xToSec,
   zoomBy,
+  type Segment,
   type Viewport,
 } from "@/features/editor/editorGeometry";
+import { haptic, makeHapticThrottle } from "@/lib/haptics";
 import { EDITOR_RECORDINGS_KEY } from "@/features/editor/queryKey";
 import type { RecordingRow } from "@/lib/bindings/RecordingRow";
 import type { EditorMediaInfo } from "@/lib/bindings/EditorMediaInfo";
@@ -488,13 +493,73 @@ function useEditorModel() {
     [duration],
   );
 
+  // ←/→ keyboard nudge: step the playhead by `deltaSec` (±1 s, ±5 s with shift).
+  // Fires a subtle `levelChange` detent when nudging into the 0 / end wall so a
+  // held arrow at the edge feels like it stopped. Reuses `scrub` for the seek.
+  const nudgeHapticRef = useRef(makeHapticThrottle(140));
+  const nudgePlayhead = useCallback(
+    (deltaSec: number) => {
+      setPlayheadSec((cur) => {
+        const next = clampMain(cur + deltaSec, duration);
+        if (next === cur && deltaSec !== 0)
+          nudgeHapticRef.current("levelChange");
+        const a = audioRef.current;
+        if (a && Number.isFinite(next)) {
+          try {
+            a.currentTime = next;
+          } catch {
+            /* not seekable yet → ignore */
+          }
+        }
+        return next;
+      });
+    },
+    [duration],
+  );
+
+  // A throttled `levelChange` tap for "you've hit a hard limit" (trim min-gap /
+  // file bound). Throttled so holding against the wall doesn't buzz every frame.
+  const limitHapticRef = useRef(makeHapticThrottle(140));
+
+  // A tiny one-deep undo for the trim fields, so the ⌘Z hint actually does
+  // something on the audio/video editor (which edits via the trim window rather
+  // than the cut-history machine). We snapshot the trim BEFORE a fresh drag
+  // gesture begins; ⌘Z restores that snapshot. `null` = nothing to undo.
+  const trimUndoRef = useRef<{ start: string; end: string } | null>(null);
+  const trimDragLive = useRef(false);
+  const canUndoTrim = useCallback(() => trimUndoRef.current != null, []);
+  const undoTrim = useCallback(() => {
+    const snap = trimUndoRef.current;
+    if (!snap) return;
+    trimUndoRef.current = null;
+    setTrimStart(snap.start);
+    setTrimEnd(snap.end);
+    void haptic("generic");
+  }, []);
+  // Clear the "drag in progress" latch once a gesture ends (pointer-up clears
+  // the live flag in the Waveform via onTrimCommit below).
+  const onTrimCommit = useCallback(() => {
+    trimDragLive.current = false;
+  }, []);
+
   // Drag-to-trim on the waveform: move one KEEP-window edge to a second, then
   // write it back through the numeric trim fields (which stay the readout +
-  // export source of truth). Clamped + ordered via the pure helpers.
+  // export source of truth). Clamped + ordered via the pure helpers. When the
+  // requested second is past a limit (the clamp moved it), fire a subtle
+  // `levelChange` haptic so you feel the detent.
   const onTrimEdge = useCallback(
     (edge: "start" | "end", sec: number) => {
+      // Snapshot once at the start of a drag gesture so ⌘Z reverts the whole
+      // drag, not each intermediate frame.
+      if (!trimDragLive.current) {
+        trimUndoRef.current = { start: trimStart, end: trimEnd };
+        trimDragLive.current = true;
+      }
       const win = effectiveTrim(trimStart, trimEnd, duration);
       const next = moveTrimEdge(edge, sec, win, duration);
+      const landed = edge === "start" ? next.start : next.end;
+      // >~30 ms of clamp = we're pressed against a limit → detent tap.
+      if (Math.abs(landed - sec) > 0.03) limitHapticRef.current("levelChange");
       if (edge === "start") setTrimStart(formatHms(next.start));
       else setTrimEnd(formatHms(next.end));
     },
@@ -634,7 +699,11 @@ function useEditorModel() {
     zoom,
     pan,
     scrub,
+    nudgePlayhead,
     onTrimEdge,
+    onTrimCommit,
+    undoTrim,
+    canUndoTrim,
     // Playback
     audioRef,
     assetSrc,
@@ -752,6 +821,98 @@ function useTranscribeModel(selected: string | null) {
  *  fixed at any zoom so the design's three-band look never moves. */
 const INTRO_FRAC = 0.15;
 
+/** A boundary the playhead can snap-tick across while scrubbing — derived from
+ *  the detected segments. */
+function segmentMarkers(segments: Segment[]): number[] {
+  if (segments.length === 0) return [];
+  return Array.from(new Set(segments.flatMap((s) => [s.start, s.end]))).sort(
+    (a, b) => a - b,
+  );
+}
+
+/** The static gold/blue waveform bars for the visible window. Memoised on the
+ *  bars array alone so a scrub (playhead move) never re-paints 150 spans — only
+ *  zoom/pan, which actually changes the windowed data, does. The single biggest
+ *  smoothness win: the heavy part of the tree is inert during scrub + playback. */
+const WaveformBars = memo(function WaveformBars({
+  bars,
+  introEnd,
+  outroStart,
+}: {
+  bars: number[];
+  introEnd: number;
+  outroStart: number;
+}) {
+  return (
+    <>
+      {bars.map((h, i) => {
+        const main = i >= introEnd && i < outroStart;
+        return (
+          <span
+            key={i}
+            style={{
+              flex: 1,
+              height: h * 100 + "%",
+              borderRadius: 1,
+              background: main ? "var(--sr-gold)" : "rgba(156,196,232,0.55)",
+            }}
+          />
+        );
+      })}
+    </>
+  );
+});
+
+/** The overlaid centre band from the shared `waveformPath` geometry. Memoised so
+ *  it only re-rasterises when the windowed bars change (zoom/pan), not on scrub. */
+const WaveformPoly = memo(function WaveformPoly({ path }: { path: string }) {
+  if (!path) return null;
+  return (
+    <svg
+      viewBox="0 0 1000 100"
+      preserveAspectRatio="none"
+      style={{
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        pointerEvents: "none",
+        opacity: 0.18,
+      }}
+    >
+      <polygon points={path} fill="var(--sr-gold-bright)" />
+    </svg>
+  );
+});
+
+/** The white playhead line — the ONLY thing that moves on a scrub/playback
+ *  frame. Driven by a CSS `translateX` percentage so the browser composites it
+ *  on the GPU (a transform, not a layout-triggering `left`). Isolated + memoised
+ *  so updating it never touches the bars/overlay/ticks. */
+const Playhead = memo(function Playhead({ frac }: { frac: number }) {
+  const visible = frac >= 0 && frac <= 1;
+  return (
+    <div
+      aria-hidden
+      style={{
+        position: "absolute",
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: 2,
+        background: "#fff",
+        pointerEvents: "none",
+        // GPU-composited move; `willChange` keeps it on its own layer. `cqw`
+        // resolves against the bars container (which sets `containerType:
+        // inline-size`), so 100cqw == the full waveform width — no JS layout read.
+        transform: `translateX(${frac * 100}cqw)`,
+        willChange: "transform",
+        opacity: visible ? 1 : 0,
+      }}
+    />
+  );
+});
+
 /** Interactive waveform: the design's fixed gold-bar timeline, now live + driven
  *  by the shared `editorGeometry` viewport model. Bars are the peaks WINDOWED to
  *  the visible `[viewport.start, viewport.end]` then downsampled to WAVE_BARS, so
@@ -760,7 +921,18 @@ const INTRO_FRAC = 0.15;
  *  playhead, the ★ preken marker and the ruler ticks all map through the
  *  viewport. Pointer-drag scrubs the playhead; wheel pans (shift / horizontal)
  *  or zooms-around-cursor. Falls back to the neutral placeholder when no peaks.
- *  Intro/outro band colouring stays FIXED fractions of WAVE_BARS — visual only. */
+ *  Intro/outro band colouring stays FIXED fractions of WAVE_BARS — visual only.
+ *
+ *  SMOOTHNESS: every continuous gesture (pointer-move scrub/trim, wheel
+ *  zoom/pan) is COALESCED into a single requestAnimationFrame tick — we stash
+ *  the latest event in a ref and apply it once per frame, so a 120 Hz trackpad
+ *  never fires 120 React state updates. The heavy bars/overlay are memoised on
+ *  the windowed data, and the playhead is an isolated GPU-transform leaf, so a
+ *  scrub frame re-renders almost nothing. Wheel-zoom is eased (pressure-
+ *  proportional, `wheelZoomFactor`) and zooms toward the cursor. Trim drags
+ *  snap to segment boundaries (subtle `alignment` haptic on snap, `levelChange`
+ *  at the min/max limit); scrubbing past a marker fires a throttled `generic`
+ *  tick. */
 function Waveform({
   peaks,
   durationSec,
@@ -769,8 +941,10 @@ function Waveform({
   onScrub,
   onZoom,
   onPan,
+  segments,
   trim,
   onTrimEdge,
+  onTrimCommit,
 }: {
   peaks: number[] | null;
   durationSec: number;
@@ -779,11 +953,17 @@ function Waveform({
   onScrub: (sec: number) => void;
   onZoom: (factor: number, anchorSec?: number) => void;
   onPan: (deltaSec: number) => void;
+  /** Detected segments — boundaries to snap trim handles to + tick the playhead
+   *  across while scrubbing. Empty array = no snap / no marker haptics. */
+  segments?: Segment[];
   /** The KEEP window in seconds; when present, two draggable handles + a gold
    *  KEEP highlight (with dimmed cut regions either side) are drawn. */
   trim?: { start: number; end: number };
   /** Move one trim edge to a second (the screen clamps + writes it back). */
   onTrimEdge?: (edge: "start" | "end", sec: number) => void;
+  /** Fired once when a trim drag gesture ends (pointer-up), so the model can
+   *  close its one-deep undo snapshot for the gesture. */
+  onTrimCommit?: () => void;
 }) {
   const { t } = useTranslation();
   const barsRef = useRef<HTMLDivElement | null>(null);
@@ -791,6 +971,24 @@ function Waveform({
   // Which trim handle (if any) the current pointer-drag is moving.
   const draggingEdge = useRef<"start" | "end" | null>(null);
   const span = viewport.end - viewport.start;
+  const segs = useMemo(() => segments ?? [], [segments]);
+  const markers = useMemo(() => segmentMarkers(segs), [segs]);
+
+  // Live viewport in a ref so the rAF tick reads the freshest geometry without
+  // re-creating the frame callbacks every render.
+  const vpRef = useRef(viewport);
+  vpRef.current = viewport;
+  const playheadRef = useRef(playheadSec);
+  playheadRef.current = playheadSec;
+
+  // Hover readout: the second under the cursor (null when not hovering). State
+  // only — a low-frequency, GUI-only nicety; updated off the same rAF.
+  const [hoverSec, setHoverSec] = useState<number | null>(null);
+
+  // One throttled haptic emitter for the playhead-crosses-marker tick (≥120 ms
+  // between ticks so a fast scrub across dense markers buzzes at most ~8×/s).
+  const markerHapticRef = useRef(makeHapticThrottle(120));
+
   // Bars: window the peaks to the visible range, then downsample to WAVE_BARS.
   const bars = useMemo(
     () =>
@@ -808,7 +1006,10 @@ function Waveform({
   const hasBars = bars.length > 0;
   const introEnd = Math.round(WAVE_BARS * INTRO_FRAC);
   const outroStart = WAVE_BARS - introEnd;
-  const ticks = viewportTicks(viewport.start, viewport.end);
+  const ticks = useMemo(
+    () => viewportTicks(viewport.start, viewport.end),
+    [viewport.start, viewport.end],
+  );
   // Reuse the tested peaks→SVG geometry for an overlaid centre band.
   const polyPath = useMemo(
     () => (hasBars ? waveformPath(bars, 1000, 100) : ""),
@@ -816,7 +1017,7 @@ function Waveform({
   );
 
   // Playhead position as a 0..1 fraction of the viewport (rendered only if in
-  // view).
+  // view). The isolated <Playhead> leaf consumes this.
   const playFrac = span > 0 ? (playheadSec - viewport.start) / span : -1;
 
   // Trim handle/highlight fractions across the viewport (null when off-screen).
@@ -827,18 +1028,22 @@ function Waveform({
     ? secToViewFrac(trim.end, viewport.start, viewport.end)
     : null;
   const showTrim = !!trim && !!onTrimEdge && hasBars;
+  // Keep the latest trim fracs in a ref for the rAF-driven handle hit-test.
+  const trimFracRef = useRef<{ start: number | null; end: number | null }>({
+    start: null,
+    end: null,
+  });
+  trimFracRef.current = { start: trimStartFrac, end: trimEndFrac };
 
-  // Map a pointer's clientX into a main-file second via the bars container box.
-  const xToSecFromEvent = useCallback(
-    (clientX: number): number | null => {
-      const el = barsRef.current;
-      if (!el) return null;
-      const rect = el.getBoundingClientRect();
-      if (rect.width <= 0) return null;
-      return xToSec(clientX - rect.left, viewport, rect.width);
-    },
-    [viewport],
-  );
+  // Map a pointer's clientX into a main-file second via the bars container box,
+  // reading the LIVE viewport ref (so the value is correct even mid-gesture).
+  const xToSecFromEvent = useCallback((clientX: number): number | null => {
+    const el = barsRef.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0) return null;
+    return xToSec(clientX - rect.left, vpRef.current, rect.width);
+  }, []);
 
   // Which trim handle (if any) a clientX is within ~10 px of — handles win over
   // a plain scrub so you can grab an edge sitting under the playhead.
@@ -850,15 +1055,82 @@ function Waveform({
       const rect = el.getBoundingClientRect();
       if (rect.width <= 0) return null;
       const x = clientX - rect.left;
-      const startX = trimStartFrac != null ? trimStartFrac * rect.width : null;
-      const endX = trimEndFrac != null ? trimEndFrac * rect.width : null;
+      const { start: sFrac, end: eFrac } = trimFracRef.current;
+      const startX = sFrac != null ? sFrac * rect.width : null;
+      const endX = eFrac != null ? eFrac * rect.width : null;
       const dStart = startX != null ? Math.abs(x - startX) : Infinity;
       const dEnd = endX != null ? Math.abs(x - endX) : Infinity;
       if (dStart > 10 && dEnd > 10) return null;
       return dStart <= dEnd ? "start" : "end";
     },
-    [showTrim, trimStartFrac, trimEndFrac],
+    [showTrim],
   );
+
+  // ── rAF coalescing ─────────────────────────────────────────────────────────
+  // Pointer-move and wheel are high-frequency. We never act on them inline;
+  // instead each handler stashes its intent in a ref and schedules ONE rAF that
+  // applies the latest value, so React sees at most one update per frame.
+  const rafRef = useRef(0);
+  const pendingMoveX = useRef<number | null>(null);
+  const pendingWheel = useRef<{
+    dx: number;
+    dy: number;
+    x: number;
+    shift: boolean;
+  } | null>(null);
+
+  const flush = useCallback(() => {
+    rafRef.current = 0;
+    const el = barsRef.current;
+    const width = el ? el.getBoundingClientRect().width : 0;
+
+    // Wheel first (zoom/pan reshape the viewport the move then reads).
+    const w = pendingWheel.current;
+    if (w && width > 0) {
+      pendingWheel.current = null;
+      const sp = vpRef.current.end - vpRef.current.start;
+      if (w.shift || Math.abs(w.dx) > Math.abs(w.dy)) {
+        onPan(((w.dx || w.dy) / width) * sp);
+      } else {
+        const anchor = xToSecFromEvent(w.x) ?? undefined;
+        onZoom(wheelZoomFactor(w.dy), anchor);
+      }
+    }
+
+    // Then the latest pointer position (scrub or trim-edge drag).
+    const mx = pendingMoveX.current;
+    if (mx != null) {
+      pendingMoveX.current = null;
+      const raw = xToSecFromEvent(mx);
+      if (raw != null) {
+        if (draggingEdge.current && onTrimEdge) {
+          // Snap the trim edge to a nearby segment boundary; tap on snap.
+          const { sec, snapped } = snapWithFeedback(
+            raw,
+            segs,
+            vpRef.current,
+            width || 1000,
+            { speech: true, music: true, silence: false },
+          );
+          if (snapped) void haptic("alignment");
+          onTrimEdge(draggingEdge.current, sec);
+        } else if (pressed.current) {
+          // Scrubbing: tick (throttled) when we sweep across a marker.
+          if (crossedMarker(playheadRef.current, raw, markers)) {
+            markerHapticRef.current("generic");
+          }
+          onScrub(raw);
+        }
+      }
+    }
+  }, [onPan, onZoom, onScrub, onTrimEdge, xToSecFromEvent, segs, markers]);
+
+  const schedule = useCallback(() => {
+    if (rafRef.current) return;
+    rafRef.current = requestAnimationFrame(flush);
+  }, [flush]);
+
+  useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -881,40 +1153,61 @@ function Waveform({
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if (!pressed.current) return;
-      const sec = xToSecFromEvent(e.clientX);
-      if (sec == null) return;
-      if (draggingEdge.current && onTrimEdge) {
-        onTrimEdge(draggingEdge.current, sec);
-      } else {
-        onScrub(sec);
+      // Always update the hover readout (cheap), coalesced via the same frame.
+      pendingMoveX.current = e.clientX;
+      if (!pressed.current) {
+        // Hover-only: refresh the readout + cursor affordance on the next frame.
+        const sec = xToSecFromEvent(e.clientX);
+        setHoverSec(sec);
+        pendingMoveX.current = null; // not a drag → don't scrub
+        return;
       }
+      schedule();
     },
-    [xToSecFromEvent, onTrimEdge, onScrub],
+    [xToSecFromEvent, schedule],
   );
 
-  const onPointerEnd = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    pressed.current = false;
-    draggingEdge.current = null;
-    barsRef.current?.releasePointerCapture?.(e.pointerId);
+  const onPointerEnd = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const wasTrim = draggingEdge.current != null;
+      pressed.current = false;
+      draggingEdge.current = null;
+      pendingMoveX.current = null;
+      barsRef.current?.releasePointerCapture?.(e.pointerId);
+      if (wasTrim) onTrimCommit?.();
+    },
+    [onTrimCommit],
+  );
+
+  const onPointerLeave = useCallback(() => {
+    if (!pressed.current) setHoverSec(null);
   }, []);
 
   const onWheel = useCallback(
     (e: React.WheelEvent<HTMLDivElement>) => {
-      e.preventDefault();
       if (!hasBars) return;
-      const el = barsRef.current;
-      const width = el ? el.getBoundingClientRect().width : 0;
-      if (width <= 0) return;
-      if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
-        onPan(((e.deltaX || e.deltaY) / width) * span);
-      } else {
-        const anchor = xToSecFromEvent(e.clientX) ?? undefined;
-        onZoom(e.deltaY > 0 ? 1.1 : 0.9, anchor);
-      }
+      e.preventDefault();
+      pendingWheel.current = {
+        dx: e.deltaX,
+        dy: e.deltaY,
+        x: e.clientX,
+        shift: e.shiftKey,
+      };
+      schedule();
     },
-    [hasBars, span, xToSecFromEvent, onPan, onZoom],
+    [hasBars, schedule],
   );
+
+  // Cursor affordance: a resize cursor over a trim handle (so you know you can
+  // drag it), otherwise a col-resize scrub cursor over the loaded waveform, and
+  // a plain pointer before anything is loaded. Pure presentation.
+  const overHandle =
+    hoverSec != null &&
+    showTrim &&
+    trim != null &&
+    (Math.abs(hoverSec - trim.start) < span * 0.02 ||
+      Math.abs(hoverSec - trim.end) < span * 0.02);
+  const cursor = !hasBars ? "pointer" : overHandle ? "ew-resize" : "col-resize";
 
   return (
     <div style={{ position: "relative" }}>
@@ -947,6 +1240,7 @@ function Waveform({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerEnd}
         onPointerCancel={onPointerEnd}
+        onPointerLeave={onPointerLeave}
         onWheel={onWheel}
         style={{
           display: "flex",
@@ -958,27 +1252,18 @@ function Waveform({
           borderRadius: "var(--sr-r-xs)",
           position: "relative",
           overflow: "hidden",
-          cursor: hasBars ? "ew-resize" : "pointer",
+          // A container so the playhead's `cqw` transform tracks this box width.
+          containerType: "inline-size",
+          cursor,
           touchAction: "none",
         }}
       >
         {hasBars ? (
-          bars.map((h, i) => {
-            const main = i >= introEnd && i < outroStart;
-            return (
-              <span
-                key={i}
-                style={{
-                  flex: 1,
-                  height: h * 100 + "%",
-                  borderRadius: 1,
-                  background: main
-                    ? "var(--sr-gold)"
-                    : "rgba(156,196,232,0.55)",
-                }}
-              />
-            );
-          })
+          <WaveformBars
+            bars={bars}
+            introEnd={introEnd}
+            outroStart={outroStart}
+          />
         ) : (
           // Neutral placeholder when no file/peaks are loaded yet.
           <div
@@ -996,22 +1281,7 @@ function Waveform({
           </div>
         )}
         {/* GUI-UNVERIFIED centre band from the shared waveformPath geometry. */}
-        {polyPath && (
-          <svg
-            viewBox="0 0 1000 100"
-            preserveAspectRatio="none"
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              pointerEvents: "none",
-              opacity: 0.18,
-            }}
-          >
-            <polygon points={polyPath} fill="var(--sr-gold-bright)" />
-          </svg>
-        )}
+        <WaveformPoly path={polyPath} />
         {/* Drag-to-trim overlay: dim the CUT regions (before start / after end),
             tint the KEEP window gold, and draw two draggable edge handles. The
             container's pointer handlers own the drag; the handles are visual +
@@ -1103,20 +1373,32 @@ function Waveform({
               </div>
             ),
           )}
-        {/* White playhead — only when it falls inside the current viewport. */}
-        {playFrac >= 0 && playFrac <= 1 && (
+        {/* Hover readout: a faint time pill following the cursor (not while
+            dragging — the playhead readout in the file bar covers that). */}
+        {hoverSec != null && !pressed.current && hasBars && (
           <div
+            aria-hidden
+            className="sr-mono sr-num"
             style={{
               position: "absolute",
-              left: `${playFrac * 100}%`,
-              top: 0,
-              bottom: 0,
-              width: 2,
-              background: "#fff",
+              left: `${((hoverSec - viewport.start) / (span || 1)) * 100}%`,
+              top: 6,
+              transform: "translateX(-50%)",
+              padding: "1px 5px",
+              fontSize: 10.5,
+              borderRadius: 4,
+              background: "rgba(10,21,33,0.78)",
+              color: "var(--sr-text-2)",
               pointerEvents: "none",
+              whiteSpace: "nowrap",
             }}
-          />
+          >
+            {clock(hoverSec)}
+          </div>
         )}
+        {/* White playhead — isolated GPU-transform leaf (the only thing that
+            moves on a scrub/playback frame). */}
+        <Playhead frac={playFrac} />
       </div>
       <div
         className="sr-row"
@@ -1705,8 +1987,10 @@ function EditAudio({ m }: { m: EditorModel }) {
           onScrub={m.scrub}
           onZoom={m.zoom}
           onPan={m.pan}
+          segments={m.segments}
           trim={trimWindow}
           onTrimEdge={m.onTrimEdge}
+          onTrimCommit={m.onTrimCommit}
         />
         <div
           className="sr-row"
@@ -2119,8 +2403,10 @@ function EditVideo({ m }: { m: EditorModel }) {
             onScrub={m.scrub}
             onZoom={m.zoom}
             onPan={m.pan}
+            segments={m.segments}
             trim={trimWindow}
             onTrimEdge={m.onTrimEdge}
+            onTrimCommit={m.onTrimCommit}
           />
           <div
             className="sr-row"
@@ -2392,12 +2678,23 @@ export function EditScreen() {
   const autoMode = variantForMedia(m.info);
   const mode = autoMode ?? manualMode;
 
-  // Keyboard transport: Space play/pauses (the design's kbd hint). Ignored while
-  // typing in a field so trim/metadata entry isn't hijacked.
-  const { selected, audioBroken, togglePlay } = m;
+  // Keyboard transport. All shortcuts are ignored while typing in a field so
+  // trim/metadata entry isn't hijacked:
+  //   Space      play / pause
+  //   ← / →      nudge the playhead −/+ 1 s (±5 s with Shift)
+  //   Tab        skip to the next detected segment boundary
+  //   ⌘Z / Ctrl-Z  undo the last trim drag (when there's a snapshot to revert)
+  const {
+    selected,
+    audioBroken,
+    togglePlay,
+    nudgePlayhead,
+    skipToNextBoundary,
+    undoTrim,
+    canUndoTrim,
+  } = m;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.code !== "Space") return;
       const el = e.target as HTMLElement | null;
       const tag = el?.tagName;
       if (
@@ -2408,13 +2705,52 @@ export function EditScreen() {
       ) {
         return;
       }
-      if (!selected || audioBroken) return;
-      e.preventDefault();
-      togglePlay();
+      if (!selected) return;
+
+      // ⌘Z / Ctrl-Z → undo the last trim drag (best-effort; no-op when empty).
+      if ((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z")) {
+        if (e.shiftKey) return; // leave redo to the browser/future use
+        if (canUndoTrim()) {
+          e.preventDefault();
+          undoTrim();
+        }
+        return;
+      }
+      // Bare modifier combos otherwise pass through (copy/paste in fields etc.).
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (e.code === "Space") {
+        if (audioBroken) return;
+        e.preventDefault();
+        togglePlay();
+        return;
+      }
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        nudgePlayhead(e.shiftKey ? -5 : -1);
+        return;
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        nudgePlayhead(e.shiftKey ? 5 : 1);
+        return;
+      }
+      if (e.code === "Tab") {
+        e.preventDefault();
+        skipToNextBoundary();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selected, audioBroken, togglePlay]);
+  }, [
+    selected,
+    audioBroken,
+    togglePlay,
+    nudgePlayhead,
+    skipToNextBoundary,
+    undoTrim,
+    canUndoTrim,
+  ]);
 
   return (
     <div className={"sr-content" + (mode === "video" ? " wide" : "")}>
