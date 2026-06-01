@@ -1266,7 +1266,8 @@
     "diskFree": "Diskplass igjen",
     "stopButton": "Trykk for å stoppe opptaket",
     "savedAs": "Lagres som:",
-    "errorPrefix": "Feil ({{code}})"
+    "errorPrefix": "Feil ({{code}})",
+    "startFailed": "Kunne ikke starte opptaket:"
   },
   "scheduleScreen": {
     "pageTitle": "Tidsplan",

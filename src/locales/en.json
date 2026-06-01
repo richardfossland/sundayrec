@@ -1266,7 +1266,8 @@
     "diskFree": "Disk space left",
     "stopButton": "Press to stop the recording",
     "savedAs": "Saved as:",
-    "errorPrefix": "Error ({{code}})"
+    "errorPrefix": "Error ({{code}})",
+    "startFailed": "Couldn't start the recording:"
   },
   "scheduleScreen": {
     "pageTitle": "Schedule",

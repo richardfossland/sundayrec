@@ -1266,7 +1266,8 @@
     "diskFree": "Ledigt diskutrymme",
     "stopButton": "Tryck för att stoppa inspelningen",
     "savedAs": "Sparas som:",
-    "errorPrefix": "Fel ({{code}})"
+    "errorPrefix": "Fel ({{code}})",
+    "startFailed": "Kunde inte starta inspelningen:"
   },
   "scheduleScreen": {
     "pageTitle": "Tidsplan",

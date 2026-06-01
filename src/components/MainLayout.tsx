@@ -125,13 +125,16 @@ export function MainLayout({
 
   return (
     <div className="sr-win">
-      {/* ── Titlebar ─────────────────────────────────────────────────────── */}
-      <div className="sr-titlebar">
-        <div className="sr-lights">
-          <span className="sr-light r" />
-          <span className="sr-light y" />
-          <span className="sr-light g" />
-        </div>
+      {/* ── Titlebar ─────────────────────────────────────────────────────────
+          The native macOS traffic-lights overlay this dark bar (window uses
+          `titleBarStyle: "Overlay"`), so we draw NO fake lights — just a
+          draggable strip with left room for the real ones, the active-section
+          title, and the header slot. */}
+      <div
+        className="sr-titlebar"
+        data-tauri-drag-region
+        style={{ paddingLeft: 80 }}
+      >
         <div className="sr-wintitle">
           {t(NAV_LABELS[nav.current].key, NAV_LABELS[nav.current].fallback)}
         </div>

@@ -1266,7 +1266,8 @@
     "diskFree": "Espace disque restant",
     "stopButton": "Appuyez pour arrêter l'enregistrement",
     "savedAs": "Enregistré sous :",
-    "errorPrefix": "Erreur ({{code}})"
+    "errorPrefix": "Erreur ({{code}})",
+    "startFailed": "Impossible de démarrer l'enregistrement :"
   },
   "scheduleScreen": {
     "pageTitle": "Planning",

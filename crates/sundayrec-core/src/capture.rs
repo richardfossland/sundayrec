@@ -170,9 +170,12 @@ pub fn build_unified_capture_args(
         args.push(af_chain);
     }
 
-    // Codecs. Audio is always AAC at 48 kHz with the requested channel count.
-    // Video (when present) is a simple libx264 — the spike doesn't tune the
-    // encoder (no filter_complex / bitrate matrix; that's Phase 3).
+    // Codecs. The audio codec is chosen from the OUTPUT extension (see
+    // `audio_codec_args`) so the encoded stream matches the chosen container —
+    // mp3→libmp3lame, wav→pcm_s16le, flac→flac, m4a/mp4/aac→aac. (Previously this
+    // hardcoded AAC, which ffmpeg rejects when muxing into a .mp3/.wav/.flac
+    // container — the default `Mp3` format never recorded.) Always 48 kHz with the
+    // requested channel count. Video (when present) stays a simple libx264.
     if has_video {
         args.push("-c:v".into());
         args.push("libx264".into());
@@ -181,14 +184,7 @@ pub fn build_unified_capture_args(
         args.push("-pix_fmt".into());
         args.push("yuv420p".into());
     }
-    args.push("-c:a".into());
-    args.push("aac".into());
-    args.push("-b:a".into());
-    args.push("192k".into());
-    args.push("-ar".into());
-    args.push("48000".into());
-    args.push("-ac".into());
-    args.push(opts.channels.count().to_string());
+    args.extend(audio_codec_args(output_path, opts.channels.count()));
 
     // Normalise leading timestamps so the file plays from t=0 in every player.
     args.push("-avoid_negative_ts".into());
@@ -202,6 +198,40 @@ pub fn build_unified_capture_args(
     args.push("-y".into());
     args.push(output_path.into());
     args
+}
+
+/// Audio codec + bitrate/sample-rate/channel args, chosen from the OUTPUT file's
+/// extension so the encoded stream is valid for its container. AAC only muxes
+/// into m4a/mp4/aac; an `.mp3`/`.wav`/`.flac` output needs its own codec, or
+/// ffmpeg refuses to write the file. Unknown extensions fall back to AAC.
+fn audio_codec_args(output_path: &str, channels: u8) -> Vec<String> {
+    let ext = output_path
+        .rsplit(['/', '\\'])
+        .next()
+        .and_then(|name| name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()))
+        .unwrap_or_default();
+
+    let mut a: Vec<String> = vec!["-c:a".into()];
+    match ext.as_str() {
+        "mp3" => {
+            a.push("libmp3lame".into());
+            a.push("-b:a".into());
+            a.push("192k".into());
+        }
+        "wav" => a.push("pcm_s16le".into()), // lossless PCM — no bitrate
+        "flac" => a.push("flac".into()),     // lossless — no bitrate
+        // aac / m4a / mp4 / unknown → AAC (the safe, widely-muxable default).
+        _ => {
+            a.push("aac".into());
+            a.push("-b:a".into());
+            a.push("192k".into());
+        }
+    }
+    a.push("-ar".into());
+    a.push("48000".into());
+    a.push("-ac".into());
+    a.push(channels.to_string());
+    a
 }
 
 #[cfg(test)]
@@ -278,6 +308,33 @@ mod tests {
         // On mac/linux the chain has no empty leading slot — it starts with
         // silencedetect (no stray leading comma).
         assert!(!af.starts_with(','), "no empty drift slot leaking a comma");
+    }
+
+    #[test]
+    fn audio_codec_matches_output_extension() {
+        let mk = |path: &str| {
+            build_unified_capture_args(Platform::MacOS, None, "1", path, &CaptureOpts::default())
+        };
+        // mp3 → libmp3lame (NOT aac — the bug that froze every default recording).
+        assert!(has_pair(&mk("/tmp/x.mp3"), "-c:a", "libmp3lame"));
+        assert!(!has_pair(&mk("/tmp/x.mp3"), "-c:a", "aac"));
+        // wav → pcm_s16le, no -b:a bitrate.
+        let wav = mk("/tmp/x.wav");
+        assert!(has_pair(&wav, "-c:a", "pcm_s16le"));
+        assert!(!wav.iter().any(|a| a == "-b:a"), "pcm needs no bitrate");
+        // flac → flac, no -b:a bitrate.
+        let flac = mk("/tmp/x.flac");
+        assert!(has_pair(&flac, "-c:a", "flac"));
+        assert!(!flac.iter().any(|a| a == "-b:a"), "flac needs no bitrate");
+        // m4a / mp4 / aac → aac.
+        assert!(has_pair(&mk("/tmp/x.m4a"), "-c:a", "aac"));
+        assert!(has_pair(&mk("/tmp/x.mp4"), "-c:a", "aac"));
+        assert!(has_pair(&mk("/tmp/x.aac"), "-c:a", "aac"));
+        // Unknown extension → AAC fallback (never crashes the builder).
+        assert!(has_pair(&mk("/tmp/x.weird"), "-c:a", "aac"));
+        // Channel count still flows through, and sample rate is fixed at 48 kHz.
+        assert!(has_pair(&mk("/tmp/x.mp3"), "-ac", "2"));
+        assert!(has_pair(&mk("/tmp/x.mp3"), "-ar", "48000"));
     }
 
     #[test]

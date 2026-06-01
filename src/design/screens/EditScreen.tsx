@@ -404,9 +404,6 @@ function useTranscribeModel(selected: string | null) {
 /** Fraction of WAVE_BARS painted as the (blue) intro/outro bands. Purely visual,
  *  fixed at any zoom so the design's three-band look never moves. */
 const INTRO_FRAC = 0.15;
-/** The sample second the ★ "antatt preken" marker is pinned to (mapped THROUGH
- *  the viewport so it pans/zooms with the rest). 16 % into the file. */
-const SERMON_FRAC = 0.16;
 
 /** Interactive waveform: the design's fixed gold-bar timeline, now live + driven
  *  by the shared `editorGeometry` viewport model. Bars are the peaks WINDOWED to
@@ -463,10 +460,8 @@ function Waveform({
   );
 
   // Playhead position as a 0..1 fraction of the viewport (rendered only if in
-  // view). The ★ marker is positioned the same way through the viewport.
+  // view).
   const playFrac = span > 0 ? (playheadSec - viewport.start) / span : -1;
-  const sermonSec = SERMON_FRAC * durationSec;
-  const sermonFrac = span > 0 ? (sermonSec - viewport.start) / span : -1;
 
   // Map a pointer's clientX into a main-file second via the bars container box.
   const xToSecFromEvent = useCallback(
@@ -632,31 +627,6 @@ function Waveform({
               pointerEvents: "none",
             }}
           />
-        )}
-        {/* ★ "antatt preken" marker, pinned to a sample second through the vp. */}
-        {sermonFrac >= 0 && sermonFrac <= 1 && (
-          <div
-            style={{
-              position: "absolute",
-              left: `${sermonFrac * 100}%`,
-              top: 6,
-              fontSize: 10,
-              color: "var(--sr-gold-bright)",
-              background: "var(--sr-ink-900)",
-              padding: "2px 6px",
-              borderRadius: 4,
-              border: "1px solid var(--sr-gold-line)",
-              pointerEvents: "none",
-            }}
-          >
-            {t(
-              "editScreen.assumedSermon",
-              "★ Antatt preken — {{minutes}} min",
-              {
-                minutes: 28,
-              },
-            )}
-          </div>
         )}
       </div>
       <div

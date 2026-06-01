@@ -1266,7 +1266,8 @@
     "diskFree": "Pozostałe miejsce na dysku",
     "stopButton": "Naciśnij, aby zatrzymać nagrywanie",
     "savedAs": "Zapisywane jako:",
-    "errorPrefix": "Błąd ({{code}})"
+    "errorPrefix": "Błąd ({{code}})",
+    "startFailed": "Nie udało się rozpocząć nagrywania:"
   },
   "scheduleScreen": {
     "pageTitle": "Harmonogram",

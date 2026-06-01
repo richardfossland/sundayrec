@@ -51,6 +51,8 @@ function useRecordingSession(video: boolean) {
   const [error, setError] = useState<RecordingEvent | null>(null);
   const [state, setState] = useState<RecorderStatePayload | null>(null);
   const [savePath, setSavePath] = useState<string | null>(null);
+  const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
+  const [startError, setStartError] = useState<string | null>(null);
   const running = useRef(false);
   const queryClient = useQueryClient();
 
@@ -118,11 +120,15 @@ function useRecordingSession(video: boolean) {
       if (!video) opts = { ...opts, video_device_name: null };
       if (cancelled) return;
       setSavePath(opts.output_path || null);
+      setDeviceLabel(opts.audio_device_name || null);
       try {
         await invoke("start_recording", { opts });
         running.current = true;
-      } catch {
-        // ignore — dev/test has no recorder backend
+      } catch (e) {
+        // Surface the failure instead of freezing silently at "Starter …".
+        if (!cancelled) {
+          setStartError((e as { message?: string })?.message ?? String(e));
+        }
       }
     })();
     return () => {
@@ -160,6 +166,8 @@ function useRecordingSession(video: boolean) {
     error,
     state,
     savePath,
+    deviceLabel,
+    startError,
     stop,
   };
 }
@@ -252,11 +260,13 @@ function RecHeader({
   weak,
   dbLeft,
   dbRight,
+  device,
 }: {
   status: "starting" | "recording" | "reconnecting";
   weak: boolean;
   dbLeft: number;
   dbRight: number;
+  device: string;
 }) {
   const { t } = useTranslation();
   const label =
@@ -295,7 +305,7 @@ function RecHeader({
           <div
             style={{ fontSize: 13.5, color: "var(--sr-text-3)", marginTop: 3 }}
           >
-            Default · MacBook Pro-mikrofon (innebygd)
+            {device}
           </div>
         </div>
       </div>
@@ -447,8 +457,7 @@ function RecFooter({
           border: "1px solid var(--sr-line)",
         }}
       >
-        {t("recordingScreen.savedAs", "Lagres som:")}{" "}
-        {savePath ?? "/Users/richardfossland/Music/SundayRec/2026-06-01.wav"}
+        {t("recordingScreen.savedAs", "Lagres som:")} {savePath ?? "…"}
       </div>
     </>
   );
@@ -471,6 +480,8 @@ export function RecordingScreen({
     error,
     state,
     savePath,
+    deviceLabel,
+    startError,
     stop,
   } = useRecordingSession(video);
   const diskFree = useDiskSpace();
@@ -494,12 +505,13 @@ export function RecordingScreen({
 
   return (
     <div className="sr-win">
-      <div className="sr-titlebar">
-        <div className="sr-lights">
-          <span className="sr-light r" />
-          <span className="sr-light y" />
-          <span className="sr-light g" />
-        </div>
+      {/* Native macOS traffic-lights overlay this dark bar (titleBarStyle:
+          Overlay); the strip is a drag region with left room for the lights. */}
+      <div
+        className="sr-titlebar"
+        data-tauri-drag-region
+        style={{ paddingLeft: 80 }}
+      >
         <div className="sr-wintitle">
           {t("recordingScreen.titlebar", "SundayRec — tar opp")}
         </div>
@@ -572,6 +584,7 @@ export function RecordingScreen({
             weak={silence !== null}
             dbLeft={peakDbLeft}
             dbRight={peakDbRight}
+            device={deviceLabel || "Standard lydinngang"}
           />
           <div
             className={video ? "sr-stack-3" : "sr-stack-4"}
@@ -581,6 +594,23 @@ export function RecordingScreen({
             <RecMeter ch="R" on={dbfsToLit(peakDbRight, 44)} />
           </div>
           <RecScale />
+          {startError && (
+            <div
+              className="sr-mono"
+              style={{
+                fontSize: 12.5,
+                color: "var(--sr-red-bright)",
+                marginTop: 18,
+                padding: "12px 14px",
+                borderRadius: "var(--sr-r-sm)",
+                background: "var(--sr-red-tint)",
+                border: "1px solid var(--sr-red)",
+              }}
+            >
+              {t("recordingScreen.startFailed", "Kunne ikke starte opptaket:")}{" "}
+              {startError}
+            </div>
+          )}
           <RecFooter
             time={formatClock(elapsed)}
             size={formatMb(bytes)}

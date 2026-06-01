@@ -1266,7 +1266,8 @@
     "diskFree": "Freier Speicherplatz",
     "stopButton": "Zum Beenden der Aufnahme drücken",
     "savedAs": "Gespeichert als:",
-    "errorPrefix": "Fehler ({{code}})"
+    "errorPrefix": "Fehler ({{code}})",
+    "startFailed": "Aufnahme konnte nicht gestartet werden:"
   },
   "scheduleScreen": {
     "pageTitle": "Zeitplan",
