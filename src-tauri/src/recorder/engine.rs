@@ -79,6 +79,7 @@ use sundayrec_core::device_match::{find_best_device_match, FfmpegDevice};
 use sundayrec_core::errors::{classify_recording_error, RecordingErrorCode};
 use sundayrec_core::ffmpeg::Platform;
 use sundayrec_core::levels::{parse_ametadata_peak, ChannelLevels, SILENCE_FLOOR_DB};
+use sundayrec_core::preflight::{low_disk_should_stop, min_disk_headroom_bytes};
 use sundayrec_core::progress::{parse_size_kb, StartupResolver};
 use sundayrec_core::reconnect::{WatchdogState, WatchdogVerdict};
 use sundayrec_core::recorder::{RecorderState, RecordingSession, RecoveryDecision};
@@ -486,6 +487,9 @@ enum SegmentOutcome {
     AutoStop,
     /// Stop-on-silence fired → finalise + end the session.
     SilenceStop,
+    /// Free disk space fell below the headroom → graceful stop + end the session
+    /// BEFORE ffmpeg hits ENOSPC and corrupts the container.
+    DiskStop,
     /// ffmpeg died unexpectedly → consult the recovery policy. Carries the last
     /// classified error (for the fatal-error short-circuit).
     UnexpectedExit {
@@ -560,7 +564,8 @@ async fn run_session(
         match outcome {
             SegmentOutcome::GracefulStop
             | SegmentOutcome::AutoStop
-            | SegmentOutcome::SilenceStop => {
+            | SegmentOutcome::SilenceStop
+            | SegmentOutcome::DiskStop => {
                 break;
             }
             SegmentOutcome::Split => {
@@ -1021,6 +1026,16 @@ async fn run_segment(
     let mut wd_tick = tokio::time::interval(Duration::from_millis(RecorderTimeouts::STUCK_POLL_MS));
     wd_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
+    // Low-disk guard: every 30 s, probe free space on the save volume and stop
+    // GRACEFULLY before ffmpeg hits ENOSPC and leaves a corrupt container. The
+    // headroom matches the pre-flight threshold (4 GB with video, else 500 MB).
+    let disk_folder = std::path::Path::new(&opts.output_path)
+        .parent()
+        .map(|p| p.to_path_buf());
+    let disk_headroom = min_disk_headroom_bytes(opts.video_device_name.is_some());
+    let mut disk_tick = tokio::time::interval(Duration::from_secs(30));
+    disk_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
     // Split + manual-max timers fire relative to NOW (this segment for split,
     // whole session for auto-stop). We arm one-shot sleeps, recomputed each loop.
     let split_deadline = if opts.split_minutes > 0 {
@@ -1108,6 +1123,24 @@ async fn run_segment(
                     let _ = child.start_kill();
                     let _ = child.wait().await;
                     break SegmentOutcome::UnexpectedExit { last_error: None };
+                }
+            }
+            // Low-disk guard poll.
+            _ = disk_tick.tick() => {
+                if let Some(folder) = &disk_folder {
+                    if let Ok(free) = fs4::available_space(folder) {
+                        if low_disk_should_stop(free, disk_headroom) {
+                            emit_error(
+                                app,
+                                "disk_full",
+                                "Lite ledig diskplass — stopper opptaket trygt før disken blir full.",
+                            );
+                            // Graceful stop so the container is finalised + playable.
+                            graceful_q(&mut stdin).await;
+                            let _ = child.wait().await;
+                            break SegmentOutcome::DiskStop;
+                        }
+                    }
                 }
             }
             // Split timer.
@@ -1334,6 +1367,12 @@ fn looks_like_error(line: &str) -> bool {
         || l.contains("unplugged")
         || l.contains("invalid")
         || l.contains("failed")
+        || l.contains("cannot open")
+        || l.contains("unable to")
+        || l.contains("conversion failed")
+        || l.contains("end of file")
+        || l.contains("disconnected")
+        || l.contains("quota exceeded")
 }
 
 /// Stable snake_case string for a [`RecordingErrorCode`] — matches the serde

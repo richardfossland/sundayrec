@@ -78,6 +78,24 @@ pub const MIN_DISK_AUDIO_BYTES: u64 = 500 * 1024 * 1024;
 /// `MIN_DISK_VIDEO_BYTES` (`preflight.ts:27`).
 pub const MIN_DISK_VIDEO_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 
+/// The disk headroom for the given capture mode — the same threshold the
+/// pre-flight check uses, reused by the during-recording guard.
+pub fn min_disk_headroom_bytes(video_active: bool) -> u64 {
+    if video_active {
+        MIN_DISK_VIDEO_BYTES
+    } else {
+        MIN_DISK_AUDIO_BYTES
+    }
+}
+
+/// DURING-recording guard: should the recorder stop NOW because free space has
+/// fallen below `headroom_bytes`? Stopping gracefully here finalises a playable
+/// file BEFORE ffmpeg hits `ENOSPC` and leaves a corrupt container. Pure so the
+/// threshold logic is unit-tested; the engine owns the periodic `fs4` probe.
+pub fn low_disk_should_stop(free_bytes: u64, headroom_bytes: u64) -> bool {
+    free_bytes < headroom_bytes
+}
+
 /// Bytes-per-GB the Electron message used for its `.toFixed(1)` GB string
 /// (`1_073_741_824` = 1024³, see `preflight.ts:55`).
 const BYTES_PER_GB: f64 = 1_073_741_824.0;
@@ -209,6 +227,29 @@ mod tests {
             mic_denied: false,
             cam_denied: false,
         }
+    }
+
+    // ── during-recording low-disk guard ─────────────────────────────────────
+
+    #[test]
+    fn low_disk_should_stop_below_headroom() {
+        let audio = min_disk_headroom_bytes(false);
+        assert_eq!(audio, MIN_DISK_AUDIO_BYTES);
+        assert!(low_disk_should_stop(audio - 1, audio), "just under → stop");
+        assert!(
+            !low_disk_should_stop(audio, audio),
+            "exactly at → keep going"
+        );
+        assert!(
+            !low_disk_should_stop(audio * 10, audio),
+            "plenty → keep going"
+        );
+        // Video raises the bar to 4 GB.
+        assert_eq!(min_disk_headroom_bytes(true), MIN_DISK_VIDEO_BYTES);
+        assert!(low_disk_should_stop(
+            MIN_DISK_AUDIO_BYTES,
+            min_disk_headroom_bytes(true)
+        ));
     }
 
     // ── disk_space_finding ───────────────────────────────────────────────────

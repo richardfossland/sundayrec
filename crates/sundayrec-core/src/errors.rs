@@ -98,7 +98,15 @@ const PATTERN_GROUPS: &[(RecordingErrorCode, &[&str])] = &[
     ),
     (
         RecordingErrorCode::DiskFull,
-        &["no space left", "disk full", "enospc"],
+        &[
+            "no space left",
+            "disk full",
+            "enospc",
+            // Locale / quota / newer-ffmpeg phrasings of "out of space".
+            "disk quota exceeded",
+            "out of disk space",
+            "not enough space",
+        ],
     ),
     (
         RecordingErrorCode::DeviceDisconnected,
@@ -110,6 +118,11 @@ const PATTERN_GROUPS: &[(RecordingErrorCode, &[&str])] = &[
             "audclnt_e_device_invalidated",
             "connection reset",
             "eof",
+            // Mid-recording device loss phrasings (USB pull, sleep, hub reset).
+            "device disconnected",
+            "device removed",
+            "device not responding",
+            "no longer available",
         ],
     ),
 ];
@@ -176,6 +189,22 @@ mod tests {
     fn detects_disconnected() {
         assert_eq!(
             classify_recording_error("Broken pipe while writing"),
+            RecordingErrorCode::DeviceDisconnected
+        );
+    }
+
+    #[test]
+    fn detects_quota_and_disconnect_variants() {
+        assert_eq!(
+            classify_recording_error("write failed: Disk quota exceeded"),
+            RecordingErrorCode::DiskFull
+        );
+        assert_eq!(
+            classify_recording_error("avfoundation: capture device disconnected"),
+            RecordingErrorCode::DeviceDisconnected
+        );
+        assert_eq!(
+            classify_recording_error("USB audio device removed during capture"),
             RecordingErrorCode::DeviceDisconnected
         );
     }
