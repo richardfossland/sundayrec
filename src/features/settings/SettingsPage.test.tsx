@@ -12,6 +12,21 @@ const h = vi.hoisted(() => ({ invoke: vi.fn() }));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => h.invoke(...args),
+  // Settings now embeds panels (DevicePicker) that build media src URLs.
+  convertFileSrc: (p: string) => p,
+}));
+
+// The embedded panels (DevicePicker, EmailSettingsPanel, …) subscribe to Tauri
+// events on mount; stub the event API so `listen` resolves to a no-op unlisten
+// instead of hitting the (absent) IPC bridge.
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(() => Promise.resolve(() => {})),
+}));
+
+// Some embedded panels use the dialog/clipboard plugins; stub them too.
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  open: vi.fn(() => Promise.resolve(null)),
+  save: vi.fn(() => Promise.resolve(null)),
 }));
 
 const invoke = h.invoke;
@@ -103,8 +118,30 @@ beforeEach(async () => {
         return Promise.resolve(DEFAULTS);
       case "list_devices":
         return Promise.resolve({ audio_inputs: [], video_inputs: [] });
+      // Settings is now a hub: the active tab also mounts feature panels, which
+      // fire their own queries. Stub them so they render their empty states.
+      case "list_input_devices":
+        return Promise.resolve({ host: "CoreAudio", inputs: [] });
+      case "ffmpeg_health":
+        return Promise.resolve({ available: true, version: "ffmpeg 6.0", path: "" });
+      case "email_status":
+        return Promise.resolve({ featureBuilt: false, gmailConnected: false });
+      case "update_status":
+        return Promise.resolve(null);
+      case "publish_feed_status":
+        return Promise.resolve({ featureBuilt: false, episodeCount: 0 });
+      case "cloud_connection_status":
+        return Promise.resolve([]);
+      case "cloud_queue_status":
+        return Promise.resolve([]);
+      case "live_bridge_status":
+        return Promise.resolve(false);
+      case "setting_get":
+        return Promise.resolve(null);
+      case "integrations_song_has_apikey":
+        return Promise.resolve(false);
       default:
-        return Promise.reject(new Error(`unexpected command: ${cmd}`));
+        return Promise.resolve(undefined);
     }
   });
 });
@@ -123,7 +160,7 @@ describe("SettingsPage", () => {
       ).toBe("100"),
     );
     // Switch to the Alt tab to verify FILFORMAT loaded correctly.
-    fireEvent.click(screen.getByRole("button", { name: "Alt" }));
+    fireEvent.click(screen.getByRole("button", { name: "Filer" }));
     await waitFor(() =>
       expect(
         (screen.getByLabelText("FILFORMAT") as HTMLSelectElement).value,
@@ -168,9 +205,9 @@ describe("SettingsPage", () => {
       renderPage();
       // Navigate to the Alt tab where FILFORMAT lives.
       await vi.waitFor(() =>
-        expect(screen.getByRole("button", { name: "Alt" })).toBeInTheDocument(),
+        expect(screen.getByRole("button", { name: "Filer" })).toBeInTheDocument(),
       );
-      fireEvent.click(screen.getByRole("button", { name: "Alt" }));
+      fireEvent.click(screen.getByRole("button", { name: "Filer" }));
       await vi.waitFor(() =>
         expect(
           (screen.getByLabelText("FILFORMAT") as HTMLSelectElement).value,
@@ -258,9 +295,9 @@ describe("SettingsPage", () => {
       renderPage();
       // Send e-post ved feil is in the Notater tab.
       await vi.waitFor(() =>
-        expect(screen.getByRole("button", { name: "Notater" })).toBeInTheDocument(),
+        expect(screen.getByRole("button", { name: "Varsler" })).toBeInTheDocument(),
       );
-      fireEvent.click(screen.getByRole("button", { name: "Notater" }));
+      fireEvent.click(screen.getByRole("button", { name: "Varsler" }));
       await vi.waitFor(() =>
         expect(
           screen.getByLabelText("Send e-post ved feil"),

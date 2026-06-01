@@ -37,6 +37,22 @@ export const VIEW_NAMES = [
 
 export type ViewName = (typeof VIEW_NAMES)[number];
 
+/**
+ * The flat set of pages shown directly in the sidebar — mirrors the original
+ * Electron layout (Hjem · Tidsplan · Direkte · Rediger · Søk). Everything else
+ * is reached via the Settings hub (its tabs), contextual cards (the home
+ * review/«Se alle» cards → review/history) or the ⌘K palette. Keeping the full
+ * {@link VIEW_NAMES} routable means those embedded panels stay navigable while
+ * the sidebar itself stays uncluttered.
+ */
+export const SIDEBAR_VIEWS = [
+  "home",
+  "schedule",
+  "streaming",
+  "editor",
+  "search",
+] as const satisfies readonly ViewName[];
+
 /** The view shown on first paint (matches the Electron default page). */
 export const DEFAULT_VIEW: ViewName = "home";
 

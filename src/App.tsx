@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import type { AppInfo } from "@/lib/bindings/AppInfo";
 import type { Settings } from "@/lib/bindings/Settings";
+import type { ScheduleStatus } from "@/lib/bindings/ScheduleStatus";
 import { DevicePicker } from "@/features/devices/DevicePicker";
 import { FfmpegHealth } from "@/features/diagnostics/FfmpegHealth";
 import { DiagnosticsPanel } from "@/features/diagnostics/DiagnosticsPanel";
@@ -103,15 +104,39 @@ function App() {
     );
   }
 
-  // The view→component map. Every Phase-0 panel is preserved here, now reached
-  // through the sidebar instead of a disclosure stack.
+  // The view→component map, organised after the original Electron layout: the
+  // five everyday pages live in the sidebar; the rest are embedded where they
+  // belong (Tidsplan folds in wake-from-sleep, Rediger folds in transcription,
+  // and the Settings hub's tabs absorb publish/cloud/email/update/integrations/
+  // diagnostics). The standalone entries remain so the ⌘K palette and the home
+  // cards (history/review) can still reach them.
   const views: Record<ViewName, React.ReactNode> = {
     home: <HomePageView />,
-    schedule: <SchedulePage />,
+    // Tidsplan = month calendar + weekly slots + a collapsible "Vekk maskin
+    // fra dvale" panel, exactly as the old app grouped them.
+    schedule: (
+      <div className="flex w-full max-w-4xl flex-col gap-6">
+        <SchedulePage />
+        <details className="rounded-xl border border-border bg-surface">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-text">
+            {t("wake.title", "Vekk maskin fra dvale")}
+          </summary>
+          <div className="border-t border-border p-4">
+            <WakePanel />
+          </div>
+        </details>
+      </div>
+    ),
     history: <HistoryPanel />,
     review: <ReviewPanel />,
     search: <SearchPage />,
-    editor: <EditorPanel />,
+    // Rediger = the editor with transcription as a section below it.
+    editor: (
+      <div className="flex w-full max-w-4xl flex-col gap-6">
+        <EditorPanel />
+        <TranscribePanel />
+      </div>
+    ),
     transcribe: <TranscribePanel />,
     publish: <PublishPanel />,
     streaming: <StreamingPanel />,
@@ -142,8 +167,52 @@ function App() {
         views={views}
         onTransition={runEffects}
         header={<LanguageSwitcher />}
+        footer={<SidebarStatus />}
       />
     </ToastHost>
+  );
+}
+
+/**
+ * The always-visible sidebar status line (bottom of the nav): a coloured dot
+ * plus the next scheduled recording (or "Alt er klart") and the app version —
+ * mirrors the old Electron sidebar footer.
+ */
+function SidebarStatus() {
+  const { t } = useTranslation();
+  const { data: status } = useQuery<ScheduleStatus>({
+    queryKey: SCHEDULE_STATUS_KEY,
+    queryFn: () => invoke<ScheduleStatus>("scheduler_status"),
+  });
+  const { data: info } = useQuery<AppInfo>({
+    queryKey: ["app_info"],
+    queryFn: () => invoke<AppInfo>("app_info"),
+  });
+
+  const next = status?.next ?? null;
+  const nextLabel = next
+    ? new Date(next).toLocaleString(undefined, {
+        weekday: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : t("home.readyTitle", "Alt er klart");
+
+  return (
+    <div className="flex flex-col gap-0.5 text-[11px] text-text3">
+      <span className="flex items-center gap-1.5">
+        <span
+          aria-hidden
+          className={`inline-block h-1.5 w-1.5 rounded-full ${
+            next ? "bg-accent" : "bg-emerald-500"
+          }`}
+        />
+        <span className="truncate" title={nextLabel}>
+          {nextLabel}
+        </span>
+      </span>
+      {info?.version && <span>v{info.version}</span>}
+    </div>
   );
 }
 

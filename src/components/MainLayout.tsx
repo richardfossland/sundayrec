@@ -1,16 +1,11 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useReducer,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useReducer, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
   initialNav,
   isViewName,
   nextNav,
+  SIDEBAR_VIEWS,
   VIEW_NAMES,
   type NavState,
   type ViewName,
@@ -44,36 +39,22 @@ export const SHELL_NAVIGATE_EVENT = "shell:navigate";
 /** Sidebar label key + fallback for each view (Norwegian source of truth). */
 const NAV_LABELS: Record<ViewName, { key: string; fallback: string }> = {
   home: { key: "nav.home", fallback: "Hjem" },
-  schedule: { key: "schedule.title", fallback: "Planlegging" },
+  schedule: { key: "nav.schedule", fallback: "Tidsplan" },
   history: { key: "nav.history", fallback: "Historikk" },
   review: { key: "review.title", fallback: "Gjennomgang" },
   search: { key: "search.title", fallback: "Søk" },
-  editor: { key: "editor.title", fallback: "Redigering" },
+  editor: { key: "nav.edit", fallback: "Rediger" },
   transcribe: { key: "transcribe.title", fallback: "Transkribering" },
   publish: { key: "publish.title", fallback: "Publisering" },
-  streaming: { key: "streaming.title", fallback: "Direktesending" },
+  streaming: { key: "nav.live", fallback: "Direkte" },
   cloud: { key: "cloud.title", fallback: "Sky-backup" },
   email: { key: "email.title", fallback: "E-postvarsler" },
   integrations: { key: "integrations.title", fallback: "Integrasjoner" },
   diagnostics: { key: "diagnostics.title", fallback: "Diagnose" },
   wake: { key: "wake.title", fallback: "Vekking fra dvale" },
-  settings: { key: "nav.general", fallback: "Generelt" },
+  settings: { key: "nav.settings", fallback: "Innstillinger" },
   update: { key: "general.updates", fallback: "Oppdateringer" },
 };
-
-/** Visual grouping of the sidebar — purely cosmetic, order = NAV order. */
-const NAV_GROUPS: ReadonlyArray<{
-  heading: string;
-  views: readonly ViewName[];
-}> = [
-  { heading: "", views: ["home", "schedule", "history", "review", "search"] },
-  {
-    heading: "produce",
-    views: ["editor", "transcribe", "publish", "streaming"],
-  },
-  { heading: "distribute", views: ["cloud", "email", "integrations"] },
-  { heading: "system", views: ["diagnostics", "wake", "settings", "update"] },
-];
 
 export interface MainLayoutProps {
   /** A node for every view (caller wires features → components). */
@@ -88,6 +69,8 @@ export interface MainLayoutProps {
   initialView?: ViewName;
   /** Top-of-sidebar slot (e.g. the language switcher). */
   header?: ReactNode;
+  /** Bottom-of-sidebar slot (e.g. the live next-recording status line). */
+  footer?: ReactNode;
 }
 
 export function MainLayout({
@@ -95,6 +78,7 @@ export function MainLayout({
   onTransition,
   initialView,
   header,
+  footer,
 }: MainLayoutProps) {
   const { t } = useTranslation();
   const [nav, dispatch] = useReducer(
@@ -126,65 +110,65 @@ export function MainLayout({
     return () => window.removeEventListener(SHELL_NAVIGATE_EVENT, handler);
   }, [showView]);
 
-  const groupHeading = useMemo(
-    () =>
-      (key: string): string => {
-        switch (key) {
-          case "produce":
-            return t("nav.produceGroup", "Produksjon");
-          case "distribute":
-            return t("nav.distributeGroup", "Distribusjon");
-          case "system":
-            return t("nav.systemGroup", "System");
-          default:
-            return "";
-        }
-      },
-    [t],
-  );
-
   return (
     <div className="flex min-h-screen bg-bg text-text">
       {/* ── Sidebar nav ──────────────────────────────────────────────── */}
       <nav
-        className="flex w-56 shrink-0 flex-col gap-4 border-r border-border bg-bg p-3"
+        className="flex w-56 shrink-0 flex-col gap-2 border-r border-border bg-bg p-3"
         aria-label={t("app.name", "SundayRec")}
       >
-        <div className="flex items-center justify-between px-1">
+        <div className="mb-2 flex items-center justify-between px-1">
           <span className="text-sm font-semibold">
             {t("app.name", "SundayRec")}
           </span>
           {header}
         </div>
-        {NAV_GROUPS.map((group) => (
-          <div key={group.heading || "main"} className="flex flex-col gap-0.5">
-            {group.heading && (
-              <p className="px-2 py-1 text-[10px] uppercase tracking-wide opacity-40">
-                {groupHeading(group.heading)}
-              </p>
-            )}
-            {group.views.map((view) => {
-              const label = NAV_LABELS[view];
-              const active = nav.current === view;
-              return (
-                <button
-                  key={view}
-                  type="button"
-                  data-view={view}
-                  aria-current={active ? "page" : undefined}
-                  className={`rounded px-2 py-1.5 text-left text-sm transition-colors ${
-                    active
-                      ? "border-l-2 border-accent bg-surface2 font-medium text-accent"
-                      : "text-text2 hover:bg-surface hover:text-text"
-                  }`}
-                  onClick={() => showView(view)}
-                >
-                  {t(label.key, label.fallback)}
-                </button>
-              );
-            })}
-          </div>
-        ))}
+
+        {/* Flat primary nav — the five everyday pages (Electron-parity). */}
+        <div className="flex flex-col gap-0.5">
+          {SIDEBAR_VIEWS.map((view) => {
+            const label = NAV_LABELS[view];
+            const active = nav.current === view;
+            return (
+              <button
+                key={view}
+                type="button"
+                data-view={view}
+                aria-current={active ? "page" : undefined}
+                className={`rounded px-2 py-1.5 text-left text-sm transition-colors ${
+                  active
+                    ? "border-l-2 border-accent bg-surface2 font-medium text-accent"
+                    : "text-text2 hover:bg-surface hover:text-text"
+                }`}
+                onClick={() => showView(view)}
+              >
+                {t(label.key, label.fallback)}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Spacer pushes Settings + status to the bottom. */}
+        <div className="flex-1" />
+
+        {/* Settings gear — the tabbed hub holding everything else. */}
+        <button
+          type="button"
+          data-view="settings"
+          aria-current={nav.current === "settings" ? "page" : undefined}
+          className={`flex items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors ${
+            nav.current === "settings"
+              ? "border-l-2 border-accent bg-surface2 font-medium text-accent"
+              : "text-text2 hover:bg-surface hover:text-text"
+          }`}
+          onClick={() => showView("settings")}
+        >
+          <span aria-hidden>⚙</span>
+          {t(NAV_LABELS.settings.key, NAV_LABELS.settings.fallback)}
+        </button>
+
+        {/* Live status (next recording + version) — always visible. */}
+        {footer && <div className="px-2 pt-1">{footer}</div>}
       </nav>
 
       {/* ── Content pane ─────────────────────────────────────────────── */}

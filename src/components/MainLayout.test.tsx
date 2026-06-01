@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 
 import { MainLayout, SHELL_NAVIGATE_EVENT } from "./MainLayout";
-import { VIEW_NAMES, type ViewName } from "@/lib/routing";
+import { SIDEBAR_VIEWS, VIEW_NAMES, type ViewName } from "@/lib/routing";
 import i18n from "@/i18n";
 
 /** A stub node per view so we can assert which one is mounted. */
@@ -32,13 +32,21 @@ describe("MainLayout", () => {
     expect(screen.getByText("view:settings")).toBeInTheDocument();
   });
 
-  it("offers a sidebar button for every view", () => {
+  it("offers a sidebar button for each primary view + the settings gear", () => {
     render(<MainLayout views={stubViews()} />);
-    for (const v of VIEW_NAMES) {
+    for (const v of SIDEBAR_VIEWS) {
       expect(
         document.querySelector(`button[data-view="${v}"]`),
       ).toBeInTheDocument();
     }
+    // The settings gear sits at the bottom of the sidebar.
+    expect(
+      document.querySelector('button[data-view="settings"]'),
+    ).toBeInTheDocument();
+    // Embedded-only views (reached via tabs/⌘K) are NOT in the flat sidebar.
+    expect(
+      document.querySelector('button[data-view="cloud"]'),
+    ).not.toBeInTheDocument();
   });
 
   it("switches the content pane when a nav button is clicked", () => {
@@ -54,11 +62,10 @@ describe("MainLayout", () => {
       "aria-current",
       "page",
     );
-    fireEvent.click(document.querySelector('button[data-view="cloud"]')!);
-    expect(document.querySelector('button[data-view="cloud"]')).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    fireEvent.click(document.querySelector('button[data-view="search"]')!);
+    expect(
+      document.querySelector('button[data-view="search"]'),
+    ).toHaveAttribute("aria-current", "page");
     expect(
       document.querySelector('button[data-view="home"]'),
     ).not.toHaveAttribute("aria-current");

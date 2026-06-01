@@ -16,11 +16,30 @@ import {
   type SupportedLng,
 } from "@/i18n";
 import { SETTINGS_QUERY_KEY } from "./queryKey";
+// Panels embedded into the relevant tabs so Settings is the single hub that
+// absorbs everything the old Electron app kept under its settings tabs.
+import { DevicePicker } from "@/features/devices/DevicePicker";
+import { DiagnosticsPanel } from "@/features/diagnostics/DiagnosticsPanel";
+import { FfmpegHealth } from "@/features/diagnostics/FfmpegHealth";
+import { PublishPanel } from "@/features/publish/PublishPanel";
+import { CloudBackupPanel } from "@/features/cloud/CloudBackupPanel";
+import { EmailSettingsPanel } from "@/features/email/EmailSettingsPanel";
+import { UpdatePanel } from "@/features/update/UpdatePanel";
+import { IntegrationsPanel } from "@/features/integrations/IntegrationsPanel";
+import { SuiteHandoffPanel } from "@/features/integrations/SuiteHandoffPanel";
 
 /** Debounce (ms) before an edit is auto-saved — matches the Electron feel. */
 const SAVE_DEBOUNCE_MS = 500;
 
-const TABS = ["Lydkilde", "Video", "Alt", "Publisering", "Notater", "System"] as const;
+const TABS = [
+  "Lydkilde",
+  "Video",
+  "Filer",
+  "Publisering",
+  "Varsler",
+  "System",
+  "Sunday-suite",
+] as const;
 type Tab = (typeof TABS)[number];
 
 /** A labelled section wrapper. */
@@ -538,7 +557,7 @@ export function SettingsPage() {
       )}
 
       {/* ── Tab: Alt ─────────────────────────────────────────────────────── */}
-      {activeTab === "Alt" && (
+      {activeTab === "Filer" && (
         <div className="flex flex-col gap-4">
           <Section title={t("files.saveFolder", "Lagringsmappe")}>
             <div className="flex items-center justify-between gap-3">
@@ -867,7 +886,7 @@ export function SettingsPage() {
       )}
 
       {/* ── Tab: Notater ─────────────────────────────────────────────────── */}
-      {activeTab === "Notater" && (
+      {activeTab === "Varsler" && (
         <div className="flex flex-col gap-4">
           <Section title={t("notify.title", "Varsler")}>
             <Field
@@ -1075,6 +1094,39 @@ export function SettingsPage() {
           </Section>
 
           {SaveStatus}
+        </div>
+      )}
+
+      {/* ── Embedded panels (Electron-parity: settings is the hub) ───────────
+          Each block is gated by the active tab so only the visible tab's
+          panels mount and run their queries. */}
+      {activeTab === "Lydkilde" && (
+        <div className="mt-6 flex flex-col gap-6">
+          <DevicePicker />
+          <DiagnosticsPanel />
+          <FfmpegHealth />
+        </div>
+      )}
+      {activeTab === "Publisering" && (
+        <div className="mt-6 flex flex-col gap-6">
+          <PublishPanel />
+          <CloudBackupPanel />
+        </div>
+      )}
+      {activeTab === "Varsler" && (
+        <div className="mt-6 flex flex-col gap-6">
+          <EmailSettingsPanel />
+        </div>
+      )}
+      {activeTab === "System" && (
+        <div className="mt-6 flex flex-col gap-6">
+          <UpdatePanel />
+        </div>
+      )}
+      {activeTab === "Sunday-suite" && (
+        <div className="flex flex-col gap-6">
+          <IntegrationsPanel />
+          <SuiteHandoffPanel />
         </div>
       )}
     </section>

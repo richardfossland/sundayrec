@@ -104,34 +104,32 @@ describe("App", () => {
     expect(screen.getByText("SundayRec")).toBeInTheDocument();
   });
 
-  it("keeps every feature panel reachable from the sidebar", async () => {
+  it("shows the flat Electron-style sidebar (5 pages + settings gear)", async () => {
     renderApp();
     await waitFor(() =>
       expect(
         document.querySelector('button[data-view="home"]'),
       ).toBeInTheDocument(),
     );
-    // Every Phase-0 panel must remain reachable through the new shell.
+    // The everyday pages + the settings gear are the only sidebar buttons.
     for (const view of [
       "home",
       "schedule",
-      "history",
-      "review",
-      "editor",
-      "transcribe",
-      "publish",
       "streaming",
-      "cloud",
-      "email",
-      "integrations",
-      "diagnostics",
-      "wake",
+      "editor",
+      "search",
       "settings",
-      "update",
     ]) {
       expect(
         document.querySelector(`button[data-view="${view}"]`),
       ).toBeInTheDocument();
+    }
+    // The rest are embedded in the settings hub / contextual cards, not the
+    // flat sidebar.
+    for (const view of ["cloud", "email", "publish", "diagnostics", "update"]) {
+      expect(
+        document.querySelector(`button[data-view="${view}"]`),
+      ).not.toBeInTheDocument();
     }
   });
 });
