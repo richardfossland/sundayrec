@@ -459,6 +459,20 @@ export function HomeScreen({
                     display: "block",
                   }}
                 />
+              ) : preview.error ? (
+                <span
+                  role="alert"
+                  style={{
+                    color: "var(--sr-red)",
+                    fontSize: 13.5,
+                    fontWeight: 600,
+                    textAlign: "center",
+                    padding: "0 24px",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {preview.error}
+                </span>
               ) : (
                 t(
                   "homeScreen.cameraPreviewPlaceholder",

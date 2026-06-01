@@ -79,17 +79,22 @@ pub fn build_silence_detect_filter(
 /// untouched and only writes telemetry to stderr — so adding it to the `-af`
 /// chain NEVER alters the recorded file.
 ///
-/// - `metadata=1` makes astats print the measurements as ffmpeg metadata lines
-///   (the `[Parsed_astats_… @ …] Channel: N` / `Peak level dB: …` blocks).
-/// - `reset=48` re-measures every 48 frames. ffmpeg's default audio frame is
-///   1024 samples, so at 48 kHz that's ~48*1024/48000 ≈ 1.02 s — roughly one
-///   readout per second, which is plenty for a smooth meter without flooding
-///   stderr.
-/// - `measure_overall=none` + `measure_perchannel=Peak_level` restrict the
-///   output to ONLY the per-channel peak we need (keeps stderr small and the
-///   parser unambiguous).
+/// - `metadata=1` makes astats publish the measurements as frame metadata.
+/// - `reset=10` re-measures every 10 frames (~100 ms at 48 kHz/1024-sample
+///   frames) → a responsive attack. The slow RELEASE (peak-hold) is done in the
+///   UI, not here.
+/// - `measure_perchannel=Peak_level` restricts the measurement to ONLY the
+///   per-channel peak we need (keeps stderr small and the parser unambiguous).
+/// - `ametadata=mode=print:file=/dev/stderr` is what makes the meter LIVE:
+///   `astats` alone only logs its summary ONCE at EOF (the meter sat frozen for
+///   the whole take); `ametadata` prints the current frame metadata every frame,
+///   e.g. `lavfi.astats.1.Peak_level=-12.5` (ch1=left) / `…2.Peak_level=…`
+///   (ch2=right), which [`crate::levels::parse_ametadata_peak`] reads. NOTE:
+///   `/dev/stderr` is a unix path — the recorder is macOS-focused; Windows would
+///   need a different sink (deferred).
 pub fn build_levels_detect_filter() -> String {
-    "astats=metadata=1:reset=48:measure_overall=none:measure_perchannel=Peak_level".to_string()
+    "astats=metadata=1:reset=10:measure_perchannel=Peak_level,ametadata=mode=print:file=/dev/stderr"
+        .to_string()
 }
 
 #[cfg(test)]
@@ -100,23 +105,29 @@ mod tests {
     fn levels_filter_is_perchannel_peak_passthrough() {
         assert_eq!(
             build_levels_detect_filter(),
-            "astats=metadata=1:reset=48:measure_overall=none:measure_perchannel=Peak_level"
+            "astats=metadata=1:reset=10:measure_perchannel=Peak_level,ametadata=mode=print:file=/dev/stderr"
         );
     }
 
     #[test]
-    fn levels_filter_requests_metadata_and_periodic_reset() {
+    fn levels_filter_prints_live_per_frame_metadata() {
         let f = build_levels_detect_filter();
         assert!(f.starts_with("astats="), "must be an astats filter");
         assert!(f.contains("metadata=1"), "needs metadata output");
-        assert!(f.contains("reset=48"), "needs ~1s periodic reset");
+        assert!(f.contains("reset=10"), "needs a short, responsive window");
         assert!(
             f.contains("measure_perchannel=Peak_level"),
             "needs per-channel peak"
         );
+        // The live part: ametadata prints per-frame metadata to stderr so the
+        // meter updates DURING the take (astats alone only logs once at EOF).
         assert!(
-            f.contains("measure_overall=none"),
-            "no overall stats (keep stderr small)"
+            f.contains("ametadata=mode=print"),
+            "needs ametadata to stream live levels"
+        );
+        assert!(
+            f.contains("file=/dev/stderr"),
+            "live levels must land on the recorder's stderr reader"
         );
     }
 

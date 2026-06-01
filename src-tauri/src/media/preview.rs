@@ -107,13 +107,27 @@ pub fn build_preview_args(
         Platform::MacOS => {
             // avfoundation: `-i "<video>:<audio>"`; `:none` captures video only.
             let dev = device.unwrap_or("0");
-            let mut args = vec!["-f".into(), "avfoundation".into(), "-framerate".into(), fps];
-            if let Some(s) = size {
-                args.push("-video_size".into());
-                args.push(s.into());
-            }
-            args.push("-i".into());
-            args.push(format!("{dev}:none"));
+            // The FaceTime HD camera (and most avfoundation devices) REJECT a bare
+            // `-framerate {fps}`: it must be paired with a SUPPORTED video size, or
+            // negotiation fails with "Selected framerate is not supported by the
+            // device" → "Input/output error" → zero frames (the silent dead
+            // preview). Request a known-good capture mode (1280x720@30, a mode the
+            // device advertises) on the INPUT, then drop the OUTPUT rate to the low
+            // preview `fps` with `-r` so the stream stays light over IPC.
+            let mut args = vec![
+                "-f".into(),
+                "avfoundation".into(),
+                "-framerate".into(),
+                "30".into(),
+                "-video_size".into(),
+                size.unwrap_or("1280x720").into(),
+                "-i".into(),
+                format!("{dev}:none"),
+                // Throttle the OUTPUT to the preview rate (the camera still captures
+                // at its supported 30 fps above).
+                "-r".into(),
+                fps,
+            ];
             args.extend(mjpeg_output());
             args
         }
@@ -449,9 +463,14 @@ mod tests {
 
     #[test]
     fn mac_args_capture_video_only_to_mjpeg_stdout() {
-        let args = build_preview_args(Platform::MacOS, Some("1"), 30, None);
+        let args = build_preview_args(Platform::MacOS, Some("1"), 15, None);
         assert!(args.windows(2).any(|w| w == ["-f", "avfoundation"]));
+        // The INPUT requests a supported capture mode (avfoundation rejects a bare
+        // framerate without a paired video size → "Input/output error", no frames).
         assert!(args.windows(2).any(|w| w == ["-framerate", "30"]));
+        assert!(args.windows(2).any(|w| w == ["-video_size", "1280x720"]));
+        // The OUTPUT is throttled to the low preview rate with `-r`.
+        assert!(args.windows(2).any(|w| w == ["-r", "15"]));
         // video-only input: "<device>:none"
         assert!(args.iter().any(|a| a == "1:none"));
         // MJPEG to stdout
@@ -466,9 +485,14 @@ mod tests {
     }
 
     #[test]
-    fn mac_args_include_video_size_when_requested() {
-        let args = build_preview_args(Platform::MacOS, Some("0"), 30, Some("1280x720"));
+    fn mac_args_always_request_supported_video_size() {
+        // Even with no explicit size, macOS MUST pin a supported mode on the input,
+        // or the camera negotiation fails and the preview is silently blank.
+        let args = build_preview_args(Platform::MacOS, Some("0"), 15, None);
         assert!(args.windows(2).any(|w| w == ["-video_size", "1280x720"]));
+        // An explicit size still overrides the default.
+        let args = build_preview_args(Platform::MacOS, Some("0"), 30, Some("1920x1080"));
+        assert!(args.windows(2).any(|w| w == ["-video_size", "1920x1080"]));
     }
 
     #[test]

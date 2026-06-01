@@ -17,6 +17,7 @@ import type { DeviceInventory } from "@/lib/bindings/DeviceInventory";
 import type { FfmpegDevice } from "@/lib/bindings/FfmpegDevice";
 import type { VuLevels } from "@/lib/bindings/VuLevels";
 import type { PreviewFrame } from "@/lib/bindings/PreviewFrame";
+import type { PreviewError } from "@/lib/bindings/PreviewError";
 import type { DiskSpace } from "@/lib/bindings/DiskSpace";
 
 /** dBFS at the bottom of a meter — anything quieter reads as empty. */
@@ -94,38 +95,59 @@ export function useVuLevels(
  * Live camera preview. While `active`, runs the Rust MJPEG `start_preview`
  * engine and returns the latest frame as a ready-to-use `data:` URL plus its
  * dimensions; stops the engine when inactive or unmounted.
+ *
+ * Also surfaces a preview failure (`preview://error`: no camera, permission
+ * denied, no video stream) as `error` so the UI can show a real message instead
+ * of the silent dead placeholder. A received frame clears any prior error.
  */
 export function useCameraPreview(
   active: boolean,
   device?: string | null,
-): { dataUrl: string | null; width: number | null; height: number | null } {
+): {
+  dataUrl: string | null;
+  width: number | null;
+  height: number | null;
+  error: string | null;
+} {
   const [frame, setFrame] = useState<PreviewFrame | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const unlisten = listen<PreviewFrame>("preview://frame", (e) =>
-      setFrame(e.payload),
+    const unlistenFrame = listen<PreviewFrame>("preview://frame", (e) => {
+      setFrame(e.payload);
+      // A live frame means the camera recovered — clear any stale error.
+      setError(null);
+    });
+    const unlistenError = listen<PreviewError>("preview://error", (e) =>
+      setError(e.payload.message),
     );
     return () => {
-      void unlisten.then((off) => off());
+      void unlistenFrame.then((off) => off());
+      void unlistenError.then((off) => off());
     };
   }, []);
 
   useEffect(() => {
     if (!active) return;
+    // Re-arm: a fresh start should not show the previous session's error.
+    setError(null);
     void invoke("start_preview", { device: device ?? null, fps: null }).catch(
       () => {},
     );
     return () => {
       void invoke("stop_preview").catch(() => {});
       setFrame(null);
+      setError(null);
     };
   }, [active, device]);
 
-  if (!active || !frame) return { dataUrl: null, width: null, height: null };
+  if (!active) return { dataUrl: null, width: null, height: null, error: null };
+  if (!frame) return { dataUrl: null, width: null, height: null, error };
   return {
     dataUrl: `data:image/jpeg;base64,${frame.data}`,
     width: frame.width,
     height: frame.height,
+    error: null,
   };
 }
 

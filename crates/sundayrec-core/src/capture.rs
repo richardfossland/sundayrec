@@ -147,6 +147,13 @@ pub fn build_unified_capture_args(
                 // and contributes to the choppiness, so we omit it for audio-only.
                 args.push("-framerate".into());
                 args.push(opts.framerate.to_string());
+                // avfoundation REJECTS a bare framerate without a paired, supported
+                // video size ("Selected framerate is not supported by the device" →
+                // "Input/output error" → zero frames). Pin a known-good capture mode
+                // (1280x720, advertised by the FaceTime HD camera) so the camera
+                // actually opens for recording, same as the preview does.
+                args.push("-video_size".into());
+                args.push("1280x720".into());
             } else {
                 // Audio-only: avfoundation reports a wild initial timestamp (the
                 // log showed `time=-577014:…`); regenerate clean PTS so the first
@@ -318,9 +325,9 @@ mod tests {
         assert!(af.contains("silencedetect="));
         assert!(
             af.contains(
-                "astats=metadata=1:reset=48:measure_overall=none:measure_perchannel=Peak_level"
+                "astats=metadata=1:reset=10:measure_perchannel=Peak_level,ametadata=mode=print:file=/dev/stderr"
             ),
-            "per-channel levels astats must be present; got: {af}"
+            "live per-channel levels astats+ametadata must be present; got: {af}"
         );
         // On mac/linux the chain has no empty leading slot — it starts with
         // silencedetect (no stray leading comma).
@@ -372,6 +379,10 @@ mod tests {
             !a.iter().any(|x| x == "-framerate"),
             "audio-only must not set -framerate"
         );
+        assert!(
+            !a.iter().any(|x| x == "-video_size"),
+            "audio-only must not request a video capture size"
+        );
     }
 
     #[test]
@@ -387,6 +398,9 @@ mod tests {
         );
         assert!(has_pair(&a, "-thread_queue_size", "1024"));
         assert!(has_pair(&a, "-framerate", "30"));
+        // The camera must be opened with a supported capture mode (avfoundation
+        // rejects a bare framerate → "Input/output error", zero frames).
+        assert!(has_pair(&a, "-video_size", "1280x720"));
         assert!(
             !a.iter().any(|x| x == "+genpts"),
             "the video path uses -framerate, not genpts"

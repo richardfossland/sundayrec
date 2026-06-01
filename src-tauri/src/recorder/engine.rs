@@ -78,7 +78,7 @@ use sundayrec_core::capture::{build_unified_capture_args, CaptureOpts, Channels}
 use sundayrec_core::device_match::{find_best_device_match, FfmpegDevice};
 use sundayrec_core::errors::{classify_recording_error, RecordingErrorCode};
 use sundayrec_core::ffmpeg::Platform;
-use sundayrec_core::levels::{parse_levels, ChannelLevels};
+use sundayrec_core::levels::{parse_ametadata_peak, ChannelLevels, SILENCE_FLOOR_DB};
 use sundayrec_core::progress::{parse_size_kb, StartupResolver};
 use sundayrec_core::reconnect::{WatchdogState, WatchdogVerdict};
 use sundayrec_core::recorder::{RecorderState, RecordingSession, RecoveryDecision};
@@ -836,33 +836,71 @@ async fn run_session(
     tracing::info!("recorder: session stopped cleanly");
 }
 
+/// Coalesces the live per-channel peak levels parsed from ffmpeg's `ametadata`
+/// stream and throttles how often they reach the UI. ffmpeg prints one line per
+/// channel PER FRAME (~94 frames/s × 2 = ~188 lines/s); the meters only need
+/// ~20 updates/s, so we hold the latest L/R and emit on a fixed cadence. The
+/// fast attack lives in ffmpeg's short `reset` window; the slow peak-hold RELEASE
+/// lives in the UI — this just paces the feed.
+struct LevelMeter {
+    left: f64,
+    right: Option<f64>,
+    last_emit: std::time::Instant,
+}
+
+impl LevelMeter {
+    /// ~20 UI updates/s — smooth without flooding the event bridge.
+    const EMIT_EVERY: Duration = Duration::from_millis(50);
+
+    fn new() -> Self {
+        Self {
+            left: SILENCE_FLOOR_DB,
+            right: None,
+            last_emit: std::time::Instant::now(),
+        }
+    }
+
+    fn update(&mut self, channel: u8, db: f64) {
+        match channel {
+            1 => self.left = db,
+            2 => self.right = Some(db),
+            _ => {} // meters are stereo; ignore any further channels
+        }
+    }
+
+    /// The latest L/R snapshot, but only once per [`Self::EMIT_EVERY`] window —
+    /// otherwise `None` (coalesce intervening frames).
+    fn take_due(&mut self) -> Option<ChannelLevels> {
+        if self.last_emit.elapsed() < Self::EMIT_EVERY {
+            return None;
+        }
+        self.last_emit = std::time::Instant::now();
+        Some(ChannelLevels {
+            peak_db_left: self.left,
+            peak_db_right: self.right,
+        })
+    }
+}
+
 /// Classify a single ffmpeg stderr line (split on `\r`/`\n` by the reader) and
-/// forward the appropriate [`ReaderMsg`]. astats prints its per-channel block
-/// over several lines, so those are buffered in `astats_buf` and flushed when a
-/// non-astats line (or a fresh `Channel: 1` readout) ends the block. Pure-helper
-/// driven — the reader owns no state machine. Extracted so the byte-splitting
-/// reader and its trailing-line flush share one classifier.
+/// forward the appropriate [`ReaderMsg`]. The live meter levels arrive as flat
+/// `lavfi.astats.<ch>.Peak_level=` lines (one per channel per frame) which update
+/// the held [`LevelMeter`] and emit on its throttle. Pure-helper driven — the
+/// reader owns no state machine.
 async fn classify_stderr_line(
     line: &str,
     startup: &mut StartupResolver,
-    astats_buf: &mut String,
+    levels: &mut LevelMeter,
     msg_tx: &tokio::sync::mpsc::Sender<ReaderMsg>,
     last_error: &mut Option<RecordingErrorCode>,
 ) {
-    let is_astats = is_astats_line(line);
-    // Flush a completed astats block when this line ends it: a new readout starts
-    // (`Channel: 1` after we already buffered something) or a non-astats line
-    // interrupts the block.
-    let starts_new_block = is_astats && starts_astats_readout(line);
-    if !astats_buf.is_empty() && (!is_astats || starts_new_block) {
-        if let Some(lv) = parse_levels(astats_buf) {
+    // Live per-frame peak levels (`lavfi.astats.1.Peak_level=-12.5`): update the
+    // held L/R and forward at most ~20×/s.
+    if let Some((channel, db)) = parse_ametadata_peak(line) {
+        levels.update(channel, db);
+        if let Some(lv) = levels.take_due() {
             let _ = msg_tx.send(ReaderMsg::Levels(lv)).await;
         }
-        astats_buf.clear();
-    }
-    if is_astats {
-        astats_buf.push_str(line);
-        astats_buf.push('\n');
         return;
     }
     if let Some(b) = parse_size_kb(line) {
@@ -912,12 +950,11 @@ async fn run_segment(
     let reader = tauri::async_runtime::spawn(async move {
         let mut startup = StartupResolver::new();
         let mut last_error: Option<RecordingErrorCode> = None;
-        // astats prints its per-channel block over SEVERAL lines (a `Channel: N`
-        // header line, then a `Peak level dB:` line, per channel). The pure
-        // `parse_levels` parser needs the whole block, so we accumulate astats
-        // lines and flush them through it at a block boundary (handled in
+        // Live L/R meter: ffmpeg's `ametadata` prints a flat
+        // `lavfi.astats.<ch>.Peak_level=` line per channel per frame; the meter
+        // holds the latest values and throttles emission (handled in
         // `classify_stderr_line`).
-        let mut astats_buf = String::new();
+        let mut levels = LevelMeter::new();
 
         // CRITICAL: ffmpeg writes its `size=…` progress line with CARRIAGE
         // RETURNS (`\r`) and NO trailing newline until the process exits, so a
@@ -945,7 +982,7 @@ async fn run_segment(
                         classify_stderr_line(
                             &line,
                             &mut startup,
-                            &mut astats_buf,
+                            &mut levels,
                             &msg_tx,
                             &mut last_error,
                         )
@@ -959,20 +996,7 @@ async fn run_segment(
         // A final progress chunk may arrive without a terminator — classify it.
         if !line_buf.is_empty() {
             let line = String::from_utf8_lossy(&line_buf).into_owned();
-            classify_stderr_line(
-                &line,
-                &mut startup,
-                &mut astats_buf,
-                &msg_tx,
-                &mut last_error,
-            )
-            .await;
-        }
-        // Flush any trailing astats block before signalling exit.
-        if !astats_buf.is_empty() {
-            if let Some(lv) = parse_levels(&astats_buf) {
-                let _ = msg_tx.send(ReaderMsg::Levels(lv)).await;
-            }
+            classify_stderr_line(&line, &mut startup, &mut levels, &msg_tx, &mut last_error).await;
         }
         let _ = msg_tx.send(ReaderMsg::Exit { last_error }).await;
     });
@@ -1261,25 +1285,6 @@ fn now_ms() -> u64 {
 }
 
 /// Heuristic: does this stderr line look like an error worth classifying?
-/// Is this stderr line part of an `astats` per-channel measurement block? We key
-/// on the two markers the levels parser consumes (`Channel:` header and
-/// `Peak level dB:` value). The reader buffers these into one block to feed the
-/// pure [`parse_levels`] (which needs the whole block to pair L/R).
-fn is_astats_line(line: &str) -> bool {
-    (line.contains("Channel:") || line.contains("Peak level dB:")) && line.contains("astats")
-}
-
-/// Does this astats line start a fresh readout (a `Channel: 1` header)? Used to
-/// detect a block boundary when readouts are emitted back-to-back.
-fn starts_astats_readout(line: &str) -> bool {
-    if let Some(idx) = line.find("Channel:") {
-        let tail = line[idx + "Channel:".len()..].trim();
-        let token: String = tail.chars().take_while(|c| c.is_ascii_digit()).collect();
-        return token == "1";
-    }
-    false
-}
-
 fn looks_like_error(line: &str) -> bool {
     let l = line.to_lowercase();
     l.contains("error")
@@ -1617,20 +1622,33 @@ mod tests {
     }
 
     #[test]
-    fn astats_line_detection_and_block_start() {
-        let header = "[Parsed_astats_0 @ 0x7f8b1c00] Channel: 1";
-        let peak = "[Parsed_astats_0 @ 0x7f8b1c00] Peak level dB: -12.500000";
-        let ch2 = "[Parsed_astats_0 @ 0x7f8b1c00] Channel: 2";
-        assert!(is_astats_line(header));
-        assert!(is_astats_line(peak));
-        assert!(starts_astats_readout(header), "Channel: 1 starts a readout");
-        assert!(!starts_astats_readout(ch2), "Channel: 2 is mid-block");
-        assert!(!starts_astats_readout(peak), "a peak line is not a header");
-        // Non-astats lines are not classified as astats.
-        assert!(!is_astats_line(
-            "frame= 30 fps=30 size=512kB time=00:00:01.00"
-        ));
-        assert!(!is_astats_line("[silencedetect] silence_start: 12.3"));
+    fn level_meter_holds_latest_and_throttles_emission() {
+        let mut m = LevelMeter::new();
+        // A fresh meter has not waited out its window → nothing due yet.
+        m.update(1, -12.0);
+        m.update(2, -9.0);
+        assert!(
+            m.take_due().is_none(),
+            "must coalesce within the throttle window"
+        );
+        // After the window, the LATEST held L/R is emitted exactly once.
+        m.last_emit = std::time::Instant::now() - LevelMeter::EMIT_EVERY - Duration::from_millis(1);
+        m.update(1, -6.0);
+        let lv = m.take_due().expect("a due snapshot");
+        assert_eq!(lv.peak_db_left, -6.0, "holds the latest left");
+        assert_eq!(lv.peak_db_right, Some(-9.0), "holds the latest right");
+        assert!(
+            m.take_due().is_none(),
+            "the next read in the same window is coalesced again"
+        );
+    }
+
+    #[test]
+    fn level_meter_ignores_channels_beyond_stereo() {
+        let mut m = LevelMeter::new();
+        m.update(3, 0.0); // a surround channel must not become L or R
+        assert_eq!(m.left, SILENCE_FLOOR_DB);
+        assert_eq!(m.right, None);
     }
 
     #[test]

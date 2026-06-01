@@ -192,10 +192,45 @@ function formatMb(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/**
+ * Peak-hold for a segmented meter: snaps UP to `value` instantly (fast attack)
+ * and falls back SLOWLY (slow release) so the marker lingers on the loudest
+ * recent level — the classic VU peak tick. `value` and the result are in
+ * lit-segment units; it decays ~`decayPerSec` segments/second.
+ */
+function usePeakHold(value: number, decayPerSec = 26): number {
+  const [held, setHeld] = useState(value);
+  const heldRef = useRef(value);
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  useEffect(() => {
+    let raf = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = Math.min((now - last) / 1000, 0.1);
+      last = now;
+      const v = valueRef.current;
+      const prev = heldRef.current;
+      // Instant attack toward a louder reading; slow linear release otherwise.
+      const next = v >= prev ? v : Math.max(v, prev - decayPerSec * dt);
+      if (next !== prev) {
+        heldRef.current = next;
+        setHeld(next);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [decayPerSec]);
+  return held;
+}
+
 // Live meter with a dB scale beneath (matches the real app). Driven by the
 // backend `recording://levels` event — `on` is the lit-segment count from
-// `dbfsToLit(peakDb, 44)`.
+// `dbfsToLit(peakDb, 44)`. The white tick is a peak-hold marker that tracks the
+// loudest recent level and decays slowly back down.
 function RecMeter({ ch, on }: { ch: string; on: number }) {
+  const peak = usePeakHold(on);
   return (
     <div className="sr-row" style={{ gap: 14 }}>
       <span
@@ -226,16 +261,20 @@ function RecMeter({ ch, on }: { ch: string; on: number }) {
             <span key={i} style={{ flex: 1, background: c, borderRadius: 2 }} />
           );
         })}
-        <span
-          style={{
-            position: "absolute",
-            left: "32%",
-            top: -4,
-            bottom: -4,
-            width: 2,
-            background: "rgba(255,255,255,0.8)",
-          }}
-        />
+        {peak > 0.5 && (
+          <span
+            style={{
+              position: "absolute",
+              left: `${Math.min((peak / 44) * 100, 100)}%`,
+              top: -4,
+              bottom: -4,
+              width: 2,
+              background: "rgba(255,255,255,0.85)",
+              // Smooth the per-frame release without lagging the instant attack.
+              transition: "left 50ms linear",
+            }}
+          />
+        )}
       </div>
     </div>
   );
