@@ -127,7 +127,8 @@ function useRecordingSession(video: boolean) {
           ),
           split_minutes: s?.splitMinutes ?? 0,
           manual_max_minutes: s?.manualMaxMinutes ?? 0,
-          live_levels: s?.showLiveLevels ?? true,
+          // The level meter is always on so users can confirm signal.
+          live_levels: true,
           keep_separate_audio: s?.keepSeparateAudio ?? false,
           // FileFormat is already the lowercase extension string the recorder
           // wants ("mp3" | "wav" | "flac" | "aac"), so pass it through directly.

@@ -346,7 +346,8 @@ pub(crate) fn build_opts(
         bitrate_kbps: settings.bitrate_kbps(),
         split_minutes: settings.split_minutes.max(0) as u32,
         manual_max_minutes: max_minutes,
-        live_levels: settings.show_live_levels,
+        // The level meter is always on so users can confirm signal.
+        live_levels: true,
         keep_separate_audio: settings.keep_separate_audio,
         separate_audio_format: format_ext(settings.separate_audio_format).to_string(),
     })

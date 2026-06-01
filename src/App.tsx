@@ -22,7 +22,6 @@ import { UpdatePanel } from "@/features/update/UpdatePanel";
 import { OnboardingFlow } from "@/features/onboarding/OnboardingFlow";
 import { MainLayout } from "@/components/MainLayout";
 import { ToastHost } from "@/components/Toast";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { SETTINGS_QUERY_KEY } from "@/features/settings/queryKey";
 import { REVIEW_QUEUE_KEY } from "@/features/review/queryKey";
 import { changeLanguage } from "@/i18n";
@@ -165,7 +164,6 @@ function App() {
       <MainLayout
         views={views}
         onTransition={runEffects}
-        header={<LanguageSwitcher />}
         footer={<SidebarStatus />}
       />
     </ToastHost>

@@ -382,50 +382,6 @@ function TabLydkilde({ s, update }: TabProps) {
           />
         </div>
       </Card>
-      <Card
-        title={t("settingsScreen.audio.processingTitle", "Nivåmåler")}
-        icon="eq"
-        desc={t(
-          "settingsScreen.audio.processingDesc",
-          "Valgfritt. Standard er av — rått opptak gir mest fleksibilitet i etterkant.",
-        )}
-        pad
-      >
-        {/* NOTE: `inputVolume` (input gain %) is a real Settings field but the
-            redesign has no gain slider on this tab, so it stays at its
-            persisted/default value — left static. EQ/compressor/limiter are
-            real Settings fields too (the editor reads them) but their recording
-            toggles were removed — processing now happens in Rediger, the
-            recording is always raw. */}
-        <SettingRow
-          title={t(
-            "settingsScreen.audio.showLevelsTitle",
-            "Vis nivåmåler under opptak",
-          )}
-          desc={t(
-            "settingsScreen.audio.showLevelsDesc",
-            "L/R-måleren vises mens du tar opp. Slå av for maksimal opptaksstabilitet på en travel maskin.",
-          )}
-          control={
-            <LiveToggle
-              on={s.showLiveLevels}
-              onChange={(next) => update({ showLiveLevels: next })}
-            />
-          }
-        />
-        <div
-          style={{
-            fontSize: 12.5,
-            color: "var(--sr-text-3)",
-            marginTop: 12,
-          }}
-        >
-          {t(
-            "settingsScreen.audio.processingMoved",
-            "Lydbehandling (EQ, kompressor, limiter) gjøres nå i redigering — opptaket er alltid rått.",
-          )}
-        </div>
-      </Card>
     </>
   );
 }
@@ -599,19 +555,6 @@ function TabVideo({ s, update }: TabProps) {
               <LiveToggle
                 on={s.keepSeparateAudio}
                 onChange={(next) => update({ keepSeparateAudio: next })}
-              />
-            }
-          />
-          <SettingRow
-            title={t("settingsScreen.video.avSyncTitle", "Perfekt A/V-synk")}
-            desc={t(
-              "settingsScreen.video.avSyncDesc",
-              "Bruker én ffmpeg-prosess for både lyd og bilde — eliminerer sync-drift.",
-            )}
-            control={
-              <LiveToggle
-                on={s.avSync}
-                onChange={(next) => update({ avSync: next })}
               />
             }
           />

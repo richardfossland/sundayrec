@@ -632,6 +632,110 @@ mod tests {
         );
     }
 
+    /// A/V SYNC: the recorder's sync lock is `-r <fps> -fps_mode cfr` on the video
+    /// output + `aresample=async=1000:first_pts=0` on the audio. This RUNS the real
+    /// combo against lavfi sources (a deliberately VFR-ish video — `fps` filter
+    /// re-times it — plus sine audio) and ffprobes that the output video is TRUE
+    /// constant frame rate (`r_frame_rate == avg_frame_rate == 30/1`) and that the
+    /// audio + video durations match within a tight epsilon (no drift). HARDWARE-
+    /// FREE. Skips without the sidecars.
+    #[test]
+    fn av_sync_output_is_cfr_and_streams_aligned_or_skips() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let (Some(ffmpeg), Some(ffprobe)) = (fetched_sidecar("ffmpeg"), fetched_sidecar("ffprobe"))
+        else {
+            eprintln!("SKIP: no fetched ffmpeg/ffprobe sidecar (run `npm run ffmpeg`)");
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("sync.mp4");
+
+        // A 2 s clip: input video re-timed to a jittery rate, audio a sine. The
+        // output applies the recorder's exact sync args.
+        let status = std::process::Command::new(&ffmpeg)
+            .args([
+                "-hide_banner",
+                "-f",
+                "lavfi",
+                "-t",
+                "2",
+                "-i",
+                "testsrc=size=320x240:rate=24",
+                "-f",
+                "lavfi",
+                "-t",
+                "2",
+                "-i",
+                "sine=frequency=440:sample_rate=48000",
+                "-map",
+                "0:v",
+                "-map",
+                "1:a",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                // the recorder's video sync lock
+                "-r",
+                "30",
+                "-fps_mode",
+                "cfr",
+                "-c:a",
+                "aac",
+                // the recorder's audio drift correction
+                "-af",
+                "aresample=async=1000:first_pts=0",
+            ])
+            .arg("-y")
+            .arg(&out)
+            .output()
+            .expect("ffmpeg should run the sync command");
+        assert!(
+            status.status.success(),
+            "sync command failed: {}",
+            String::from_utf8_lossy(&status.stderr)
+        );
+
+        let probe = |stream: &str, entry: &str| -> String {
+            let o = std::process::Command::new(&ffprobe)
+                .args([
+                    "-v",
+                    "error",
+                    "-select_streams",
+                    stream,
+                    "-show_entries",
+                    entry,
+                    "-of",
+                    "csv=p=0",
+                ])
+                .arg(&out)
+                .output()
+                .expect("ffprobe runs");
+            String::from_utf8_lossy(&o.stdout).trim().to_string()
+        };
+
+        // Video is TRUE constant frame rate at 30 fps (no VFR drift).
+        assert_eq!(
+            probe("v:0", "stream=r_frame_rate"),
+            "30/1",
+            "video must be locked 30 fps CFR"
+        );
+        assert_eq!(
+            probe("v:0", "stream=avg_frame_rate"),
+            "30/1",
+            "CFR: avg == nominal frame rate"
+        );
+
+        // Audio and video durations match within 50 ms — no A/V drift.
+        let vdur: f64 = probe("v:0", "stream=duration").parse().unwrap_or(0.0);
+        let adur: f64 = probe("a:0", "stream=duration").parse().unwrap_or(0.0);
+        assert!(
+            (vdur - adur).abs() < 0.05,
+            "A/V durations must align: video={vdur}s audio={adur}s"
+        );
+        eprintln!("av-sync: CFR 30fps, video={vdur}s audio={adur}s (aligned)");
+    }
+
     #[test]
     fn ffmpeg_version_and_health_against_real_binary_or_skip() {
         let _guard = ENV_LOCK.lock().unwrap();

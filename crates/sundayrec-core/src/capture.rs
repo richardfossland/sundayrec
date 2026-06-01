@@ -247,7 +247,20 @@ pub fn build_unified_capture_args(
     // records (on a MonoL take the meter then shows the one kept channel). Comma-
     // join only the NON-EMPTY filters. `astats` is pass-through — it never alters
     // the recorded audio, only emits telemetry to stderr.
-    let drift = unified_audio_drift_filter(platform);
+    let has_video = video_device.is_some();
+    // Audio drift correction for the `-af` chain. For an A/V recording the camera
+    // and the mic can be on DIFFERENT hardware clocks (a USB mixer's 48 kHz is not
+    // exactly the camera/system clock), so even on macOS the audio slowly slides
+    // against the (CFR) video over a long service → lip-sync drift.
+    // `aresample=async=1000:first_pts=0` continuously resamples the audio to track
+    // the video clock and pins the first sample to t=0, keeping A/V LOCKED for the
+    // whole recording. Audio-ONLY recordings stay RAW (the platform default —
+    // nothing on macOS, the existing two-clock fix on Windows).
+    let drift = if has_video {
+        "aresample=async=1000:first_pts=0".to_string()
+    } else {
+        unified_audio_drift_filter(platform).to_string()
+    };
     let pan = channel_map_filter(opts.channel_mode).unwrap_or_default();
     let silence = build_silence_detect_filter(opts.stop_on_silence, opts.silence_threshold_db);
     // The live-levels astats pass is OPTIONAL: when the user turns the meters off
@@ -258,13 +271,11 @@ pub fn build_unified_capture_args(
     } else {
         String::new()
     };
-    let af_chain = [drift.to_string(), pan, silence, levels]
+    let af_chain = [drift, pan, silence, levels]
         .into_iter()
         .filter(|f| !f.is_empty())
         .collect::<Vec<_>>()
         .join(",");
-
-    let has_video = video_device.is_some();
 
     match platform {
         Platform::MacOS | Platform::Linux => {
@@ -363,6 +374,17 @@ pub fn build_unified_capture_args(
         args.push("veryfast".into());
         args.push("-pix_fmt".into());
         args.push("yuv420p".into());
+        // PERFECT A/V SYNC: avfoundation cameras deliver VARIABLE frame rate (they
+        // drop to ~15 fps in low light). Muxed as-is the video timeline diverges
+        // from the audio and lip-sync drifts over a service. `-r <fps> -fps_mode
+        // cfr` conforms the capture to TRUE constant frame rate, duplicating /
+        // dropping frames against their real PTS so the video stays locked to the
+        // audio clock for the whole recording. (Per-output: the MJPEG preview
+        // output below sets its own rate via `fps=8` and is unaffected.)
+        args.push("-r".into());
+        args.push(opts.framerate.to_string());
+        args.push("-fps_mode".into());
+        args.push("cfr".into());
     }
     args.extend(audio_encode_args(
         ext_of(output_path),
@@ -457,12 +479,13 @@ mod tests {
     }
 
     #[test]
-    fn mac_has_silencedetect_but_not_aresample() {
+    fn mac_audio_only_has_silencedetect_but_no_aresample() {
+        // AUDIO-ONLY (no camera) stays RAW on macOS — one clock, no resampling.
         let args = build_unified_capture_args(
             Platform::MacOS,
-            Some("0"),
+            None,
             "1",
-            "/tmp/out.mp4",
+            "/tmp/out.m4a",
             &CaptureOpts::default(),
         );
         let af = args
@@ -472,7 +495,7 @@ mod tests {
             .expect("an -af chain");
         assert!(
             !af.contains("aresample"),
-            "mac shares one clock — no drift filter; got: {af}"
+            "mac audio-only is raw — no drift filter; got: {af}"
         );
         assert!(af.contains("silencedetect="));
         assert!(
@@ -484,6 +507,55 @@ mod tests {
         // On mac/linux the chain has no empty leading slot — it starts with
         // silencedetect (no stray leading comma).
         assert!(!af.starts_with(','), "no empty drift slot leaking a comma");
+    }
+
+    #[test]
+    fn video_recording_locks_av_sync_cfr_and_aresample() {
+        // A/V recording on EVERY platform gets the sync lock: CFR video + audio
+        // drift resampling. Audio-only recordings get NEITHER.
+        for platform in [Platform::MacOS, Platform::Windows] {
+            let args = build_unified_capture_args(
+                platform,
+                Some("0"),
+                "1",
+                "/tmp/out.mp4",
+                &CaptureOpts {
+                    framerate: 30,
+                    ..CaptureOpts::default()
+                },
+            );
+            // Video conformed to true constant frame rate, locked to the audio clock.
+            assert!(
+                has_pair(&args, "-fps_mode", "cfr"),
+                "{platform:?} video must be CFR"
+            );
+            assert!(has_pair(&args, "-r", "30"), "{platform:?} CFR rate");
+            // Audio continuously drift-corrected + pinned to t=0.
+            let af = args
+                .iter()
+                .position(|a| a == "-af")
+                .map(|i| args[i + 1].clone())
+                .expect("an -af chain");
+            assert!(
+                af.contains("aresample=async=1000:first_pts=0"),
+                "{platform:?} A/V audio must be drift-corrected; got: {af}"
+            );
+        }
+        // Audio-only: NO CFR, NO aresample (raw).
+        let audio = build_unified_capture_args(
+            Platform::MacOS,
+            None,
+            "1",
+            "/tmp/a.wav",
+            &CaptureOpts::default(),
+        );
+        assert!(!audio.iter().any(|a| a == "-fps_mode"), "audio-only ≠ CFR");
+        let af = audio
+            .iter()
+            .position(|a| a == "-af")
+            .map(|i| audio[i + 1].clone())
+            .unwrap_or_default();
+        assert!(!af.contains("aresample"), "audio-only stays raw");
     }
 
     #[test]

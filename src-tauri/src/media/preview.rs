@@ -85,6 +85,56 @@ const MAC_PREVIEW_MODES: &[(Option<&str>, u32)] = &[
 /// overhead modest. The recorder captures at the user's real rate separately.
 const DEFAULT_FPS: u32 = 15;
 
+/// How long the live stream may go WITHOUT a new frame before we treat it as a
+/// stall and restart. macOS idling/sleeping the camera leaves the long-running
+/// preview ffmpeg's MJPEG stream stalled or degraded (a frozen/garbled/doubled
+/// image) with no recovery of its own — there is only a first-frame deadline per
+/// mode attempt, nothing once frames are flowing. At even the lowest sensible
+/// preview rate a fresh frame should arrive every ~67–200 ms; 3 s is far longer
+/// than any legitimate inter-frame gap, so it fires only on a genuine stall while
+/// staying well clear of false positives on a merely slow camera.
+const STREAM_STALL_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// How many CONSECUTIVE stall-restarts that delivered ZERO frames we tolerate
+/// before giving up and surfacing an error. A stall *after* frames flowed is the
+/// normal "camera woke up" case and restarts quietly with the counter reset; only
+/// a restart that then produces no frame at all counts toward the cap, so a
+/// genuinely-gone camera stops spinning after a few tries instead of forever.
+const MAX_STALL_RESTARTS: u32 = 4;
+
+/// Backoff before each stall-restart, scaled by how many zero-frame restarts we
+/// have already burned. Keeps a genuinely-dead camera from busy-spinning ffmpeg
+/// spawns while a real "woke up" stall (counter reset to 0) restarts promptly.
+fn stall_restart_backoff(consecutive_zero_frame_restarts: u32) -> Duration {
+    // 0 → 150ms (the woke-up case: near-instant), then 300ms, 600ms, 1200ms…
+    let base_ms: u64 = 150;
+    let shift = consecutive_zero_frame_restarts.min(3);
+    Duration::from_millis(base_ms << shift)
+}
+
+/// Pure decision: should the preview restart from the top of the mode matrix after
+/// the live stream went quiet?
+///
+/// A restart is warranted only once the gap since the last emitted frame has
+/// exceeded [`STREAM_STALL_TIMEOUT`] AND we are actually in the streaming phase
+/// (`frames_seen > 0` — before the first frame the per-attempt first-frame
+/// deadline owns the decision, not this watchdog). Factored out so the threshold
+/// logic is unit-tested without spawning ffmpeg.
+fn should_restart_after_stall(ms_since_last_frame: u64, frames_seen: u64) -> bool {
+    frames_seen > 0 && ms_since_last_frame >= STREAM_STALL_TIMEOUT.as_millis() as u64
+}
+
+/// Pure decision: have we exhausted the stall-restart budget and should give up
+/// (emit an error and stop) rather than restart again?
+///
+/// Only restarts that produced ZERO frames count — a restart that streamed real
+/// frames resets the counter, so the normal "camera slept then woke" loop never
+/// trips this. Once [`MAX_STALL_RESTARTS`] consecutive zero-frame restarts pile
+/// up, the camera is genuinely gone and we stop spinning.
+fn should_give_up_after_stalls(consecutive_zero_frame_restarts: u32) -> bool {
+    consecutive_zero_frame_restarts >= MAX_STALL_RESTARTS
+}
+
 /// One preview frame delivered to the renderer. `data` is a base64-encoded JPEG
 /// (drop it straight into `src="data:image/jpeg;base64,…"`).
 ///
@@ -542,12 +592,28 @@ enum AttemptOutcome {
     /// A PERMISSION error was seen: retrying other modes cannot help. Short-circuit
     /// the whole matrix and surface this immediately.
     Fatal(&'static str),
+    /// The live stream went quiet for longer than [`STREAM_STALL_TIMEOUT`] (the
+    /// camera idled/slept and ffmpeg's MJPEG stream stalled or degraded). Carries
+    /// whether ANY frame was delivered during this run so the caller can decide
+    /// between a quiet "camera woke up" restart and counting toward the give-up cap.
+    /// The whole preview must restart from the top of the mode matrix with a fresh
+    /// child + splitter, so the matrix walk does NOT continue to the next mode.
+    Stalled { delivered_frame: bool },
 }
 
 /// The reader task body: walk the platform's capture-mode matrix, and for the
 /// FIRST mode that yields a frame, signal readiness once and pump frames to the
 /// renderer until the stream ends. If no mode produces a frame, surface the real
 /// classified error. A permission error short-circuits the matrix.
+///
+/// A *stall* of the live stream (the camera idled/slept and ffmpeg's MJPEG output
+/// went quiet for [`STREAM_STALL_TIMEOUT`]) is NOT the end of the preview: we tear
+/// the stalled child down and RESTART the whole matrix walk from the top with a
+/// fresh child + [`MjpegFrameSplitter`], re-negotiating the camera rather than
+/// leaving a frozen/garbled image on screen. A stall *after* frames were flowing
+/// (the normal "camera woke up" case) restarts quietly; only consecutive restarts
+/// that then deliver zero frames count toward [`MAX_STALL_RESTARTS`], after which
+/// we give up with a real error so a genuinely-gone camera stops spinning.
 ///
 /// ⚠️ HARDWARE-UNVERIFIED — opens a real camera and depends on which avfoundation
 /// mode the device actually advertises; see the module header. The spawn/retry
@@ -559,7 +625,6 @@ async fn run_preview(
     output_fps: u32,
     ready: tokio::sync::oneshot::Sender<AppResult<()>>,
 ) {
-    let modes = preview_modes_for(platform, output_fps);
     // The per-attempt deadline: short on macOS (we have several modes to walk),
     // generous on a single-attempt platform (no matrix to grind through).
     let attempt_timeout = if matches!(platform, Platform::MacOS) {
@@ -569,15 +634,101 @@ async fn run_preview(
     };
 
     // `ready` is consumed exactly once — Ok on the first frame from any mode, or
-    // Err after every mode fails. We thread it through as `Option` so a borrow
-    // across attempts is safe.
+    // Err after every mode fails / we give up. We thread it through as `Option` so
+    // a borrow across attempts and restarts is safe.
     let mut ready = Some(ready);
+
+    // Consecutive stall-restarts that delivered ZERO frames. Reset whenever a
+    // restart manages to stream at least one frame, so the normal sleep/wake loop
+    // never trips the give-up cap; only a truly dead camera accumulates these.
+    let mut zero_frame_restarts: u32 = 0;
+
+    // Outer loop = the restart boundary. Each pass is a complete, fresh matrix
+    // walk (fresh ffmpeg child + fresh `MjpegFrameSplitter` per attempt inside
+    // `attempt_preview_mode`, so stale partial bytes can never concatenate into a
+    // doubled/garbled frame across a restart).
+    loop {
+        match run_matrix_walk(
+            &app,
+            platform,
+            &device_token,
+            output_fps,
+            attempt_timeout,
+            &mut ready,
+        )
+        .await
+        {
+            // The stream finished cleanly (stop/unplug/listener-gone) or a fatal
+            // error was already surfaced — nothing more to do.
+            MatrixWalk::Done => return,
+            // The live stream stalled (camera idled/slept). Decide between a quiet
+            // restart and giving up.
+            MatrixWalk::Stalled { delivered_frame } => {
+                if delivered_frame {
+                    // The normal "camera woke up" case: frames WERE flowing, so this
+                    // is not an error. Reset the give-up counter and restart quietly.
+                    zero_frame_restarts = 0;
+                    tracing::debug!("preview: live stream stalled after frames; restarting");
+                } else {
+                    // A restart that produced no frame at all → count it toward the
+                    // cap so a genuinely-gone camera stops spinning.
+                    zero_frame_restarts += 1;
+                    if should_give_up_after_stalls(zero_frame_restarts) {
+                        let message =
+                            "Mistet kontakt med kameraet. Sjekk tilkobling og tilgang.".to_string();
+                        tracing::warn!("preview: giving up after {zero_frame_restarts} stalls");
+                        let _ = app.emit(
+                            PREVIEW_ERROR_EVENT,
+                            PreviewError {
+                                message: message.clone(),
+                            },
+                        );
+                        if let Some(tx) = ready.take() {
+                            let _ = tx.send(Err(AppError::Recording(message)));
+                        }
+                        return;
+                    }
+                }
+                // Back off (scaled by how many zero-frame restarts we've burned),
+                // then loop to re-negotiate from the top of the matrix.
+                tokio::time::sleep(stall_restart_backoff(zero_frame_restarts)).await;
+            }
+        }
+    }
+}
+
+/// The result of one full matrix walk inside [`run_preview`].
+enum MatrixWalk {
+    /// The walk reached a terminal state: the stream ended cleanly, a permission
+    /// error was surfaced, or every mode failed (error already emitted). Stop.
+    Done,
+    /// The live stream stalled mid-flight; the caller should restart from the top.
+    Stalled { delivered_frame: bool },
+}
+
+/// One full pass over the platform's capture-mode matrix. Returns [`MatrixWalk`]
+/// so [`run_preview`] can either stop or restart on a stall. Each attempt inside
+/// uses a fresh ffmpeg child and a fresh [`MjpegFrameSplitter`].
+async fn run_matrix_walk(
+    app: &AppHandle,
+    platform: Platform,
+    device_token: &str,
+    output_fps: u32,
+    attempt_timeout: Duration,
+    ready: &mut Option<tokio::sync::oneshot::Sender<AppResult<()>>>,
+) -> MatrixWalk {
+    let modes = preview_modes_for(platform, output_fps);
     let mut last_err: Option<&'static str> = None;
 
     for (input_fps, size) in modes {
-        let args = build_preview_args(platform, Some(&device_token), output_fps, input_fps, size);
-        match attempt_preview_mode(&app, &args, attempt_timeout, &mut ready).await {
-            AttemptOutcome::Streamed => return, // a mode worked; we're done.
+        let args = build_preview_args(platform, Some(device_token), output_fps, input_fps, size);
+        match attempt_preview_mode(app, &args, attempt_timeout, ready).await {
+            AttemptOutcome::Streamed => return MatrixWalk::Done, // a mode worked; done.
+            AttemptOutcome::Stalled { delivered_frame } => {
+                // The live stream stalled — hand back up so the whole preview
+                // restarts with a fresh child/splitter, NOT the next matrix mode.
+                return MatrixWalk::Stalled { delivered_frame };
+            }
             AttemptOutcome::Fatal(msg) => {
                 // Permission denied — no mode will help. Surface and stop.
                 let _ = app.emit(
@@ -589,7 +740,7 @@ async fn run_preview(
                 if let Some(tx) = ready.take() {
                     let _ = tx.send(Err(AppError::Recording(msg.into())));
                 }
-                return;
+                return MatrixWalk::Done;
             }
             AttemptOutcome::NoFrame { last_err: e } => {
                 if e.is_some() {
@@ -615,6 +766,7 @@ async fn run_preview(
     if let Some(tx) = ready.take() {
         let _ = tx.send(Err(AppError::Recording(message)));
     }
+    MatrixWalk::Done
 }
 
 /// One capture-mode attempt: spawn ffmpeg with `args`, wait up to `attempt_timeout`
@@ -663,6 +815,9 @@ async fn attempt_preview_mode(
     }
 
     let b64 = base64::engine::general_purpose::STANDARD;
+    // A FRESH splitter per attempt (and therefore per restart, since each restart
+    // is a fresh `attempt_preview_mode` call): stale partial bytes from a stalled
+    // stream can never carry over and concatenate into a doubled/garbled frame.
     let mut splitter = MjpegFrameSplitter::new();
     let mut read_buf = vec![0u8; 64 * 1024];
     let mut seq: u64 = 0;
@@ -670,6 +825,18 @@ async fn attempt_preview_mode(
     // The per-attempt first-frame deadline. Disarmed (`None`) once the first frame
     // lands; from then on the stream is live and we pump until it ends.
     let mut first_frame_deadline = Some(Box::pin(tokio::time::sleep(attempt_timeout)));
+    // The ONGOING stall watchdog, armed only while streaming (after the first
+    // frame). Reset on every delivered frame; if it ever fires the camera went
+    // quiet (idled/slept) and we bail to `Stalled` so the preview restarts with a
+    // fresh child/splitter instead of sitting on a frozen image.
+    let mut stall_deadline = Box::pin(tokio::time::sleep(STREAM_STALL_TIMEOUT));
+    // When the last frame was emitted, so the stall decision can be re-derived from
+    // the elapsed gap via the pure `should_restart_after_stall` helper (rather than
+    // trusting the timer alone). Set on the first frame.
+    let mut last_frame_at: Option<tokio::time::Instant> = None;
+    // Frames delivered THIS attempt — drives the quiet-restart vs count-toward-
+    // give-up decision when a stall fires, and feeds the pure stall helper.
+    let mut frames_seen: u64 = 0;
 
     loop {
         let n = tokio::select! {
@@ -689,6 +856,29 @@ async fn attempt_preview_mode(
             {
                 tracing::warn!("preview: no frame within {attempt_timeout:?} for this mode");
                 return AttemptOutcome::NoFrame { last_err };
+            }
+            // The stream went quiet for STREAM_STALL_TIMEOUT while live: the camera
+            // stalled/slept. Bail so the whole preview restarts (re-negotiates) with
+            // a fresh child + splitter, rather than leaving a frozen/garbled image.
+            // Only armed once streaming (first_frame_deadline disarmed).
+            () = &mut stall_deadline, if first_frame_deadline.is_none() => {
+                let ms_since = last_frame_at
+                    .map_or(0, |t| t.elapsed().as_millis() as u64);
+                // Confirm via the pure decision before bailing (defends against a
+                // spurious early wake of the timer).
+                if should_restart_after_stall(ms_since, frames_seen) {
+                    tracing::warn!(
+                        "preview: live stream stalled (no frame for {ms_since}ms); restarting"
+                    );
+                    return AttemptOutcome::Stalled {
+                        delivered_frame: frames_seen > 0,
+                    };
+                }
+                // Not actually past the threshold yet — re-arm for the remainder.
+                stall_deadline
+                    .as_mut()
+                    .reset(tokio::time::Instant::now() + STREAM_STALL_TIMEOUT);
+                continue;
             }
             read = stdout.read(&mut read_buf) => match read {
                 // ffmpeg closed stdout. If we already delivered a frame (deadline
@@ -713,6 +903,7 @@ async fn attempt_preview_mode(
                 None => (None, None),
             };
             seq += 1;
+            frames_seen += 1;
             // First frame in: we're live. Disarm the deadline and signal Ok once.
             if first_frame_deadline.is_some() {
                 first_frame_deadline = None;
@@ -720,6 +911,11 @@ async fn attempt_preview_mode(
                     let _ = tx.send(Ok(()));
                 }
             }
+            // Re-arm the stall watchdog: a frame just arrived, so the clock to the
+            // next-frame stall restarts from now.
+            let now = tokio::time::Instant::now();
+            last_frame_at = Some(now);
+            stall_deadline.as_mut().reset(now + STREAM_STALL_TIMEOUT);
             let payload = PreviewFrame {
                 data: b64.encode(&frame),
                 width,
@@ -995,6 +1191,49 @@ mod tests {
             !is_permission_fatal(open),
             "open/format error must be retry-eligible"
         );
+    }
+
+    #[test]
+    fn stall_watchdog_restarts_only_after_threshold_and_while_streaming() {
+        let threshold = STREAM_STALL_TIMEOUT.as_millis() as u64;
+
+        // Before the first frame (frames_seen == 0) the first-frame deadline owns
+        // the decision, NOT the stall watchdog — never restart, however long.
+        assert!(!should_restart_after_stall(threshold + 5_000, 0));
+
+        // Streaming, but the gap is still under the threshold → a merely slow
+        // camera, not a stall. Don't restart (no false positives).
+        assert!(!should_restart_after_stall(threshold - 1, 10));
+
+        // Streaming AND quiet past the threshold → the camera stalled/slept.
+        assert!(should_restart_after_stall(threshold, 10));
+        assert!(should_restart_after_stall(threshold + 2_000, 1));
+    }
+
+    #[test]
+    fn stall_give_up_only_after_max_consecutive_zero_frame_restarts() {
+        // A stall after frames flowed resets the counter to 0 (the normal "woke up"
+        // case) — must never give up.
+        assert!(!should_give_up_after_stalls(0));
+        // Below the cap → keep restarting.
+        assert!(!should_give_up_after_stalls(MAX_STALL_RESTARTS - 1));
+        // At/over the cap → a genuinely-gone camera; give up instead of spinning.
+        assert!(should_give_up_after_stalls(MAX_STALL_RESTARTS));
+        assert!(should_give_up_after_stalls(MAX_STALL_RESTARTS + 3));
+    }
+
+    #[test]
+    fn stall_restart_backoff_grows_then_caps() {
+        // The "camera woke up" restart (counter reset to 0) is near-instant.
+        assert_eq!(stall_restart_backoff(0), Duration::from_millis(150));
+        // Each consecutive zero-frame restart doubles the wait so a dead camera
+        // doesn't busy-spin ffmpeg spawns…
+        assert_eq!(stall_restart_backoff(1), Duration::from_millis(300));
+        assert_eq!(stall_restart_backoff(2), Duration::from_millis(600));
+        assert_eq!(stall_restart_backoff(3), Duration::from_millis(1200));
+        // …and the shift caps so the backoff can't grow without bound.
+        assert_eq!(stall_restart_backoff(4), stall_restart_backoff(3));
+        assert_eq!(stall_restart_backoff(99), stall_restart_backoff(3));
     }
 
     #[test]
