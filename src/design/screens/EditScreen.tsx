@@ -246,7 +246,7 @@ function useEditorModel() {
       if (!selected) return;
       const folder = selected.replace(/[/\\][^/\\]*$/, "");
       const duration = loadMutation.data?.durationSec ?? 0;
-      const request: EditorExportRequest = {
+      const base: EditorExportRequest = {
         inputPath: selected,
         cutRegions: buildTrimCuts(trimStart, trimEnd, duration),
         duration,
@@ -256,7 +256,21 @@ function useEditorModel() {
         bitDepth: null,
         masterPreset: withMaster ? presetId : null,
       };
-      exportMutation.mutate(request);
+      // "Begge" = export twice from the SAME trim + mastering plan: first the
+      // full MP4 (video + audio), then an audio-only MP3. We fire mp4 and, once
+      // it settles (success OR feature-disabled/error), fire mp3 — so the user
+      // sees a single in-progress run that produces both files. onError on the
+      // mutation keeps either pass a graceful no-op if the backend rejects.
+      if (format === "begge") {
+        exportMutation.mutate(
+          { ...base, format: "mp4" },
+          {
+            onSettled: () => exportMutation.mutate({ ...base, format: "mp3" }),
+          },
+        );
+        return;
+      }
+      exportMutation.mutate(base);
     },
     [selected, loadMutation.data, presetId, trimStart, trimEnd, exportMutation],
   );
@@ -1503,8 +1517,15 @@ function EditVideo({ m }: { m: EditorModel }) {
                   sub={t("editScreen.audioOnly", "Kun lyd")}
                 />
               </div>
-              {/* "Begge" (MP4 + MP3) needs two export passes — // TODO. */}
-              <SegOpt title={t("editScreen.both", "Begge")} sub="MP4 + MP3" />
+              {/* "Begge" runs two export passes (MP4 then MP3) from the same
+                  trim + mastering plan — see runExport. */}
+              <div onClick={() => setFormat("begge")}>
+                <SegOpt
+                  sel={format === "begge"}
+                  title={t("editScreen.both", "Begge")}
+                  sub="MP4 + MP3"
+                />
+              </div>
             </div>
           </div>
           <button
