@@ -23,6 +23,7 @@ import { EmailSettingsPanel } from "@/features/email/EmailSettingsPanel";
 import { StreamingPanel } from "@/features/streaming/StreamingPanel";
 import { UpdatePanel } from "@/features/update/UpdatePanel";
 import { HomePage } from "@/features/home/HomePage";
+import { SearchPage } from "@/features/search/SearchPage";
 import { OnboardingFlow } from "@/features/onboarding/OnboardingFlow";
 import { MainLayout, SHELL_NAVIGATE_EVENT } from "@/components/MainLayout";
 import { ToastHost } from "@/components/Toast";
@@ -109,6 +110,7 @@ function App() {
     schedule: <SchedulePage />,
     history: <HistoryPanel />,
     review: <ReviewPanel />,
+    search: <SearchPage />,
     editor: <EditorPanel />,
     transcribe: <TranscribePanel />,
     publish: <PublishPanel />,

@@ -21,6 +21,7 @@ export const VIEW_NAMES = [
   "schedule",
   "history",
   "review",
+  "search",
   "editor",
   "transcribe",
   "publish",

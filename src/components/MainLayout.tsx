@@ -15,6 +15,7 @@ import {
   type NavState,
   type ViewName,
 } from "@/lib/routing";
+import { CommandPalette } from "@/components/CommandPalette";
 
 /**
  * Custom DOM event a child view dispatches to ask the shell to switch views
@@ -46,6 +47,7 @@ const NAV_LABELS: Record<ViewName, { key: string; fallback: string }> = {
   schedule: { key: "schedule.title", fallback: "Planlegging" },
   history: { key: "nav.history", fallback: "Historikk" },
   review: { key: "review.title", fallback: "Gjennomgang" },
+  search: { key: "search.title", fallback: "Søk" },
   editor: { key: "editor.title", fallback: "Redigering" },
   transcribe: { key: "transcribe.title", fallback: "Transkribering" },
   publish: { key: "publish.title", fallback: "Publisering" },
@@ -64,7 +66,7 @@ const NAV_GROUPS: ReadonlyArray<{
   heading: string;
   views: readonly ViewName[];
 }> = [
-  { heading: "", views: ["home", "schedule", "history", "review"] },
+  { heading: "", views: ["home", "schedule", "history", "review", "search"] },
   {
     heading: "produce",
     views: ["editor", "transcribe", "publish", "streaming"],
@@ -195,6 +197,9 @@ export function MainLayout({
       >
         {views[nav.current]}
       </main>
+
+      {/* Global ⌘K command palette — available on every view. */}
+      <CommandPalette />
     </div>
   );
 }
