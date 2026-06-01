@@ -44,9 +44,11 @@ import type { TranscriptData } from "@/lib/bindings/TranscriptData";
 import type { TranscriptExportFormat } from "@/lib/bindings/TranscriptExportFormat";
 import {
   axisTicks,
+  buildTrimCuts,
   clock,
   fileExt,
   fileName,
+  formatHms,
   mediaMeta,
   peaksToBars,
   variantForMedia,
@@ -92,6 +94,10 @@ type EditorModel = ReturnType<typeof useEditorModel>;
 function useEditorModel() {
   const [selected, setSelected] = useState<string | null>(null);
   const [presetId, setPresetId] = useState<string>(MASTER_PRESETS[0].id);
+  // Trim (Videofil) — free-text HH:MM:SS bounds; empty = the file's own bound.
+  // Parsed + turned into cut regions at export time (see runExport).
+  const [trimStart, setTrimStart] = useState("");
+  const [trimEnd, setTrimEnd] = useState("");
 
   const recordings = useQuery<RecordingRow[]>({
     queryKey: EDITOR_RECORDINGS_KEY,
@@ -135,6 +141,8 @@ function useEditorModel() {
   const onSelect = useCallback(
     (path: string) => {
       setSelected(path);
+      setTrimStart("");
+      setTrimEnd("");
       peaksMutation.reset();
       segmentsMutation.reset();
       analyzeMutation.reset();
@@ -183,6 +191,8 @@ function useEditorModel() {
 
   const onCloseFile = useCallback(() => {
     setSelected(null);
+    setTrimStart("");
+    setTrimEnd("");
     loadMutation.reset();
     peaksMutation.reset();
     segmentsMutation.reset();
@@ -216,16 +226,18 @@ function useEditorModel() {
     });
   }, [selected, presetId, previewMutation]);
 
-  // "Mastre fil" / "Eksporter ferdig episode" — full export with the chosen
-  // format + mastering preset. No cut regions yet (drag-trim is // TODO).
+  // "Mastre fil" / "Eksporter ferdig episode" — export with the chosen format +
+  // mastering preset, applying the Videofil trim as cut regions (everything
+  // before Start and after Slutt is removed). Empty trim → whole file.
   const runExport = useCallback(
     (format: string, withMaster: boolean) => {
       if (!selected) return;
       const folder = selected.replace(/[/\\][^/\\]*$/, "");
+      const duration = loadMutation.data?.durationSec ?? 0;
       const request: EditorExportRequest = {
         inputPath: selected,
-        cutRegions: [],
-        duration: loadMutation.data?.durationSec ?? 0,
+        cutRegions: buildTrimCuts(trimStart, trimEnd, duration),
+        duration,
         format,
         outputFolder: folder,
         bitrate: null,
@@ -234,13 +246,17 @@ function useEditorModel() {
       };
       exportMutation.mutate(request);
     },
-    [selected, loadMutation.data, presetId, exportMutation],
+    [selected, loadMutation.data, presetId, trimStart, trimEnd, exportMutation],
   );
 
   return {
     selected,
     presetId,
     setPresetId,
+    trimStart,
+    setTrimStart,
+    trimEnd,
+    setTrimEnd,
     rows: recordings.data ?? [],
     info: loadMutation.data ?? null,
     peaks: peaksMutation.data ?? null,
@@ -1204,16 +1220,17 @@ function EditVideo({ m }: { m: EditorModel }) {
           </div>
         </div>
 
-        {/* TODO: drag-trim start/slutt — numeric inputs below are the design's
-            static placeholders; wiring them to the editorGeometry cut-plan is a
-            follow-up (export currently sends no cut regions). */}
+        {/* Trim → cut regions: Start/Slutt (HH:MM:SS) are removed before/after
+            on export (buildTrimCuts → editor_export.cutRegions). Empty = whole
+            file. Drag-on-waveform trim is a separate follow-up (C-7). */}
         <Collapsible
           icon="scissors"
           title={t("editScreen.trimStartEnd", "Trim — start & slutt")}
           open
           meta={
             <span style={{ fontSize: 12.5, color: "var(--sr-text-3)" }}>
-              {dur > 0 ? `00:00 – ${clock(dur)}` : "00:00 – 32:14"}
+              {m.trimStart || "00:00:00"} –{" "}
+              {m.trimEnd || (dur > 0 ? formatHms(dur) : "00:32:14")}
             </span>
           }
         >
@@ -1224,14 +1241,26 @@ function EditVideo({ m }: { m: EditorModel }) {
             )}
           </div>
           <div className="sr-row" style={{ gap: 12 }}>
-            <div className="sr-field sr-grow">
+            <label className="sr-field sr-grow">
               <span className="sr-label">{t("editScreen.start", "Start")}</span>
-              <div className="sr-input mono">00:00:31</div>
-            </div>
-            <div className="sr-field sr-grow">
+              <input
+                className="sr-input mono"
+                value={m.trimStart}
+                onChange={(e) => m.setTrimStart(e.target.value)}
+                placeholder="00:00:00"
+                inputMode="numeric"
+              />
+            </label>
+            <label className="sr-field sr-grow">
               <span className="sr-label">{t("editScreen.end", "Slutt")}</span>
-              <div className="sr-input mono">00:31:48</div>
-            </div>
+              <input
+                className="sr-input mono"
+                value={m.trimEnd}
+                onChange={(e) => m.setTrimEnd(e.target.value)}
+                placeholder={dur > 0 ? formatHms(dur) : "00:31:48"}
+                inputMode="numeric"
+              />
+            </label>
           </div>
         </Collapsible>
 

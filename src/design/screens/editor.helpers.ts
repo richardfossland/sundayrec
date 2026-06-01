@@ -9,9 +9,53 @@
  * thin view over the editor feature's IPC contract.
  */
 import type { EditorMediaInfo } from "@/lib/bindings/EditorMediaInfo";
+import type { EditorCutRegion } from "@/lib/bindings/EditorCutRegion";
 
 /** The number of bars the design's `Waveform` renders. */
 export const WAVE_BARS = 150;
+
+/** Tolerance (seconds) below which a trim edge is treated as "at the bound". */
+const TRIM_EPSILON = 0.05;
+
+/** Parse a free-text `HH:MM:SS` / `MM:SS` / `SS` field to seconds; `null` when
+ *  empty or non-numeric (so the caller falls back to the file bound). */
+export function parseHms(value: string): number | null {
+  const str = value.trim();
+  if (!str) return null;
+  const parts = str.split(":").map((p) => Number(p));
+  if (parts.length === 0 || parts.length > 3) return null;
+  if (parts.some((n) => !Number.isFinite(n) || n < 0)) return null;
+  return parts.reduce((acc, n) => acc * 60 + n, 0);
+}
+
+/** `seconds → "HH:MM:SS"`, the trim fields' display format. */
+export function formatHms(sec: number): string {
+  const s = Math.max(0, Math.round(sec));
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(Math.floor(s / 3600))}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}`;
+}
+
+/**
+ * Turn the two trim fields into the cut regions to REMOVE: everything before
+ * `start` and everything after `end`. Empty/invalid fields fall back to the
+ * file bounds (0 / `duration`), so an untouched trim exports the whole file.
+ * Matches `editor_export`'s `cutRegions` contract (regions are cut out).
+ */
+export function buildTrimCuts(
+  trimStart: string,
+  trimEnd: string,
+  duration: number,
+): EditorCutRegion[] {
+  if (!(duration > 0)) return [];
+  const clamp = (v: number) => Math.min(Math.max(v, 0), duration);
+  const start = clamp(parseHms(trimStart) ?? 0);
+  const end = clamp(parseHms(trimEnd) ?? duration);
+  const cuts: EditorCutRegion[] = [];
+  if (start > TRIM_EPSILON) cuts.push({ start: 0, end: start });
+  if (end < duration - TRIM_EPSILON && end > start)
+    cuts.push({ start: end, end: duration });
+  return cuts;
+}
 
 /** `seconds → "M min S s"`, matching the mockup's file-bar duration copy. */
 export function formatDurationLong(sec: number): string {
