@@ -224,7 +224,14 @@ mod tests {
     use std::sync::Mutex;
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
-    /// Path to the fetched dev sidecar, if `npm run ffmpeg` has populated it.
+    /// Path to the fetched dev sidecar, if `npm run ffmpeg` has populated it AND
+    /// the binary actually RUNS. On macOS a fetched sidecar's ad-hoc code
+    /// signature can get invalidated (e.g. a tool touches the file), after which
+    /// the OS SIGKILLs it ("killed: 9") — `-version` then dies with no output. We
+    /// must not let that turn the gated real-ffmpeg tests RED: a non-runnable
+    /// binary is treated the same as a missing one (the test SKIPs), so a broken
+    /// dev sidecar never fails the suite. Re-sign with `codesign --force --sign -`
+    /// to restore it.
     fn fetched_sidecar(name: &str) -> Option<std::path::PathBuf> {
         // Host triple matches what scripts/fetch-ffmpeg.mjs suffixes with.
         // `SUNDAYREC_TARGET_TRIPLE` is injected by build.rs from cargo's TARGET.
@@ -233,7 +240,25 @@ mod tests {
         let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("binaries")
             .join(format!("{name}-{triple}{ext}"));
-        p.is_file().then_some(p)
+        if !p.is_file() {
+            return None;
+        }
+        // Confirm it actually executes (exit 0 with output) before any test relies
+        // on it — a SIGKILLed/broken binary returns no usable status.
+        let runs = std::process::Command::new(&p)
+            .arg("-version")
+            .output()
+            .map(|o| o.status.success() && !o.stdout.is_empty())
+            .unwrap_or(false);
+        if runs {
+            Some(p)
+        } else {
+            eprintln!(
+                "SKIP-CAUSE: {name} sidecar at {} is not runnable (broken signature? re-sign: `codesign --force --sign - {name}-{triple}`)",
+                p.display()
+            );
+            None
+        }
     }
 
     // We hold ENV_LOCK across `spawn_ffmpeg(...).await` to serialise the env
