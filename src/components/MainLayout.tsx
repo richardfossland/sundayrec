@@ -142,10 +142,10 @@ export function MainLayout({
   );
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-bg text-text">
       {/* ── Sidebar nav ──────────────────────────────────────────────── */}
       <nav
-        className="flex w-56 shrink-0 flex-col gap-4 border-r border-zinc-800 bg-zinc-950 p-3"
+        className="flex w-56 shrink-0 flex-col gap-4 border-r border-border bg-bg p-3"
         aria-label={t("app.name", "SundayRec")}
       >
         <div className="flex items-center justify-between px-1">
@@ -172,8 +172,8 @@ export function MainLayout({
                   aria-current={active ? "page" : undefined}
                   className={`rounded px-2 py-1.5 text-left text-sm transition-colors ${
                     active
-                      ? "bg-zinc-800 font-medium text-white"
-                      : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+                      ? "border-l-2 border-accent bg-surface2 font-medium text-accent"
+                      : "text-text2 hover:bg-surface hover:text-text"
                   }`}
                   onClick={() => showView(view)}
                 >
