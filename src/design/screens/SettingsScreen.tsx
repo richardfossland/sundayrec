@@ -23,6 +23,7 @@ import type { FilenamePattern } from "@/lib/bindings/FilenamePattern";
 import type { RecordingOpts } from "@/lib/bindings/RecordingOpts";
 import type { SampleRate } from "@/lib/bindings/SampleRate";
 import type { AudioDeviceList } from "@/lib/bindings/AudioDeviceList";
+import type { IntegrationSettings } from "@/lib/bindings/IntegrationSettings";
 import { LANGUAGE_NAMES, SUPPORTED_LNGS, changeLanguage } from "@/i18n";
 import { SETTINGS_QUERY_KEY } from "@/features/settings/queryKey";
 import { useVideoDevices } from "@/design/hooks";
@@ -941,43 +942,6 @@ function TabPublisering() {
         </button>
       </Card>
       <Card
-        title={t("settingsScreen.publishing.streamTitle", "Direktesending")}
-        icon="live"
-        desc={t(
-          "settingsScreen.publishing.streamDesc",
-          "Stream gudstjenester live til YouTube, Facebook eller egen RTMP-server.",
-        )}
-        pad
-      >
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 12,
-            marginTop: 14,
-          }}
-        >
-          <div className="sr-field">
-            <span className="sr-label">
-              {t("settingsScreen.publishing.nameLabel", "Navn")}
-            </span>
-            <div className="sr-input">YouTube · SundayRec</div>
-          </div>
-          <div className="sr-field">
-            <span className="sr-label">
-              {t("settingsScreen.publishing.rtmpLabel", "RTMP-URL")}
-            </span>
-            <div className="sr-input mono">rtmp://a.rtmp.youtube.com/live2</div>
-          </div>
-        </div>
-        <div className="sr-row" style={{ marginTop: 12 }}>
-          <span className="sr-grow" style={{ fontSize: 13.5, fontWeight: 600 }}>
-            {t("settingsScreen.publishing.enabled", "Aktivert")}
-          </span>
-          <Toggle on />
-        </div>
-      </Card>
-      <Card
         title={t(
           "settingsScreen.publishing.podcastTitle",
           "Podkast (RSS-feed)",
@@ -1487,25 +1451,40 @@ function SuiteRow({
   name,
   desc,
   on,
+  onChange,
 }: {
   name: string;
   desc: string;
-  on?: boolean;
+  on: boolean;
+  onChange: (next: boolean) => void;
 }) {
-  return <SettingRow title={name} desc={desc} control={<Toggle on={on} />} />;
+  return (
+    <SettingRow
+      title={name}
+      desc={desc}
+      control={<LiveToggle on={on} onChange={onChange} />}
+    />
+  );
 }
+
+/** The integrations-bag query key (the opt-in suite settings, separate from the
+ *  plain `Settings`). */
+const INTEGRATIONS_QUERY_KEY = ["integrations_get_settings"] as const;
 
 function TabSuite() {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   // church_id lives in the integrations bag (not plain Settings). Seed it from
   // the backend, edit locally, persist on "Lagre tilkobling".
   const [churchId, setChurchId] = useState("");
   const [savedTick, setSavedTick] = useState(false);
 
-  useQuery({
-    queryKey: ["integrations_get_settings"],
+  // The full integrations bag — drives the master + per-peer toggles. We seed
+  // the church_id field from it once loaded.
+  const { data: integrations } = useQuery<IntegrationSettings>({
+    queryKey: INTEGRATIONS_QUERY_KEY,
     queryFn: async () => {
-      const res = await invoke<{ connection?: { churchId?: string | null } }>(
+      const res = await invoke<IntegrationSettings>(
         "integrations_get_settings",
       );
       setChurchId(res?.connection?.churchId ?? "");
@@ -1513,6 +1492,24 @@ function TabSuite() {
     },
     retry: false,
   });
+
+  // Disabled default so every toggle reflects a real value even before the
+  // backend answers (and in dev/test where `integrations_get_settings` rejects).
+  const ig: IntegrationSettings = integrations ?? { enabled: false };
+
+  // Persist a shallow patch into the integrations bag (the backend merge keeps
+  // keys the patch didn't send) and reflect the merged result into the cache so
+  // the toggles update instantly.
+  const patchMutation = useMutation({
+    mutationFn: (patch: Partial<IntegrationSettings>) =>
+      invoke<IntegrationSettings>("integrations_set_settings", { patch }),
+    onSuccess: (merged) =>
+      queryClient.setQueryData(INTEGRATIONS_QUERY_KEY, merged),
+  });
+  const patchIntegrations = (patch: Partial<IntegrationSettings>) => {
+    queryClient.setQueryData(INTEGRATIONS_QUERY_KEY, { ...ig, ...patch });
+    patchMutation.mutate(patch);
+  };
 
   const saveConnection = useMutation({
     mutationFn: (id: string) =>
@@ -1527,8 +1524,6 @@ function TabSuite() {
 
   return (
     <>
-      {/* TODO: Sunday-suite integration switches/church_id are owned by the
-          integrations subsystem — no plain Settings fields, so kept static. */}
       <Card
         title="Sunday-suite"
         icon="sparkle"
@@ -1548,7 +1543,12 @@ function TabSuite() {
               "settingsScreen.suite.enableDesc",
               "Hovedbryter. Når den er av kjøres ingen integrasjonskode.",
             )}
-            control={<Toggle />}
+            control={
+              <LiveToggle
+                on={ig.enabled}
+                onChange={(next) => patchIntegrations({ enabled: next })}
+              />
+            }
           />
         </div>
       </Card>
@@ -1565,6 +1565,10 @@ function TabSuite() {
             "settingsScreen.suite.verbatimDesc",
             "Send et videoopptak til Verbatim for profesjonell teksting; kommer tilbake som transkripsjon.",
           )}
+          on={ig.verbatim?.enabled ?? false}
+          onChange={(next) =>
+            patchIntegrations({ verbatim: { enabled: next } })
+          }
         />
         <SuiteRow
           name={t(
@@ -1575,6 +1579,8 @@ function TabSuite() {
             "settingsScreen.suite.songDesc",
             "Send sanglisten til SundaySong for automatiske lisensrapporter.",
           )}
+          on={ig.song?.enabled ?? false}
+          onChange={(next) => patchIntegrations({ song: { enabled: next } })}
         />
         <SuiteRow
           name={t(
@@ -1585,6 +1591,8 @@ function TabSuite() {
             "settingsScreen.suite.planDesc",
             "Henter kommende tjenester og fyller inn tittel og taler automatisk.",
           )}
+          on={ig.plan?.enabled ?? false}
+          onChange={(next) => patchIntegrations({ plan: { enabled: next } })}
         />
         <SuiteRow
           name={t(
@@ -1595,6 +1603,8 @@ function TabSuite() {
             "settingsScreen.suite.stageDesc",
             "Importer Stage sin cue-logg for å sette kapittelmarkører automatisk.",
           )}
+          on={ig.stage?.enabled ?? false}
+          onChange={(next) => patchIntegrations({ stage: { enabled: next } })}
         />
       </Card>
       <Card

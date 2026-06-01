@@ -31,6 +31,15 @@ vi.mock("@tauri-apps/api/core", () => ({
       if (cmd === "settings_get") return DEFAULT_SETTINGS;
       if (cmd === "settings_save") return (args?.settings as Settings) ?? null;
       if (cmd === "list_devices") return { video_inputs: [] };
+      // The Sunday-suite tab reads/writes the opt-in integrations bag. Start
+      // disabled; `integrations_set_settings` echoes a merged bag so the
+      // optimistic→canonical toggle update works.
+      if (cmd === "integrations_get_settings") return { enabled: false };
+      if (cmd === "integrations_set_settings")
+        return {
+          enabled: false,
+          ...((args?.patch as Record<string, unknown>) ?? {}),
+        };
       if (cmd === "plan_recording_opts")
         return {
           audio_device_name: "",
@@ -137,6 +146,35 @@ describe("SettingsScreen", () => {
         "settings_save",
         expect.objectContaining({
           settings: expect.objectContaining({ channels: "monoMix" }),
+        }),
+      ),
+    );
+  });
+
+  it("persists a Sunday-suite integration toggle via integrations_set_settings", async () => {
+    renderSettings();
+    await waitFor(() =>
+      expect(screen.getByText("Kanaler")).toBeInTheDocument(),
+    );
+
+    // Open the Sunday-suite tab.
+    fireEvent.click(screen.getByText("Sunday-suite"));
+    await waitFor(() =>
+      expect(screen.getByText("Integrasjoner")).toBeInTheDocument(),
+    );
+
+    // Flip the master "Aktiver Sunday-suite-integrasjoner" toggle — it must
+    // patch the integrations bag with `{ enabled: true }`.
+    const masterRow = screen
+      .getByText("Aktiver Sunday-suite-integrasjoner")
+      .closest(".sr-srow") as HTMLElement;
+    fireEvent.click(masterRow.querySelector('[role="switch"]') as HTMLElement);
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith(
+        "integrations_set_settings",
+        expect.objectContaining({
+          patch: expect.objectContaining({ enabled: true }),
         }),
       ),
     );

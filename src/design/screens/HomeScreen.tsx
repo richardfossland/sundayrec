@@ -493,6 +493,20 @@ export function HomeScreen({
   const diskPct = diskUsedPercent(freeBytes);
   const cameraName = selectedCamera?.name ?? null;
 
+  // Live video-quality card values, read straight from the settings query so a
+  // change in Settings (settings_save → same cache) re-renders the Home card.
+  const videoResolution = settings?.videoResolution ?? "720p";
+  const videoFramerate = settings?.videoFramerate ?? 30;
+  const videoQualityV = `${videoResolution} · ${videoFramerate} fps`;
+  const isSeparateOutput = settings?.outputMode === "separate";
+  const videoQualityMeta = isSeparateOutput
+    ? t("settingsScreen.video.separateTitle", "Separate filer")
+    : t("settingsScreen.video.combinedTitle", "Kombinert MP4");
+
+  // Audio source card: the chosen device name (falls back to the enumerated
+  // default) so Settings' Lydkilde choice is reflected on Home.
+  const audioSourceV = settings?.deviceName ?? micName;
+
   // Format-card meta reflects the real sample-rate policy: "Auto" (native rate,
   // no conversion) or the chosen kHz — instead of a hardcoded "48 kHz" (WS-2).
   const rateLabel = sampleRateKhzLabel(
@@ -793,7 +807,7 @@ export function HomeScreen({
           <DeviceCard
             icon="mic"
             k={t("homeScreen.cardAudioSource", "Lydkilde")}
-            v={micName ?? "MacBook Pro-mikrofon"}
+            v={audioSourceV ?? "MacBook Pro-mikrofon"}
             meta={micMeta ?? "Innebygd · stereo · 48 kHz"}
             badge={
               <Badge kind="ok" dot>
@@ -818,8 +832,8 @@ export function HomeScreen({
               <DeviceCard
                 icon="gear"
                 k={t("homeScreen.cardVideoQuality", "Videokvalitet")}
-                v="720p · 30 fps"
-                meta={t("homeScreen.combinedMp4", "Kombinert MP4")}
+                v={videoQualityV}
+                meta={videoQualityMeta}
                 onEdit={() => navigateToSettings("video")}
               />
               <SeparateAudioCard
@@ -841,7 +855,7 @@ export function HomeScreen({
               <DeviceCard
                 icon="file"
                 k={t("homeScreen.cardFormat", "Format")}
-                v="WAV"
+                v={(settings?.format ?? "wav").toUpperCase()}
                 meta={formatMeta}
                 onEdit={() => navigateToSettings("filer")}
               />
