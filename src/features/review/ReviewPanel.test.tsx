@@ -11,6 +11,7 @@ import i18n from "@/i18n";
 const h = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => h.invoke(...args),
+  convertFileSrc: (path: string) => `asset://localhost/${encodeURIComponent(path)}`,
 }));
 const invoke = h.invoke;
 
@@ -68,6 +69,8 @@ function routeInvoke(queue = QUEUE) {
         return Promise.resolve(true);
       case "review_process_reminders":
         return Promise.resolve([]);
+      case "editor_peaks":
+        return Promise.resolve({ peaks: [0.1, 0.5, 0.9, 0.3], sampleRate: 8000 });
       default:
         return Promise.resolve(undefined);
     }
@@ -151,6 +154,52 @@ describe("ReviewPanel", () => {
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("review_process_reminders"),
     );
+  });
+
+  it("previews the selected recording with an audio element over convertFileSrc", async () => {
+    const { container } = renderPanel();
+    await screen.findByText("2026-05-31 Høymesse.mp4");
+    fireEvent.click(screen.getAllByText("▸ Forhåndsvis")[0]!);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("editor_peaks", {
+        inputPath: "/rec/2026-05-31 Høymesse.mp4",
+      }),
+    );
+    const audio = container.querySelector("audio");
+    expect(audio).not.toBeNull();
+    expect(audio!.getAttribute("src")).toContain("asset://localhost/");
+  });
+
+  it("bulk-publishes every selected pending entry over IPC", async () => {
+    renderPanel();
+    await screen.findByText("2026-05-31 Høymesse.mp4");
+
+    // Select both active entries via their checkboxes.
+    fireEvent.click(screen.getByLabelText("Velg 2026-05-31 Høymesse.mp4"));
+    fireEvent.click(screen.getByLabelText("Velg 2026-05-24.mp4"));
+
+    expect(screen.getByText("2 valgt")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Publiser valgte"));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("review_mark_published", { id: "q1" }),
+    );
+    expect(invoke).toHaveBeenCalledWith("review_mark_published", { id: "q2" });
+  });
+
+  it("bulk-discards selected entries after confirmation", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderPanel();
+    await screen.findByText("2026-05-31 Høymesse.mp4");
+
+    fireEvent.click(screen.getByLabelText("Velg 2026-05-31 Høymesse.mp4"));
+    fireEvent.click(screen.getByText("Forkast valgte"));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("review_mark_discarded", { id: "q1" }),
+    );
+    confirmSpy.mockRestore();
   });
 
   it("shows the empty state with no active entries", async () => {
