@@ -46,6 +46,13 @@ The engine ports the Electron `editor/` modules near-verbatim (the only changes:
 `convertFileSrc`/`invoke`). Canvas drawing code is copied line-for-line — same colours,
 geometry, intro/outro slots, ruler, playhead, cut overlays.
 
+## Progress (branch `feat/editor-port`)
+
+- ✅ **Phase 1** `45c9446` — engine + waveform + playback + cuts + normalize + export
+- ✅ **Phase 2 (part)** `fc0d8ae` metadata `.meta` sidecar · `e7fa1b4` cut-draft crash recovery
+- ✅ **Phase 3 (part)** `2aae94f` segment detection + auto-trim-to-sermon · `48bbdab` mastering presets + LUFS analysis
+- ⏳ **Remaining**: intro/outro (display+playback done in engine; **export support pending backend** — deferred); video variant (needs `<video>` + frame scrub); i18n (thread `t()` + 7 locales + parity test); remove orphaned `editor.helpers.ts`/`editorGeometry.ts`.
+
 ## Phases
 
 - **Phase 1 — Waveform + playback + cuts (the core).** Engine class, client-side peaks
