@@ -273,6 +273,12 @@ export function LiveScreen() {
   const bitrate = active ? (st?.bitrateKbps ?? 0) : 0;
   const fps = active ? (st?.fps ?? 0) : 0;
   const dropped = active ? (st?.dropped ?? 0) : 0;
+  // Live per-destination health (name → ok), so a half-dead multi-destination
+  // stream shows the dead one red instead of all-green. Defaults to "ok" for a
+  // destination not yet reported on.
+  const destHealth = new Map(
+    (active ? (st?.destinations ?? []) : []).map((h) => [h.name, h.ok]),
+  );
 
   return (
     <div className="sr-content wide">
@@ -378,6 +384,10 @@ export function LiveScreen() {
                 `editable` gates the key/remove controls to real rows only. */}
             {(shownDests ?? [{ ...SAMPLE_DEST, keyInput: "" }]).map((d) => {
               const editable = shownDests !== null;
+              // While live, reflect the REAL tee-slave health: a destination whose
+              // slave failed turns red even though the overall stream is up.
+              const liveOk = destHealth.get(d.name) ?? true;
+              const destOffline = active && d.enabled && !liveOk;
               return (
                 <div
                   key={d.id}
@@ -397,7 +407,7 @@ export function LiveScreen() {
                         height: 8,
                         borderRadius: "50%",
                         background:
-                          active && d.enabled
+                          active && d.enabled && liveOk
                             ? "var(--sr-green)"
                             : "var(--sr-red)",
                       }}
@@ -408,6 +418,17 @@ export function LiveScreen() {
                     >
                       {d.name}
                     </span>
+                    {destOffline && (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: "var(--sr-red)",
+                        }}
+                      >
+                        {t("liveScreen.destDropped", "Frakoblet")}
+                      </span>
+                    )}
                     {editable ? (
                       <span
                         onClick={() => toggleDestination(d.id)}

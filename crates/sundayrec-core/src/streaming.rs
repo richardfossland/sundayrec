@@ -558,6 +558,47 @@ pub fn reconnect_backoff_secs(attempt: u32) -> u64 {
     }
 }
 
+/// Parse an ffmpeg `tee` muxer line reporting that ONE slave (destination) failed,
+/// returning its 0-based slave index when present.
+///
+/// This is the fix for per-destination blindness: with `onfail=ignore` the tee
+/// keeps the surviving destinations alive but ffmpeg only whispers which one died
+/// — e.g. `[tee @ …] Slave muxer #1 failed: …, continuing with 1/2 slaves`. The
+/// slave index matches the order of [`StreamOptions::pushable`] (the order we
+/// built the tee in). We extract ONLY the integer, never the message tail, which
+/// can echo the slave URL (and thus the stream key).
+pub fn tee_slave_failure_index(line: &str) -> Option<usize> {
+    let l = line.to_lowercase();
+    if !l.contains("slave") || !l.contains("fail") {
+        return None;
+    }
+    // The index is the integer immediately after the first `#`.
+    let after_hash = l.split('#').nth(1)?;
+    let digits: String = after_hash
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect();
+    digits.parse::<usize>().ok()
+}
+
+/// Whether a stderr line indicates a tee slave (destination) failed at all, even
+/// when no index is carried (e.g. an open-time `Slave '…': error opening …`).
+/// Lets the caller surface a generic "a destination dropped" WITHOUT ever logging
+/// the raw line — which would leak the slave URL + key.
+pub fn is_tee_slave_failure(line: &str) -> bool {
+    let l = line.to_lowercase();
+    l.contains("slave") && (l.contains("fail") || l.contains("error opening"))
+}
+
+/// True when EVERY destination in `health` has failed (and there's at least one).
+/// A tee whose slaves are all dead keeps ffmpeg encoding into the void, so the
+/// supervisor uses this to trigger a full reconnect that re-attempts them all —
+/// while a PARTIAL failure leaves the survivors streaming untouched (no needless
+/// blip).
+pub fn all_destinations_failed(health: &[bool]) -> bool {
+    !health.is_empty() && health.iter().all(|&ok| !ok)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -907,5 +948,52 @@ mod tests {
         assert_eq!(reconnect_backoff_secs(50), 30);
         // Generous enough to ride out a router reboot mid-service.
         const { assert!(STREAM_RECONNECT_MAX_FAILURES >= 12) };
+    }
+
+    // ── per-destination health (tee slave failures) ──
+    #[test]
+    fn tee_slave_failure_index_extracts_the_slave_number() {
+        assert_eq!(
+            tee_slave_failure_index(
+                "[tee @ 0x12] Slave muxer #1 failed: Broken pipe, continuing with 1/2 slaves."
+            ),
+            Some(1)
+        );
+        assert_eq!(
+            tee_slave_failure_index("[tee @ 0x12] Slave muxer #0 failed to write packet"),
+            Some(0)
+        );
+        // No index → None (handled by the generic detector instead).
+        assert_eq!(
+            tee_slave_failure_index("[tee] Slave 'rtmp://x': error opening: failed"),
+            None
+        );
+        // A normal progress line is not a slave failure.
+        assert_eq!(
+            tee_slave_failure_index("frame= 10 fps= 30 bitrate= 400kbits/s"),
+            None
+        );
+    }
+
+    #[test]
+    fn is_tee_slave_failure_catches_indexed_and_open_failures() {
+        assert!(is_tee_slave_failure("Slave muxer #1 failed: Broken pipe"));
+        assert!(is_tee_slave_failure(
+            "[tee] Slave 'rtmp://host/app': error opening"
+        ));
+        // Not a tee/slave line.
+        assert!(!is_tee_slave_failure("Connection reset by peer"));
+        assert!(!is_tee_slave_failure("frame= 10 fps= 30"));
+    }
+
+    #[test]
+    fn all_destinations_failed_is_total_only() {
+        assert!(all_destinations_failed(&[false, false]));
+        assert!(all_destinations_failed(&[false]));
+        // A survivor means NOT total — keep streaming to it.
+        assert!(!all_destinations_failed(&[true, false]));
+        assert!(!all_destinations_failed(&[true, true]));
+        // Empty is never "all failed".
+        assert!(!all_destinations_failed(&[]));
     }
 }

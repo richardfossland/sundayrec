@@ -1258,6 +1258,7 @@
     "addDestination": "Dodaj cel",
     "destActive": "Aktywny",
     "destOff": "Wył.",
+    "destDropped": "Rozłączono",
     "keySaved": "•••• (zapisany)",
     "deleteKey": "Usuń klucz",
     "streamKeyPlaceholder": "Klucz transmisji",

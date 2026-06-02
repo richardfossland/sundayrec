@@ -41,8 +41,9 @@ use sundayrec_core::overlay::OverlayConfig;
 use sundayrec_core::overlay::{build_overlay_pipeline, BuildOverlayOpts};
 #[cfg(feature = "streaming")]
 use sundayrec_core::streaming::{
-    build_output_args, is_stream_connection_error, parse_progress_line, reconnect_backoff_secs,
-    StreamArgError, StreamProgress, STREAM_RECONNECT_MAX_FAILURES,
+    all_destinations_failed, build_output_args, is_stream_connection_error, is_tee_slave_failure,
+    parse_progress_line, reconnect_backoff_secs, tee_slave_failure_index, StreamArgError,
+    StreamProgress, STREAM_RECONNECT_MAX_FAILURES,
 };
 use sundayrec_core::streaming::{
     validate_rtmp_url, validate_stream_key, AudioInputLayout, StreamDestination, StreamKeyError,
@@ -68,6 +69,21 @@ pub struct StreamDestinationView {
     pub has_key: bool,
 }
 
+/// Per-destination liveness, surfaced so a half-dead multi-destination stream
+/// (e.g. YouTube dropped but Facebook is fine) is VISIBLE instead of silently
+/// hiding behind the tee's `onfail=ignore`. The list is in the same order as the
+/// pushable destinations (= the tee slave order).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/lib/bindings/DestinationHealth.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct DestinationHealth {
+    /// User-facing name ("YouTube", "Kirkens server", …).
+    pub name: String,
+    /// True while this destination is believed live; false once ffmpeg reported
+    /// its tee slave failed (reset to true on a full reconnect).
+    pub ok: bool,
+}
+
 /// Live stream status surfaced to the renderer. Mirrors the Electron
 /// `StreamStats` (sans the per-line churn). `active` is the single source of
 /// truth for the start/stop button.
@@ -86,6 +102,8 @@ pub struct StreamStatus {
     pub dropped: u32,
     /// Last interesting stderr line (e.g. a connection error), key-redacted.
     pub last_line: String,
+    /// Per-destination liveness, in pushable order. Empty when idle.
+    pub destinations: Vec<DestinationHealth>,
 }
 
 impl StreamStatus {
@@ -97,6 +115,7 @@ impl StreamStatus {
             fps: 0,
             dropped: 0,
             last_line: String::new(),
+            destinations: Vec::new(),
         }
     }
 }
@@ -356,6 +375,9 @@ pub async fn start(
     let first = spawn_stream(&args)
         .map_err(|e| AppError::Recording(format!("stream ffmpeg spawn: {e}")))?;
 
+    // Per-destination health, in the SAME order as the tee slaves (= pushable
+    // order) so a `Slave muxer #N failed` line maps straight to a destination.
+    let dest_names: Vec<String> = opts.pushable().iter().map(|d| d.name.clone()).collect();
     let status = StreamStatus {
         active: true,
         started_at: Some(now_ms),
@@ -363,6 +385,13 @@ pub async fn start(
         fps: 0,
         dropped: 0,
         last_line: String::new(),
+        destinations: dest_names
+            .iter()
+            .map(|name| DestinationHealth {
+                name: name.clone(),
+                ok: true,
+            })
+            .collect(),
     };
     engine.set_status(status.clone());
 
@@ -375,7 +404,10 @@ pub async fn start(
     let stop_t = stop.clone();
     let notify_t = notify.clone();
     let task = tauri::async_runtime::spawn(async move {
-        supervise(args, status_arc, stop_t, notify_t, now_ms, first).await;
+        supervise(
+            args, dest_names, status_arc, stop_t, notify_t, now_ms, first,
+        )
+        .await;
     });
     *lock_recover(&engine.handle) = Some(StreamHandle { stop, notify, task });
     Ok(status)
@@ -403,6 +435,11 @@ enum RunEnd {
     Exited,
     /// We were asked to stop (the `notify` fired); the child is still alive.
     Stopped,
+    /// EVERY destination's tee slave failed, so ffmpeg was encoding into the void
+    /// (it does NOT exit on its own with `onfail=ignore`). We killed it; the
+    /// supervisor must reconnect AND count this toward the give-up cap, because
+    /// the still-flowing "progress" would otherwise reset the counter and thrash.
+    AllDestinationsFailed,
 }
 
 /// The supervisor loop: keep an ffmpeg running for the stream, parsing its stderr
@@ -413,6 +450,7 @@ enum RunEnd {
 #[cfg(feature = "streaming")]
 async fn supervise(
     args: Vec<String>,
+    dest_names: Vec<String>,
     status: Arc<Mutex<StreamStatus>>,
     stop: Arc<std::sync::atomic::AtomicBool>,
     notify: Arc<tokio::sync::Notify>,
@@ -433,7 +471,8 @@ async fn supervise(
             Some(c) => c,
             None => match spawn_stream(&args) {
                 Ok(c) => {
-                    mark_reconnected(&status, started_at);
+                    // A fresh ffmpeg re-attempts EVERY destination → all live again.
+                    mark_reconnected(&status, started_at, &dest_names);
                     c
                 }
                 Err(e) => {
@@ -451,10 +490,17 @@ async fn supervise(
         };
 
         let (produced, end) = run_one(&mut child, &status, &notify).await;
+        // A total-destination failure ALWAYS counts toward giving up (the void
+        // stream keeps "producing", so we can't trust `produced` to reset).
+        let mut force_failure = false;
         match end {
             RunEnd::Stopped => {
                 graceful_stop(&mut child).await;
                 break;
+            }
+            RunEnd::AllDestinationsFailed => {
+                let _ = child.wait().await;
+                force_failure = true;
             }
             RunEnd::Exited => {
                 let _ = child.wait().await;
@@ -464,9 +510,10 @@ async fn supervise(
             break;
         }
 
-        // An unexpected exit. A run that streamed frames resets the counter (a
-        // recoverable hiccup); a zero-frame exit counts toward giving up.
-        if produced {
+        // An unexpected exit. A run that streamed frames to a live destination
+        // resets the counter (a recoverable hiccup); a zero-frame exit — or a
+        // total-destination loss — counts toward giving up.
+        if produced && !force_failure {
             failures = 0;
         } else {
             failures += 1;
@@ -518,6 +565,19 @@ async fn run_one(
                     if let Some(p) = parse_progress_line(&l) {
                         produced = true;
                         update_progress(status, p);
+                    } else if let Some(idx) = tee_slave_failure_index(&l) {
+                        // ONE destination's tee slave died. Mark it (so the UI shows
+                        // it red) and keep streaming to the survivors — unless every
+                        // destination is now dead, in which case the tee is encoding
+                        // into the void: kill + reconnect to re-attempt them all.
+                        if mark_destination_failed(status, idx) {
+                            let _ = child.start_kill();
+                            return (produced, RunEnd::AllDestinationsFailed);
+                        }
+                    } else if is_tee_slave_failure(&l) {
+                        // A slave failed without a parseable index (e.g. an open-time
+                        // error, whose raw line carries the URL+key — never logged).
+                        set_line(status, "En strøm-destinasjon koblet fra — sjekk status per destinasjon.");
                     } else if is_stream_connection_error(&l) {
                         // NEVER store the raw line — an RTMP error can echo the URL
                         // (and thus the stream key). A fixed message is safe + clear.
@@ -602,13 +662,40 @@ fn set_line(status: &Arc<Mutex<StreamStatus>>, line: &str) {
     lock_recover(status).last_line = line.to_string();
 }
 
-/// Mark the stream live again after a successful respawn.
+/// Mark the stream live again after a successful respawn — a fresh ffmpeg
+/// re-attempts every destination, so all are live again.
 #[cfg(feature = "streaming")]
-fn mark_reconnected(status: &Arc<Mutex<StreamStatus>>, started_at: i64) {
+fn mark_reconnected(status: &Arc<Mutex<StreamStatus>>, started_at: i64, dest_names: &[String]) {
     let mut s = lock_recover(status);
     s.active = true;
     s.started_at = Some(started_at);
     s.last_line = "Tilkoblet igjen.".to_string();
+    s.destinations = dest_names
+        .iter()
+        .map(|name| DestinationHealth {
+            name: name.clone(),
+            ok: true,
+        })
+        .collect();
+}
+
+/// Mark destination `idx` (a failed tee slave) as down, set a per-destination
+/// status line naming it, and return whether EVERY destination is now down. A
+/// partial failure leaves the survivors streaming; a total failure is the
+/// caller's cue to kill + reconnect (re-attempting them all).
+#[cfg(feature = "streaming")]
+fn mark_destination_failed(status: &Arc<Mutex<StreamStatus>>, idx: usize) -> bool {
+    let mut s = lock_recover(status);
+    if let Some(d) = s.destinations.get_mut(idx) {
+        if d.ok {
+            d.ok = false;
+            let name = d.name.clone();
+            s.last_line = format!("«{name}» koblet fra — fortsetter med de andre.");
+        }
+    }
+    // Snapshot the ok-flags and ask the core whether it's a total loss.
+    let health: Vec<bool> = s.destinations.iter().map(|d| d.ok).collect();
+    all_destinations_failed(&health)
 }
 
 /// Mark the stream stopped with a terminal error message (gave up reconnecting).

@@ -1258,6 +1258,7 @@
     "addDestination": "Add destination",
     "destActive": "Active",
     "destOff": "Off",
+    "destDropped": "Disconnected",
     "keySaved": "•••• (saved)",
     "deleteKey": "Delete key",
     "streamKeyPlaceholder": "Stream key",

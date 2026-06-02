@@ -1258,6 +1258,7 @@
     "addDestination": "Lägg till destination",
     "destActive": "Aktiv",
     "destOff": "Av",
+    "destDropped": "Frånkopplad",
     "keySaved": "•••• (sparad)",
     "deleteKey": "Ta bort nyckel",
     "streamKeyPlaceholder": "Strömnyckel",
