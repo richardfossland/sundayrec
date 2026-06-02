@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  macOS hardened-runtime entitlements for the SIGNED / notarized release.
+
+  Why each key:
+  - device.camera / device.audio-input: under the hardened runtime an app may
+    only reach the camera/microphone if it carries these entitlements — the
+    Info.plist usage strings alone are NOT enough for a notarized build. Without
+    them a released SundayRec could record audio in `tauri dev` but silently fail
+    to open the camera/mic once signed.
+  - cs.disable-library-validation: the bundled ffmpeg/ffprobe sidecars are
+    third-party binaries; the hardened runtime refuses to load a process whose
+    libraries aren't signed by the same Team ID unless this is set. This is what
+    lets the notarized app actually launch the ffmpeg sidecar.
+
+  Wired via `bundle.macOS.entitlements` in tauri.conf.json. Applied only at
+  `tauri build` codesign time (ad-hoc or real identity) — `tauri dev` is
+  unaffected, so this is safe to land before signing is fully configured.
+
+  NOTE (follow-up for signing): the ffmpeg *sidecar* should additionally be
+  signed with `com.apple.security.inherit` so it inherits the app's camera/mic
+  TCC grant rather than prompting/​failing as a separate responsible process.
+  That belongs in the signing pipeline, not here.
+-->
+<plist version="1.0">
+  <dict>
+    <key>com.apple.security.device.camera</key>
+    <true/>
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+  </dict>
+</plist>

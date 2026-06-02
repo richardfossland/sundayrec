@@ -379,6 +379,31 @@ impl RecorderEngine {
     ) -> AppResult<()> {
         self.stop();
 
+        // Fail FAST + CLEAR on blocked TCC access: the microphone (always needed)
+        // and the camera (only when video is on). avfoundation on a denied device
+        // hangs or errors opaquely, so an actionable "open System Settings" beats a
+        // confusing device-probe timeout. NotDetermined/Unknown fall through —
+        // opening the device is what triggers the OS prompt, and Unknown means we
+        // couldn't tell, so we behave exactly as before.
+        {
+            use crate::media::permissions::{blocked_message, status, MediaKind};
+            let mic = status(MediaKind::Microphone);
+            if let Some(msg) = blocked_message(MediaKind::Microphone, mic) {
+                return Err(AppError::Recording(msg));
+            }
+            let wants_video = opts
+                .video_device_name
+                .as_deref()
+                .map(|n| !n.is_empty())
+                .unwrap_or(false);
+            if wants_video {
+                let cam = status(MediaKind::Camera);
+                if let Some(msg) = blocked_message(MediaKind::Camera, cam) {
+                    return Err(AppError::Recording(msg));
+                }
+            }
+        }
+
         // Pre-roll prepend (F3.2 + F3.3a). When the caller harvested a pre-roll
         // clip we have a real, playable clip (in the recording's codec/container)
         // of the audio captured BEFORE the record press. The supervisor prepends

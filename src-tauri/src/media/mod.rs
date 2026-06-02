@@ -8,4 +8,5 @@
 //! MJPEG camera-preview engine built on that spawn primitive.
 
 pub mod ffmpeg;
+pub mod permissions;
 pub mod preview;

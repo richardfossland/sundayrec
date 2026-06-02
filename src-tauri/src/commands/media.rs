@@ -37,3 +37,11 @@ pub fn stop_preview(engine: State<'_, PreviewEngine>) -> AppResult<()> {
     engine.stop();
     Ok(())
 }
+
+/// Report the macOS camera + microphone authorization status so the UI can show
+/// a friendly "grant access" prompt before the user hits record, instead of
+/// letting a denied device fail opaquely. On non-macOS both read `authorized`.
+#[tauri::command]
+pub fn media_permissions() -> crate::media::permissions::MediaPermissions {
+    crate::media::permissions::current()
+}

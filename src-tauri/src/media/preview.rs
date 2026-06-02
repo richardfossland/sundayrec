@@ -35,6 +35,7 @@ use ts_rs::TS;
 use crate::audio::device_enum::enumerate_ffmpeg_devices;
 use crate::error::{AppError, AppResult};
 use crate::media::ffmpeg::spawn_ffmpeg;
+use crate::media::permissions;
 
 /// The Tauri event channel the renderer listens on for preview frames.
 pub const PREVIEW_EVENT: &str = "preview://frame";
@@ -86,9 +87,17 @@ const MODE_ATTEMPT_TIMEOUT: Duration = Duration::from_secs(2);
 const MAC_PREVIEW_MODES: &[(Option<&str>, u32)] = &[
     (Some("1280x720"), 30),
     (Some("1920x1080"), 30),
+    // PAL (25 fps) variants: European HDMI capture cards / cameras commonly
+    // advertise ONLY 25 fps, so a 30-fps-only matrix would never find their mode
+    // (the old Electron build carried these as MAC_CONFIGS 4 & 5).
+    (Some("1920x1080"), 25),
     (Some("1280x720"), 25),
     (Some("640x480"), 30),
+    // Escape hatches: bare `-framerate` with NO `-video_size`, for devices that
+    // reject every explicit size and only work at their native mode — at 30 then
+    // 25 (a PAL-only grabber rejects a bare 30 too).
     (None, 30),
+    (None, 25),
 ];
 
 /// Default preview frame-rate. Low on purpose: a preview only needs to look
@@ -333,6 +342,24 @@ impl PreviewEngine {
     ) -> AppResult<()> {
         self.stop();
 
+        // Fail FAST + CLEAR on a denied/restricted camera. avfoundation on a
+        // blocked device usually emits only "Input/output error" or zero frames,
+        // which the user reads as the misleading "Fant ikke kameraet" — and we'd
+        // have burned ~10 s walking the mode matrix first. Asking AVFoundation for
+        // the authorization status up front lets us point them straight at System
+        // Settings. NotDetermined/Unknown fall through (opening the device is what
+        // triggers the OS prompt; Unknown means we couldn't tell → behave as before).
+        let cam = permissions::status(permissions::MediaKind::Camera);
+        if let Some(message) = permissions::blocked_message(permissions::MediaKind::Camera, cam) {
+            let _ = app.emit(
+                PREVIEW_ERROR_EVENT,
+                PreviewError {
+                    message: message.clone(),
+                },
+            );
+            return Err(AppError::Recording(message));
+        }
+
         // Resolve the camera token the SAME way the recorder does: a stored
         // camera *name* (e.g. "FaceTime HD Camera") is not what avfoundation's
         // `-i` accepts on macOS — it needs the device *index*. Feeding ffmpeg the
@@ -543,6 +570,10 @@ fn classify_camera_error(line: &str) -> Option<&'static str> {
     let l = line.to_lowercase();
     if is_permission_fatal_line(&l) {
         Some("Kameratilgang nektet. Gi appen tilgang til kameraet i Systemvalg.")
+    } else if is_camera_in_use_line(&l) {
+        // A camera held by Zoom/Teams/Photo Booth etc. No capture mode will free
+        // it, so this is fatal for the whole matrix — surface it fast.
+        Some("Kameraet er i bruk av et annet program. Lukk det og prøv igjen.")
     } else if l.contains("input/output error")
         || l.contains("could not open")
         || l.contains("cannot open")
@@ -554,6 +585,20 @@ fn classify_camera_error(line: &str) -> Option<&'static str> {
     } else {
         None
     }
+}
+
+/// Whether an (already-lowercased) stderr line indicates the camera is held by
+/// ANOTHER application/session. avfoundation surfaces this as plain text on most
+/// builds and as OSStatus `-11804` (AVErrorDeviceAlreadyUsedByAnotherSession) on
+/// others. Retrying other capture modes can't free a busy device, so the caller
+/// treats this as fatal (short-circuits the matrix).
+fn is_camera_in_use_line(lowercased: &str) -> bool {
+    lowercased.contains("in use")
+        || lowercased.contains("resource busy")
+        || lowercased.contains("device or resource busy")
+        || lowercased.contains("device is busy")
+        || lowercased.contains("already in use")
+        || lowercased.contains("-11804")
 }
 
 /// Whether an (already-lowercased) stderr line indicates a PERMISSION/access
@@ -570,6 +615,15 @@ fn is_permission_fatal_line(lowercased: &str) -> bool {
 /// permission variant (vs a retry-eligible open/format error).
 fn is_permission_fatal(msg: &str) -> bool {
     msg == "Kameratilgang nektet. Gi appen tilgang til kameraet i Systemvalg."
+}
+
+/// Whether a classified message is fatal for the WHOLE mode matrix — no other
+/// capture mode can fix it, so the walk short-circuits. Covers both a permission
+/// denial AND a camera held by another app (busy); a plain open/format error
+/// stays retry-eligible so the matrix can try the next mode.
+fn is_fatal_camera_error(msg: &str) -> bool {
+    is_permission_fatal(msg)
+        || msg == "Kameraet er i bruk av et annet program. Lukk det og prøv igjen."
 }
 
 /// The capture modes to try for `platform`, in attempt order, as
@@ -817,7 +871,7 @@ async fn attempt_preview_mode(
             while let Ok(Some(line)) = lines.next_line().await {
                 tracing::debug!(target: "preview_ffmpeg", "{line}");
                 if let Some(msg) = classify_camera_error(&line) {
-                    let fatal = is_permission_fatal(msg);
+                    let fatal = is_fatal_camera_error(msg);
                     // Best-effort: a full/closed channel means an error already won.
                     let _ = err_tx.try_send((msg, fatal));
                 }
@@ -1204,6 +1258,47 @@ mod tests {
         // Routine ffmpeg banner / progress lines must NOT trip the error path.
         assert!(classify_camera_error("frame=  120 fps= 15 q=8.0 size=…").is_none());
         assert!(classify_camera_error("Stream #0:0: Video: mjpeg").is_none());
+    }
+
+    #[test]
+    fn classify_camera_error_flags_camera_in_use_distinctly() {
+        // A camera held by another app gets its OWN actionable message…
+        let busy = classify_camera_error("[avfoundation] device is in use by another process")
+            .expect("in-use line classifies");
+        assert!(busy.contains("i bruk"), "in-use message: {busy}");
+        assert!(
+            classify_camera_error("AVCaptureSessionRuntimeError -11804").is_some(),
+            "the AVFoundation already-used OSStatus is recognised"
+        );
+        // …and it's distinct from the generic not-found message.
+        let notfound = classify_camera_error("Could not open video device").unwrap();
+        assert_ne!(busy, notfound);
+    }
+
+    #[test]
+    fn fatal_covers_permission_and_in_use_but_not_open_errors() {
+        let perm = classify_camera_error("permission to capture video was denied").unwrap();
+        let busy = classify_camera_error("camera already in use").unwrap();
+        let open = classify_camera_error("Input/output error").unwrap();
+        assert!(is_fatal_camera_error(perm), "permission short-circuits");
+        assert!(is_fatal_camera_error(busy), "in-use short-circuits");
+        assert!(
+            !is_fatal_camera_error(open),
+            "a plain open error stays retry-eligible so the matrix tries the next mode"
+        );
+    }
+
+    #[test]
+    fn mac_mode_matrix_includes_pal_and_native_escape_hatches() {
+        // PAL (25 fps) sized modes AND bare-framerate escape hatches at both 30
+        // and 25 must be present — a European HDMI grabber that only advertises
+        // 25 fps would otherwise never negotiate.
+        assert!(MAC_PREVIEW_MODES.contains(&(Some("1920x1080"), 25)));
+        assert!(MAC_PREVIEW_MODES.contains(&(None, 30)));
+        assert!(
+            MAC_PREVIEW_MODES.contains(&(None, 25)),
+            "a PAL-only grabber needs a bare-framerate 25 fallback"
+        );
     }
 
     #[test]

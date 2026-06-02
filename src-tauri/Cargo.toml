@@ -209,6 +209,11 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
     "std",
 ] }
 dispatch2 = { version = "0.3", default-features = false, features = ["std"] }
+# Raw Objective-C messaging for the AVFoundation camera/mic authorization query
+# (no typed `objc2-av-foundation` binding is vendored, so we look the class up at
+# runtime and `msg_send!` `authorizationStatusForMediaType:`). Same objc2 0.6
+# lineage as the AppKit bindings above.
+objc2 = { version = "0.6", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 # Throwaway temp databases for the storage tests — no app, no device.

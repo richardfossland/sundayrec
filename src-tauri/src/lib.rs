@@ -223,6 +223,7 @@ pub fn run() {
             commands::media::ffmpeg_health,
             commands::media::start_preview,
             commands::media::stop_preview,
+            commands::media::media_permissions,
             commands::recorder::list_recording_devices,
             commands::recorder::recording_preview_frame,
             commands::recorder::plan_recording_opts,
