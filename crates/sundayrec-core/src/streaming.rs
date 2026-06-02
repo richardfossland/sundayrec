@@ -346,6 +346,12 @@ pub fn build_output_args(
         (fps * 2).to_string(),
         "-keyint_min".into(),
         (fps * 2).to_string(),
+        // Disable libx264 scene-change keyframes: by default a slide/camera change
+        // forces an extra I-frame, spiking the bitrate and breaking the strict 2 s
+        // GOP that adaptive-bitrate ladders (YouTube/Facebook) rely on. OBS streams
+        // with scene detection OFF for exactly this reason.
+        "-sc_threshold".into(),
+        "0".into(),
         "-c:a".into(),
         "aac".into(),
         "-b:a".into(),
@@ -357,8 +363,13 @@ pub fn build_output_args(
     ]);
 
     // ── destination muxer: single → flv, multi → tee ──
+    // `flvflags=no_duration_filesize` keeps the FLV header from advertising a
+    // (meaningless, ever-growing) duration/filesize for an infinite live stream —
+    // YouTube's own ingest guidance and strict RTMP servers both want this.
     if pushable.len() == 1 {
         let d = pushable[0];
+        args.push("-flvflags".into());
+        args.push("no_duration_filesize".into());
         args.push("-f".into());
         args.push("flv".into());
         args.push(joined_rtmp_url(&d.rtmp_url, &d.stream_key));
@@ -366,8 +377,9 @@ pub fn build_output_args(
         let tee = pushable
             .iter()
             .map(|d| {
+                // `onfail=ignore` keeps the OTHER destinations alive if one drops.
                 format!(
-                    "[f=flv:onfail=ignore]{}",
+                    "[f=flv:flvflags=no_duration_filesize:onfail=ignore]{}",
                     joined_rtmp_url(&d.rtmp_url, &d.stream_key)
                 )
             })
@@ -451,6 +463,99 @@ fn redact_keys(args: &[String], pushable: &[&StreamDestination]) -> Vec<String> 
             s
         })
         .collect()
+}
+
+// ── Live supervision: progress parsing + reconnect policy (pure) ─────────────
+//
+// The shell spawns ffmpeg and feeds its stderr through these. Keeping the
+// parsing + the reconnect *decisions* here makes the "must survive a 90-minute
+// service" logic unit-testable without a network or a real RTMP endpoint.
+
+/// One parsed ffmpeg progress sample.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StreamProgress {
+    /// Encoder frames per second (rounded).
+    pub fps: u32,
+    /// Current total bitrate in kbps (rounded; from `bitrate=… kbits/s`).
+    pub bitrate_kbps: u32,
+    /// Cumulative dropped frames (`drop=`), if the line carried one.
+    pub dropped: u32,
+}
+
+/// Parse an ffmpeg `frame=… fps=… bitrate=… drop=…` progress line into a
+/// [`StreamProgress`]. Returns `None` for any line that isn't a progress line, so
+/// the caller can keep non-progress lines as the "last interesting line". Tolerant
+/// of ffmpeg's variable whitespace (`fps= 30` vs `fps=30`).
+pub fn parse_progress_line(line: &str) -> Option<StreamProgress> {
+    // A progress line always has both `frame=` and `fps=`.
+    if !line.contains("frame=") || !line.contains("fps=") {
+        return None;
+    }
+    let fps = parse_kv_number(line, "fps=").map(|v| v.round() as u32)?;
+    // `bitrate= 409.6kbits/s` → 410. Missing on the very first lines → 0.
+    let bitrate_kbps = parse_kv_number(line, "bitrate=")
+        .map(|v| v.round() as u32)
+        .unwrap_or(0);
+    let dropped = parse_kv_number(line, "drop=")
+        .map(|v| v as u32)
+        .unwrap_or(0);
+    Some(StreamProgress {
+        fps,
+        bitrate_kbps,
+        dropped,
+    })
+}
+
+/// Read the number that follows `key` in `line`, skipping ffmpeg's optional
+/// leading spaces and ignoring any trailing unit (`kbits/s`, `x`, `kB`). `None`
+/// when the key is absent or no number follows.
+fn parse_kv_number(line: &str, key: &str) -> Option<f64> {
+    let rest = line.split(key).nth(1)?.trim_start();
+    let num: String = rest
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || *c == '.' || *c == '-')
+        .collect();
+    num.parse::<f64>().ok()
+}
+
+/// Whether an ffmpeg stderr line indicates the RTMP CONNECTION dropped (vs a
+/// benign warning). A live stream must treat these as "reconnect", not "done".
+/// Conservative: only clear network/write failures trip it.
+pub fn is_stream_connection_error(line: &str) -> bool {
+    let l = line.to_lowercase();
+    l.contains("connection reset")
+        || l.contains("broken pipe")
+        || l.contains("connection refused")
+        || l.contains("connection timed out")
+        || l.contains("network is unreachable")
+        || l.contains("no route to host")
+        || l.contains("error in the pull function")
+        || l.contains("error in the write function")
+        || l.contains("av_interleaved_write_frame")
+        || l.contains("end of file") && l.contains("rtmp")
+        || l.contains("failed to send")
+        || l.contains("unable to open resource")
+}
+
+/// Max CONSECUTIVE reconnect attempts that deliver no progress before we give up
+/// and surface an error. A reconnect that then streams frames resets the count,
+/// so a stream that merely hiccups can recover forever; only a genuinely-dead
+/// endpoint (bad network / revoked key) eventually stops. With the capped
+/// backoff below this is ~9 minutes of trying — long enough to ride out a router
+/// reboot mid-service, short enough not to spin silently forever.
+pub const STREAM_RECONNECT_MAX_FAILURES: u32 = 20;
+
+/// Backoff before reconnect attempt `attempt` (1-based), in seconds: a capped
+/// exponential 2 → 4 → 8 → 16 → 30 (held). Fast enough that a brief blip barely
+/// shows, capped so a longer outage doesn't hammer the ingest server.
+pub fn reconnect_backoff_secs(attempt: u32) -> u64 {
+    match attempt {
+        0 | 1 => 2,
+        2 => 4,
+        3 => 8,
+        4 => 16,
+        _ => 30,
+    }
 }
 
 #[cfg(test)]
@@ -610,11 +715,12 @@ mod tests {
         )
         .unwrap();
         let joined = built.args.join(" ");
-        assert!(joined.contains("-f flv rtmp://x/live2/secretkey"));
+        assert!(joined.contains("-flvflags no_duration_filesize -f flv rtmp://x/live2/secretkey"));
         assert!(!joined.contains("tee"));
-        // GOP = fps × 2.
+        // GOP = fps × 2, with scene-change keyframes disabled for a stable GOP.
         assert!(joined.contains("-g 60"));
         assert!(joined.contains("-keyint_min 60"));
+        assert!(joined.contains("-sc_threshold 0"));
         // bufsize = bitrate × 2 (720p auto = 4500).
         assert!(joined.contains("-b:v 4500k"));
         assert!(joined.contains("-bufsize 9000k"));
@@ -646,9 +752,10 @@ mod tests {
         .unwrap();
         let joined = built.args.join(" ");
         assert!(joined.contains("-f tee"));
-        // Both enabled destinations present with onfail=ignore; disabled one absent.
+        // Both enabled destinations present with no_duration_filesize + onfail=ignore;
+        // the disabled one is absent.
         assert!(joined.contains(
-            "[f=flv:onfail=ignore]rtmp://a.youtube/live2/ytkey|[f=flv:onfail=ignore]rtmp://b.facebook/rtmp/fbkey"
+            "[f=flv:flvflags=no_duration_filesize:onfail=ignore]rtmp://a.youtube/live2/ytkey|[f=flv:flvflags=no_duration_filesize:onfail=ignore]rtmp://b.facebook/rtmp/fbkey"
         ));
         assert!(!joined.contains("ckey"));
     }
@@ -738,5 +845,63 @@ mod tests {
         // The REAL args still carry the keys (so the spawn works).
         let realline = built.args.join(" ");
         assert!(realline.contains("ytsupersecret"));
+    }
+
+    // ── live supervision: progress parse + reconnect policy ──
+    #[test]
+    fn parse_progress_line_reads_fps_bitrate_and_drops() {
+        let p = parse_progress_line(
+            "frame= 1234 fps= 30 q=23.0 size=    2048kB time=00:00:41.00 \
+             bitrate= 409.6kbits/s dup=0 drop=5 speed=1.0x",
+        )
+        .expect("a progress line parses");
+        assert_eq!(p.fps, 30);
+        assert_eq!(p.bitrate_kbps, 410); // 409.6 rounds to 410
+        assert_eq!(p.dropped, 5);
+    }
+
+    #[test]
+    fn parse_progress_line_tolerates_no_space_and_missing_bitrate() {
+        // Early lines have no bitrate yet, and ffmpeg sometimes omits the space.
+        let p = parse_progress_line("frame=1 fps=0 q=0.0 size=0kB time=00:00:00.00 bitrate=N/A")
+            .expect("still a progress line");
+        assert_eq!(p.fps, 0);
+        assert_eq!(p.bitrate_kbps, 0);
+        assert_eq!(p.dropped, 0);
+    }
+
+    #[test]
+    fn parse_progress_line_rejects_non_progress() {
+        assert!(parse_progress_line("[tee @ 0x..] Connection to tcp://… failed").is_none());
+        assert!(parse_progress_line("Stream mapping:").is_none());
+    }
+
+    #[test]
+    fn connection_errors_are_detected_warnings_are_not() {
+        assert!(is_stream_connection_error(
+            "[flv @ 0x..] Connection reset by peer"
+        ));
+        assert!(is_stream_connection_error("av_interleaved_write_frame(): Broken pipe"));
+        assert!(is_stream_connection_error("Error in the pull function"));
+        assert!(is_stream_connection_error("Connection timed out"));
+        // A benign deprecation/info line must NOT trigger a reconnect.
+        assert!(!is_stream_connection_error(
+            "[libx264] using cpu capabilities: ARMv8 NEON"
+        ));
+        assert!(!is_stream_connection_error("frame= 10 fps= 30 bitrate= 400kbits/s"));
+    }
+
+    #[test]
+    fn reconnect_backoff_is_capped_exponential() {
+        assert_eq!(reconnect_backoff_secs(1), 2);
+        assert_eq!(reconnect_backoff_secs(2), 4);
+        assert_eq!(reconnect_backoff_secs(3), 8);
+        assert_eq!(reconnect_backoff_secs(4), 16);
+        // Held at the cap for every later attempt — no unbounded growth, no
+        // hammering the ingest server.
+        assert_eq!(reconnect_backoff_secs(5), 30);
+        assert_eq!(reconnect_backoff_secs(50), 30);
+        // Generous enough to ride out a router reboot mid-service.
+        const { assert!(STREAM_RECONNECT_MAX_FAILURES >= 12) };
     }
 }

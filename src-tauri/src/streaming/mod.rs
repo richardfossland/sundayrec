@@ -30,7 +30,7 @@
 //! need a real camera, a real RTMP endpoint and a key. Only the
 //! `sundayrec-core` decisions are unit-tested. See docs/SMOKE-TEST.md §R3.
 
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -40,7 +40,10 @@ use sundayrec_core::overlay::OverlayConfig;
 #[cfg(feature = "streaming")]
 use sundayrec_core::overlay::{build_overlay_pipeline, BuildOverlayOpts};
 #[cfg(feature = "streaming")]
-use sundayrec_core::streaming::{build_output_args, StreamArgError};
+use sundayrec_core::streaming::{
+    build_output_args, is_stream_connection_error, parse_progress_line, reconnect_backoff_secs,
+    StreamArgError, StreamProgress, STREAM_RECONNECT_MAX_FAILURES,
+};
 use sundayrec_core::streaming::{
     validate_rtmp_url, validate_stream_key, AudioInputLayout, StreamDestination, StreamKeyError,
     StreamOptions, StreamResolution,
@@ -110,14 +113,25 @@ impl StreamStatus {
 
 // ── Engine (managed state) ─────────────────────────────────────────────────────
 
-/// At most one live stream runs at a time. The engine stores the running child
-/// handle (feature-on) and the last-known status. Held as Tauri-managed state.
+/// A running stream's control surface: the supervisor task plus the flags `stop`
+/// uses to ask it to wind down (set `stop`, wake it via `notify`, await the task).
+#[cfg(feature = "streaming")]
+struct StreamHandle {
+    stop: Arc<std::sync::atomic::AtomicBool>,
+    notify: Arc<tokio::sync::Notify>,
+    task: tauri::async_runtime::JoinHandle<()>,
+}
+
+/// At most one live stream runs at a time. The engine stores the supervisor
+/// handle (feature-on) and the last-known status, shared with the supervisor task
+/// via an `Arc` so its live-stats/reconnect updates land where `status()` reads.
+/// Held as Tauri-managed state.
 pub struct StreamEngine {
-    /// The running ffmpeg child, when streaming. Only used feature-on, but the
-    /// field compiles either way to keep the managed-state type stable.
+    /// The running stream's supervisor, when streaming. Feature-on only; the
+    /// field is gated but the managed-state type stays stable across builds.
     #[cfg(feature = "streaming")]
-    child: Mutex<Option<tokio::process::Child>>,
-    status: Mutex<StreamStatus>,
+    handle: Mutex<Option<StreamHandle>>,
+    status: Arc<Mutex<StreamStatus>>,
 }
 
 impl Default for StreamEngine {
@@ -130,8 +144,8 @@ impl StreamEngine {
     pub fn new() -> Self {
         StreamEngine {
             #[cfg(feature = "streaming")]
-            child: Mutex::new(None),
-            status: Mutex::new(StreamStatus::idle()),
+            handle: Mutex::new(None),
+            status: Arc::new(Mutex::new(StreamStatus::idle())),
         }
     }
 
@@ -288,8 +302,6 @@ pub async fn start(
     snapshot_path: String,
     now_ms: i64,
 ) -> AppResult<StreamStatus> {
-    use std::process::Stdio;
-
     // Refuse a second concurrent stream (mirrors Electron "Stream allerede aktiv").
     if engine.status().active {
         return Err(AppError::Validation("stream_already_active".into()));
@@ -347,17 +359,13 @@ pub async fn start(
         built.loggable.join(" ")
     );
 
-    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    let child = tokio::process::Command::new(crate::media::ffmpeg::ffmpeg_path())
-        .args(&arg_refs)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
+    // Spawn the FIRST ffmpeg here so a launch failure (e.g. a missing sidecar)
+    // surfaces to the caller immediately, instead of disappearing into a silent
+    // "reconnecting" spin. The supervisor takes over this child and respawns it on
+    // any later unexpected exit (network drop) until `stop` or the give-up cap.
+    let first = spawn_stream(&args)
         .map_err(|e| AppError::Recording(format!("stream ffmpeg spawn: {e}")))?;
 
-    *lock_recover(&engine.child) = Some(child);
     let status = StreamStatus {
         active: true,
         started_at: Some(now_ms),
@@ -367,7 +375,261 @@ pub async fn start(
         last_line: String::new(),
     };
     engine.set_status(status.clone());
+
+    // Hand control to a supervisor task: it parses ffmpeg's stderr for live stats
+    // + connection errors, and on an unexpected exit reconnects with capped
+    // backoff so a brief network blip doesn't end a 90-minute service.
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let notify = Arc::new(tokio::sync::Notify::new());
+    let status_arc = engine.status.clone();
+    let stop_t = stop.clone();
+    let notify_t = notify.clone();
+    let task = tauri::async_runtime::spawn(async move {
+        supervise(args, status_arc, stop_t, notify_t, now_ms, first).await;
+    });
+    *lock_recover(&engine.handle) = Some(StreamHandle { stop, notify, task });
     Ok(status)
+}
+
+/// Spawn one streaming ffmpeg with stderr piped (for the live-stats parse) and
+/// `kill_on_drop` so a dropped child can never outlive us.
+#[cfg(feature = "streaming")]
+fn spawn_stream(args: &[String]) -> std::io::Result<tokio::process::Child> {
+    use std::process::Stdio;
+    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    tokio::process::Command::new(crate::media::ffmpeg::ffmpeg_path())
+        .args(&arg_refs)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+}
+
+/// How one ffmpeg run ended.
+#[cfg(feature = "streaming")]
+enum RunEnd {
+    /// ffmpeg exited on its own (clean finish or a network/fatal error).
+    Exited,
+    /// We were asked to stop (the `notify` fired); the child is still alive.
+    Stopped,
+}
+
+/// The supervisor loop: keep an ffmpeg running for the stream, parsing its stderr
+/// for live stats and reconnecting on unexpected exits with capped backoff, until
+/// `stop` is set or [`STREAM_RECONNECT_MAX_FAILURES`] consecutive zero-progress
+/// attempts give up. A run that produced frames resets the failure count, so a
+/// stream that merely hiccups recovers indefinitely.
+#[cfg(feature = "streaming")]
+async fn supervise(
+    args: Vec<String>,
+    status: Arc<Mutex<StreamStatus>>,
+    stop: Arc<std::sync::atomic::AtomicBool>,
+    notify: Arc<tokio::sync::Notify>,
+    started_at: i64,
+    first: tokio::process::Child,
+) {
+    use std::sync::atomic::Ordering;
+
+    let mut next_child = Some(first);
+    let mut failures: u32 = 0;
+
+    loop {
+        if stop.load(Ordering::SeqCst) {
+            break;
+        }
+        // Obtain a child: the pre-spawned first one, else a fresh respawn.
+        let mut child = match next_child.take() {
+            Some(c) => c,
+            None => match spawn_stream(&args) {
+                Ok(c) => {
+                    mark_reconnected(&status, started_at);
+                    c
+                }
+                Err(e) => {
+                    failures += 1;
+                    if failures >= STREAM_RECONNECT_MAX_FAILURES {
+                        mark_dead(&status, &format!("Strøm stoppet (kunne ikke starte): {e}"));
+                        break;
+                    }
+                    if !wait_backoff(failures, &status, &notify, &stop).await {
+                        break;
+                    }
+                    continue;
+                }
+            },
+        };
+
+        let (produced, end) = run_one(&mut child, &status, &notify).await;
+        match end {
+            RunEnd::Stopped => {
+                graceful_stop(&mut child).await;
+                break;
+            }
+            RunEnd::Exited => {
+                let _ = child.wait().await;
+            }
+        }
+        if stop.load(Ordering::SeqCst) {
+            break;
+        }
+
+        // An unexpected exit. A run that streamed frames resets the counter (a
+        // recoverable hiccup); a zero-frame exit counts toward giving up.
+        if produced {
+            failures = 0;
+        } else {
+            failures += 1;
+        }
+        if failures >= STREAM_RECONNECT_MAX_FAILURES {
+            mark_dead(
+                &status,
+                "Mistet forbindelsen — klarte ikke å koble til igjen.",
+            );
+            break;
+        }
+        if !wait_backoff(failures.max(1), &status, &notify, &stop).await {
+            break;
+        }
+    }
+
+    // Whatever the exit reason, the stream is no longer active. Preserve a
+    // give-up error line if one was set; otherwise go fully idle.
+    {
+        let mut s = lock_recover(&status);
+        s.active = false;
+        s.fps = 0;
+        s.bitrate_kbps = 0;
+        s.started_at = None;
+    }
+}
+
+/// Read one ffmpeg run's stderr to completion (or until `notify` asks us to
+/// stop), updating live stats. Returns whether any progress line was seen and how
+/// the run ended.
+#[cfg(feature = "streaming")]
+async fn run_one(
+    child: &mut tokio::process::Child,
+    status: &Arc<Mutex<StreamStatus>>,
+    notify: &tokio::sync::Notify,
+) -> (bool, RunEnd) {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+
+    let Some(stderr) = child.stderr.take() else {
+        return (false, RunEnd::Exited);
+    };
+    let mut lines = BufReader::new(stderr).lines();
+    let mut produced = false;
+
+    loop {
+        tokio::select! {
+            line = lines.next_line() => match line {
+                Ok(Some(l)) => {
+                    if let Some(p) = parse_progress_line(&l) {
+                        produced = true;
+                        update_progress(status, p);
+                    } else if is_stream_connection_error(&l) {
+                        // NEVER store the raw line — an RTMP error can echo the URL
+                        // (and thus the stream key). A fixed message is safe + clear.
+                        set_line(status, "Nettverksfeil oppdaget — overvåker forbindelsen…");
+                    }
+                }
+                _ => return (produced, RunEnd::Exited), // EOF → ffmpeg exiting
+            },
+            _ = notify.notified() => return (produced, RunEnd::Stopped),
+        }
+    }
+}
+
+/// Try to stop ffmpeg gracefully so a local recording (the `also_record` branch)
+/// finalises its container: SIGTERM, wait up to 3 s, then SIGKILL. On non-unix we
+/// only have the hard kill.
+#[cfg(feature = "streaming")]
+async fn graceful_stop(child: &mut tokio::process::Child) {
+    use std::time::Duration;
+    #[cfg(unix)]
+    {
+        if let Some(pid) = child.id() {
+            let _ = std::process::Command::new("kill")
+                .arg("-TERM")
+                .arg(pid.to_string())
+                .status();
+            if tokio::time::timeout(Duration::from_secs(3), child.wait())
+                .await
+                .is_ok()
+            {
+                return;
+            }
+        }
+    }
+    let _ = child.kill().await;
+}
+
+/// Sleep the reconnect backoff for `attempt`, surfacing a "reconnecting" status,
+/// woken early by `notify`. Returns `false` if we were asked to stop during the
+/// wait (caller should break).
+#[cfg(feature = "streaming")]
+async fn wait_backoff(
+    attempt: u32,
+    status: &Arc<Mutex<StreamStatus>>,
+    notify: &tokio::sync::Notify,
+    stop: &Arc<std::sync::atomic::AtomicBool>,
+) -> bool {
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+
+    let secs = reconnect_backoff_secs(attempt);
+    {
+        let mut s = lock_recover(status);
+        s.fps = 0;
+        s.bitrate_kbps = 0;
+        s.last_line =
+            format!("Mistet forbindelsen — kobler til igjen (forsøk {attempt}) om {secs}s…");
+    }
+    tokio::select! {
+        _ = tokio::time::sleep(Duration::from_secs(secs)) => {}
+        _ = notify.notified() => {}
+    }
+    !stop.load(Ordering::SeqCst)
+}
+
+/// Update the live encoder stats from a parsed progress sample.
+#[cfg(feature = "streaming")]
+fn update_progress(status: &Arc<Mutex<StreamStatus>>, p: StreamProgress) {
+    let mut s = lock_recover(status);
+    s.fps = p.fps;
+    s.bitrate_kbps = p.bitrate_kbps;
+    s.dropped = p.dropped;
+    // A flowing stream clears any stale reconnect/error line.
+    if !s.last_line.is_empty() {
+        s.last_line.clear();
+    }
+}
+
+/// Set only the status line (e.g. a connection warning), leaving stats intact.
+#[cfg(feature = "streaming")]
+fn set_line(status: &Arc<Mutex<StreamStatus>>, line: &str) {
+    lock_recover(status).last_line = line.to_string();
+}
+
+/// Mark the stream live again after a successful respawn.
+#[cfg(feature = "streaming")]
+fn mark_reconnected(status: &Arc<Mutex<StreamStatus>>, started_at: i64) {
+    let mut s = lock_recover(status);
+    s.active = true;
+    s.started_at = Some(started_at);
+    s.last_line = "Tilkoblet igjen.".to_string();
+}
+
+/// Mark the stream stopped with a terminal error message (gave up reconnecting).
+#[cfg(feature = "streaming")]
+fn mark_dead(status: &Arc<Mutex<StreamStatus>>, line: &str) {
+    let mut s = lock_recover(status);
+    s.active = false;
+    s.fps = 0;
+    s.bitrate_kbps = 0;
+    s.started_at = None;
+    s.last_line = line.to_string();
 }
 
 /// Stop the running stream. Idempotent: no active stream → `false`.
@@ -376,14 +638,21 @@ pub async fn stop(_engine: &StreamEngine) -> AppResult<bool> {
     disabled("stop")
 }
 
-/// Stop the running stream by killing the ffmpeg child. NETWORK/HARDWARE-UNVERIFIED.
+/// Stop the running stream: ask the supervisor to wind down (which stops
+/// reconnecting and SIGTERMs ffmpeg so a local recording finalises), await it,
+/// then go idle. Idempotent: no active stream → `false`. NETWORK/HARDWARE-UNVERIFIED.
 #[cfg(feature = "streaming")]
 pub async fn stop(engine: &StreamEngine) -> AppResult<bool> {
-    let child = lock_recover(&engine.child).take();
-    let was_active = child.is_some();
-    if let Some(mut c) = child {
-        // kill_on_drop is set, but kill explicitly so we await the exit.
-        let _ = c.kill().await;
+    use std::sync::atomic::Ordering;
+
+    let handle = lock_recover(&engine.handle).take();
+    let was_active = handle.is_some();
+    if let Some(h) = handle {
+        // Tell the supervisor to stop (no more reconnects) and wake it from any
+        // stderr-read or backoff-sleep, then wait for it to tear ffmpeg down.
+        h.stop.store(true, Ordering::SeqCst);
+        h.notify.notify_one();
+        let _ = h.task.await;
     }
     engine.set_status(StreamStatus::idle());
     Ok(was_active)
