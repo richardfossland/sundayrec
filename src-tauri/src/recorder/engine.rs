@@ -74,10 +74,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
-use sundayrec_core::capture::{
-    build_unified_capture_args, parse_avfoundation_modes, resolve_camera_mode, CameraMode,
-    CaptureOpts,
-};
+use sundayrec_core::capture::{build_unified_capture_args, resolve_camera_mode, CaptureOpts};
 use sundayrec_core::device_match::{find_best_device_match, FfmpegDevice};
 use sundayrec_core::errors::{classify_recording_error, RecordingErrorCode};
 use sundayrec_core::ffmpeg::Platform;
@@ -296,57 +293,6 @@ pub fn recording_preview_path() -> std::path::PathBuf {
     std::env::temp_dir().join("sundayrec-recording-preview.jpg")
 }
 
-/// Probe a camera's advertised capture modes. avfoundation only lists a device's
-/// modes when you request an UNSUPPORTED one, so we ask for `-framerate 1` and
-/// parse the "Supported modes" block it prints to stderr. macOS-only (avfoundation
-/// is the only backend with this hard rejection); other platforms return empty so
-/// the legacy 720p guess is used. Bounded by a short timeout so a wedged device
-/// open can't delay the recording start.
-///
-/// ⚠️ HARDWARE-UNVERIFIED in the test suite (opens the real camera).
-async fn probe_camera_modes(token: &str, platform: Platform) -> Vec<CameraMode> {
-    if !matches!(platform, Platform::MacOS) {
-        return Vec::new();
-    }
-    use tokio::io::AsyncReadExt;
-    let input = format!("{token}:none");
-    let spawn = tokio::process::Command::new(crate::media::ffmpeg::ffmpeg_path())
-        .args([
-            "-hide_banner",
-            "-f",
-            "avfoundation",
-            "-framerate",
-            "1",
-            "-i",
-        ])
-        .arg(&input)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .kill_on_drop(true)
-        .spawn();
-    let mut child = match spawn {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::warn!("recorder: camera-mode probe spawn failed: {e}");
-            return Vec::new();
-        }
-    };
-    let Some(mut stderr) = child.stderr.take() else {
-        return Vec::new();
-    };
-    let mut buf = String::new();
-    let read = async {
-        let _ = stderr.read_to_string(&mut buf).await;
-    };
-    // ffmpeg exits ~immediately (the bad framerate errors out); 6 s is a generous
-    // ceiling for a slow USB device-open.
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(6), read).await;
-    let _ = child.start_kill();
-    let _ = child.wait().await;
-    parse_avfoundation_modes(&buf)
-}
-
 /// The addressable token for a device: the avfoundation index (mac) when known,
 /// otherwise the dshow name (Windows).
 fn device_token(d: &FfmpegDevice) -> String {
@@ -517,7 +463,7 @@ impl RecorderEngine {
         // "mux_failed"). The OUTPUT still conforms to the user's target fps.
         let mut opts = opts;
         if let Some(v) = &video {
-            let modes = probe_camera_modes(&device_token(v), platform).await;
+            let modes = crate::media::camera::probe_camera_modes(&device_token(v), platform).await;
             let (target_w, target_h) =
                 sundayrec_core::capture::resolution_dims(&opts.video_resolution);
             match resolve_camera_mode(&modes, target_w, target_h, opts.framerate.max(1)) {

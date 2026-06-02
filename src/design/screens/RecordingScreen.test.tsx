@@ -42,6 +42,7 @@ const PLANNED = vi.hoisted(
     live_levels: true,
     keep_separate_audio: false,
     separate_audio_format: "wav",
+    video_resolution: "720p",
   }),
 );
 

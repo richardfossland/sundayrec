@@ -132,6 +132,8 @@ function useRecordingSession(video: boolean) {
           // FileFormat is already the lowercase extension string the recorder
           // wants ("mp3" | "wav" | "flac" | "aac"), so pass it through directly.
           separate_audio_format: s?.separateAudioFormat ?? "wav",
+          // The camera-mode probe targets this so 1080p records 1080p.
+          video_resolution: s?.videoResolution ?? "720p",
         };
       }
       // Honour the Home video toggle even if it differs from the persisted flag.

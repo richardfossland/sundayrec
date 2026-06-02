@@ -669,12 +669,38 @@ async fn run_preview(
     output_fps: u32,
     ready: tokio::sync::oneshot::Sender<AppResult<()>>,
 ) {
-    // The per-attempt deadline: short on macOS (we have several modes to walk),
-    // generous on a single-attempt platform (no matrix to grind through).
-    let attempt_timeout = if matches!(platform, Platform::MacOS) {
-        MODE_ATTEMPT_TIMEOUT
-    } else {
-        FIRST_FRAME_TIMEOUT
+    // PROBE the camera's REAL advertised modes once and open a KNOWN-good one,
+    // instead of thrashing a hardcoded guess-matrix (the preview-stutter fix). The
+    // old matrix tried 7 modes — several of them rates this camera rejects — at
+    // 2 s each, rapidly opening/closing the camera until it destabilised. With
+    // probed modes every attempt is a real one, so the first simply works, and a
+    // stall restart re-opens the SAME good mode fast. Falls back to the legacy
+    // matrix only if the probe yields nothing.
+    let (preview_modes, attempt_timeout): (Vec<(u32, Option<String>)>, Duration) = {
+        let probed = crate::media::camera::preview_modes_from(
+            &crate::media::camera::probe_camera_modes(&device_token, platform).await,
+        );
+        if probed.is_empty() {
+            let legacy = preview_modes_for(platform, output_fps)
+                .into_iter()
+                .map(|(f, s)| (f, s.map(String::from)))
+                .collect();
+            // A guess-matrix needs the short per-mode deadline to walk fast.
+            let to = if matches!(platform, Platform::MacOS) {
+                MODE_ATTEMPT_TIMEOUT
+            } else {
+                FIRST_FRAME_TIMEOUT
+            };
+            (legacy, to)
+        } else {
+            let modes = probed
+                .into_iter()
+                .map(|m| (m.input_fps, Some(format!("{}x{}", m.width, m.height))))
+                .collect();
+            // Real modes → allow proper camera WARM-UP (a 2 s deadline mistook
+            // warmup for failure and forced a restart).
+            (modes, FIRST_FRAME_TIMEOUT)
+        }
     };
 
     // `ready` is consumed exactly once — Ok on the first frame from any mode, or
@@ -697,6 +723,7 @@ async fn run_preview(
             platform,
             &device_token,
             output_fps,
+            &preview_modes,
             attempt_timeout,
             &mut ready,
         )
@@ -758,14 +785,20 @@ async fn run_matrix_walk(
     platform: Platform,
     device_token: &str,
     output_fps: u32,
+    modes: &[(u32, Option<String>)],
     attempt_timeout: Duration,
     ready: &mut Option<tokio::sync::oneshot::Sender<AppResult<()>>>,
 ) -> MatrixWalk {
-    let modes = preview_modes_for(platform, output_fps);
     let mut last_err: Option<&'static str> = None;
 
     for (input_fps, size) in modes {
-        let args = build_preview_args(platform, Some(device_token), output_fps, input_fps, size);
+        let args = build_preview_args(
+            platform,
+            Some(device_token),
+            output_fps,
+            *input_fps,
+            size.as_deref(),
+        );
         match attempt_preview_mode(app, &args, attempt_timeout, ready).await {
             AttemptOutcome::Streamed => return MatrixWalk::Done, // a mode worked; done.
             AttemptOutcome::Stalled { delivered_frame } => {

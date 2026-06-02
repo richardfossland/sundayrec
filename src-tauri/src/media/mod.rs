@@ -7,6 +7,7 @@
 //! stderr/stdout streaming and a graceful stdin `q` shutdown. `preview` is the
 //! MJPEG camera-preview engine built on that spawn primitive.
 
+pub mod camera;
 pub mod ffmpeg;
 pub mod permissions;
 pub mod preview;
