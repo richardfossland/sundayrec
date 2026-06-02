@@ -27,6 +27,7 @@ import type { RecordingRow } from "@/lib/bindings/RecordingRow";
 import type { EditorExportRequest } from "@/lib/bindings/EditorExportRequest";
 import type { EditorExportResult } from "@/lib/bindings/EditorExportResult";
 import type { EditorSegment } from "@/lib/bindings/EditorSegment";
+import type { EditorLoudness } from "@/lib/bindings/EditorLoudness";
 import { Badge, Btn, Card, EmptyState, Spinner } from "@/design/atoms";
 import { Icon } from "@/design/Icon";
 import { EditorEngine } from "@/features/editor/engine/EditorEngine";
@@ -35,6 +36,16 @@ import { baseName } from "@/features/editor/engine/types";
 
 const EXPORT_FORMATS = ["mp3", "wav", "flac", "mp4"] as const;
 type ExportFormat = (typeof EXPORT_FORMATS)[number];
+
+/** Mastering presets (two-pass loudnorm) the export can apply. `null` = none.
+ *  Ids mirror the Electron editor + the Rust core preset table. */
+const MASTER_PRESETS: { id: string | null; label: string }[] = [
+  { id: null, label: "Ingen" },
+  { id: "speech-clear", label: "Tale — tydelig" },
+  { id: "speech-punchy", label: "Strømming −14" },
+  { id: "speech-natural", label: "Naturlig −19" },
+  { id: "music-speech", label: "Musikk + tale −16" },
+];
 
 export function EditScreen() {
   // One engine per mounted screen.
@@ -51,6 +62,9 @@ export function EditScreen() {
   const [exportResult, setExportResult] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [showRecents, setShowRecents] = useState(false);
+  const [masterPreset, setMasterPreset] = useState<string | null>(null);
+  const [loudness, setLoudness] = useState<EditorLoudness | null>(null);
+  const [analyzingLoudness, setAnalyzingLoudness] = useState(false);
 
   // Metadata (title/speaker/description) — persisted to the per-recording
   // `.meta` sidecar. `hydrating` suppresses the debounced write while we apply
@@ -259,7 +273,7 @@ export function EditScreen() {
       outputFolder: folder,
       bitrate: null,
       bitDepth: null,
-      masterPreset: null,
+      masterPreset,
     };
     try {
       const res = await invoke<EditorExportResult>("editor_export", {
@@ -277,7 +291,29 @@ export function EditScreen() {
     } finally {
       setExporting(false);
     }
-  }, [engine, snap.filePath, snap.duration, format]);
+  }, [engine, snap.filePath, snap.duration, format, masterPreset]);
+
+  // Measure the file's loudness (EBU R128 LUFS) so the user can judge whether
+  // mastering is needed before exporting. Resets whenever the file changes.
+  useEffect(() => {
+    setLoudness(null);
+    setMasterPreset(null);
+  }, [metaPath]);
+
+  const onAnalyzeLoudness = useCallback(async () => {
+    if (!metaPath) return;
+    setAnalyzingLoudness(true);
+    try {
+      const l = await invoke<EditorLoudness>("editor_mastering_analyze", {
+        inputPath: metaPath,
+      });
+      setLoudness(l);
+    } catch {
+      /* feature off / ffmpeg unavailable → no readout */
+    } finally {
+      setAnalyzingLoudness(false);
+    }
+  }, [metaPath]);
 
   const isPlaying = snap.isPlaying && !snap.isPreview;
   const isPreviewing = snap.isPlaying && snap.isPreview;
@@ -720,18 +756,81 @@ export function EditScreen() {
       {snap.hasFile && (
         <Card title="Eksporter" icon="download">
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {EXPORT_FORMATS.map((f) => (
-                <button
-                  key={f}
-                  className={
-                    "sr-btn " + (format === f ? "gold" : "ghost") + " sm"
-                  }
-                  onClick={() => setFormat(f)}
+            <div>
+              <span className="sr-label">FORMAT</span>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  flexWrap: "wrap",
+                  marginTop: 6,
+                }}
+              >
+                {EXPORT_FORMATS.map((f) => (
+                  <button
+                    key={f}
+                    className={
+                      "sr-btn " + (format === f ? "gold" : "ghost") + " sm"
+                    }
+                    onClick={() => setFormat(f)}
+                  >
+                    {f.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className="sr-label">LYDMASTERING</span>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  flexWrap: "wrap",
+                  marginTop: 6,
+                }}
+              >
+                {MASTER_PRESETS.map((p) => (
+                  <button
+                    key={p.id ?? "none"}
+                    className={
+                      "sr-btn " +
+                      (masterPreset === p.id ? "gold" : "ghost") +
+                      " sm"
+                    }
+                    onClick={() => setMasterPreset(p.id)}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  marginTop: 8,
+                  flexWrap: "wrap",
+                }}
+              >
+                <Btn
+                  variant="ghost"
+                  sm
+                  icon="eq"
+                  loading={analyzingLoudness}
+                  onClick={onAnalyzeLoudness}
                 >
-                  {f.toUpperCase()}
-                </button>
-              ))}
+                  Analyser lydnivå
+                </Btn>
+                {loudness && (
+                  <span className="sr-card-desc">
+                    Nå: {loudness.inputI.toFixed(1)} LUFS → mål{" "}
+                    {loudness.targetLufs.toFixed(0)} LUFS
+                    {loudness.inputI < loudness.targetLufs - 1 &&
+                      " · mastering anbefales"}
+                  </span>
+                )}
+              </div>
             </div>
             <div
               style={{
