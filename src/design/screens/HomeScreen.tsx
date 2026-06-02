@@ -37,6 +37,7 @@ import {
 } from "./home.helpers";
 import { sampleRateKhzLabel } from "./settings.helpers";
 import { SETTINGS_QUERY_KEY } from "@/features/settings/queryKey";
+import { navigateTo, navigateToSettings } from "@/lib/navigation";
 import type { ScheduleStatus } from "@/lib/bindings/ScheduleStatus";
 import type { Settings } from "@/lib/bindings/Settings";
 import type { FileFormat } from "@/lib/bindings/FileFormat";
@@ -175,23 +176,6 @@ function RecordRow({
         <Toggle on={video} />
       </button>
     </div>
-  );
-}
-
-/** Navigate the shell to the Innstillinger view (used by the device cards'
- *  "Endre" button so the user can actually change the device). The optional
- *  `tab` deep-links straight to the matching settings tab (WS-6) — audio card →
- *  "lydkilde", format card → "filer", camera/video card → "video". An optional
- *  `anchor` further points at ONE setting inside the tab, which the settings
- *  screen scrolls to centre and flashes for ~1.3 s so the user sees exactly
- *  what the card was about. */
-function navigateToSettings(tab?: string, anchor?: string) {
-  window.dispatchEvent(
-    new CustomEvent("shell:navigate", {
-      detail: tab
-        ? { view: "settings", tab, ...(anchor ? { anchor } : {}) }
-        : "settings",
-    }),
   );
 }
 
@@ -749,13 +733,7 @@ export function HomeScreen({
                 className="sr-grow"
                 role="button"
                 tabIndex={0}
-                onClick={() =>
-                  window.dispatchEvent(
-                    new CustomEvent("shell:navigate", {
-                      detail: "diagnostics",
-                    }),
-                  )
-                }
+                onClick={() => navigateTo("diagnostics")}
                 style={{
                   fontSize: 13.5,
                   color: "var(--sr-gold)",

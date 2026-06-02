@@ -16,13 +16,16 @@ import {
   setPendingSettingsTab,
   setPendingSettingsAnchor,
 } from "@/design/screens/settingsTab";
+import { SHELL_NAVIGATE_EVENT } from "@/lib/navigation";
 
 /**
  * Custom DOM event a child view dispatches to ask the shell to switch views
  * (e.g. the home review-card → `review`). Decouples deep children from the
- * layout's reducer without prop-drilling a navigate callback.
+ * layout's reducer without prop-drilling a navigate callback. Defined in
+ * `@/lib/navigation` (alongside the `navigateTo` helpers); re-exported here so
+ * existing `@/components/MainLayout` importers keep working.
  */
-export const SHELL_NAVIGATE_EVENT = "shell:navigate";
+export { SHELL_NAVIGATE_EVENT };
 
 /**
  * The app shell — the macOS desktop window from the redesign (`sr-shell.jsx` +

@@ -38,12 +38,9 @@ export function snippetWithBrackets(context: HitContext): string {
   return `${before}[${safeText(context.match)}]${after}`;
 }
 
-/** Whole seconds → `m:ss`, for the segment timestamp on each hit row. */
-export function clock(sec: number): string {
-  const s = Math.max(0, Math.round(sec));
-  const m = Math.floor(s / 60);
-  return `${m}:${String(s % 60).padStart(2, "0")}`;
-}
+/** Whole seconds → `m:ss`, for the segment timestamp on each hit row.
+ *  Shared with the editor (identical formatter). */
+export { clock } from "./editor.helpers";
 
 /**
  * Format a transcript `createdAt` (unix seconds or ms) as a short Norwegian

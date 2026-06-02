@@ -43,6 +43,7 @@ import type { ScheduleSlot } from "@/lib/bindings/ScheduleSlot";
 import type { SpecialRecording } from "@/lib/bindings/SpecialRecording";
 import type { WakeCapabilities } from "@/lib/bindings/WakeCapabilities";
 import type { LiturgicalDay } from "@/lib/bindings/LiturgicalDay";
+import { navigateTo } from "@/lib/navigation";
 
 const SCHEDULER_STATUS_KEY = ["scheduler_status"] as const;
 
@@ -1166,11 +1167,7 @@ export function ScheduleScreen() {
           color: "inherit",
           background: "transparent",
         }}
-        onClick={() =>
-          window.dispatchEvent(
-            new CustomEvent("shell:navigate", { detail: "wake" }),
-          )
-        }
+        onClick={() => navigateTo("wake")}
         aria-label={t("scheduleScreen.wakeOpen", "Åpne vekking fra dvale")}
       >
         <div className="sr-row">

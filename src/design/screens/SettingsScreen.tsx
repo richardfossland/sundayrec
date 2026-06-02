@@ -28,6 +28,7 @@ import type { IntegrationSettings } from "@/lib/bindings/IntegrationSettings";
 import { LANGUAGE_NAMES, SUPPORTED_LNGS, changeLanguage } from "@/i18n";
 import { SETTINGS_QUERY_KEY } from "@/features/settings/queryKey";
 import { useVideoDevices } from "@/design/hooks";
+import { navigateTo } from "@/lib/navigation";
 
 import { Icon } from "../Icon";
 import { Badge, Card, DeviceRow, SegOpt, SettingRow, Toggle } from "../atoms";
@@ -60,13 +61,6 @@ function flashSettingAnchor(anchor: string): () => void {
     cancelAnimationFrame(raf);
     if (timer) window.clearTimeout(timer);
   };
-}
-
-/** Ask the shell to switch to a different view (same CustomEvent MainLayout
- *  listens for). Used to send the "test / check" buttons to the Diagnose view,
- *  which owns the real preflight/test-recording UI. */
-function navigateTo(view: string) {
-  window.dispatchEvent(new CustomEvent("shell:navigate", { detail: view }));
 }
 
 /** Open a native image picker and return the chosen absolute path, or `null`
