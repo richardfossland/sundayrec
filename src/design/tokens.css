@@ -6,58 +6,60 @@
    ============================================================================ */
 
 :root {
-  /* ---- Ink scale (cool navy neutrals, hue ~232) ------------------------- */
-  --sr-ink-1000: #07101a; /* deepest — behind everything */
-  --sr-ink-950: #0a1521; /* app background */
-  --sr-ink-900: #0e1b29; /* sidebar */
-  --sr-ink-850: #122236; /* raised panel / banner */
-  --sr-ink-800: #16273b; /* card surface */
-  --sr-ink-750: #1b3047; /* card hover, inset, input */
-  --sr-ink-700: #213a54; /* strong border / selected inset */
+  /* ---- Ink scale — Electron palette (cool blue-grey, hue ~225) ----------
+     Re-skinned to match the old Electron app exactly. Few distinct surfaces:
+     bg < sidebar=card < raised=input < inset, delineated by solid borders. */
+  --sr-ink-1000: #070b15; /* deepest — behind everything */
+  --sr-ink-950: #0c1020; /* app background        (Electron --bg) */
+  --sr-ink-900: #111827; /* sidebar               (Electron --surface) */
+  --sr-ink-850: #172035; /* raised panel / banner (Electron --surface2) */
+  --sr-ink-800: #111827; /* card surface          (Electron --surface) */
+  --sr-ink-750: #172035; /* hover / inset / input (Electron --surface2) */
+  --sr-ink-700: #1e2a42; /* strong inset          (Electron --surface3) */
 
-  /* ---- Hairline borders (over dark surfaces) ---------------------------- */
-  --sr-line: rgba(255, 255, 255, 0.07);
-  --sr-line-strong: rgba(255, 255, 255, 0.12);
-  --sr-line-faint: rgba(255, 255, 255, 0.04);
+  /* ---- Borders — Electron solid, subtle-but-present blue ---------------- */
+  --sr-line: #1e2d4a; /* Electron --border */
+  --sr-line-strong: #263860; /* Electron --border2 */
+  --sr-line-faint: #16233c;
 
-  /* ---- Text ------------------------------------------------------------- */
-  --sr-text: #e9f0f8; /* primary */
-  --sr-text-2: #a6b6c9; /* secondary */
-  --sr-text-3: #6e8197; /* tertiary / muted */
-  --sr-text-dim: #495a6e; /* disabled / placeholder */
+  /* ---- Text — Electron four-level hierarchy ----------------------------- */
+  --sr-text: #eaeaf6; /* primary */
+  --sr-text-2: #8899bb; /* secondary */
+  --sr-text-3: #4a5878; /* tertiary / muted */
+  --sr-text-dim: #2e3a55; /* disabled / placeholder */
 
-  /* ---- Brand & state ---------------------------------------------------- */
+  /* ---- Brand & state — Electron gold + semantics ------------------------ */
   --sr-gold: #f0bb47;
-  --sr-gold-bright: #ffd173;
+  --sr-gold-bright: #f9d07a; /* Electron --accent2 */
   --sr-gold-deep: #c8932b;
-  --sr-gold-tint: rgba(240, 187, 71, 0.13); /* selected/active fill */
-  --sr-gold-tint-2: rgba(240, 187, 71, 0.22);
-  --sr-gold-line: rgba(240, 187, 71, 0.5); /* selected border */
+  --sr-gold-tint: rgba(240, 187, 71, 0.12); /* Electron --accent-bg */
+  --sr-gold-tint-2: rgba(240, 187, 71, 0.2);
+  --sr-gold-line: rgba(240, 187, 71, 0.35); /* Electron --accent-border */
 
-  --sr-red: #e5484d; /* record / active recording */
-  --sr-red-bright: #f76a6e;
-  --sr-red-deep: #c0353a;
-  --sr-red-tint: rgba(229, 72, 77, 0.14);
+  --sr-red: #ef4444; /* record / active recording (Electron --red) */
+  --sr-red-bright: #f87171;
+  --sr-red-deep: #b91c1c;
+  --sr-red-tint: rgba(239, 68, 68, 0.1); /* Electron --red-bg */
 
-  --sr-green: #34c77b; /* ready / ok / connected */
-  --sr-green-tint: rgba(52, 199, 123, 0.14);
-  --sr-blue: #5b9bd5; /* info / links to external */
-  --sr-blue-tint: rgba(91, 155, 213, 0.14);
+  --sr-green: #22c55e; /* ready / ok / connected (Electron --green) */
+  --sr-green-tint: rgba(34, 197, 94, 0.1);
+  --sr-blue: #63b3ed; /* info / links to external */
+  --sr-blue-tint: rgba(99, 179, 237, 0.12);
 
-  /* ---- Radii ------------------------------------------------------------ */
-  --sr-r-xs: 6px;
-  --sr-r-sm: 9px;
-  --sr-r-md: 13px;
-  --sr-r-lg: 18px;
-  --sr-r-xl: 24px;
+  /* ---- Radii — Electron 12 / 8 / 5 -------------------------------------- */
+  --sr-r-xs: 5px;
+  --sr-r-sm: 8px;
+  --sr-r-md: 12px;
+  --sr-r-lg: 16px;
+  --sr-r-xl: 22px;
   --sr-r-pill: 999px;
 
-  /* ---- Shadows ---------------------------------------------------------- */
-  --sr-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --sr-shadow-md: 0 6px 20px rgba(0, 0, 0, 0.35);
-  --sr-shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.5);
+  /* ---- Shadows — Electron depth ----------------------------------------- */
+  --sr-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --sr-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --sr-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.6);
   --sr-glow-red:
-    0 0 0 1px rgba(229, 72, 77, 0.4), 0 8px 30px rgba(229, 72, 77, 0.35);
+    0 0 0 1px rgba(239, 68, 68, 0.4), 0 8px 30px rgba(239, 68, 68, 0.35);
   --sr-glow-gold:
     0 0 0 1px var(--sr-gold-line), 0 6px 22px rgba(240, 187, 71, 0.18);
 
@@ -223,7 +225,9 @@
 .sr-navitem.is-active {
   background: var(--sr-gold-tint);
   color: var(--sr-gold-bright);
-  border-color: var(--sr-gold-line);
+  border-color: transparent;
+  /* Electron's signature 3px gold left-accent bar (inset → no layout shift). */
+  box-shadow: inset 3px 0 0 var(--sr-gold);
 }
 .sr-navitem.is-active svg {
   opacity: 1;
@@ -314,12 +318,12 @@
   color: var(--sr-text-3);
 }
 
-/* Card */
+/* Card — Electron is flat (no shadow); depth comes from the solid blue border
+   over the darker app background. */
 .sr-card {
   background: var(--sr-ink-800);
   border: 1px solid var(--sr-line);
   border-radius: var(--sr-r-md);
-  box-shadow: var(--sr-shadow-sm);
 }
 .sr-card.pad {
   padding: 20px;
@@ -418,9 +422,11 @@
   background: var(--sr-gold);
   border-color: var(--sr-gold);
   color: #1a1306;
+  box-shadow: 0 2px 8px rgba(240, 187, 71, 0.3); /* Electron lifted-gold CTA */
 }
 .sr-btn.gold:hover {
   background: var(--sr-gold-bright);
+  box-shadow: 0 4px 14px rgba(240, 187, 71, 0.4);
 }
 .sr-btn.danger {
   background: var(--sr-red);
