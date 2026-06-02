@@ -587,11 +587,12 @@ export function HomeScreen({
                 <Icon name="refresh" size={15} />
               </button>
               <div className="sr-grow" />
-              {/* "Live" only when frames are actually flowing — otherwise the
-                  badge would claim Live over a blank/erroring preview. */}
+              {/* "Preview" — NOT "Live" — so this is never mistaken for a
+                  livestream/broadcast. A muted badge (no red recording dot) when
+                  frames flow; a clear "no image" otherwise. */}
               {preview.dataUrl ? (
-                <Badge kind="err" dot>
-                  {t("homeScreen.liveBadge", "● Live")}
+                <Badge kind="muted">
+                  {t("homeScreen.previewBadge", "Preview")}
                 </Badge>
               ) : (
                 <Badge kind="muted">

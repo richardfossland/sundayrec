@@ -1207,7 +1207,7 @@
     "videoOn": "Video på",
     "videoOff": "Video av",
     "selectCamera": "Välj kamera",
-    "liveBadge": "● Live",
+    "previewBadge": "Preview",
     "cameraPreviewAlt": "kameraförhandsvisning",
     "cameraPreviewPlaceholder": "kameraförhandsvisning · 16:9",
     "audioLevel": "Ljudnivå",

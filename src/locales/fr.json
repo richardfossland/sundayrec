@@ -1207,7 +1207,7 @@
     "videoOn": "Vidéo activée",
     "videoOff": "Vidéo désactivée",
     "selectCamera": "Choisir la caméra",
-    "liveBadge": "● En direct",
+    "previewBadge": "Aperçu",
     "cameraPreviewAlt": "aperçu de la caméra",
     "cameraPreviewPlaceholder": "aperçu de la caméra · 16:9",
     "audioLevel": "Niveau audio",

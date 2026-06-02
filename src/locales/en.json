@@ -1207,7 +1207,7 @@
     "videoOn": "Video on",
     "videoOff": "Video off",
     "selectCamera": "Select camera",
-    "liveBadge": "● Live",
+    "previewBadge": "Preview",
     "cameraPreviewAlt": "camera preview",
     "cameraPreviewPlaceholder": "camera preview · 16:9",
     "audioLevel": "Audio level",
