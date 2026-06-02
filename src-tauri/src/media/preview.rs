@@ -846,6 +846,16 @@ async fn run_matrix_walk(
     MatrixWalk::Done
 }
 
+/// Aborts the held task when dropped — stops the preview emit task on any of
+/// [`attempt_preview_mode`]'s many exit points without threading an explicit abort
+/// through each `return`.
+struct AbortOnDrop(tauri::async_runtime::JoinHandle<()>);
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
 /// One capture-mode attempt: spawn ffmpeg with `args`, wait up to `attempt_timeout`
 /// for the first frame, and — if it arrives — signal `ready` Ok (once) and pump
 /// frames to the renderer until the stream ends.
@@ -890,6 +900,32 @@ async fn attempt_preview_mode(
             }
         });
     }
+
+    // DECOUPLE the emit from the stdout read. Emitting each frame synchronously in
+    // the read loop meant a slow/busy webview back-pressured the `pipe:1` — the
+    // macOS pipe buffer (~64 KB ≈ 6 frames) fills, ffmpeg BLOCKS on write, no new
+    // frames arrive, and the 3 s stall watchdog restarts the whole preview: the
+    // visible stutter. Now the read loop just drops the latest frame into this
+    // `watch` slot (instant, non-blocking) and a separate task emits it — DROPPING
+    // intermediate frames under load, exactly how a live preview should behave
+    // (never block the source). So the read loop always keeps the pipe drained and
+    // ffmpeg flows smoothly.
+    let (frame_tx, frame_rx) = tokio::sync::watch::channel::<Option<PreviewFrame>>(None);
+    let emit_app = app.clone();
+    let emit_task = tauri::async_runtime::spawn(async move {
+        let mut rx = frame_rx;
+        while rx.changed().await.is_ok() {
+            let latest = rx.borrow_and_update().clone();
+            if let Some(f) = latest {
+                if emit_app.emit(PREVIEW_EVENT, f).is_err() {
+                    break; // window/listener gone
+                }
+            }
+        }
+    });
+    // Abort the emit task on every exit (its `watch` sender drops too, but this is
+    // immediate and tidy).
+    let _emit_guard = AbortOnDrop(emit_task);
 
     let b64 = base64::engine::general_purpose::STANDARD;
     // A FRESH splitter per attempt (and therefore per restart, since each restart
@@ -999,8 +1035,10 @@ async fn attempt_preview_mode(
                 height,
                 seq,
             };
-            // A failed emit means the window/listener is gone — end the stream.
-            if app.emit(PREVIEW_EVENT, payload).is_err() {
+            // Hand to the emit task (instant, coalescing — drops stale frames so a
+            // slow webview never back-pressures the pipe). A closed channel means
+            // the emit task ended (window gone) → end the stream.
+            if frame_tx.send(Some(payload)).is_err() {
                 return AttemptOutcome::Streamed;
             }
         }
