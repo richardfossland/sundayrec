@@ -72,4 +72,10 @@ keep_separate_audio: boolean,
  * chosen from `Settings::separate_audio_format`. Drives the extract codec via
  * the shared `audio_encode_args` seam.
  */
-separate_audio_format: string, };
+separate_audio_format: string, 
+/**
+ * Capture resolution tag (`"480p"`/`"720p"`/`"1080p"`) from settings — the
+ * camera-mode probe TARGET, so a 1080p setting records 1080p (when the camera
+ * advertises it). Empty → 720p. Serialized (it roundtrips through the planner).
+ */
+video_resolution: string, };

@@ -175,6 +175,11 @@ pub struct RecordingOpts {
     /// chosen from `Settings::separate_audio_format`. Drives the extract codec via
     /// the shared `audio_encode_args` seam.
     pub separate_audio_format: String,
+    /// Capture resolution tag (`"480p"`/`"720p"`/`"1080p"`) from settings — the
+    /// camera-mode probe TARGET, so a 1080p setting records 1080p (when the camera
+    /// advertises it). Empty → 720p. Serialized (it roundtrips through the planner).
+    #[serde(default)]
+    pub video_resolution: String,
     /// The camera INPUT mode the recorder probed at start (a size + framerate the
     /// device actually advertises). NOT sent by the frontend — it's resolved
     /// server-side so avfoundation doesn't reject an unsupported size/rate. `None`
@@ -513,13 +518,16 @@ impl RecorderEngine {
         let mut opts = opts;
         if let Some(v) = &video {
             let modes = probe_camera_modes(&device_token(v), platform).await;
-            match resolve_camera_mode(&modes, 1280, 720, opts.framerate.max(1)) {
+            let (target_w, target_h) =
+                sundayrec_core::capture::resolution_dims(&opts.video_resolution);
+            match resolve_camera_mode(&modes, target_w, target_h, opts.framerate.max(1)) {
                 Some(m) => {
                     tracing::info!(
                         width = m.width,
                         height = m.height,
                         input_fps = m.input_fps,
                         target_fps = opts.framerate,
+                        target_res = %opts.video_resolution,
                         "recorder: resolved camera capture mode from probe"
                     );
                     opts.video_input = Some(m);
@@ -1809,6 +1817,7 @@ mod tests {
             live_levels: true,
             keep_separate_audio: false,
             separate_audio_format: "wav".into(),
+            video_resolution: "720p".into(),
             video_input: None,
         }
     }
@@ -2199,6 +2208,7 @@ mod tests {
             live_levels: true,
             keep_separate_audio: true,
             separate_audio_format: "wav".into(),
+            video_resolution: "1080p".into(),
             video_input: None,
         };
         let json = serde_json::to_string(&o).unwrap();

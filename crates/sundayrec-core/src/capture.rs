@@ -270,6 +270,19 @@ pub fn resolve_camera_mode(
     })
 }
 
+/// Map a settings resolution tag (`"480p"`/`"720p"`/`"1080p"`) to its (width,
+/// height). Used as the camera-mode probe TARGET so a 1080p setting actually
+/// records 1080p (when the camera advertises it), not the old hardcoded 720p.
+/// Unknown tags fall back to 720p.
+pub fn resolution_dims(tag: &str) -> (u32, u32) {
+    match tag.trim().to_ascii_lowercase().as_str() {
+        "480p" => (854, 480),
+        "1080p" => (1920, 1080),
+        // "720p" + anything unknown → 720p.
+        _ => (1280, 720),
+    }
+}
+
 /// The advertised frame rate closest to `target`; ties prefer the HIGHER rate.
 fn pick_input_framerate(framerates: &[u32], target: u32) -> Option<u32> {
     framerates
@@ -591,6 +604,20 @@ mod tests {
     #[test]
     fn resolve_is_none_when_no_modes_parsed() {
         assert_eq!(resolve_camera_mode(&[], 1280, 720, 30), None);
+    }
+
+    #[test]
+    fn resolution_tag_maps_to_dims_and_drives_1080p() {
+        assert_eq!(resolution_dims("480p"), (854, 480));
+        assert_eq!(resolution_dims("720p"), (1280, 720));
+        assert_eq!(resolution_dims("1080p"), (1920, 1080));
+        assert_eq!(resolution_dims(""), (1280, 720)); // unknown → 720p
+                                                      // A 1080p target on a camera that advertises 1080p resolves to 1080p
+                                                      // (the bug: it used to hardcode 720p regardless of the setting).
+        let modes = parse_avfoundation_modes(FACETIME_MODES);
+        let (w, h) = resolution_dims("1080p");
+        let r = resolve_camera_mode(&modes, w, h, 30).unwrap();
+        assert_eq!((r.width, r.height), (1920, 1080));
     }
 
     #[test]
