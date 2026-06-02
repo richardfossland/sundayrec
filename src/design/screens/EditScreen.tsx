@@ -266,6 +266,8 @@ export function EditScreen() {
         request,
       });
       setExportResult(res.outputPath);
+      // Export succeeded → the cut plan is committed; drop the crash-recovery draft.
+      engine.clearDraft();
     } catch (err) {
       setExportError(
         String(err).includes("feature_disabled")

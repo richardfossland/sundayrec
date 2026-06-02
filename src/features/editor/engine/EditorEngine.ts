@@ -85,6 +85,7 @@ export class EditorEngine {
   private subscribers = new Set<() => void>();
   private loading = false;
   private error: string | null = null;
+  private draftTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** Per-frame playhead callback (timecode). Set by the React shell. */
   onTick: ((sec: number, isPlaying: boolean) => void) | null = null;
@@ -337,6 +338,10 @@ export class EditorEngine {
       s.duration = buf.duration;
       s.peaks = computePeaks(s, buf);
       fitAll(s);
+      // Restore unsaved cuts from a previous session that ended abruptly (the
+      // draft is written every edit and cleared on export — finding one means
+      // we were closed mid-edit).
+      await this.restoreDraft(path, seq);
       this.loading = false;
       this.emit();
       this.syncCanvasSize();
@@ -374,8 +379,83 @@ export class EditorEngine {
     );
   }
 
+  // ── Cut-draft persistence (crash recovery) ────────────────────────────────
+
+  /** Debounced (1.5 s) write of the live cut plan to the `.cuts-draft` sidecar,
+   *  so a crash mid-edit doesn't lose the work. */
+  private scheduleDraftSave(): void {
+    const path = this.state.filePath;
+    if (!path) return;
+    if (this.draftTimer) clearTimeout(this.draftTimer);
+    this.draftTimer = setTimeout(() => {
+      this.draftTimer = null;
+      const value = {
+        cuts: this.state.cuts.map((c) => ({ ...c })),
+        audioGainDb: this.state.audioGainDb,
+        ts: Date.now(),
+      };
+      invoke<boolean>("editor_write_sidecar", {
+        mediaPath: path,
+        sidecar: "cutsDraft",
+        value,
+      }).catch(() => {});
+    }, 1500);
+  }
+
+  private async restoreDraft(path: string, seq: number): Promise<void> {
+    try {
+      const draft = await invoke<{
+        cuts?: { start: number; end: number }[];
+        audioGainDb?: number;
+        ts?: number;
+      } | null>("editor_read_sidecar", {
+        mediaPath: path,
+        sidecar: "cutsDraft",
+      });
+      if (seq !== this.state.loadSeq) return;
+      if (!draft || !Array.isArray(draft.cuts) || draft.cuts.length === 0)
+        return;
+      // Ignore drafts older than 7 days (avoid surprising months-old leftovers).
+      const ageMs = draft.ts ? Date.now() - draft.ts : 0;
+      if (draft.ts && ageMs > 7 * 86400_000) return;
+      this.state.cuts = draft.cuts.filter(
+        (c) =>
+          typeof c.start === "number" &&
+          typeof c.end === "number" &&
+          c.end > c.start,
+      );
+      this.state.cutHistory = [JSON.parse(JSON.stringify(this.state.cuts))];
+      this.state.cutHistoryIdx = 0;
+      if (typeof draft.audioGainDb === "number")
+        this.state.audioGainDb = draft.audioGainDb;
+    } catch {
+      /* no draft / sidecar unavailable */
+    }
+  }
+
+  /** Remove the draft after a successful export (or on close). */
+  clearDraft(): void {
+    if (this.draftTimer) {
+      clearTimeout(this.draftTimer);
+      this.draftTimer = null;
+    }
+    const path = this.state.filePath;
+    if (path) {
+      invoke<boolean>("editor_delete_sidecar", {
+        mediaPath: path,
+        sidecar: "cutsDraft",
+      }).catch(() => {});
+    }
+  }
+
   closeFile(): void {
     this.stop();
+    // Flush a pending draft for the file we're leaving (don't delete it — a
+    // reopen should restore unsaved cuts).
+    if (this.draftTimer) {
+      clearTimeout(this.draftTimer);
+      this.draftTimer = null;
+    }
     const prevCtx = this.state.audioCtx;
     this.state.audioCtx = null;
     if (prevCtx) prevCtx.close().catch(() => {});
@@ -645,6 +725,7 @@ export class EditorEngine {
     this.emit();
     this.scheduleDraw();
     this.drawMinimapNow();
+    this.scheduleDraftSave();
   }
 
   clearAllCuts(): void {
@@ -653,6 +734,7 @@ export class EditorEngine {
     this.emit();
     this.scheduleDraw();
     this.drawMinimapNow();
+    this.scheduleDraftSave();
   }
 
   undo(): void {
@@ -660,6 +742,7 @@ export class EditorEngine {
     this.emit();
     this.scheduleDraw();
     this.drawMinimapNow();
+    this.scheduleDraftSave();
   }
 
   redo(): void {
@@ -667,6 +750,7 @@ export class EditorEngine {
     this.emit();
     this.scheduleDraw();
     this.drawMinimapNow();
+    this.scheduleDraftSave();
   }
 
   // ── Normalize (peak gain) ───────────────────────────────────────────────────
@@ -679,6 +763,7 @@ export class EditorEngine {
     this.emit();
     this.scheduleDraw();
     this.drawMinimapNow();
+    this.scheduleDraftSave();
     return gain !== 0;
   }
 
@@ -687,6 +772,7 @@ export class EditorEngine {
     this.emit();
     this.scheduleDraw();
     this.drawMinimapNow();
+    this.scheduleDraftSave();
   }
 
   setIncludeIntroOutro(on: boolean): void {
@@ -717,6 +803,7 @@ export class EditorEngine {
     this.emit();
     this.scheduleDraw();
     this.drawMinimapNow();
+    this.scheduleDraftSave();
     return s.cuts.length > 0;
   }
 
@@ -823,6 +910,7 @@ export class EditorEngine {
       this.emit();
       this.scheduleDraw();
       this.drawMinimapNow();
+      this.scheduleDraftSave();
       return;
     }
 
@@ -846,6 +934,7 @@ export class EditorEngine {
         : this.snapToSegmentBoundary(upMainSec, rect.width);
       addCut(s, a, b);
       this.emit();
+      this.scheduleDraftSave();
     } else {
       this.stop();
       s.playStartSec = snapOutOfCut(
@@ -871,6 +960,7 @@ export class EditorEngine {
       this.emit();
       this.scheduleDraw();
       this.drawMinimapNow();
+      this.scheduleDraftSave();
       return;
     }
     if (s.playheadDragging) {
@@ -883,6 +973,7 @@ export class EditorEngine {
       if (Math.abs(s.dragEndSec - s.dragStartSec) > 0.1) {
         addCut(s, s.dragStartSec, s.dragEndSec);
         this.emit();
+        this.scheduleDraftSave();
       }
       s.dragStartSec = -1;
       s.dragEndSec = -1;
@@ -990,6 +1081,7 @@ export class EditorEngine {
     window.removeEventListener("mousemove", this.onMinimapMove);
     window.removeEventListener("mouseup", this.onMinimapUp);
     if (this.drawRaf) cancelAnimationFrame(this.drawRaf);
+    if (this.draftTimer) clearTimeout(this.draftTimer);
     const ctx = this.state.audioCtx;
     if (ctx) ctx.close().catch(() => {});
     this.subscribers.clear();
