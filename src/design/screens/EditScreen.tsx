@@ -26,7 +26,8 @@ import { useQuery } from "@tanstack/react-query";
 import type { RecordingRow } from "@/lib/bindings/RecordingRow";
 import type { EditorExportRequest } from "@/lib/bindings/EditorExportRequest";
 import type { EditorExportResult } from "@/lib/bindings/EditorExportResult";
-import { Badge, Btn, Card, EmptyState } from "@/design/atoms";
+import type { EditorSegment } from "@/lib/bindings/EditorSegment";
+import { Badge, Btn, Card, EmptyState, Spinner } from "@/design/atoms";
 import { Icon } from "@/design/Icon";
 import { EditorEngine } from "@/features/editor/engine/EditorEngine";
 import { formatTime, formatDuration } from "@/features/editor/engine/format";
@@ -138,6 +139,40 @@ export function EditScreen() {
     }, 600);
     return () => window.clearTimeout(id);
   }, [metaPath, title, speaker, description]);
+
+  // Auto-detect content segments (speech / music / silence / sermon) in the
+  // background once a file is open — feeds the waveform overlays, the snap-to-
+  // boundary on cut edges, and the one-click "isolate the sermon" banner.
+  const [analyzing, setAnalyzing] = useState(false);
+  const [autoTrimDismissed, setAutoTrimDismissed] = useState(false);
+  useEffect(() => {
+    setAutoTrimDismissed(false);
+    if (!metaPath) return;
+    let cancelled = false;
+    setAnalyzing(true);
+    invoke<EditorSegment[]>("editor_segments", { inputPath: metaPath })
+      .then((segs) => {
+        if (cancelled) return;
+        engine.setSuggestions(
+          segs.map((s) => ({
+            start: s.start,
+            end: s.end,
+            duration: s.duration,
+            label: s.label,
+            type: s.kind,
+          })),
+        );
+      })
+      .catch(() => {
+        /* detection unavailable (feature off / ffmpeg) → no overlays */
+      })
+      .finally(() => {
+        if (!cancelled) setAnalyzing(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [engine, metaPath]);
 
   // Keyboard shortcuts (Electron parity): Space play · Shift+Space preview ·
   // Tab next cut · Shift+Tab prev cut · ⌘Z undo · ⌘⇧Z redo. Suppressed while
@@ -409,12 +444,68 @@ export function EditScreen() {
         )}
       </Card>
 
+      {/* ── Auto-trim banner (detected sermon) ───────────────────────── */}
+      {snap.hasFile &&
+        snap.sermon &&
+        !autoTrimDismissed &&
+        snap.cuts.length === 0 && (
+          <Card
+            style={{
+              borderColor: "var(--sr-gold-line)",
+              background: "var(--sr-gold-tint)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <Icon name="sparkle" size={20} />
+              <div style={{ flex: 1, minWidth: 180 }}>
+                <div style={{ fontWeight: 600 }}>
+                  Fant antatt preken — {snap.sermon.minutes} min
+                </div>
+                <div className="sr-card-desc">
+                  {formatTime(snap.sermon.start)} –{" "}
+                  {formatTime(snap.sermon.end)}. Klipp bort alt rundt med ett
+                  klikk.
+                </div>
+              </div>
+              <Btn
+                variant="gold"
+                icon="scissors"
+                onClick={() => engine.autoTrimToSermon()}
+              >
+                Behold bare preken
+              </Btn>
+              <Btn
+                variant="ghost"
+                sm
+                onClick={() => setAutoTrimDismissed(true)}
+              >
+                Avvis
+              </Btn>
+            </div>
+          </Card>
+        )}
+
       {/* ── Waveform ─────────────────────────────────────────────────── */}
       <Card
         title="Tidslinje"
         icon="wave"
         action={
-          <div style={{ display: "flex", gap: 6 }}>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            {analyzing && (
+              <span
+                className="sr-card-desc"
+                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+              >
+                <Spinner size={13} /> Analyserer …
+              </span>
+            )}
             <Btn
               variant="ghost"
               sm

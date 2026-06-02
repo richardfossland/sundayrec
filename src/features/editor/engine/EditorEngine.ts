@@ -18,6 +18,7 @@ import {
   WEB_AUDIO_EXTS,
   type Cut,
   type EditorState,
+  type Suggestion,
 } from "./types";
 import { computePeaks, computePeakGain } from "./peaks";
 import {
@@ -68,6 +69,9 @@ export interface EditorSnapshot {
   includeIntroOutro: boolean;
   canUndo: boolean;
   canRedo: boolean;
+  suggestionCount: number;
+  /** The longest detected sermon/speech block, for the one-click auto-trim. */
+  sermon: { start: number; end: number; minutes: number } | null;
 }
 
 export class EditorEngine {
@@ -120,6 +124,30 @@ export class EditorEngine {
       canUndo:
         s.cutHistoryIdx >= 0 && (s.cutHistoryIdx > 0 || s.cuts.length > 0),
       canRedo: s.cutHistoryIdx < s.cutHistory.length - 1,
+      suggestionCount: s.suggestions.length,
+      sermon: this.findSermonBlock(),
+    };
+  }
+
+  /** The longest sermon block (or, failing that, the longest speech block) —
+   *  what the auto-trim banner offers to isolate. */
+  private findSermonBlock(): {
+    start: number;
+    end: number;
+    minutes: number;
+  } | null {
+    const pick = (type: string) =>
+      this.state.suggestions
+        .filter((s) => s.type === type)
+        .reduce<
+          (typeof this.state.suggestions)[number] | null
+        >((best, s) => (!best || s.duration > best.duration ? s : best), null);
+    const block = pick("sermon") ?? pick("speech");
+    if (!block || block.duration < 60) return null;
+    return {
+      start: block.start,
+      end: block.end,
+      minutes: Math.round(block.duration / 60),
     };
   }
 
@@ -665,6 +693,31 @@ export class EditorEngine {
     this.state.includeIntroOutro = on;
     this.emit();
     this.scheduleDraw();
+  }
+
+  // ── Segment detection (speech / music / silence / sermon) ──────────────────
+
+  /** Set the detected segments that paint behind the waveform and that cut
+   *  edges snap to. Called by the screen after `editor_segments` resolves. */
+  setSuggestions(suggestions: Suggestion[]): void {
+    this.state.suggestions = suggestions;
+    this.emit();
+    this.scheduleDraw();
+  }
+
+  /** One-click "isolate the sermon": cut everything before the longest sermon/
+   *  speech block and everything after it. Returns true if it made cuts. */
+  autoTrimToSermon(): boolean {
+    const block = this.findSermonBlock();
+    if (!block) return false;
+    const s = this.state;
+    s.cuts = [];
+    if (block.start > 0.2) addCut(s, 0, block.start);
+    if (block.end < s.duration - 0.2) addCut(s, block.end, s.duration);
+    this.emit();
+    this.scheduleDraw();
+    this.drawMinimapNow();
+    return s.cuts.length > 0;
   }
 
   /** Cuts for `editor_export.cutRegions`. */
