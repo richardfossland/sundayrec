@@ -1282,7 +1282,11 @@
     "transcription": "Transkrypcja",
     "transcriptionWhisper": "Whisper (na urządzeniu)",
     "transcriptionHint": "Automatyczny tekst do wyszukiwania",
-    "manage": "Zarządzaj"
+    "manage": "Zarządzaj",
+    "mixerOfflineLabel": "Brak źródła dźwięku",
+    "mixerOfflineNone": "Brak podłączonego miksera",
+    "mixerOfflineGone": "Wybrane źródło dźwięku jest odłączone",
+    "mixerOfflineFix": "Wybierz źródło dźwięku"
   },
   "liveScreen": {
     "title": "Transmisja na żywo",

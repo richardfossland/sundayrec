@@ -1282,7 +1282,11 @@
     "transcription": "Transcription",
     "transcriptionWhisper": "Whisper (on-device)",
     "transcriptionHint": "Automatic text for search",
-    "manage": "Manage"
+    "manage": "Manage",
+    "mixerOfflineLabel": "Audio source missing",
+    "mixerOfflineNone": "No audio mixer connected",
+    "mixerOfflineGone": "The selected audio source is disconnected",
+    "mixerOfflineFix": "Choose audio source"
   },
   "liveScreen": {
     "title": "Live stream",

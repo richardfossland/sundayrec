@@ -1282,7 +1282,11 @@
     "transcription": "Transskription",
     "transcriptionWhisper": "Whisper (på enheden)",
     "transcriptionHint": "Automatisk tekst til søgning",
-    "manage": "Rediger"
+    "manage": "Rediger",
+    "mixerOfflineLabel": "Lydkilde mangler",
+    "mixerOfflineNone": "Ingen lydmixer tilsluttet",
+    "mixerOfflineGone": "Den valgte lydkilde er frakoblet",
+    "mixerOfflineFix": "Vælg lydkilde"
   },
   "liveScreen": {
     "title": "Direkte udsendelse",

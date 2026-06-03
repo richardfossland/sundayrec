@@ -1282,7 +1282,11 @@
     "transcription": "Transkribering",
     "transcriptionWhisper": "Whisper (på enheten)",
     "transcriptionHint": "Automatisk text för sökning",
-    "manage": "Ändra"
+    "manage": "Ändra",
+    "mixerOfflineLabel": "Ljudkälla saknas",
+    "mixerOfflineNone": "Ingen ljudmixer ansluten",
+    "mixerOfflineGone": "Den valda ljudkällan är frånkopplad",
+    "mixerOfflineFix": "Välj ljudkälla"
   },
   "liveScreen": {
     "title": "Direktsändning",

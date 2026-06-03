@@ -835,6 +835,13 @@
 .sr-banner.ready {
   border-left: 3px solid var(--sr-green);
 }
+.sr-banner.warn {
+  border-left: 3px solid var(--sr-red);
+}
+.sr-banner.warn .sr-banner-ico {
+  background: var(--sr-red-tint);
+  color: var(--sr-red);
+}
 .sr-banner-ico {
   width: 44px;
   height: 44px;

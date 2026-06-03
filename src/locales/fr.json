@@ -1282,7 +1282,11 @@
     "transcription": "Transcription",
     "transcriptionWhisper": "Whisper (sur l’appareil)",
     "transcriptionHint": "Texte automatique pour la recherche",
-    "manage": "Gérer"
+    "manage": "Gérer",
+    "mixerOfflineLabel": "Source audio manquante",
+    "mixerOfflineNone": "Aucune table de mixage connectée",
+    "mixerOfflineGone": "La source audio sélectionnée est déconnectée",
+    "mixerOfflineFix": "Choisir une source audio"
   },
   "liveScreen": {
     "title": "Diffusion en direct",

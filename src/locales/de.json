@@ -1282,7 +1282,11 @@
     "transcription": "Transkription",
     "transcriptionWhisper": "Whisper (auf dem Gerät)",
     "transcriptionHint": "Automatischer Text für die Suche",
-    "manage": "Ändern"
+    "manage": "Ändern",
+    "mixerOfflineLabel": "Audioquelle fehlt",
+    "mixerOfflineNone": "Kein Audiomischer verbunden",
+    "mixerOfflineGone": "Die gewählte Audioquelle ist getrennt",
+    "mixerOfflineFix": "Audioquelle wählen"
   },
   "liveScreen": {
     "title": "Livestream",

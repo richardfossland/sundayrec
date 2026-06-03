@@ -114,6 +114,52 @@ function TrustBanner() {
   }
   const showWakeBadge = !!settings?.wakeFromSleep && !!nextTime;
 
+  // Mixer-disconnected warning: the configured audio source is gone, or there
+  // are no inputs at all. Mirrors the Electron home's `#hero-warn` state.
+  const devices = useInputDevices();
+  const inputs = devices?.inputs ?? [];
+  const configured = settings?.deviceName ?? null;
+  const deviceMissing =
+    devices != null &&
+    (inputs.length === 0 ||
+      (!!configured && !inputs.some((d) => d.name === configured)));
+
+  if (deviceMissing) {
+    return (
+      <div className="sr-banner warn" style={{ marginBottom: 16 }}>
+        <div className="sr-banner-ico">
+          <Icon name="warn" size={24} strokeWidth={2.4} />
+        </div>
+        <div className="sr-grow">
+          <div className="sr-label" style={{ color: "var(--sr-red)" }}>
+            {t("homeScreen.mixerOfflineLabel", "Lydkilde mangler")}
+          </div>
+          <div
+            style={{
+              fontSize: 19,
+              fontWeight: 650,
+              letterSpacing: "-0.01em",
+              marginTop: 2,
+            }}
+          >
+            {inputs.length === 0
+              ? t("homeScreen.mixerOfflineNone", "Ingen lydmikser tilkoblet")
+              : t(
+                  "homeScreen.mixerOfflineGone",
+                  "Den valgte lydkilden er frakoblet",
+                )}
+          </div>
+        </div>
+        <button
+          className="sr-btn gold"
+          onClick={() => navigateToSettings("lydkilde", "device")}
+        >
+          {t("homeScreen.mixerOfflineFix", "Velg lydkilde")}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="sr-banner ready" style={{ marginBottom: 16 }}>
       <div className="sr-banner-ico">
