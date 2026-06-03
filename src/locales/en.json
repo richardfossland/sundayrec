@@ -1307,7 +1307,9 @@
     "stopStreaming": "Stop streaming",
     "startStreamingAndRecording": "Start streaming + recording",
     "streamingOnly": "Streaming only (no local recording)",
-    "startHelpText": "The local recording lands in “Recent recordings” when the stream stops — higher quality than the live stream."
+    "startHelpText": "The local recording lands in “Recent recordings” when the stream stops — higher quality than the live stream.",
+    "liveTag": "LIVE",
+    "startError": "Could not start the stream"
   },
   "recordingScreen": {
     "titlebar": "SundayRec — recording",

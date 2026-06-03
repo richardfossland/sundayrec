@@ -123,6 +123,7 @@ export function LiveScreen() {
   // Whether "Start direktesending + opptak" also writes a local file. Tracked so
   // the right primary button maps to the right `alsoRecordPath` start option.
   const [alsoRecord, setAlsoRecord] = useState(false);
+  const [streamError, setStreamError] = useState<string | null>(null);
 
   // Destinations: the canonical panel keeps these in memory (no persisted load),
   // so we mirror that and fall back to the design's sample row when empty. Keys
@@ -166,9 +167,13 @@ export function LiveScreen() {
         winAudioName: null,
         snapshotPath: "",
       }),
-    onSuccess: invalidate,
-    // Feature off in dev/test → no-op rather than crash.
-    onError: () => {},
+    onSuccess: () => {
+      setStreamError(null);
+      invalidate();
+    },
+    // Surface a real failure to start; a feature-disabled build stays quiet.
+    onError: (e) =>
+      setStreamError(String(e).includes("feature_disabled") ? null : String(e)),
   });
 
   const stopMutation = useMutation({
@@ -319,11 +324,46 @@ export function LiveScreen() {
         <div className="sr-card" style={{ padding: 0, overflow: "hidden" }}>
           <div
             className="sr-media"
-            style={{ aspectRatio: "16 / 9", borderRadius: 0, border: "none" }}
+            style={{
+              aspectRatio: "16 / 9",
+              borderRadius: 0,
+              border: "none",
+              position: "relative",
+            }}
           >
             {t(
               "liveScreen.previewPlaceholder",
               "video-forhåndsvisning · det som sendes ut",
+            )}
+            {active && (
+              <span
+                style={{
+                  position: "absolute",
+                  top: 10,
+                  right: 10,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  background: "rgba(239,68,68,0.92)",
+                  color: "#fff",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  letterSpacing: "0.02em",
+                  boxShadow: "0 2px 8px rgba(239,68,68,0.45)",
+                }}
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: "#fff",
+                  }}
+                />
+                {t("liveScreen.liveTag", "LIVE")}
+              </span>
             )}
           </div>
           <div
@@ -700,6 +740,12 @@ export function LiveScreen() {
 
       {/* Start buttons */}
       <div className="sr-stack-3" style={{ marginTop: 16 }}>
+        {streamError && (
+          <Badge kind="err">
+            {t("liveScreen.startError", "Kunne ikke starte sendingen")}:{" "}
+            {streamError}
+          </Badge>
+        )}
         <button
           className="sr-record"
           onClick={() => startStream(active ? alsoRecord : true)}

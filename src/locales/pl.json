@@ -1307,7 +1307,9 @@
     "stopStreaming": "Zatrzymaj transmisję",
     "startStreamingAndRecording": "Rozpocznij transmisję + nagrywanie",
     "streamingOnly": "Tylko transmisja (bez lokalnego nagrywania)",
-    "startHelpText": "Lokalne nagranie trafia do „Ostatnich nagrań” po zatrzymaniu transmisji — w wyższej jakości niż transmisja na żywo."
+    "startHelpText": "Lokalne nagranie trafia do „Ostatnich nagrań” po zatrzymaniu transmisji — w wyższej jakości niż transmisja na żywo.",
+    "liveTag": "NA ŻYWO",
+    "startError": "Nie można rozpocząć transmisji"
   },
   "recordingScreen": {
     "titlebar": "SundayRec — nagrywanie",

@@ -1307,7 +1307,9 @@
     "stopStreaming": "Stopp sending",
     "startStreamingAndRecording": "Start direktesending + opptak",
     "streamingOnly": "Bare direktesending (uten lokal opptak)",
-    "startHelpText": "Lokal opptaksfil havner i «Siste opptak» når strømmen stopper — høyere kvalitet enn livestreamen."
+    "startHelpText": "Lokal opptaksfil havner i «Siste opptak» når strømmen stopper — høyere kvalitet enn livestreamen.",
+    "liveTag": "LIVE",
+    "startError": "Kunne ikke starte sendingen"
   },
   "recordingScreen": {
     "titlebar": "SundayRec — tar opp",

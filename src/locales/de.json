@@ -1307,7 +1307,9 @@
     "stopStreaming": "Übertragung stoppen",
     "startStreamingAndRecording": "Stream + Aufnahme starten",
     "streamingOnly": "Nur Stream (ohne lokale Aufnahme)",
-    "startHelpText": "Die lokale Aufnahme erscheint in „Letzte Aufnahmen“, sobald der Stream endet — in höherer Qualität als der Livestream."
+    "startHelpText": "Die lokale Aufnahme erscheint in „Letzte Aufnahmen“, sobald der Stream endet — in höherer Qualität als der Livestream.",
+    "liveTag": "LIVE",
+    "startError": "Stream konnte nicht gestartet werden"
   },
   "recordingScreen": {
     "titlebar": "SundayRec — Aufnahme läuft",

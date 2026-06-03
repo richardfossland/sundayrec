@@ -1307,7 +1307,9 @@
     "stopStreaming": "Stoppa sändning",
     "startStreamingAndRecording": "Starta sändning + inspelning",
     "streamingOnly": "Endast sändning (utan lokal inspelning)",
-    "startHelpText": "Den lokala inspelningen hamnar i ”Senaste inspelningar” när sändningen stoppar — högre kvalitet än livesändningen."
+    "startHelpText": "Den lokala inspelningen hamnar i ”Senaste inspelningar” när sändningen stoppar — högre kvalitet än livesändningen.",
+    "liveTag": "LIVE",
+    "startError": "Kunde inte starta sändningen"
   },
   "recordingScreen": {
     "titlebar": "SundayRec — spelar in",

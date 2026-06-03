@@ -1307,7 +1307,9 @@
     "stopStreaming": "Stop udsendelse",
     "startStreamingAndRecording": "Start udsendelse + optagelse",
     "streamingOnly": "Kun udsendelse (uden lokal optagelse)",
-    "startHelpText": "Den lokale optagelse havner i “Seneste optagelser”, når strømmen stopper — højere kvalitet end livestreamen."
+    "startHelpText": "Den lokale optagelse havner i “Seneste optagelser”, når strømmen stopper — højere kvalitet end livestreamen.",
+    "liveTag": "LIVE",
+    "startError": "Kunne ikke starte udsendelsen"
   },
   "recordingScreen": {
     "titlebar": "SundayRec — optager",

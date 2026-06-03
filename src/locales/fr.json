@@ -1307,7 +1307,9 @@
     "stopStreaming": "Arrêter la diffusion",
     "startStreamingAndRecording": "Démarrer la diffusion + l'enregistrement",
     "streamingOnly": "Diffusion seule (sans enregistrement local)",
-    "startHelpText": "L'enregistrement local apparaît dans « Enregistrements récents » à l'arrêt du flux — d'une qualité supérieure à la diffusion en direct."
+    "startHelpText": "L'enregistrement local apparaît dans « Enregistrements récents » à l'arrêt du flux — d'une qualité supérieure à la diffusion en direct.",
+    "liveTag": "EN DIRECT",
+    "startError": "Impossible de démarrer la diffusion"
   },
   "recordingScreen": {
     "titlebar": "SundayRec — enregistrement",
