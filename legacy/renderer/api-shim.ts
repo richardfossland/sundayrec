@@ -203,14 +203,6 @@ const streamStatusStub = {
   dropped: 0,
   destinations: [],
 };
-const whisperStatusStub = {
-  models: [],
-  installed: [],
-  active: null,
-  // home.ts / editor-transcript.ts read `status.binaryAvailable`.
-  binaryAvailable: false,
-  available: false,
-};
 
 // ── History adapter: Rust RecordingRow → the old renderer's RecordingEntry ───
 type RecordingRow = {
@@ -302,8 +294,30 @@ const api: Record<string, unknown> = {
   // get_disk_space returns { freeBytes } (camelCase) — exactly what home.ts reads.
   getDiskSpace: async () =>
     call("get_disk_space", undefined, { freeBytes: null, totalBytes: null }),
-  startRecordingNow: async () => ({ ok: false }),
-  stopRecordingNow: async () => true,
+  // Recording: the old renderer builds a full (old-shape) RecordingOpts, but the
+  // Rust recorder wants its own RecordingOpts. plan_recording_opts builds the
+  // correct one from the backend settings; we only forward customName/maxMinutes/
+  // video from the old opts. (Device/format come from the Rust DB settings, not
+  // the client-side localStorage settings — a known limit of the split.)
+  startRecordingNow: async (opts: unknown) => {
+    const o = (opts ?? {}) as {
+      customName?: string;
+      maxMinutes?: number;
+      videoEnabled?: boolean;
+    };
+    try {
+      const planned = await invoke("plan_recording_opts", {
+        customName: o.customName || null,
+        maxMinutes: o.maxMinutes ?? null,
+        video: !!o.videoEnabled,
+      });
+      await invoke("start_recording", { opts: planned });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  },
+  stopRecordingNow: async () => call("stop_recording", undefined, true).then(() => true),
   runTestRecording: async () =>
     call("run_test_recording", undefined, { ok: false, level: null, message: "" }),
   // run_preflight returns Vec<PreflightFinding> directly; old code reads { findings }.
@@ -371,20 +385,24 @@ const api: Record<string, unknown> = {
   videoPreviewStart: async () => true,
   videoPreviewStop: async () => true,
 
-  // ── Wake from sleep ─────────────────────────────────────────────────────
-  scheduleOsWakes: async () => ({ ok: true }),
-  scheduleOsWakesAdmin: async () => ({ ok: true }),
-  getSleepConfig: async () => ({}),
-  fixMacSleep: async () => ({ ok: false }),
-  fixWinWakeTimers: async () => ({ ok: false }),
-  wakeDetectCapabilities: async () => ({ canWake: false, reasons: [] }),
-  wakeVerifyScheduled: async () => ({ ok: false, scheduled: [] }),
-  wakeCheckPower: async () => ({}),
-  wakeCheckStandby: async () => ({}),
-  wakeTest: async () => ({ ok: false }),
-  wakeCancelTest: async () => true,
-  wakeFailureHistory: async () => [],
-  wakeClearFailureHistory: async () => true,
+  // ── Wake from sleep (wake_* commands) ───────────────────────────────────
+  scheduleOsWakes: async () => call("wake_reschedule", undefined, { ok: true }),
+  scheduleOsWakesAdmin: async () => call("wake_reschedule", undefined, { ok: true }),
+  getSleepConfig: async () => call("wake_get_sleep_config", undefined, {}),
+  fixMacSleep: async () => call("wake_fix_sleep", undefined, { ok: false }),
+  fixWinWakeTimers: async () => call("wake_fix_sleep", undefined, { ok: false }),
+  wakeDetectCapabilities: async () =>
+    call("wake_capabilities", undefined, { canWake: false, reasons: [] }),
+  wakeVerifyScheduled: async () =>
+    call("wake_verify", undefined, { ok: false, scheduled: [] }),
+  wakeCheckPower: async () => ({}), // TODO Phase 3: no wake_check_power command
+  wakeCheckStandby: async () => ({}), // TODO Phase 3: no wake_check_standby command
+  wakeTest: async (secondsAhead?: number) =>
+    call("wake_test", { secondsAhead: secondsAhead ?? null }, { ok: false }),
+  wakeCancelTest: async () => call("wake_cancel_test", undefined, true).then(() => true),
+  wakeFailureHistory: async () => call("wake_failure_history", undefined, []),
+  wakeClearFailureHistory: async () =>
+    call("wake_clear_failure_history", undefined, true).then(() => true),
 
   // ── Editor ──────────────────────────────────────────────────────────────
   editorReadFile: async () => null,
@@ -393,11 +411,28 @@ const api: Record<string, unknown> = {
   editorExportFile: async () => ({ ok: false }),
   editorCancelExport: async () => true,
   editorPickOutputFolder: async () => pickPath({ directory: true }),
-  editorReadMeta: async () => null,
-  editorSaveMeta: async () => true,
-  editorReadCutsDraft: async () => null,
-  editorSaveCutsDraft: async () => true,
-  editorDeleteCutsDraft: async () => true,
+  // Sidecars (meta / cutsDraft / transcript) are clean JSON key-value via
+  // editor_read/write/delete_sidecar — no media decode needed.
+  editorReadMeta: async (fp: string) =>
+    call("editor_read_sidecar", { mediaPath: fp, sidecar: "meta" }, null),
+  editorSaveMeta: async (fp: string, meta: unknown) =>
+    call("editor_write_sidecar", { mediaPath: fp, sidecar: "meta", value: meta }, false).then(
+      () => true,
+    ),
+  editorReadCutsDraft: async (fp: string) =>
+    call("editor_read_sidecar", { mediaPath: fp, sidecar: "cutsDraft" }, null),
+  // The old main wrapped the cut array as { cuts, ts }; preserve that so the
+  // loader's `draft.cuts` / age check still work.
+  editorSaveCutsDraft: async (fp: string, cuts: unknown) =>
+    call(
+      "editor_write_sidecar",
+      { mediaPath: fp, sidecar: "cutsDraft", value: { cuts, ts: Date.now() } },
+      false,
+    ).then(() => true),
+  editorDeleteCutsDraft: async (fp: string) =>
+    call("editor_delete_sidecar", { mediaPath: fp, sidecar: "cutsDraft" }, false).then(
+      () => true,
+    ),
   editorDetectSegments: async () => ({ segments: [] }),
   editorSetVideoPath: async () => ({ ok: false }),
   editorExtractAudioPeaks: async () => ({ peaks: [] }),
@@ -406,9 +441,18 @@ const api: Record<string, unknown> = {
   editorSaveVideo: async () => ({ ok: false }),
   editorExportVideo: async () => ({ ok: false }),
   editorProbeStreams: async () => ({ streams: [] }),
-  editorReadTranscript: async () => null,
-  editorWriteTranscript: async () => true,
-  editorDeleteTranscript: async () => true,
+  editorReadTranscript: async (fp: string) =>
+    call("editor_read_sidecar", { mediaPath: fp, sidecar: "transcript" }, null),
+  editorWriteTranscript: async (fp: string, t: unknown) =>
+    call(
+      "editor_write_sidecar",
+      { mediaPath: fp, sidecar: "transcript", value: t },
+      false,
+    ).then(() => true),
+  editorDeleteTranscript: async (fp: string) =>
+    call("editor_delete_sidecar", { mediaPath: fp, sidecar: "transcript" }, false).then(
+      () => true,
+    ),
 
   // ── Mastering ───────────────────────────────────────────────────────────
   masterPresets: async () => [],
@@ -451,12 +495,17 @@ const api: Record<string, unknown> = {
   youtubeUpload: async () => ({ ok: false }),
 
   // ── Streaming / overlays ────────────────────────────────────────────────
-  streamStatus: async () => streamStatusStub,
-  streamStart: async () => ({ ok: false }),
-  streamStop: async () => true,
-  streamPreviewPath: async () => "",
-  streamSetKey: async () => true,
-  streamDeleteKey: async () => true,
+  // streamStatus shape (idle) matches old fields; live telemetry arrives via the
+  // streaming://stats event. The action commands are wired:
+  streamStatus: async () => call("stream_status", undefined, streamStatusStub),
+  streamStart: async (params: unknown) =>
+    call("stream_start", params as Record<string, unknown>, { ok: false }),
+  streamStop: async () => call("stream_stop", undefined, true).then(() => true),
+  streamPreviewPath: async () => "", // TODO Phase 3: no stream_preview_path command
+  streamSetKey: async (destId: string, key: string) =>
+    call("stream_set_key", { destId, key }, true).then(() => true),
+  streamDeleteKey: async (destId: string) =>
+    call("stream_delete_key", { destId }, true).then(() => true),
   overlayListScreens: async () => [],
   overlayListNdiSources: async () => ({ available: false, sources: [] }),
   overlayPickImage: async () =>
@@ -465,12 +514,24 @@ const api: Record<string, unknown> = {
   // ── Transcripts / whisper ───────────────────────────────────────────────
   transcriptListAll: async () => [],
   transcriptResolveSource: async () => null,
-  whisperStatus: async () => whisperStatusStub,
-  whisperDownloadModel: async () => ({ ok: false }),
-  whisperCancelDownload: async () => true,
-  whisperDeleteModel: async () => true,
-  whisperTranscribe: async () => ({ ok: false }),
-  whisperCancelTranscribe: async () => true,
+  // whisper_list_models gives the catalogue; the build ships the whisper feature
+  // so the binary is available. (Per-model installed flags come from the list.)
+  whisperStatus: async () => ({
+    models: await call("whisper_list_models", undefined, []),
+    installed: [],
+    active: null,
+    binaryAvailable: true,
+    available: true,
+  }),
+  whisperDownloadModel: async (modelId: string) =>
+    call("whisper_download_model", { modelId }, { ok: false }),
+  whisperCancelDownload: async (modelId: string) =>
+    call("whisper_cancel_download", { modelId }, true).then(() => true),
+  whisperDeleteModel: async (modelId: string) =>
+    call("whisper_delete_model", { modelId }, true).then(() => true),
+  whisperTranscribe: async (params: unknown) =>
+    call("whisper_transcribe", params as Record<string, unknown>, { ok: false }),
+  whisperCancelTranscribe: async () => true, // TODO Phase 3: no cancel command
 
   // ── Review queue ────────────────────────────────────────────────────────
   reviewQueueList: async () => [],
