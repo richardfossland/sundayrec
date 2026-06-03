@@ -705,7 +705,13 @@ async fn run_session(
         if to.is_terminal() {
             scheduled_stop.send_replace(None);
         }
-        set_state(&app, &last_state, to, reconnect_count, *scheduled_stop.borrow());
+        set_state(
+            &app,
+            &last_state,
+            to,
+            reconnect_count,
+            *scheduled_stop.borrow(),
+        );
     };
     // Unique per recording (singleton engine → start_ms never repeats); also the
     // crash-recovery manifest's filename.
@@ -959,11 +965,17 @@ async fn run_session(
                                         match spawn_ffmpeg_owned(&args).await {
                                             Ok(c) => {
                                                 child = c;
-                                                emit_state(RecorderState::Recording, session.reconnect_count());
+                                                emit_state(
+                                                    RecorderState::Recording,
+                                                    session.reconnect_count(),
+                                                );
                                             }
                                             Err(e2) => {
                                                 emit_error(&app, "device_error", &e2.to_string());
-                                                emit_state(RecorderState::Failed, session.reconnect_count());
+                                                emit_state(
+                                                    RecorderState::Failed,
+                                                    session.reconnect_count(),
+                                                );
                                                 finalize_pending(
                                                     &app,
                                                     &pool,
@@ -981,7 +993,10 @@ async fn run_session(
                                     }
                                     RecoveryDecision::GiveUp => {
                                         emit_error(&app, "device_disconnected", &e.to_string());
-                                        emit_state(RecorderState::Failed, session.reconnect_count());
+                                        emit_state(
+                                            RecorderState::Failed,
+                                            session.reconnect_count(),
+                                        );
                                         finalize_pending(
                                             &app,
                                             &pool,
@@ -2009,7 +2024,10 @@ mod tests {
         assert_eq!(extended_stop_ms(Some(now - 5), now, 30), now + 30 * 60_000);
         // A live deadline in the future → add to IT (so "+30 min" really extends).
         let future = now + 10 * 60_000;
-        assert_eq!(extended_stop_ms(Some(future), now, 30), future + 30 * 60_000);
+        assert_eq!(
+            extended_stop_ms(Some(future), now, 30),
+            future + 30 * 60_000
+        );
 
         // A huge/adversarial minutes value is clamped to one day, so the derived
         // Duration can never overflow the platform Instant downstream.

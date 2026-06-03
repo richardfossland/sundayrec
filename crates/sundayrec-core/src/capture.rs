@@ -419,9 +419,13 @@ pub fn build_unified_capture_args(
     };
     // Explicit per-channel pick (multi-channel mixers) overrides the mode default
     // when the user chose channels other than (0, 1); otherwise the mode routing.
-    let pan = custom_channel_map_filter(opts.channel_mode, opts.input_channel_l, opts.input_channel_r)
-        .or_else(|| channel_map_filter(opts.channel_mode))
-        .unwrap_or_default();
+    let pan = custom_channel_map_filter(
+        opts.channel_mode,
+        opts.input_channel_l,
+        opts.input_channel_r,
+    )
+    .or_else(|| channel_map_filter(opts.channel_mode))
+    .unwrap_or_default();
     let silence = build_silence_detect_filter(opts.stop_on_silence, opts.silence_threshold_db);
     // The live-levels astats pass is OPTIONAL: when the user turns the meters off
     // (`live_levels = false`) we drop it from the chain so its per-frame stderr
