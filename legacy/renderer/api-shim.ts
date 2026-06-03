@@ -16,6 +16,35 @@
 
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
+
+const AUDIO_EXT = ["mp3", "wav", "flac", "m4a", "aac", "ogg", "opus"];
+const VIDEO_EXT = ["mp4", "mov", "mkv", "webm", "avi", "m4v"];
+const IMAGE_EXT = ["png", "jpg", "jpeg", "webp", "gif"];
+
+/** A native file/folder picker that returns the chosen path (or null), never
+ *  throwing — a denied permission or cancel just yields null. */
+async function pickPath(opts: {
+  directory?: boolean;
+  name?: string;
+  extensions?: string[];
+}): Promise<string | null> {
+  try {
+    const res = await openDialog({
+      directory: !!opts.directory,
+      multiple: false,
+      filters:
+        opts.extensions && opts.name
+          ? [{ name: opts.name, extensions: opts.extensions }]
+          : undefined,
+    });
+    return typeof res === "string" ? res : null;
+  } catch (e) {
+    console.warn("[api-shim] file dialog failed", e);
+    return null;
+  }
+}
 
 // Re-exported so the unused `convertFileSrc` import is retained for the file://
 // → asset: rewrites that land as pages get wired. (Tree-shaken if truly unused.)
@@ -213,11 +242,26 @@ const api: Record<string, unknown> = {
   runTestRecording: async () => ({ ok: false, level: null, message: "" }),
   runPreflight: async () => ({ ok: true, checks: [] }),
 
-  // ── File dialogs / shell ────────────────────────────────────────────────
-  pickFolder: async () => null,
-  openFolder: async () => true,
-  revealFile: async () => true,
-  pickAudioFile: async () => null,
+  // ── File dialogs / shell (Tauri dialog + opener plugins) ────────────────
+  pickFolder: async () => pickPath({ directory: true }),
+  openFolder: async (p: string) => {
+    try {
+      await openPath(p);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  revealFile: async (p: string) => {
+    try {
+      await revealItemInDir(p);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  pickAudioFile: async () =>
+    pickPath({ name: "Lyd", extensions: AUDIO_EXT }),
 
   // ── Email / webhook ─────────────────────────────────────────────────────
   testWebhook: async () => ({ ok: false }),
@@ -276,10 +320,10 @@ const api: Record<string, unknown> = {
   // ── Editor ──────────────────────────────────────────────────────────────
   editorReadFile: async () => null,
   editorSaveFile: async () => ({ ok: false }),
-  editorPickFile: async () => null,
+  editorPickFile: async () => pickPath({ name: "Lyd", extensions: AUDIO_EXT }),
   editorExportFile: async () => ({ ok: false }),
   editorCancelExport: async () => true,
-  editorPickOutputFolder: async () => null,
+  editorPickOutputFolder: async () => pickPath({ directory: true }),
   editorReadMeta: async () => null,
   editorSaveMeta: async () => true,
   editorReadCutsDraft: async () => null,
@@ -288,7 +332,8 @@ const api: Record<string, unknown> = {
   editorDetectSegments: async () => ({ segments: [] }),
   editorSetVideoPath: async () => ({ ok: false }),
   editorExtractAudioPeaks: async () => ({ peaks: [] }),
-  editorPickVideoFile: async () => null,
+  editorPickVideoFile: async () =>
+    pickPath({ name: "Video", extensions: VIDEO_EXT }),
   editorSaveVideo: async () => ({ ok: false }),
   editorExportVideo: async () => ({ ok: false }),
   editorProbeStreams: async () => ({ streams: [] }),
@@ -345,7 +390,8 @@ const api: Record<string, unknown> = {
   streamDeleteKey: async () => true,
   overlayListScreens: async () => [],
   overlayListNdiSources: async () => ({ available: false, sources: [] }),
-  overlayPickImage: async () => null,
+  overlayPickImage: async () =>
+    pickPath({ name: "Bilde", extensions: IMAGE_EXT }),
 
   // ── Transcripts / whisper ───────────────────────────────────────────────
   transcriptListAll: async () => [],
@@ -402,7 +448,6 @@ const api: Record<string, unknown> = {
   },
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).api = api;
 
 // Mark this file as a module (loaded via <script type="module">) so its
@@ -414,7 +459,6 @@ export {};
 // installed window.showPage, then navigate. Inert without the query param.
 if (VERIFY_GOTO) {
   const tryGoto = (): void => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = window as any;
     if (typeof w.showPage === "function") {
       w.showPage(VERIFY_GOTO);
