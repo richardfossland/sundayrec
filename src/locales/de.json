@@ -1353,6 +1353,9 @@
     "signalLoud": "Laut",
     "reconnectTitle": "Die Audioquelle wurde getrennt",
     "reconnectDesc": "Verbindung wird automatisch wiederhergestellt — die Aufnahme läuft weiter, sobald das Gerät zurück ist.",
+    "autoStopLabel": "Auto-Stopp in",
+    "extend30": "+30 Min",
+    "cancelAutoStop": "Auto-Stopp abbrechen",
     "clip": "CLIP",
     "clipReset": "Zum Zurücksetzen klicken"
   },

@@ -1353,6 +1353,9 @@
     "signalLoud": "Hög",
     "reconnectTitle": "Ljudkällan kopplades från",
     "reconnectDesc": "Återansluter automatiskt — inspelningen fortsätter när enheten är tillbaka.",
+    "autoStopLabel": "Auto-stopp om",
+    "extend30": "+30 min",
+    "cancelAutoStop": "Avbryt auto-stopp",
     "clip": "KLIPP",
     "clipReset": "Klicka för att återställa"
   },

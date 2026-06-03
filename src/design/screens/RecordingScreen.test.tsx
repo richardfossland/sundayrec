@@ -169,4 +169,53 @@ describe("RecordingScreen", () => {
     await waitFor(() => expect(invoke).toHaveBeenCalledWith("stop_recording"));
     await waitFor(() => expect(onStop).toHaveBeenCalled());
   });
+
+  it("shows the auto-stop countdown and extends/cancels it via the recorder commands", async () => {
+    renderRec();
+    await waitFor(() => expect(handlers["recording://state"]).toBeDefined());
+
+    // The backend stamps an absolute deadline (~90 s out) on the state event.
+    act(() =>
+      handlers["recording://state"]?.({
+        payload: {
+          state: "recording",
+          reconnect_count: 0,
+          scheduled_stop_ms: Date.now() + 90_000,
+        },
+      }),
+    );
+
+    // The countdown banner appears (label + a HH:MM:SS near 00:01:30).
+    await waitFor(() =>
+      expect(screen.getByText("Auto-stopp om")).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByText("+30 min"));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("recording_extend_autostop", {
+        minutes: 30,
+      }),
+    );
+
+    fireEvent.click(screen.getByText("Avbryt auto-stopp"));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("recording_cancel_autostop"),
+    );
+  });
+
+  it("hides the auto-stop banner when no deadline is set", async () => {
+    renderRec();
+    await waitFor(() => expect(handlers["recording://state"]).toBeDefined());
+    act(() =>
+      handlers["recording://state"]?.({
+        payload: {
+          state: "recording",
+          reconnect_count: 0,
+          scheduled_stop_ms: null,
+        },
+      }),
+    );
+    // No auto-stop armed → no countdown banner.
+    expect(screen.queryByText("Auto-stopp om")).not.toBeInTheDocument();
+  });
 });

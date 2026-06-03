@@ -188,6 +188,31 @@ function useRecordingSession(video: boolean) {
     }
   }, []);
 
+  // Auto-stop countdown. The backend stamps an ABSOLUTE deadline
+  // (`scheduled_stop_ms`) on every state event; we tick locally to it so the
+  // countdown is smooth without spamming IPC. `null` = no auto-stop armed.
+  const scheduledStopMs = state?.scheduled_stop_ms ?? null;
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (scheduledStopMs === null) return;
+    setNowMs(Date.now());
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [scheduledStopMs]);
+  const autoStopRemaining =
+    scheduledStopMs === null
+      ? null
+      : Math.max(0, Math.round((scheduledStopMs - nowMs) / 1000));
+
+  // Live extend ("+30 min") / cancel — fire-and-forget; the loop re-emits state
+  // with the new deadline, which drives the countdown above.
+  const extendAutostop = useCallback(async (minutes: number) => {
+    await invoke("recording_extend_autostop", { minutes }).catch(() => {});
+  }, []);
+  const cancelAutostop = useCallback(async () => {
+    await invoke("recording_cancel_autostop").catch(() => {});
+  }, []);
+
   return {
     started,
     bytes,
@@ -199,6 +224,9 @@ function useRecordingSession(video: boolean) {
     startError,
     channelMode,
     stop,
+    autoStopRemaining,
+    extendAutostop,
+    cancelAutostop,
   };
 }
 
@@ -214,6 +242,50 @@ function formatClock(total: number): string {
 /** Bytes → a compact MB string ("1.8 MB"). */
 function formatMb(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * The auto-stop countdown banner: shows time left until the recording stops by
+ * itself (driven by `manual_max_minutes`), with "+30 min" to extend and a cancel
+ * to keep recording indefinitely. Only rendered while an auto-stop is armed.
+ */
+function AutoStopCard({
+  remaining,
+  onExtend,
+  onCancel,
+}: {
+  remaining: number;
+  onExtend: () => void;
+  onCancel: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div
+      className="sr-card sr-row"
+      style={{
+        gap: 14,
+        alignItems: "center",
+        padding: "12px 16px",
+        marginBottom: 18,
+      }}
+    >
+      <Icon name="clock" size={16} style={{ color: "var(--sr-gold)" }} />
+      <div className="sr-grow">
+        <span className="sr-label">
+          {t("recordingScreen.autoStopLabel", "Auto-stopp om")}
+        </span>{" "}
+        <span className="sr-mono sr-num" style={{ fontWeight: 700 }}>
+          {formatClock(remaining)}
+        </span>
+      </div>
+      <button className="sr-btn ghost sm" type="button" onClick={onExtend}>
+        {t("recordingScreen.extend30", "+30 min")}
+      </button>
+      <button className="sr-btn ghost sm" type="button" onClick={onCancel}>
+        {t("recordingScreen.cancelAutoStop", "Avbryt auto-stopp")}
+      </button>
+    </div>
+  );
 }
 
 // Live meter with a dB scale beneath (matches the real app). Driven by the
@@ -665,6 +737,9 @@ export function RecordingScreen({
     startError,
     channelMode,
     stop,
+    autoStopRemaining,
+    extendAutostop,
+    cancelAutostop,
   } = useRecordingSession(video);
   const diskFree = useDiskSpace();
 
@@ -743,6 +818,13 @@ export function RecordingScreen({
                 </div>
               </div>
             </div>
+          )}
+          {autoStopRemaining !== null && (
+            <AutoStopCard
+              remaining={autoStopRemaining}
+              onExtend={() => void extendAutostop(30)}
+              onCancel={() => void cancelAutostop()}
+            />
           )}
           {video && (
             <div

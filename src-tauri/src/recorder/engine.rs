@@ -244,6 +244,12 @@ pub struct RecorderStatePayload {
     pub state: RecorderState,
     /// How many reconnects have happened so far this session.
     pub reconnect_count: u32,
+    /// Absolute epoch-ms the recording will auto-stop at, or `null` for no
+    /// auto-stop. Driven by `manual_max_minutes` at start; live extend/cancel
+    /// (`recording_extend_autostop` / `recording_cancel_autostop`) move or clear
+    /// it and the UI ticks a countdown to it locally.
+    #[ts(type = "number | null")]
+    pub scheduled_stop_ms: Option<u64>,
 }
 
 /// Map the running OS to the core [`Platform`] enum. Public for the recorder's
@@ -353,6 +359,14 @@ pub struct RecorderEngine {
     session: Mutex<Option<RecorderSession>>,
     /// The last-emitted state, so `recording_status` can report it synchronously.
     last_state: Arc<Mutex<RecorderState>>,
+    /// The live auto-stop deadline (absolute epoch ms, `None` = no auto-stop), as
+    /// a watch channel so the running recording loop reacts to extend/cancel
+    /// immediately. `run_session` sets the initial value (from
+    /// `manual_max_minutes`) and clears it at session end; the
+    /// `recording_extend_autostop` / `recording_cancel_autostop` commands move /
+    /// clear it. Wrapped in `Arc` so both the engine (commands) and the
+    /// supervisor task share the one sender.
+    scheduled_stop: Arc<tokio::sync::watch::Sender<Option<u64>>>,
 }
 
 impl Default for RecorderEngine {
@@ -363,9 +377,11 @@ impl Default for RecorderEngine {
 
 impl RecorderEngine {
     pub fn new() -> Self {
+        let (scheduled_stop, _rx) = tokio::sync::watch::channel(None);
         Self {
             session: Mutex::new(None),
             last_state: Arc::new(Mutex::new(RecorderState::Idle)),
+            scheduled_stop: Arc::new(scheduled_stop),
         }
     }
 
@@ -373,6 +389,27 @@ impl RecorderEngine {
     /// on every transition). Used by the `recording_status` command.
     pub fn current_state(&self) -> RecorderState {
         *lock_recover(&self.last_state)
+    }
+
+    /// The current auto-stop deadline (absolute epoch ms), or `None` when no
+    /// auto-stop is armed. Lets `recording_status` report it synchronously.
+    pub fn scheduled_stop_ms(&self) -> Option<u64> {
+        *self.scheduled_stop.borrow()
+    }
+
+    /// Extend the auto-stop by `minutes` (the "+30 min" button). Adds to the
+    /// current deadline so it never SHORTENS the recording, falling back to
+    /// `now` when no auto-stop is armed or it has already passed. The running
+    /// loop observes the change via its watch receiver and re-pins the real
+    /// timer + re-emits state. A no-op (just a stored value) when idle.
+    pub fn extend_autostop(&self, minutes: u32) {
+        let next = extended_stop_ms(*self.scheduled_stop.borrow(), now_ms(), minutes);
+        self.scheduled_stop.send_replace(Some(next));
+    }
+
+    /// Clear the auto-stop entirely so the recording runs until a manual stop.
+    pub fn cancel_autostop(&self) {
+        self.scheduled_stop.send_replace(None);
     }
 
     /// Start a recording. Resolves the device, then launches the supervisor task
@@ -503,6 +540,7 @@ impl RecorderEngine {
 
         let sup_app = app.clone();
         let last_state = Arc::clone(&self.last_state);
+        let scheduled_stop = Arc::clone(&self.scheduled_stop);
         let supervisor = tauri::async_runtime::spawn(async move {
             run_session(
                 sup_app,
@@ -515,6 +553,7 @@ impl RecorderEngine {
                 stop_rx,
                 ready_tx,
                 last_state,
+                scheduled_stop,
             )
             .await;
         });
@@ -568,6 +607,7 @@ fn set_state(
     last_state: &Arc<Mutex<RecorderState>>,
     to: RecorderState,
     reconnect_count: u32,
+    scheduled_stop_ms: Option<u64>,
 ) {
     {
         let mut guard = lock_recover(last_state);
@@ -584,8 +624,17 @@ fn set_state(
         RecorderStatePayload {
             state: to,
             reconnect_count,
+            scheduled_stop_ms,
         },
     );
+}
+
+/// The auto-stop deadline after the user extends by `minutes`: add to the current
+/// deadline so "+30 min" really extends (never shortens), falling back to `now`
+/// when nothing is armed or the existing deadline already passed. Pure → tested.
+fn extended_stop_ms(current: Option<u64>, now: u64, minutes: u32) -> u64 {
+    let base = current.filter(|&d| d > now).unwrap_or(now);
+    base + u64::from(minutes) * 60_000
 }
 
 /// Why the current segment's ffmpeg stopped — drives what the supervisor does
@@ -626,8 +675,22 @@ async fn run_session(
     mut stop_rx: tokio::sync::mpsc::Receiver<()>,
     ready: tokio::sync::oneshot::Sender<AppResult<()>>,
     last_state: Arc<Mutex<RecorderState>>,
+    scheduled_stop: Arc<tokio::sync::watch::Sender<Option<u64>>>,
 ) {
     let start_ms = now_ms();
+    // Arm the auto-stop deadline for the whole session (absolute, so splits +
+    // reconnects re-pin the SAME stop time, not a fresh duration). `manual_max
+    // == 0` means no auto-stop. Always send_replace so a stale deadline from a
+    // previous recording can't leak into this one.
+    let initial_stop = (opts.manual_max_minutes > 0)
+        .then(|| start_ms + u64::from(opts.manual_max_minutes) * 60_000);
+    scheduled_stop.send_replace(initial_stop);
+    let mut stop_watch = scheduled_stop.subscribe();
+    // Emit a state transition, always stamping the CURRENT auto-stop deadline so
+    // the UI countdown stays in sync on every transition (start, reconnect, stop).
+    let emit_state = |to: RecorderState, reconnect_count: u32| {
+        set_state(&app, &last_state, to, reconnect_count, *scheduled_stop.borrow());
+    };
     // Unique per recording (singleton engine → start_ms never repeats); also the
     // crash-recovery manifest's filename.
     let session_id = start_ms.to_string();
@@ -641,7 +704,7 @@ async fn run_session(
     if opts.video_device_name.is_some() {
         let _ = std::fs::remove_file(recording_preview_path());
     }
-    set_state(&app, &last_state, RecorderState::Preparing, 0);
+    emit_state(RecorderState::Preparing, 0);
 
     // Spawn the FIRST segment. A launch failure here is reported to the caller.
     let first_args = build_record_args(
@@ -658,12 +721,12 @@ async fn run_session(
         }
         Err(e) => {
             let _ = ready.send(Err(e));
-            set_state(&app, &last_state, RecorderState::Failed, 0);
+            emit_state(RecorderState::Failed, 0);
             return;
         }
     };
 
-    set_state(&app, &last_state, RecorderState::Recording, 0);
+    emit_state(RecorderState::Recording, 0);
 
     loop {
         // Persist the crash-recovery manifest reflecting the CURRENT deliverable /
@@ -688,6 +751,8 @@ async fn run_session(
             &session,
             Arc::clone(&segment_bytes),
             &mut stop_rx,
+            &last_state,
+            &mut stop_watch,
         )
         .await;
 
@@ -722,12 +787,7 @@ async fn run_session(
                     Err(e) => {
                         tracing::error!("recorder: split respawn failed: {e}");
                         emit_error(&app, "device_error", &e.to_string());
-                        set_state(
-                            &app,
-                            &last_state,
-                            RecorderState::Failed,
-                            session.reconnect_count(),
-                        );
+                        emit_state(RecorderState::Failed, session.reconnect_count());
                         finalize_pending(
                             &app,
                             &pool,
@@ -787,10 +847,10 @@ async fn run_session(
                         )
                         .await;
                         match result {
-                            Ok(()) => set_state(&app, &last_state, RecorderState::Stopped, 0),
+                            Ok(()) => emit_state(RecorderState::Stopped, 0),
                             Err(e) => {
                                 emit_error(&app, "device_error", &e.to_string());
-                                set_state(&app, &last_state, RecorderState::Failed, 0);
+                                emit_state(RecorderState::Failed, 0);
                             }
                         }
                         return;
@@ -804,12 +864,7 @@ async fn run_session(
                             .map(error_code_str)
                             .unwrap_or("device_disconnected");
                         emit_error(&app, code, "Opptaket kunne ikke gjenopprettes");
-                        set_state(
-                            &app,
-                            &last_state,
-                            RecorderState::Failed,
-                            session.reconnect_count(),
-                        );
+                        emit_state(RecorderState::Failed, session.reconnect_count());
                         finalize_pending(
                             &app,
                             &pool,
@@ -829,12 +884,7 @@ async fn run_session(
                         attempt,
                         next_segment,
                     } => {
-                        set_state(
-                            &app,
-                            &last_state,
-                            RecorderState::Reconnecting,
-                            session.reconnect_count(),
-                        );
+                        emit_state(RecorderState::Reconnecting, session.reconnect_count());
                         let _ = app.emit(
                             RECONNECTING_EVENT,
                             RecordingEvent {
@@ -866,12 +916,7 @@ async fn run_session(
                                             .into(),
                                     },
                                 );
-                                set_state(
-                                    &app,
-                                    &last_state,
-                                    RecorderState::Recording,
-                                    session.reconnect_count(),
-                                );
+                                emit_state(RecorderState::Recording, session.reconnect_count());
                             }
                             Err(e) => {
                                 // Respawn failed: loop again so the NEXT
@@ -898,21 +943,11 @@ async fn run_session(
                                         match spawn_ffmpeg_owned(&args).await {
                                             Ok(c) => {
                                                 child = c;
-                                                set_state(
-                                                    &app,
-                                                    &last_state,
-                                                    RecorderState::Recording,
-                                                    session.reconnect_count(),
-                                                );
+                                                emit_state(RecorderState::Recording, session.reconnect_count());
                                             }
                                             Err(e2) => {
                                                 emit_error(&app, "device_error", &e2.to_string());
-                                                set_state(
-                                                    &app,
-                                                    &last_state,
-                                                    RecorderState::Failed,
-                                                    session.reconnect_count(),
-                                                );
+                                                emit_state(RecorderState::Failed, session.reconnect_count());
                                                 finalize_pending(
                                                     &app,
                                                     &pool,
@@ -930,12 +965,7 @@ async fn run_session(
                                     }
                                     RecoveryDecision::GiveUp => {
                                         emit_error(&app, "device_disconnected", &e.to_string());
-                                        set_state(
-                                            &app,
-                                            &last_state,
-                                            RecorderState::Failed,
-                                            session.reconnect_count(),
-                                        );
+                                        emit_state(RecorderState::Failed, session.reconnect_count());
                                         finalize_pending(
                                             &app,
                                             &pool,
@@ -960,12 +990,7 @@ async fn run_session(
 
     // Graceful end of session: finalise the last (and any not-yet-finalised)
     // deliverable — concat its fragments + write its history row.
-    set_state(
-        &app,
-        &last_state,
-        RecorderState::Stopping,
-        session.reconnect_count(),
-    );
+    emit_state(RecorderState::Stopping, session.reconnect_count());
     finalize_pending(
         &app,
         &pool,
@@ -996,12 +1021,10 @@ async fn run_session(
             },
         );
     }
-    set_state(
-        &app,
-        &last_state,
-        RecorderState::Stopped,
-        session.reconnect_count(),
-    );
+    // Clear the auto-stop BEFORE the final state emit so the Stopped payload (and
+    // any later `recording_status`) reports no stale deadline.
+    scheduled_stop.send_replace(None);
+    emit_state(RecorderState::Stopped, session.reconnect_count());
     tracing::info!("recorder: session stopped cleanly");
 }
 
@@ -1118,6 +1141,7 @@ async fn classify_stderr_line(
 /// and waits for it to finalise before returning.
 ///
 /// ⚠️ HARDWARE-UNVERIFIED.
+#[allow(clippy::too_many_arguments)]
 async fn run_segment(
     app: &AppHandle,
     mut child: tokio::process::Child,
@@ -1125,6 +1149,8 @@ async fn run_segment(
     session: &RecordingSession,
     segment_bytes: Arc<AtomicU64>,
     stop_rx: &mut tokio::sync::mpsc::Receiver<()>,
+    last_state: &Arc<Mutex<RecorderState>>,
+    stop_watch: &mut tokio::sync::watch::Receiver<Option<u64>>,
 ) -> SegmentOutcome {
     let Some(stderr) = child.stderr.take() else {
         return SegmentOutcome::UnexpectedExit { last_error: None };
@@ -1226,21 +1252,20 @@ async fn run_segment(
     } else {
         None
     };
-    // For auto-stop we measure remaining time against the session start.
-    let auto_stop_remaining =
-        |opts: &RecordingOpts, session: &RecordingSession| -> Option<Duration> {
-            if opts.manual_max_minutes == 0 {
-                return None;
-            }
-            let total = u64::from(opts.manual_max_minutes) * 60_000;
-            let elapsed = session.elapsed_ms(now_ms());
-            Some(Duration::from_millis(total.saturating_sub(elapsed)))
-        };
+    // Auto-stop fires at an ABSOLUTE deadline (epoch ms) carried in the shared
+    // `stop_watch`, so splits + reconnects re-pin the SAME stop time and a live
+    // extend/cancel moves/clears the real timer. `None` = no auto-stop. We pin one
+    // sleep and `reset()` it whenever the deadline changes.
+    let auto_stop_remaining = |deadline: Option<u64>| -> Option<Duration> {
+        deadline.map(|d| Duration::from_millis(d.saturating_sub(now_ms())))
+    };
+    // Snapshot the current deadline (re-read each time the watch signals a change).
+    let mut auto_deadline: Option<u64> = *stop_watch.borrow();
 
     // Pin the timers. We use a helper that yields "never" when disabled.
     let split_sleep = sleep_opt(split_deadline);
     tokio::pin!(split_sleep);
-    let auto_sleep = sleep_opt(auto_stop_remaining(opts, session));
+    let auto_sleep = sleep_opt(auto_stop_remaining(auto_deadline));
     tokio::pin!(auto_sleep);
     // Silence timers, initially disarmed.
     let mut silence_stop: Option<std::pin::Pin<Box<tokio::time::Sleep>>> = None;
@@ -1360,11 +1385,36 @@ async fn run_segment(
                 let _ = child.wait().await;
                 break SegmentOutcome::Split;
             }
-            // Manual-max auto-stop.
-            _ = &mut auto_sleep, if opts.manual_max_minutes > 0 => {
+            // Auto-stop deadline reached (guarded so a `None` deadline — the
+            // 100-year "never" sleep — can never actually fire).
+            _ = &mut auto_sleep, if auto_deadline.is_some() => {
                 graceful_q(&mut stdin).await;
                 let _ = child.wait().await;
                 break SegmentOutcome::AutoStop;
+            }
+            // The auto-stop deadline was moved or cleared (live extend/cancel, or
+            // the initial arm). Re-pin the real timer to the new remaining time and
+            // re-emit state so the UI countdown re-syncs immediately.
+            changed = stop_watch.changed() => {
+                if changed.is_ok() {
+                    auto_deadline = *stop_watch.borrow();
+                    match auto_stop_remaining(auto_deadline) {
+                        Some(rem) => auto_sleep.as_mut().reset(tokio::time::Instant::now() + rem),
+                        // Cleared: push the deadline far out so the guarded arm idles.
+                        None => auto_sleep.as_mut().reset(
+                            tokio::time::Instant::now()
+                                + Duration::from_secs(60 * 60 * 24 * 365 * 100),
+                        ),
+                    }
+                    let _ = app.emit(
+                        STATE_EVENT,
+                        RecorderStatePayload {
+                            state: *lock_recover(last_state),
+                            reconnect_count: session.reconnect_count(),
+                            scheduled_stop_ms: auto_deadline,
+                        },
+                    );
+                }
             }
             // Stop-on-silence fired.
             () = wait_opt(&mut silence_stop), if silence_stop.is_some() => {
@@ -1928,11 +1978,23 @@ mod tests {
         let p = RecorderStatePayload {
             state: RecorderState::Reconnecting,
             reconnect_count: 3,
+            scheduled_stop_ms: Some(1_700_000_000_000),
         };
         let json = serde_json::to_string(&p).unwrap();
         assert!(json.contains("reconnecting"));
         let back: RecorderStatePayload = serde_json::from_str(&json).unwrap();
         assert_eq!(p, back);
+    }
+
+    #[test]
+    fn extended_stop_adds_to_live_deadline_and_never_shortens() {
+        let now = 1_000_000;
+        // No deadline / passed deadline → extend from now.
+        assert_eq!(extended_stop_ms(None, now, 30), now + 30 * 60_000);
+        assert_eq!(extended_stop_ms(Some(now - 5), now, 30), now + 30 * 60_000);
+        // A live deadline in the future → add to IT (so "+30 min" really extends).
+        let future = now + 10 * 60_000;
+        assert_eq!(extended_stop_ms(Some(future), now, 30), future + 30 * 60_000);
     }
 
     #[test]

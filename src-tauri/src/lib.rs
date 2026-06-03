@@ -234,6 +234,8 @@ pub fn run() {
             commands::recorder::start_recording,
             commands::recorder::stop_recording,
             commands::recorder::recording_status,
+            commands::recorder::recording_extend_autostop,
+            commands::recorder::recording_cancel_autostop,
             commands::recorder::preroll_start,
             commands::recorder::preroll_stop,
             commands::recorder::preroll_status,

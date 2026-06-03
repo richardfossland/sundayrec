@@ -1353,6 +1353,9 @@
     "signalLoud": "Fort",
     "reconnectTitle": "La source audio a été déconnectée",
     "reconnectDesc": "Reconnexion automatique — l’enregistrement reprend dès le retour de l’appareil.",
+    "autoStopLabel": "Arrêt auto dans",
+    "extend30": "+30 min",
+    "cancelAutoStop": "Annuler l’arrêt auto",
     "clip": "SAT.",
     "clipReset": "Cliquez pour réinitialiser"
   },

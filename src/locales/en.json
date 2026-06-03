@@ -1353,6 +1353,9 @@
     "signalLoud": "Loud",
     "reconnectTitle": "The audio source disconnected",
     "reconnectDesc": "Reconnecting automatically — recording resumes when the device is back.",
+    "autoStopLabel": "Auto-stop in",
+    "extend30": "+30 min",
+    "cancelAutoStop": "Cancel auto-stop",
     "clip": "CLIP",
     "clipReset": "Click to reset"
   },

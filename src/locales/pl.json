@@ -1353,6 +1353,9 @@
     "signalLoud": "Głośny",
     "reconnectTitle": "Źródło dźwięku zostało odłączone",
     "reconnectDesc": "Automatyczne ponowne łączenie — nagrywanie wznawia się po powrocie urządzenia.",
+    "autoStopLabel": "Auto-stop za",
+    "extend30": "+30 min",
+    "cancelAutoStop": "Anuluj auto-stop",
     "clip": "PRZEST.",
     "clipReset": "Kliknij, aby zresetować"
   },

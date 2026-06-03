@@ -13,4 +13,11 @@ state: RecorderState,
 /**
  * How many reconnects have happened so far this session.
  */
-reconnect_count: number, };
+reconnect_count: number, 
+/**
+ * Absolute epoch-ms the recording will auto-stop at, or `null` for no
+ * auto-stop. Driven by `manual_max_minutes` at start; live extend/cancel
+ * (`recording_extend_autostop` / `recording_cancel_autostop`) move or clear
+ * it and the UI ticks a countdown to it locally.
+ */
+scheduled_stop_ms: number | null, };

@@ -202,6 +202,25 @@ pub fn recording_status(engine: State<'_, RecorderEngine>) -> RecorderState {
     engine.current_state()
 }
 
+/// Extend the running recording's auto-stop by `minutes` (the "+30 min" button).
+/// Adds to the live deadline so it never shortens; the running loop picks up the
+/// change and re-emits `recording://state` with the new `scheduled_stop_ms`. A
+/// no-op when nothing is recording (the stored value just isn't observed).
+#[tauri::command]
+pub fn recording_extend_autostop(engine: State<'_, RecorderEngine>, minutes: u32) -> AppResult<()> {
+    engine.extend_autostop(minutes);
+    Ok(())
+}
+
+/// Cancel the running recording's auto-stop entirely so it records until a manual
+/// stop. The loop clears its real timer and re-emits state with `scheduled_stop_ms
+/// = null`.
+#[tauri::command]
+pub fn recording_cancel_autostop(engine: State<'_, RecorderEngine>) -> AppResult<()> {
+    engine.cancel_autostop();
+    Ok(())
+}
+
 /// Free bytes on the volume holding the save folder, or `null` when the platform
 /// can't report it. Mirrors the Electron `get-disk-space` handler, but uses the
 /// `fs4` cross-platform probe (already a dep, used by preflight) instead of

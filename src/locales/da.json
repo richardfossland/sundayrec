@@ -1353,6 +1353,9 @@
     "signalLoud": "Høj",
     "reconnectTitle": "Lydkilden blev frakoblet",
     "reconnectDesc": "Genopretter forbindelsen automatisk — optagelsen fortsætter, når enheden er tilbage.",
+    "autoStopLabel": "Auto-stop om",
+    "extend30": "+30 min",
+    "cancelAutoStop": "Annullér auto-stop",
     "clip": "KLIP",
     "clipReset": "Klik for at nulstille"
   },
