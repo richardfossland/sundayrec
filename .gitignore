@@ -1,6 +1,11 @@
 # Logs
 logs
 *.log
+
+# ts-rs regenerates these on `cargo test` (export_to points at the old React
+# tree). The legacy renderer doesn't import them; the committed snapshot lives
+# in reference/bindings. Transient — don't track.
+/src/lib/bindings/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
