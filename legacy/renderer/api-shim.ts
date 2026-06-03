@@ -420,8 +420,32 @@ const api: Record<string, unknown> = {
   },
   editorSaveFile: async () => ({ ok: false }),
   editorPickFile: async () => pickPath({ name: "Lyd", extensions: AUDIO_EXT }),
-  editorExportFile: async (params: unknown) =>
-    call("editor_export", { request: params }, { ok: false }),
+  // Map the old export params to EditorExportRequest (outputFormat→format,
+  // outputBitrate→bitrate, …; drops mode/processing/metadata). NEEDS LIVE VERIFY.
+  editorExportFile: async (params: unknown) => {
+    const o = (params ?? {}) as Record<string, unknown>;
+    const fmt = (o.outputFormat ?? o.format ?? "mp3") as string;
+    return call(
+      "editor_export",
+      {
+        request: {
+          inputPath: o.inputPath,
+          cutRegions: o.cutRegions ?? [],
+          duration: o.duration ?? 0,
+          container: fmt,
+          format: fmt,
+          outputFolder: o.outputFolder ?? "",
+          bitrate: o.outputBitrate ?? null,
+          bitDepth: o.outputBitDepth ?? null,
+          masterPreset: o.masterPreset ?? null,
+          introPath: o.introPath ?? null,
+          outroPath: o.outroPath ?? null,
+          gainDb: o.gainDb ?? null,
+        },
+      },
+      { ok: false },
+    );
+  },
   editorCancelExport: async () => true,
   editorPickOutputFolder: async () => pickPath({ directory: true }),
   // Sidecars (meta / cutsDraft / transcript) are clean JSON key-value via
@@ -478,6 +502,7 @@ const api: Record<string, unknown> = {
 
   // ── Mastering (editor_master_* / editor_mastering_analyze) ──────────────
   masterPresets: async () => [], // TODO Phase 3: presets are client-side; no command
+  // editor_master_preview/apply take a single `request` struct; cancel takes jobId.
   masterPreview: async (
     inputPath: string,
     presetId: string,
@@ -486,14 +511,15 @@ const api: Record<string, unknown> = {
   ) =>
     call(
       "editor_master_preview",
-      { inputPath, presetId, startSec, durationSec },
+      { request: { inputPath, presetId, startSec, durationSec } },
       { ok: false },
     ),
   masterMeasure: async (inputPath: string, presetId: string) =>
     call("editor_mastering_analyze", { inputPath, presetId }, { ok: false }),
   masterApply: async (params: unknown) =>
-    call("editor_master_apply", params as Record<string, unknown>, { ok: false }),
-  masterCancel: async () => call("editor_master_cancel", undefined, true).then(() => true),
+    call("editor_master_apply", { request: params }, { ok: false }),
+  masterCancel: async (jobId: string) =>
+    call("editor_master_cancel", { jobId }, true).then(() => true),
 
   // ── Thumbnail ───────────────────────────────────────────────────────────
   thumbnailSetDefault: async () => ({ ok: false }),
@@ -557,14 +583,29 @@ const api: Record<string, unknown> = {
     binaryAvailable: true,
     available: true,
   }),
+  // whisper_* commands take `id`, not `model_id`.
   whisperDownloadModel: async (modelId: string) =>
-    call("whisper_download_model", { modelId }, { ok: false }),
+    call("whisper_download_model", { id: modelId }, { ok: false }),
   whisperCancelDownload: async (modelId: string) =>
-    call("whisper_cancel_download", { modelId }, true).then(() => true),
+    call("whisper_cancel_download", { id: modelId }, true).then(() => true),
   whisperDeleteModel: async (modelId: string) =>
-    call("whisper_delete_model", { modelId }, true).then(() => true),
-  whisperTranscribe: async (params: unknown) =>
-    call("whisper_transcribe", params as Record<string, unknown>, { ok: false }),
+    call("whisper_delete_model", { id: modelId }, true).then(() => true),
+  // old { filePath, modelId, language, translate, jobId } → whisper_transcribe
+  // (input_path, model_id, language, translate, subtitle_style). NEEDS LIVE VERIFY.
+  whisperTranscribe: async (params: unknown) => {
+    const o = (params ?? {}) as Record<string, unknown>;
+    return call(
+      "whisper_transcribe",
+      {
+        inputPath: o.filePath,
+        modelId: o.modelId,
+        language: o.language ?? null,
+        translate: o.translate ?? null,
+        subtitleStyle: null,
+      },
+      { ok: false },
+    );
+  },
   whisperCancelTranscribe: async () => true, // TODO Phase 3: no cancel command
 
   // ── Review queue ────────────────────────────────────────────────────────
