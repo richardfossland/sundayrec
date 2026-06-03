@@ -7,10 +7,11 @@
 //! handles gracefully (the panel shows a "not built into this build" hint).
 
 use crate::editor::{
-    self, EditorChapter, EditorExportRequest, EditorExportResult, EditorFileRead, EditorLoudness,
-    EditorMasterApplyRequest, EditorMasterApplyResult, EditorMasterPreviewRequest,
-    EditorMasterPreviewResult, EditorMasterProgress, EditorMediaInfo, EditorPeaks, EditorSegment,
-    EditorSidecar, EditorStreamInfo, EditorTranscriptLine, MasterEngine,
+    self, EditorAutoProcess, EditorChannelDiagnosis, EditorChapter, EditorExportRequest,
+    EditorExportResult, EditorFileRead, EditorLoudness, EditorMasterApplyRequest,
+    EditorMasterApplyResult, EditorMasterPreviewRequest, EditorMasterPreviewResult,
+    EditorMasterProgress, EditorMediaInfo, EditorPeaks, EditorSegment, EditorSidecar,
+    EditorStreamInfo, EditorTranscriptLine, MasterEngine,
 };
 use crate::error::AppResult;
 use tauri::{Emitter, State};
@@ -39,6 +40,20 @@ pub async fn editor_segments(input_path: String) -> AppResult<Vec<EditorSegment>
 #[tauri::command]
 pub fn editor_detect_chapters(lines: Vec<EditorTranscriptLine>) -> AppResult<Vec<EditorChapter>> {
     Ok(editor::detect_chapters(&lines))
+}
+
+/// Analyse a recording's stereo channel balance and recommend a repair
+/// (swap / duplicate the good channel / per-channel makeup). HARDWARE-UNVERIFIED.
+#[tauri::command]
+pub async fn editor_diagnose_channels(input_path: String) -> AppResult<EditorChannelDiagnosis> {
+    editor::diagnose_channels(&input_path).await
+}
+
+/// One-click "auto-improve": diagnose channels + recommend the full best-result
+/// processing setup (channel repair + podcast vocal chain + clear mastering).
+#[tauri::command]
+pub async fn editor_auto_process(input_path: String) -> AppResult<EditorAutoProcess> {
+    editor::auto_process(&input_path).await
 }
 
 /// Measure the recording's loudness against a mastering preset (pass 1 only).

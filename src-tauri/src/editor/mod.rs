@@ -150,6 +150,14 @@ pub struct EditorExportRequest {
     /// Optional description (FFMETADATA `comment`).
     #[serde(default)]
     pub description: Option<String>,
+    /// One-click vocal-chain preset id (`voice-light|voice-podcast|
+    /// voice-noisy-room`). Resolved server-side; ignored when `processing` is set.
+    #[serde(default)]
+    pub vocal_chain_preset: Option<String>,
+    /// Full per-stage vocal-chain config. Overrides `vocalChainPreset`. The chain
+    /// runs BEFORE the mastering loudnorm (tone/dynamics first, loudness last).
+    #[serde(default)]
+    pub processing: Option<EditorProcessing>,
 }
 
 /// One chapter marker (a title at a time, in seconds). The renderer-facing mirror
@@ -170,6 +178,207 @@ pub struct EditorChapter {
 pub struct EditorTranscriptLine {
     pub start: f64,
     pub text: String,
+}
+
+/// How to repair the channel layout (mirror of
+/// [`sundayrec_core::processing::ChannelRepair`]). `mode` is one of
+/// `none|swapLr|duplicateLeft|duplicateRight|monoMix|gainDb`; `leftDb`/`rightDb`
+/// are only read for `gainDb`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "../../src/lib/bindings/EditorChannelRepair.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct EditorChannelRepair {
+    pub mode: String,
+    #[serde(default)]
+    pub left_db: f64,
+    #[serde(default)]
+    pub right_db: f64,
+}
+
+impl EditorChannelRepair {
+    fn to_core(&self) -> sundayrec_core::processing::ChannelRepair {
+        use sundayrec_core::processing::ChannelRepair as R;
+        match self.mode.as_str() {
+            "swapLr" => R::SwapLr,
+            "duplicateLeft" => R::DuplicateLeft,
+            "duplicateRight" => R::DuplicateRight,
+            "monoMix" => R::MonoMix,
+            "gainDb" => R::GainDb {
+                left_db: self.left_db,
+                right_db: self.right_db,
+            },
+            _ => R::None,
+        }
+    }
+}
+
+/// One parametric EQ band (mirror of [`sundayrec_core::processing::EqBand`]).
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "../../src/lib/bindings/EditorEqBand.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct EditorEqBand {
+    pub freq_hz: u32,
+    pub gain_db: f64,
+    pub q: f64,
+}
+
+/// The full, per-stage vocal-chain configuration (mirror of
+/// [`sundayrec_core::processing::VocalChain`]). Every stage is independently
+/// toggleable; `serde(default)` lets the renderer send a partial object. When an
+/// export carries this it overrides any `vocalChainPreset`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "../../src/lib/bindings/EditorProcessing.ts")]
+#[serde(rename_all = "camelCase", default)]
+pub struct EditorProcessing {
+    pub channel_repair: Option<EditorChannelRepair>,
+    pub highpass_enabled: bool,
+    pub highpass_hz: u32,
+    pub denoise_enabled: bool,
+    pub denoise_db: f64,
+    pub denoise_floor_db: f64,
+    pub dereverb_enabled: bool,
+    pub dereverb_strength: f64,
+    pub gate_enabled: bool,
+    pub gate_threshold_db: f64,
+    pub gate_ratio: f64,
+    pub eq: Vec<EditorEqBand>,
+    pub comp_enabled: bool,
+    pub comp_threshold_db: f64,
+    pub comp_ratio: f64,
+    pub comp_attack_ms: f64,
+    pub comp_release_ms: f64,
+    pub comp_makeup_db: f64,
+    pub deesser_enabled: bool,
+    pub deesser_intensity: f64,
+    pub limiter_enabled: bool,
+    pub limiter_db: f64,
+    pub gain_db: f64,
+}
+
+impl Default for EditorProcessing {
+    fn default() -> Self {
+        // Mirrors `VocalChain::default()` so an empty object behaves identically.
+        use sundayrec_core::processing::VocalChain;
+        let c = VocalChain::default();
+        Self {
+            channel_repair: None,
+            highpass_enabled: c.highpass.enabled,
+            highpass_hz: c.highpass.freq_hz,
+            denoise_enabled: c.denoise.enabled,
+            denoise_db: c.denoise.reduction_db,
+            denoise_floor_db: c.denoise.noise_floor_db,
+            dereverb_enabled: c.dereverb.enabled,
+            dereverb_strength: c.dereverb.strength,
+            gate_enabled: c.gate.enabled,
+            gate_threshold_db: c.gate.threshold_db,
+            gate_ratio: c.gate.ratio,
+            eq: Vec::new(),
+            comp_enabled: c.compressor.enabled,
+            comp_threshold_db: c.compressor.threshold_db,
+            comp_ratio: c.compressor.ratio,
+            comp_attack_ms: c.compressor.attack_ms,
+            comp_release_ms: c.compressor.release_ms,
+            comp_makeup_db: c.compressor.makeup_db,
+            deesser_enabled: c.deesser.enabled,
+            deesser_intensity: c.deesser.intensity,
+            limiter_enabled: c.limiter.enabled,
+            limiter_db: c.limiter.limit_db,
+            gain_db: c.gain_db,
+        }
+    }
+}
+
+impl EditorProcessing {
+    fn to_core(&self) -> sundayrec_core::processing::VocalChain {
+        use sundayrec_core::processing::*;
+        VocalChain {
+            channel_repair: self
+                .channel_repair
+                .as_ref()
+                .map(|r| r.to_core())
+                .unwrap_or(ChannelRepair::None),
+            highpass: HighpassStage {
+                enabled: self.highpass_enabled,
+                freq_hz: self.highpass_hz,
+            },
+            denoise: DenoiseStage {
+                enabled: self.denoise_enabled,
+                reduction_db: self.denoise_db,
+                noise_floor_db: self.denoise_floor_db,
+            },
+            dereverb: DereverbStage {
+                enabled: self.dereverb_enabled,
+                strength: self.dereverb_strength,
+            },
+            gate: GateStage {
+                enabled: self.gate_enabled,
+                threshold_db: self.gate_threshold_db,
+                ratio: self.gate_ratio,
+                attack_ms: 5.0,
+                release_ms: 120.0,
+            },
+            eq: self
+                .eq
+                .iter()
+                .map(|b| EqBand {
+                    freq_hz: b.freq_hz,
+                    gain_db: b.gain_db,
+                    q: b.q,
+                })
+                .collect(),
+            compressor: CompressorStage {
+                enabled: self.comp_enabled,
+                threshold_db: self.comp_threshold_db,
+                ratio: self.comp_ratio,
+                attack_ms: self.comp_attack_ms,
+                release_ms: self.comp_release_ms,
+                makeup_db: self.comp_makeup_db,
+            },
+            deesser: DeesserStage {
+                enabled: self.deesser_enabled,
+                intensity: self.deesser_intensity,
+            },
+            limiter: LimiterStage {
+                enabled: self.limiter_enabled,
+                limit_db: self.limiter_db,
+            },
+            gain_db: self.gain_db,
+        }
+    }
+}
+
+/// The result of analysing a recording's stereo channel balance (mirror of
+/// [`sundayrec_core::processing::ChannelDiagnosis`] plus the measured peaks and a
+/// ready-to-apply [`EditorChannelRepair`]).
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "../../src/lib/bindings/EditorChannelDiagnosis.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct EditorChannelDiagnosis {
+    /// `balanced|imbalance|dead_left|dead_right|both_dead|mono`.
+    pub code: String,
+    /// Left − right level difference in dB (positive = left louder).
+    pub imbalance_db: f64,
+    pub peak_left_db: f64,
+    pub peak_right_db: Option<f64>,
+    /// The repair to apply (`mode == "none"` when nothing is recommended).
+    pub recommended: EditorChannelRepair,
+}
+
+/// The one-click "auto-improve" recommendation: the channel diagnosis plus the
+/// vocal-chain + mastering presets to apply for the best out-of-the-box result.
+/// The renderer applies these to its export settings in a single click.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "../../src/lib/bindings/EditorAutoProcess.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct EditorAutoProcess {
+    /// The channel-balance analysis + recommended repair.
+    pub diagnosis: EditorChannelDiagnosis,
+    /// Vocal-chain preset id to apply (e.g. `voice-podcast`).
+    pub vocal_chain_preset: String,
+    /// Mastering preset id to apply (e.g. `speech-clear`).
+    pub master_preset: String,
+    /// A short Norwegian summary of what was decided, for a toast/hint.
+    pub summary: String,
 }
 
 /// The outcome of an export: where the file landed.
@@ -549,6 +758,12 @@ pub async fn segments(_input_path: &str) -> AppResult<Vec<EditorSegment>> {
     disabled("segments")
 }
 
+/// Analyse stereo channel balance (needs ffmpeg astats).
+#[cfg(not(feature = "editor"))]
+pub async fn diagnose_channels(_input_path: &str) -> AppResult<EditorChannelDiagnosis> {
+    disabled("diagnoseChannels")
+}
+
 /// Measure the recording's loudness against a mastering preset (pass 1 only).
 #[cfg(not(feature = "editor"))]
 pub async fn mastering_analyze(_input_path: &str, _preset_id: &str) -> AppResult<EditorLoudness> {
@@ -671,6 +886,112 @@ pub async fn segments(input_path: &str) -> AppResult<Vec<EditorSegment>> {
             kind: d.kind,
         })
         .collect())
+}
+
+/// Map a core [`ChannelRepair`](sundayrec_core::processing::ChannelRepair) to the
+/// renderer DTO.
+#[cfg(feature = "editor")]
+fn core_repair_to_dto(r: sundayrec_core::processing::ChannelRepair) -> EditorChannelRepair {
+    use sundayrec_core::processing::ChannelRepair as R;
+    let (mode, left_db, right_db) = match r {
+        R::None => ("none", 0.0, 0.0),
+        R::SwapLr => ("swapLr", 0.0, 0.0),
+        R::DuplicateLeft => ("duplicateLeft", 0.0, 0.0),
+        R::DuplicateRight => ("duplicateRight", 0.0, 0.0),
+        R::MonoMix => ("monoMix", 0.0, 0.0),
+        R::GainDb { left_db, right_db } => ("gainDb", left_db, right_db),
+    };
+    EditorChannelRepair {
+        mode: mode.to_string(),
+        left_db,
+        right_db,
+    }
+}
+
+/// Analyse a recording's stereo channel balance: run `astats` over the whole
+/// file, parse the per-channel peaks, and ask the core for a recommended repair
+/// (swap / duplicate-good-channel / per-channel makeup). HARDWARE-UNVERIFIED.
+#[cfg(feature = "editor")]
+pub async fn diagnose_channels(input_path: &str) -> AppResult<EditorChannelDiagnosis> {
+    use sundayrec_core::levels::parse_levels;
+    use sundayrec_core::processing::{diagnose_channels as core_diagnose, ChannelLevelsDb};
+
+    if !std::path::Path::new(input_path).exists() {
+        return Err(AppError::Validation("file_not_found".into()));
+    }
+    // astats over the whole input to a null sink → per-channel peak summary on
+    // stderr (parsed by the tested `levels::parse_levels`).
+    let args = [
+        "-nostdin",
+        "-hide_banner",
+        "-i",
+        input_path,
+        "-af",
+        "astats=metadata=0",
+        "-f",
+        "null",
+        "-",
+    ];
+    let child = crate::media::ffmpeg::spawn_ffmpeg(&args).await?;
+    let out = child
+        .wait_with_output()
+        .await
+        .map_err(|e| AppError::Recording(format!("astats wait: {e}")))?;
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let levels = parse_levels(&stderr)
+        .ok_or_else(|| AppError::Recording("astats produced no channel levels".into()))?;
+
+    let pl = levels.peak_db_left;
+    match levels.peak_db_right {
+        // Mono source — nothing to balance.
+        None => Ok(EditorChannelDiagnosis {
+            code: "mono".into(),
+            imbalance_db: 0.0,
+            peak_left_db: pl,
+            peak_right_db: None,
+            recommended: core_repair_to_dto(sundayrec_core::processing::ChannelRepair::None),
+        }),
+        Some(pr) => {
+            let d = core_diagnose(ChannelLevelsDb {
+                peak_left_db: pl,
+                peak_right_db: pr,
+                rms_left_db: None,
+                rms_right_db: None,
+            });
+            Ok(EditorChannelDiagnosis {
+                code: d.code.to_string(),
+                imbalance_db: d.imbalance_db,
+                peak_left_db: pl,
+                peak_right_db: Some(pr),
+                recommended: core_repair_to_dto(d.recommended),
+            })
+        }
+    }
+}
+
+/// One-click "auto-improve": diagnose the channels, then recommend the full
+/// best-result setup — channel repair + the podcast vocal chain + clear-speech
+/// mastering. Delegates the ffmpeg work to [`diagnose_channels`] (so it returns
+/// the `feature_disabled` error in the default build), then composes the preset
+/// choices + a Norwegian summary. The renderer applies the result in one click.
+pub async fn auto_process(input_path: &str) -> AppResult<EditorAutoProcess> {
+    let diagnosis = diagnose_channels(input_path).await?;
+    let repair_note = match diagnosis.code.as_str() {
+        "dead_left" => "høyre kanal kopieres til begge (venstre er stille — sjekk kabel)",
+        "dead_right" => "venstre kanal kopieres til begge (høyre er stille — sjekk kabel)",
+        "imbalance" => "kanalene balanseres (ulik styrke)",
+        "both_dead" => "begge kanaler er svært svake — sjekk tilkobling",
+        "mono" => "mono-opptak",
+        _ => "kanalbalanse OK",
+    };
+    let summary =
+        format!("Automatisk lydforbedring: {repair_note}, podkast-stemme + tydelig mastering.");
+    Ok(EditorAutoProcess {
+        diagnosis,
+        vocal_chain_preset: "voice-podcast".into(),
+        master_preset: "speech-clear".into(),
+        summary,
+    })
 }
 
 /// Measure loudness: run the preset's pass-1 measure chain to a null sink and
@@ -963,6 +1284,22 @@ pub async fn export(req: &EditorExportRequest) -> AppResult<EditorExportResult> 
     if let Some(g) = req.gain_db {
         if g.is_finite() && g.abs() > f64::EPSILON {
             proc_filters.insert(0, format!("volume={g:.2}dB"));
+        }
+    }
+    // Vocal chain (channel repair + cleanup/sweetening) runs BEFORE the mastering
+    // loudnorm: shape the tone/dynamics first, set delivery loudness last. A full
+    // `processing` object wins; otherwise resolve the one-click preset id.
+    let chain = req.processing.as_ref().map(|p| p.to_core()).or_else(|| {
+        req.vocal_chain_preset
+            .as_deref()
+            .and_then(sundayrec_core::processing::vocal_chain_preset_by_id)
+            .map(|p| p.chain)
+    });
+    if let Some(chain) = chain {
+        let mut parts = chain.build_filters();
+        if !parts.is_empty() {
+            parts.append(&mut proc_filters);
+            proc_filters = parts;
         }
     }
 
@@ -1484,6 +1821,8 @@ mod tests {
                 title: None,
                 speaker: None,
                 description: None,
+                vocal_chain_preset: None,
+                processing: None,
             };
 
             let rt = tokio::runtime::Runtime::new().unwrap();
