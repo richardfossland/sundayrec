@@ -60,6 +60,26 @@ export function formatDbfs(db: number | null | undefined): string {
   return db.toFixed(1);
 }
 
+/**
+ * Seconds → a clock string, clamped to ≥0 and rounded. Default shows hours only
+ * when present (`m:ss` or `h:mm:ss`); `forceHours` always emits `HH:MM:SS` with a
+ * zero-padded hour (for a fixed-width countdown). The shared formatter for the
+ * recording timer and the home live-countdown. (The editor ruler keeps its own
+ * floor-based `formatTime`, and transcript timestamps their own unbounded `m:ss`.)
+ */
+export function formatClock(
+  totalSec: number,
+  opts?: { forceHours?: boolean },
+): string {
+  const s = Math.max(0, Math.round(totalSec));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  if (opts?.forceHours) return `${pad(h)}:${pad(m)}:${pad(sec)}`;
+  return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+}
+
 /** Enumerate the system's audio input devices once on mount. */
 export function useInputDevices(): AudioDeviceList | null {
   const [devices, setDevices] = useState<AudioDeviceList | null>(null);

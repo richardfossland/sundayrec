@@ -25,6 +25,7 @@ import {
 import {
   dbfsToLit,
   formatBytes,
+  formatClock,
   formatDbfs,
   levelLabel,
   useCameraPreview,
@@ -519,17 +520,6 @@ function SeparateAudioCard({
   );
 }
 
-/** Whole seconds → `h:mm:ss` / `m:ss` for the history duration column. */
-function fmtClock(totalSec: number): string {
-  const s = Math.max(0, Math.round(totalSec));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  return h > 0
-    ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
-    : `${m}:${String(sec).padStart(2, "0")}`;
-}
-
 /** A unix-seconds (or ms) timestamp → short Norwegian-ish date+time. */
 function fmtWhen(ts: number): string {
   const ms = ts > 1e12 ? ts : ts * 1000;
@@ -589,7 +579,7 @@ function HomeHistory() {
       icon="clock"
       desc={
         all.length > 0
-          ? `${all.length} ${t("history.totalCount", "opptak")} · ${fmtClock(totalSec)} ${t("history.totalDuration", "totalt")}`
+          ? `${all.length} ${t("history.totalCount", "opptak")} · ${formatClock(totalSec)} ${t("history.totalDuration", "totalt")}`
           : undefined
       }
       action={
@@ -717,7 +707,7 @@ function HomeHistory() {
                 <div className="sr-card-desc">
                   {fmtWhen(r.started_at || r.created_at)}
                   {r.duration_ms != null && (
-                    <> · {fmtClock(r.duration_ms / 1000)}</>
+                    <> · {formatClock(r.duration_ms / 1000)}</>
                   )}
                   {r.byte_size != null && <> · {formatBytes(r.byte_size)}</>}
                 </div>

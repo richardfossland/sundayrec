@@ -39,6 +39,7 @@ import { Icon } from "../Icon";
 import {
   useDiskSpace,
   formatBytes,
+  formatClock,
   dbfsToLit,
   formatDbfs,
   levelLabel,
@@ -245,15 +246,6 @@ function useRecordingSession(video: boolean) {
   };
 }
 
-/** Seconds → HH:MM:SS, matching the design's big counter. */
-function formatClock(total: number): string {
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(h)}:${p(m)}:${p(s)}`;
-}
-
 /** Bytes → a compact MB string ("1.8 MB"). */
 function formatMb(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -290,7 +282,7 @@ function AutoStopCard({
           {t("recordingScreen.autoStopLabel", "Auto-stopp om")}
         </span>{" "}
         <span className="sr-mono sr-num" style={{ fontWeight: 700 }}>
-          {formatClock(remaining)}
+          {formatClock(remaining, { forceHours: true })}
         </span>
       </div>
       <button className="sr-btn ghost sm" type="button" onClick={onExtend}>
@@ -911,7 +903,7 @@ export function RecordingScreen({
             </div>
           )}
           <RecFooter
-            time={formatClock(elapsed)}
+            time={formatClock(elapsed, { forceHours: true })}
             size={formatMb(bytes)}
             diskFree={diskFree != null ? `${formatBytes(diskFree)}` : "569 GB"}
             savePath={savePath}
