@@ -1218,7 +1218,10 @@
     "keepRemove": "Behåller {{keep}} · tar bort {{remove}}",
     "clipPeaks": "{{count}} klipptoppar",
     "loadingShort": "Laddar …",
-    "noRecentRecordings": "Inga inspelningar i historiken än."
+    "noRecentRecordings": "Inga inspelningar i historiken än.",
+    "noFileChosen": "Ingen fil vald",
+    "chooseFile": "Välj fil",
+    "introOutroAudioOnly": "Intro/outro gäller endast ljudexport — MP4 påverkas inte."
   },
   "homeScreen": {
     "readyForRecording": "Redo att spela in",

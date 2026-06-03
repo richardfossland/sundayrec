@@ -1218,7 +1218,10 @@
     "keepRemove": "Conserve {{keep}} · supprime {{remove}}",
     "clipPeaks": "{{count}} crêtes d'écrêtage",
     "loadingShort": "Chargement …",
-    "noRecentRecordings": "Aucun enregistrement dans l'historique pour l'instant."
+    "noRecentRecordings": "Aucun enregistrement dans l'historique pour l'instant.",
+    "noFileChosen": "Aucun fichier choisi",
+    "chooseFile": "Choisir un fichier",
+    "introOutroAudioOnly": "L'intro/outro ne s'applique qu'à l'export audio — le MP4 n'est pas modifié."
   },
   "homeScreen": {
     "readyForRecording": "Prêt à enregistrer",

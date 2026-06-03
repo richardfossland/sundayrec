@@ -1218,7 +1218,10 @@
     "keepRemove": "Beholder {{keep}} · fjerner {{remove}}",
     "clipPeaks": "{{count}} klip-toppe",
     "loadingShort": "Indlæser …",
-    "noRecentRecordings": "Ingen optagelser i historikken endnu."
+    "noRecentRecordings": "Ingen optagelser i historikken endnu.",
+    "noFileChosen": "Ingen fil valgt",
+    "chooseFile": "Vælg fil",
+    "introOutroAudioOnly": "Intro/outro gælder kun lydeksport — MP4 røres ikke."
   },
   "homeScreen": {
     "readyForRecording": "Klar til optagelse",

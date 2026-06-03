@@ -26,4 +26,12 @@ bitDepth: number | null,
 /**
  * Optional mastering preset id (a two-pass loudnorm chain is applied first).
  */
-masterPreset: string | null, };
+masterPreset: string | null, 
+/**
+ * Optional intro clip prepended to the audio on export (non-mp4 only).
+ */
+introPath: string | null, 
+/**
+ * Optional outro clip appended to the audio on export (non-mp4 only).
+ */
+outroPath: string | null, };

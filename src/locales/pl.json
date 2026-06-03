@@ -1218,7 +1218,10 @@
     "keepRemove": "Zachowuje {{keep}} · usuwa {{remove}}",
     "clipPeaks": "{{count}} przesterowanych szczytów",
     "loadingShort": "Ładowanie …",
-    "noRecentRecordings": "Brak nagrań w historii."
+    "noRecentRecordings": "Brak nagrań w historii.",
+    "noFileChosen": "Nie wybrano pliku",
+    "chooseFile": "Wybierz plik",
+    "introOutroAudioOnly": "Intro/outro dotyczą tylko eksportu audio — plik MP4 pozostaje bez zmian."
   },
   "homeScreen": {
     "readyForRecording": "Gotowe do nagrywania",

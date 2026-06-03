@@ -1218,7 +1218,10 @@
     "keepRemove": "Behält {{keep}} · entfernt {{remove}}",
     "clipPeaks": "{{count}} Übersteuerungsspitzen",
     "loadingShort": "Lädt …",
-    "noRecentRecordings": "Noch keine Aufnahmen im Verlauf."
+    "noRecentRecordings": "Noch keine Aufnahmen im Verlauf.",
+    "noFileChosen": "Keine Datei gewählt",
+    "chooseFile": "Datei wählen",
+    "introOutroAudioOnly": "Intro/Outro gelten nur für den Audio-Export — MP4 bleibt unberührt."
   },
   "homeScreen": {
     "readyForRecording": "Aufnahmebereit",

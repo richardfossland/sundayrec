@@ -1218,7 +1218,10 @@
     "keepRemove": "Keeping {{keep}} · removing {{remove}}",
     "clipPeaks": "{{count}} clipping peaks",
     "loadingShort": "Loading …",
-    "noRecentRecordings": "No recordings in the history yet."
+    "noRecentRecordings": "No recordings in the history yet.",
+    "noFileChosen": "No file chosen",
+    "chooseFile": "Choose file",
+    "introOutroAudioOnly": "Intro/outro apply to audio export only — MP4 is untouched."
   },
   "homeScreen": {
     "readyForRecording": "Ready to record",

@@ -7,9 +7,10 @@
  * This component is the thin chrome — file bar, transport, cut list, normalize,
  * and export wired to the Rust `editor_export` seam.
  *
- * See docs/EDITOR-PORT.md for the multi-phase plan. Phase 1 = waveform +
- * playback + cuts + normalize + export. Intro/outro, metadata sidecars,
- * mastering, segment detection and the video variant land in later phases.
+ * See docs/EDITOR-PORT.md for the multi-phase plan. Done: waveform + playback +
+ * cuts + normalize + export, metadata sidecars, cut-draft recovery, segment
+ * detection + auto-trim, mastering, intro/outro, i18n. The video variant is the
+ * last remaining piece.
  */
 import {
   useCallback,
@@ -29,7 +30,8 @@ import type { EditorExportRequest } from "@/lib/bindings/EditorExportRequest";
 import type { EditorExportResult } from "@/lib/bindings/EditorExportResult";
 import type { EditorSegment } from "@/lib/bindings/EditorSegment";
 import type { EditorLoudness } from "@/lib/bindings/EditorLoudness";
-import { Badge, Btn, Card, EmptyState, Spinner } from "@/design/atoms";
+import type { Settings } from "@/lib/bindings/Settings";
+import { Badge, Btn, Card, EmptyState, Spinner, Toggle } from "@/design/atoms";
 import { Icon } from "@/design/Icon";
 import { EditorEngine } from "@/features/editor/engine/EditorEngine";
 import { formatTime, formatDuration } from "@/features/editor/engine/format";
@@ -68,6 +70,10 @@ export function EditScreen() {
   const [masterPreset, setMasterPreset] = useState<string | null>(null);
   const [loudness, setLoudness] = useState<EditorLoudness | null>(null);
   const [analyzingLoudness, setAnalyzingLoudness] = useState(false);
+  // Intro/outro jingle paths (decoded client-side for the timeline slots +
+  // preview, and passed to the export seam). Seeded from settings.
+  const [introPath, setIntroPath] = useState<string | null>(null);
+  const [outroPath, setOutroPath] = useState<string | null>(null);
 
   // Metadata (title/speaker/description) — persisted to the per-recording
   // `.meta` sidecar. `hydrating` suppresses the debounced write while we apply
@@ -83,6 +89,84 @@ export function EditScreen() {
     queryKey: ["recordings", "list"],
     queryFn: () => invoke<RecordingRow[]>("recordings_list"),
   });
+
+  // Settings — used to seed the intro/outro jingle paths (Electron parity).
+  const settings = useQuery<Settings>({
+    queryKey: ["settings"],
+    queryFn: () => invoke<Settings>("settings_get"),
+  });
+
+  // Seed intro/outro from settings once, then decode them into the engine so
+  // the dimmed slots render and preview playback includes them. Default the
+  // "include on export" toggle ON when a jingle is configured.
+  const seededIntroOutro = useRef(false);
+  useEffect(() => {
+    if (seededIntroOutro.current || !settings.data) return;
+    seededIntroOutro.current = true;
+    const ip = settings.data.editorIntroPath ?? null;
+    const op = settings.data.editorOutroPath ?? null;
+    setIntroPath(ip);
+    setOutroPath(op);
+    void engine.setIntroFromPath(ip);
+    void engine.setOutroFromPath(op);
+    if (ip || op) engine.setIncludeIntroOutro(true);
+  }, [engine, settings.data]);
+
+  // Persist a changed intro/outro path back to settings (read-modify-write the
+  // full object, the app's settings_save contract).
+  const persistIntroOutro = useCallback(
+    (patch: Partial<Pick<Settings, "editorIntroPath" | "editorOutroPath">>) => {
+      if (!settings.data) return;
+      const next = { ...settings.data, ...patch };
+      invoke<Settings>("settings_save", { settings: next }).catch(() => {});
+    },
+    [settings.data],
+  );
+
+  const pickIntro = useCallback(
+    async (which: "intro" | "outro") => {
+      try {
+        const picked = await open({
+          multiple: false,
+          filters: [
+            {
+              name: "Lyd",
+              extensions: ["mp3", "m4a", "aac", "wav", "flac", "ogg", "opus"],
+            },
+          ],
+        });
+        if (typeof picked !== "string") return;
+        if (which === "intro") {
+          setIntroPath(picked);
+          void engine.setIntroFromPath(picked);
+          persistIntroOutro({ editorIntroPath: picked });
+        } else {
+          setOutroPath(picked);
+          void engine.setOutroFromPath(picked);
+          persistIntroOutro({ editorOutroPath: picked });
+        }
+        engine.setIncludeIntroOutro(true);
+      } catch {
+        /* dialog unavailable in dev/test */
+      }
+    },
+    [engine, persistIntroOutro],
+  );
+
+  const clearIntro = useCallback(
+    (which: "intro" | "outro") => {
+      if (which === "intro") {
+        setIntroPath(null);
+        void engine.setIntroFromPath(null);
+        persistIntroOutro({ editorIntroPath: null });
+      } else {
+        setOutroPath(null);
+        void engine.setOutroFromPath(null);
+        persistIntroOutro({ editorOutroPath: null });
+      }
+    },
+    [engine, persistIntroOutro],
+  );
 
   // ── Engine ↔ canvas lifecycle ───────────────────────────────────────────
   useEffect(() => {
@@ -292,6 +376,9 @@ export function EditScreen() {
       bitrate: null,
       bitDepth: null,
       masterPreset,
+      // Intro/outro are audio-only and only when the toggle is on.
+      introPath: snap.includeIntroOutro && format !== "mp4" ? introPath : null,
+      outroPath: snap.includeIntroOutro && format !== "mp4" ? outroPath : null,
     };
     try {
       const res = await invoke<EditorExportResult>("editor_export", {
@@ -309,7 +396,17 @@ export function EditScreen() {
     } finally {
       setExporting(false);
     }
-  }, [engine, snap.filePath, snap.duration, format, masterPreset, t]);
+  }, [
+    engine,
+    snap.filePath,
+    snap.duration,
+    snap.includeIntroOutro,
+    format,
+    masterPreset,
+    introPath,
+    outroPath,
+    t,
+  ]);
 
   // Measure the file's loudness (EBU R128 LUFS) so the user can judge whether
   // mastering is needed before exporting. Resets whenever the file changes.
@@ -752,6 +849,48 @@ export function EditScreen() {
         </Card>
       )}
 
+      {/* ── Intro & Outro ────────────────────────────────────────────── */}
+      {snap.hasFile && (
+        <Card
+          title={t("editScreen.introOutro")}
+          icon="speaker"
+          action={
+            <button
+              className="sr-btn ghost sm"
+              onClick={() =>
+                engine.setIncludeIntroOutro(!snap.includeIntroOutro)
+              }
+              style={{ gap: 8 }}
+            >
+              <Toggle on={snap.includeIntroOutro} />
+              {t("editScreen.includeOnExport")}
+            </button>
+          }
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <IntroOutroRow
+              label={t("editScreen.waveIntro")}
+              path={introPath}
+              durationSec={snap.introDuration}
+              onPick={() => pickIntro("intro")}
+              onClear={() => clearIntro("intro")}
+            />
+            <IntroOutroRow
+              label={t("editScreen.waveOutro")}
+              path={outroPath}
+              durationSec={snap.outroDuration}
+              onPick={() => pickIntro("outro")}
+              onClear={() => clearIntro("outro")}
+            />
+            {format === "mp4" && (snap.hasIntro || snap.hasOutro) && (
+              <div className="sr-card-desc">
+                {t("editScreen.introOutroAudioOnly")}
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
       {/* ── Metadata ─────────────────────────────────────────────────── */}
       {snap.hasFile && (
         <Card
@@ -910,6 +1049,64 @@ export function EditScreen() {
             {exportError && <Badge kind="err">{exportError}</Badge>}
           </div>
         </Card>
+      )}
+    </div>
+  );
+}
+
+function IntroOutroRow({
+  label,
+  path,
+  durationSec,
+  onPick,
+  onClear,
+}: {
+  label: string;
+  path: string | null;
+  durationSec: number;
+  onPick: () => void;
+  onClear: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "6px 10px",
+        borderRadius: 8,
+        background: "var(--sr-ink-850)",
+      }}
+    >
+      <span className="sr-label" style={{ minWidth: 48 }}>
+        {label}
+      </span>
+      <span
+        style={{
+          flex: 1,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          color: path ? "var(--sr-text)" : "var(--sr-text-3)",
+        }}
+      >
+        {path ? baseName(path) : t("editScreen.noFileChosen")}
+        {path && durationSec > 0 && (
+          <span className="sr-card-desc"> · {formatDuration(durationSec)}</span>
+        )}
+      </span>
+      <Btn variant="ghost" sm icon="folder" onClick={onPick}>
+        {t("editScreen.chooseFile")}
+      </Btn>
+      {path && (
+        <Btn
+          variant="ghost"
+          sm
+          icon="x"
+          ariaLabel={t("editScreen.resetBtn")}
+          onClick={onClear}
+        />
       )}
     </div>
   );

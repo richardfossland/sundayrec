@@ -21,7 +21,7 @@ import {
   type Suggestion,
   type WaveLabels,
 } from "./types";
-import { computePeaks, computePeakGain } from "./peaks";
+import { computePeaks, computePeakGain, computeJinglePeaks } from "./peaks";
 import {
   clampMain,
   clampPlayable,
@@ -70,6 +70,10 @@ export interface EditorSnapshot {
   includeIntroOutro: boolean;
   canUndo: boolean;
   canRedo: boolean;
+  hasIntro: boolean;
+  hasOutro: boolean;
+  introDuration: number;
+  outroDuration: number;
   suggestionCount: number;
   /** The longest detected sermon/speech block, for the one-click auto-trim. */
   sermon: { start: number; end: number; minutes: number } | null;
@@ -127,6 +131,10 @@ export class EditorEngine {
       canUndo:
         s.cutHistoryIdx >= 0 && (s.cutHistoryIdx > 0 || s.cuts.length > 0),
       canRedo: s.cutHistoryIdx < s.cutHistory.length - 1,
+      hasIntro: !!s.introBuffer,
+      hasOutro: !!s.outroBuffer,
+      introDuration: s.introDuration,
+      outroDuration: s.outroDuration,
       suggestionCount: s.suggestions.length,
       sermon: this.findSermonBlock(),
     };
@@ -784,6 +792,65 @@ export class EditorEngine {
 
   setIncludeIntroOutro(on: boolean): void {
     this.state.includeIntroOutro = on;
+    this.emit();
+    this.scheduleDraw();
+  }
+
+  // ── Intro / outro jingles (decoded client-side for the dimmed slots + the
+  //    preview playback; the paths also go to the export seam) ───────────────
+
+  private async decodeJingle(path: string): Promise<AudioBuffer> {
+    const ab = await this.readFileBytes(path);
+    const ctx = new AudioContext();
+    try {
+      return await ctx.decodeAudioData(ab);
+    } finally {
+      ctx.close().catch(() => {});
+    }
+  }
+
+  /** Load (or, with `null`, clear) the intro jingle. */
+  async setIntroFromPath(path: string | null): Promise<void> {
+    const s = this.state;
+    if (!path) {
+      s.introBuffer = null;
+      s.introDuration = 0;
+      s.introPeaks = null;
+    } else {
+      try {
+        const buf = await this.decodeJingle(path);
+        s.introBuffer = buf;
+        s.introDuration = buf.duration;
+        s.introPeaks = computeJinglePeaks(buf);
+      } catch {
+        s.introBuffer = null;
+        s.introDuration = 0;
+        s.introPeaks = null;
+      }
+    }
+    this.emit();
+    this.scheduleDraw();
+  }
+
+  /** Load (or, with `null`, clear) the outro jingle. */
+  async setOutroFromPath(path: string | null): Promise<void> {
+    const s = this.state;
+    if (!path) {
+      s.outroBuffer = null;
+      s.outroDuration = 0;
+      s.outroPeaks = null;
+    } else {
+      try {
+        const buf = await this.decodeJingle(path);
+        s.outroBuffer = buf;
+        s.outroDuration = buf.duration;
+        s.outroPeaks = computeJinglePeaks(buf);
+      } catch {
+        s.outroBuffer = null;
+        s.outroDuration = 0;
+        s.outroPeaks = null;
+      }
+    }
     this.emit();
     this.scheduleDraw();
   }

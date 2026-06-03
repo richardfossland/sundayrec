@@ -129,6 +129,10 @@ pub struct EditorExportRequest {
     pub bit_depth: Option<u8>,
     /// Optional mastering preset id (a two-pass loudnorm chain is applied first).
     pub master_preset: Option<String>,
+    /// Optional intro clip prepended to the audio on export (non-mp4 only).
+    pub intro_path: Option<String>,
+    /// Optional outro clip appended to the audio on export (non-mp4 only).
+    pub outro_path: Option<String>,
 }
 
 /// The outcome of an export: where the file landed.
@@ -902,23 +906,47 @@ pub async fn export(req: &EditorExportRequest) -> AppResult<EditorExportResult> 
         Path::new(c).exists()
     });
 
-    // 4. Build the ffmpeg args — all graph/codec decisions are the core's.
-    let mut args: Vec<String> = vec![
-        "-nostdin".into(),
-        "-hide_banner".into(),
-        "-i".into(),
-        req.input_path.clone(),
-    ];
+    // 4. Intro/outro jingles (audio formats only — they wrap the audio track,
+    //    so the mp4 video path ignores them). The intro is ffmpeg input 0, the
+    //    main file the next input, the outro the one after that — the order the
+    //    core's filter graph expects.
+    let intro = req
+        .intro_path
+        .as_deref()
+        .filter(|p| fmt != "mp4" && Path::new(p).exists());
+    let outro = req
+        .outro_path
+        .as_deref()
+        .filter(|p| fmt != "mp4" && Path::new(p).exists());
+    let has_intro = intro.is_some();
+    let has_outro = outro.is_some();
+    let main_input_idx = if has_intro { 1 } else { 0 };
+
+    // 5. Build the ffmpeg args — all graph/codec decisions are the core's.
+    let mut args: Vec<String> = vec!["-nostdin".into(), "-hide_banner".into()];
+    if let Some(p) = intro {
+        args.extend(["-i".into(), p.to_string()]);
+    }
+    args.extend(["-i".into(), req.input_path.clone()]);
+    if let Some(p) = outro {
+        args.extend(["-i".into(), p.to_string()]);
+    }
     if fmt == "mp4" {
         let (fc, v_out, a_out) = video_filter_complex(0, &keeps, &proc_filters);
         args.extend(["-filter_complex".into(), fc]);
         args.extend(["-map".into(), v_out, "-map".into(), a_out]);
         args.extend(mp4_codec_args());
-    } else if is_simple_audio_export(&keeps, &proc_filters, false, false) {
+    } else if is_simple_audio_export(&keeps, &proc_filters, has_intro, has_outro) {
         args.extend(["-af".into(), audio_simple_af(&keeps[0])]);
         args.extend(codec_args(fmt, req.bitrate, req.bit_depth));
     } else {
-        let (fc, map) = audio_export_filter_complex(&keeps, 0, &proc_filters, false, false);
+        let (fc, map) = audio_export_filter_complex(
+            &keeps,
+            main_input_idx,
+            &proc_filters,
+            has_intro,
+            has_outro,
+        );
         args.extend(["-filter_complex".into(), fc]);
         args.extend(["-map".into(), map]);
         args.extend(codec_args(fmt, req.bitrate, req.bit_depth));
@@ -1105,6 +1133,8 @@ mod tests {
             bitrate: None,
             bit_depth: None,
             master_preset: None,
+            intro_path: None,
+            outro_path: None,
         };
         assert!(export(&req)
             .await
@@ -1330,6 +1360,8 @@ mod tests {
                 bitrate: Some(128),
                 bit_depth: None,
                 master_preset: None,
+                intro_path: None,
+                outro_path: None,
             };
 
             let rt = tokio::runtime::Runtime::new().unwrap();
