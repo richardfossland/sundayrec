@@ -282,10 +282,18 @@ export class EditorEngine {
     const dpr = window.devicePixelRatio || 1;
     const W = this.minimap.parentElement?.clientWidth ?? 0;
     if (!W) return;
-    this.minimap.style.width = W + "px";
-    this.minimap.style.height = MINIMAP_HEIGHT + "px";
-    this.minimap.width = W * dpr;
-    this.minimap.height = MINIMAP_HEIGHT * dpr;
+    // Only resize the backing store when the dimensions actually change —
+    // assigning canvas.width/height reallocates (and clears) the bitmap even when
+    // set to the same value, and this runs up to 60×/s during playback auto-scroll.
+    // `drawMinimap` fully repaints via fillRect, so no realloc is needed to clear.
+    const targetW = Math.round(W * dpr);
+    const targetH = Math.round(MINIMAP_HEIGHT * dpr);
+    if (this.minimap.width !== targetW || this.minimap.height !== targetH) {
+      this.minimap.width = targetW;
+      this.minimap.height = targetH;
+      this.minimap.style.width = W + "px";
+      this.minimap.style.height = MINIMAP_HEIGHT + "px";
+    }
     ctx.save();
     ctx.scale(dpr, dpr);
     drawMinimap(this.state, ctx, W, MINIMAP_HEIGHT, this.colors);
