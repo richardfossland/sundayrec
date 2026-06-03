@@ -405,10 +405,23 @@ const api: Record<string, unknown> = {
     call("wake_clear_failure_history", undefined, true).then(() => true),
 
   // ── Editor ──────────────────────────────────────────────────────────────
-  editorReadFile: async () => null,
+  // editor_read_file → { tooLarge, size, bytes }. The old loader expects EITHER
+  // a raw byte array (→ Web Audio decode, the client-side waveform path) OR a
+  // { tooLarge } marker (→ ffmpeg-extract fallback). Adapt to that.
+  editorReadFile: async (fp: string) => {
+    const r = await call<{ tooLarge?: boolean; bytes?: number[] | null }>(
+      "editor_read_file",
+      { mediaPath: fp },
+      null as unknown as { tooLarge?: boolean; bytes?: number[] | null },
+    );
+    if (!r) return null;
+    if (r.tooLarge) return { tooLarge: true };
+    return new Uint8Array(r.bytes ?? []);
+  },
   editorSaveFile: async () => ({ ok: false }),
   editorPickFile: async () => pickPath({ name: "Lyd", extensions: AUDIO_EXT }),
-  editorExportFile: async () => ({ ok: false }),
+  editorExportFile: async (params: unknown) =>
+    call("editor_export", { request: params }, { ok: false }),
   editorCancelExport: async () => true,
   editorPickOutputFolder: async () => pickPath({ directory: true }),
   // Sidecars (meta / cutsDraft / transcript) are clean JSON key-value via
@@ -433,14 +446,23 @@ const api: Record<string, unknown> = {
     call("editor_delete_sidecar", { mediaPath: fp, sidecar: "cutsDraft" }, false).then(
       () => true,
     ),
-  editorDetectSegments: async () => ({ segments: [] }),
-  editorSetVideoPath: async () => ({ ok: false }),
-  editorExtractAudioPeaks: async () => ({ peaks: [] }),
+  editorDetectSegments: async (fp: string) => ({
+    segments: await call("editor_segments", { inputPath: fp }, []),
+  }),
+  editorSetVideoPath: async (fp: string) =>
+    call("editor_load_recording", { inputPath: fp }, { ok: false }),
+  // editor_peaks → { peaks, sampleRate }; old too-large path wants { data,
+  // duration }. The normal path uses editorReadFile (Web Audio) instead, so this
+  // fallback is best-effort for very large files only.
+  editorExtractAudioPeaks: async (fp: string) =>
+    call("editor_peaks", { inputPath: fp }, null),
   editorPickVideoFile: async () =>
     pickPath({ name: "Video", extensions: VIDEO_EXT }),
   editorSaveVideo: async () => ({ ok: false }),
-  editorExportVideo: async () => ({ ok: false }),
-  editorProbeStreams: async () => ({ streams: [] }),
+  editorExportVideo: async (params: unknown) =>
+    call("editor_export", { request: params }, { ok: false }),
+  editorProbeStreams: async (fp: string) =>
+    call("editor_probe_streams", { inputPath: fp }, { streams: [] }),
   editorReadTranscript: async (fp: string) =>
     call("editor_read_sidecar", { mediaPath: fp, sidecar: "transcript" }, null),
   editorWriteTranscript: async (fp: string, t: unknown) =>
@@ -454,12 +476,24 @@ const api: Record<string, unknown> = {
       () => true,
     ),
 
-  // ── Mastering ───────────────────────────────────────────────────────────
-  masterPresets: async () => [],
-  masterPreview: async () => ({ ok: false }),
-  masterMeasure: async () => ({ ok: false }),
-  masterApply: async () => ({ ok: false }),
-  masterCancel: async () => true,
+  // ── Mastering (editor_master_* / editor_mastering_analyze) ──────────────
+  masterPresets: async () => [], // TODO Phase 3: presets are client-side; no command
+  masterPreview: async (
+    inputPath: string,
+    presetId: string,
+    startSec: number,
+    durationSec: number,
+  ) =>
+    call(
+      "editor_master_preview",
+      { inputPath, presetId, startSec, durationSec },
+      { ok: false },
+    ),
+  masterMeasure: async (inputPath: string, presetId: string) =>
+    call("editor_mastering_analyze", { inputPath, presetId }, { ok: false }),
+  masterApply: async (params: unknown) =>
+    call("editor_master_apply", params as Record<string, unknown>, { ok: false }),
+  masterCancel: async () => call("editor_master_cancel", undefined, true).then(() => true),
 
   // ── Thumbnail ───────────────────────────────────────────────────────────
   thumbnailSetDefault: async () => ({ ok: false }),
