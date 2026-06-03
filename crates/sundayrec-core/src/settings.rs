@@ -146,6 +146,10 @@ pub struct Settings {
     /// Capture frame rate (fps). Valid 1..=120, default 30.
     #[serde(default = "default_video_framerate")]
     pub video_framerate: i32,
+    /// Mirror the camera horizontally (preview + recording). Default false.
+    /// Electron `videoFlip` — handy for front-facing / mirrored stage cameras.
+    #[serde(default)]
+    pub video_flip: bool,
     /// Output muxing: `"combined"` (one A/V file) | `"separate"` (split files).
     /// Default `"combined"`.
     #[serde(default = "default_output_mode")]
@@ -437,6 +441,7 @@ impl Default for Settings {
             video_device_index: None,
             video_resolution: default_video_resolution(),
             video_framerate: default_video_framerate(),
+            video_flip: false,
             output_mode: default_output_mode(),
             keep_separate_audio: false,
             separate_audio_format: default_separate_audio_format(),

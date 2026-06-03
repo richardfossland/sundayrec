@@ -1272,7 +1272,8 @@
     "cdH": "in {{h}} Std",
     "cdHm": "in {{h}} Std {{m}} Min",
     "cdDays": "in {{d}} Tagen",
-    "wakeAuto": "Der Computer wird automatisch geweckt"
+    "wakeAuto": "Der Computer wird automatisch geweckt",
+    "flipCamera": "Kamera spiegeln"
   },
   "liveScreen": {
     "title": "Livestream",

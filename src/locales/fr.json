@@ -1272,7 +1272,8 @@
     "cdH": "dans {{h}}h",
     "cdHm": "dans {{h}}h {{m}}m",
     "cdDays": "dans {{d}} jours",
-    "wakeAuto": "L’ordinateur se réveille automatiquement"
+    "wakeAuto": "L’ordinateur se réveille automatiquement",
+    "flipCamera": "Inverser la caméra"
   },
   "liveScreen": {
     "title": "Diffusion en direct",

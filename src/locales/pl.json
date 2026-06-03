@@ -1272,7 +1272,8 @@
     "cdH": "za {{h}}h",
     "cdHm": "za {{h}}h {{m}}m",
     "cdDays": "za {{d}} dni",
-    "wakeAuto": "Komputer wybudza się automatycznie"
+    "wakeAuto": "Komputer wybudza się automatycznie",
+    "flipCamera": "Odbij kamerę"
   },
   "liveScreen": {
     "title": "Transmisja na żywo",

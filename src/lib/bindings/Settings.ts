@@ -60,6 +60,11 @@ videoResolution: string,
  */
 videoFramerate: number, 
 /**
+ * Mirror the camera horizontally (preview + recording). Default false.
+ * Electron `videoFlip` — handy for front-facing / mirrored stage cameras.
+ */
+videoFlip: boolean, 
+/**
  * Output muxing: `"combined"` (one A/V file) | `"separate"` (split files).
  * Default `"combined"`.
  */

@@ -872,6 +872,20 @@ export function HomeScreen({
               >
                 <Icon name="refresh" size={15} />
               </button>
+              <button
+                className={
+                  "sr-btn ghost sm" + (settings?.videoFlip ? " gold" : "")
+                }
+                style={{ padding: "7px 9px", fontSize: 15, lineHeight: 1 }}
+                onClick={() =>
+                  updateSettings({ videoFlip: !settings?.videoFlip })
+                }
+                aria-label={t("homeScreen.flipCamera", "Speilvend kamera")}
+                aria-pressed={!!settings?.videoFlip}
+                type="button"
+              >
+                ⇄
+              </button>
               <div className="sr-grow" />
               {/* "Preview" — NOT "Live" — so this is never mistaken for a
                   livestream/broadcast. A muted badge (no red recording dot) when
@@ -902,6 +916,7 @@ export function HomeScreen({
                     height: "100%",
                     objectFit: "cover",
                     display: "block",
+                    transform: settings?.videoFlip ? "scaleX(-1)" : undefined,
                   }}
                 />
               ) : preview.error ? (

@@ -1272,7 +1272,8 @@
     "cdH": "om {{h}}h",
     "cdHm": "om {{h}}h {{m}}m",
     "cdDays": "om {{d}} dagar",
-    "wakeAuto": "Datorn väcks automatiskt"
+    "wakeAuto": "Datorn väcks automatiskt",
+    "flipCamera": "Spegla kamera"
   },
   "liveScreen": {
     "title": "Direktsändning",

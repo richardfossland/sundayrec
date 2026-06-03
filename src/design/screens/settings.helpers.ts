@@ -66,6 +66,7 @@ export const DEFAULT_SETTINGS: Settings = {
   videoDeviceIndex: null,
   videoResolution: "720p",
   videoFramerate: 30,
+  videoFlip: false,
   outputMode: "combined",
   keepSeparateAudio: false,
   separateAudioFormat: "wav",

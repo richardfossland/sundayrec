@@ -1272,7 +1272,8 @@
     "cdH": "om {{h}}t",
     "cdHm": "om {{h}}t {{m}}m",
     "cdDays": "om {{d}} dage",
-    "wakeAuto": "Computeren vækkes automatisk"
+    "wakeAuto": "Computeren vækkes automatisk",
+    "flipCamera": "Spejlvend kamera"
   },
   "liveScreen": {
     "title": "Direkte udsendelse",

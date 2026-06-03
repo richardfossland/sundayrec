@@ -1272,7 +1272,8 @@
     "cdH": "in {{h}}h",
     "cdHm": "in {{h}}h {{m}}m",
     "cdDays": "in {{d}} days",
-    "wakeAuto": "The computer wakes automatically"
+    "wakeAuto": "The computer wakes automatically",
+    "flipCamera": "Mirror camera"
   },
   "liveScreen": {
     "title": "Live stream",
