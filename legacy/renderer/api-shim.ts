@@ -304,8 +304,12 @@ const api: Record<string, unknown> = {
     call("get_disk_space", undefined, { freeBytes: null, totalBytes: null }),
   startRecordingNow: async () => ({ ok: false }),
   stopRecordingNow: async () => true,
-  runTestRecording: async () => ({ ok: false, level: null, message: "" }),
-  runPreflight: async () => ({ ok: true, checks: [] }),
+  runTestRecording: async () =>
+    call("run_test_recording", undefined, { ok: false, level: null, message: "" }),
+  // run_preflight returns Vec<PreflightFinding> directly; old code reads { findings }.
+  runPreflight: async () => ({
+    findings: await call<unknown[]>("run_preflight", undefined, []),
+  }),
 
   // ── File dialogs / shell (Tauri dialog + opener plugins) ────────────────
   pickFolder: async () => pickPath({ directory: true }),
