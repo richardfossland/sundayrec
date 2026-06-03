@@ -124,6 +124,7 @@ declare global {
       editorReadMeta:         (filePath: string) => Promise<unknown>
       editorSaveMeta:         (filePath: string, metadata: unknown) => Promise<boolean>
       editorDetectSegments:   (filePath: string) => Promise<{ start: number; end: number; duration: number; label: string; type: string }[]>
+      editorDetectChapters:   (lines: { start: number; text: string }[]) => Promise<{ time: number; title: string }[]>
       editorReadCutsDraft:    (filePath: string) => Promise<unknown>
       editorSaveCutsDraft:    (filePath: string, cuts: unknown) => Promise<void>
       editorDeleteCutsDraft:  (filePath: string) => Promise<void>

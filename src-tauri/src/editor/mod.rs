@@ -109,9 +109,9 @@ pub struct EditorCutRegion {
     pub end: f64,
 }
 
-/// Export request — the cut-plan + a chosen format + optional mastering preset.
-/// Mirrors the non-video subset of the Electron `EditorExportParams` the editor
-/// UI sent (intro/outro/chapters/video are deferred — see module + docs).
+/// Export request — the cut-plan + a chosen format + optional mastering preset,
+/// intro/outro jingles, and topic chapters. Mirrors the non-video subset of the
+/// Electron `EditorExportParams` the editor UI sent (mp4 video re-encode aside).
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
 #[ts(export, export_to = "../../src/lib/bindings/EditorExportRequest.ts")]
 #[serde(rename_all = "camelCase")]
@@ -136,6 +136,40 @@ pub struct EditorExportRequest {
     /// Optional peak-normalization gain (dB) applied as a `volume` filter — what
     /// the editor's "Normalize" button computes. `None`/`0` is a no-op.
     pub gain_db: Option<f64>,
+    /// Topic chapters to embed in the exported file (FFMETADATA → ID3 CHAP/CTOC).
+    /// Times are in the ORIGINAL recording timeline; export remaps them through
+    /// the cut-plan and drops any that fall inside a cut. Empty = none embedded.
+    #[serde(default)]
+    pub chapters: Vec<EditorChapter>,
+    /// Optional file title (FFMETADATA `title`); also used as the chapter header.
+    #[serde(default)]
+    pub title: Option<String>,
+    /// Optional speaker (FFMETADATA `artist`).
+    #[serde(default)]
+    pub speaker: Option<String>,
+    /// Optional description (FFMETADATA `comment`).
+    #[serde(default)]
+    pub description: Option<String>,
+}
+
+/// One chapter marker (a title at a time, in seconds). The renderer-facing mirror
+/// of [`sundayrec_core::editor::Chapter`].
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "../../src/lib/bindings/EditorChapter.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct EditorChapter {
+    pub time: f64,
+    pub title: String,
+}
+
+/// One timestamped transcript line fed to chapter detection. Mirrors the whisper
+/// `TranscriptSegment` subset the detector needs (start + text).
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "../../src/lib/bindings/EditorTranscriptLine.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct EditorTranscriptLine {
+    pub start: f64,
+    pub text: String,
 }
 
 /// The outcome of an export: where the file landed.
@@ -144,6 +178,28 @@ pub struct EditorExportRequest {
 #[serde(rename_all = "camelCase")]
 pub struct EditorExportResult {
     pub output_path: String,
+}
+
+/// Detect topic chapters from a transcript (Bible references + enumeration
+/// points). Pure, offline, deterministic — no ffmpeg, so it compiles + runs
+/// regardless of the `editor`/`whisper` features. Times are in the original
+/// recording timeline; `editor_export` remaps them through the cut-plan.
+pub fn detect_chapters(lines: &[EditorTranscriptLine]) -> Vec<EditorChapter> {
+    use sundayrec_core::chapters::{detect_chapters as core_detect, TranscriptLine};
+    let core_lines: Vec<TranscriptLine> = lines
+        .iter()
+        .map(|l| TranscriptLine {
+            start: l.start,
+            text: l.text.clone(),
+        })
+        .collect();
+    core_detect(&core_lines)
+        .into_iter()
+        .map(|c| EditorChapter {
+            time: c.time,
+            title: c.title,
+        })
+        .collect()
 }
 
 /// Which sidecar a read/write/delete targets, mirroring the Electron suffixes.
@@ -851,9 +907,11 @@ where
 #[cfg(feature = "editor")]
 pub async fn export(req: &EditorExportRequest) -> AppResult<EditorExportResult> {
     use std::path::Path;
+    use sundayrec_core::chapters::remap_chapters_to_keeps;
     use sundayrec_core::editor::{
         audio_export_filter_complex, audio_simple_af, build_keeps, codec_args, collision_free_path,
-        is_simple_audio_export, mp4_codec_args, video_filter_complex, CutRegion,
+        ffmetadata, is_simple_audio_export, metadata_args, mp4_codec_args, video_filter_complex,
+        Chapter as CoreChapter, CutRegion, RecordingMetadata,
     };
     use sundayrec_core::mastering::{build_apply_pass_filters, get_preset_by_id};
 
@@ -933,6 +991,41 @@ pub async fn export(req: &EditorExportRequest) -> AppResult<EditorExportResult> 
     let has_outro = outro.is_some();
     let main_input_idx = if has_intro { 1 } else { 0 };
 
+    // 4b. Topic chapters → FFMETADATA. The detector timed them on the ORIGINAL
+    //     recording; remap them through the cut-plan onto the exported timeline
+    //     and drop any inside a cut. Title/speaker/description ride along as tags.
+    //     NOTE: an intro jingle shifts the audio later; chapter times here are
+    //     relative to the main audio (no intro offset) — fine for the common
+    //     no-jingle podcast export, slightly early if a long intro is prepended.
+    let kept_duration: f64 = keeps.iter().map(|k| k.end - k.start).sum();
+    let core_chapters: Vec<CoreChapter> = req
+        .chapters
+        .iter()
+        .map(|c| CoreChapter {
+            time: c.time,
+            title: c.title.clone(),
+        })
+        .collect();
+    let meta = RecordingMetadata {
+        title: req.title.clone(),
+        speaker: req.speaker.clone(),
+        description: req.description.clone(),
+        chapters: remap_chapters_to_keeps(&core_chapters, &keeps),
+    };
+    // Write the `;FFMETADATA1` sidecar to a temp file ffmpeg reads as an extra
+    // input (`-map_metadata <idx>`). `None` when there are no chapters.
+    let meta_path: Option<String> = match ffmetadata(&meta, kept_duration) {
+        Some(text) => {
+            let p = std::env::temp_dir().join(format!("{base}_chapters.ffmeta"));
+            std::fs::write(&p, text)
+                .map_err(|e| AppError::Recording(format!("write chapters metadata: {e}")))?;
+            Some(p.to_string_lossy().into_owned())
+        }
+        None => None,
+    };
+    // The metadata file is appended after all real inputs (intro/main/outro).
+    let meta_input_idx = 1 + has_intro as usize + has_outro as usize;
+
     // 5. Build the ffmpeg args — all graph/codec decisions are the core's.
     let mut args: Vec<String> = vec!["-nostdin".into(), "-hide_banner".into()];
     if let Some(p) = intro {
@@ -941,6 +1034,9 @@ pub async fn export(req: &EditorExportRequest) -> AppResult<EditorExportResult> 
     args.extend(["-i".into(), req.input_path.clone()]);
     if let Some(p) = outro {
         args.extend(["-i".into(), p.to_string()]);
+    }
+    if let Some(p) = &meta_path {
+        args.extend(["-i".into(), p.clone()]);
     }
     if fmt == "mp4" {
         let (fc, v_out, a_out) = video_filter_complex(0, &keeps, &proc_filters);
@@ -962,9 +1058,18 @@ pub async fn export(req: &EditorExportRequest) -> AppResult<EditorExportResult> 
         args.extend(["-map".into(), map]);
         args.extend(codec_args(fmt, req.bitrate, req.bit_depth));
     }
+    // Pull chapters from the metadata input; title/speaker/description as tags.
+    if meta_path.is_some() {
+        args.extend(["-map_metadata".into(), meta_input_idx.to_string()]);
+    }
+    args.extend(metadata_args(&meta));
     args.extend(["-y".into(), out_path.clone()]);
 
-    run_ffmpeg(&args).await?;
+    let result = run_ffmpeg(&args).await;
+    if let Some(p) = &meta_path {
+        let _ = std::fs::remove_file(p); // best-effort temp cleanup
+    }
+    result?;
     if !Path::new(&out_path).exists() {
         return Err(AppError::Recording("export produced no output file".into()));
     }
@@ -1375,6 +1480,10 @@ mod tests {
                 intro_path: None,
                 outro_path: None,
                 gain_db: None,
+                chapters: Vec::new(),
+                title: None,
+                speaker: None,
+                description: None,
             };
 
             let rt = tokio::runtime::Runtime::new().unwrap();

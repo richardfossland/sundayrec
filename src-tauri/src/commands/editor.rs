@@ -7,10 +7,10 @@
 //! handles gracefully (the panel shows a "not built into this build" hint).
 
 use crate::editor::{
-    self, EditorExportRequest, EditorExportResult, EditorFileRead, EditorLoudness,
+    self, EditorChapter, EditorExportRequest, EditorExportResult, EditorFileRead, EditorLoudness,
     EditorMasterApplyRequest, EditorMasterApplyResult, EditorMasterPreviewRequest,
     EditorMasterPreviewResult, EditorMasterProgress, EditorMediaInfo, EditorPeaks, EditorSegment,
-    EditorSidecar, EditorStreamInfo, MasterEngine,
+    EditorSidecar, EditorStreamInfo, EditorTranscriptLine, MasterEngine,
 };
 use crate::error::AppResult;
 use tauri::{Emitter, State};
@@ -31,6 +31,14 @@ pub async fn editor_peaks(input_path: String) -> AppResult<EditorPeaks> {
 #[tauri::command]
 pub async fn editor_segments(input_path: String) -> AppResult<Vec<EditorSegment>> {
     editor::segments(&input_path).await
+}
+
+/// Detect topic chapters from a transcript (Bible references + enumeration
+/// points). Pure/offline/deterministic — no ffmpeg, works without the `whisper`
+/// or `editor` features. Returns chapters on the original recording timeline.
+#[tauri::command]
+pub fn editor_detect_chapters(lines: Vec<EditorTranscriptLine>) -> AppResult<Vec<EditorChapter>> {
+    Ok(editor::detect_chapters(&lines))
 }
 
 /// Measure the recording's loudness against a mastering preset (pass 1 only).

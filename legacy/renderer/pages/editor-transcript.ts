@@ -15,6 +15,9 @@
 
 import { t } from '../i18n'
 import type { TranscriptData, TranscriptSegment, RecordingMetadata } from '../../types'
+import { E } from './editor/state'
+import { renderChapterList } from './editor/metadata'
+import { drawWaveform } from './editor/waveform'
 
 interface ModelStatus {
   id:             string
@@ -222,8 +225,15 @@ function renderPanel(): void {
     <div class="editor-transcript-meta">
       ${dateStr} · ${meta.model} · ${langLabel} · ${segCount} ${t('transcript.segments', 'segmenter')}
     </div>
+    <div class="editor-transcript-meta" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <button class="btn-ghost btn-sm" id="btn-detect-chapters">${t('transcript.detectChapters', '✦ Generer kapitler fra tema')}</button>
+      <span id="detect-chapters-hint" style="opacity:.75"></span>
+    </div>
     <div class="editor-transcript-segments" id="editor-transcript-segments"></div>
   `
+
+  const detectBtn = $('btn-detect-chapters') as HTMLButtonElement | null
+  if (detectBtn) detectBtn.addEventListener('click', generateChaptersFromTranscript)
 
   const container = $('editor-transcript-segments')!
   for (const seg of meta.segments) {
@@ -252,6 +262,54 @@ function formatTime(sec: number): string {
   return h > 0
     ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
     : `${m}:${String(s).padStart(2,'0')}`
+}
+
+/**
+ * Generate topic chapters from the transcript. The Rust detector scans each
+ * line for Bible references ("Johannes 3:16") and enumeration points ("for det
+ * første", "punkt 2") and returns { time, title } markers on the recording's
+ * timeline. We MERGE into E.meta.chapters — keeping any manual chapters and
+ * skipping detected ones that duplicate an existing marker — then re-render the
+ * chapter list + waveform dots. The export embeds these as ID3 CHAP/CTOC.
+ */
+async function generateChaptersFromTranscript(): Promise<void> {
+  if (!currentTranscript || currentTranscript.segments.length === 0) return
+  const btn  = $('btn-detect-chapters') as HTMLButtonElement | null
+  const hint = $('detect-chapters-hint')
+  if (btn) { btn.disabled = true; btn.textContent = t('transcript.detecting', 'Analyserer tema…') }
+
+  const lines = currentTranscript.segments.map(s => ({ start: s.start, text: s.text }))
+  let detected: Array<{ time: number; title: string }> = []
+  try {
+    detected = (await window.api.editorDetectChapters(lines)) as Array<{ time: number; title: string }>
+  } catch {
+    detected = []
+  }
+
+  // Merge into the existing chapters, de-duping against markers already present
+  // (same title within 2 s, or any chapter within 1 s — manual or re-detected).
+  const existing = E.meta.chapters
+  let added = 0
+  for (const ch of detected) {
+    const dup = existing.some(
+      e => (e.title === ch.title && Math.abs(e.time - ch.time) < 2) || Math.abs(e.time - ch.time) < 1,
+    )
+    if (!dup) { existing.push({ time: ch.time, title: ch.title }); added++ }
+  }
+  existing.sort((a, b) => a.time - b.time)
+  E.metaDirty = true
+  renderChapterList()
+  drawWaveform()
+
+  if (btn) { btn.disabled = false; btn.textContent = t('transcript.detectChapters', '✦ Generer kapitler fra tema') }
+  if (hint) {
+    hint.textContent =
+      added > 0
+        ? `${added} ${t('transcript.chaptersAdded', 'kapitler lagt til')}`
+        : detected.length > 0
+          ? t('transcript.chaptersAllPresent', 'Alle funne kapitler finnes allerede')
+          : t('transcript.chaptersNoneFound', 'Fant ingen tema-kapitler i talen')
+  }
 }
 
 // ─── Modal: choose model + language ─────────────────────────────────────────
