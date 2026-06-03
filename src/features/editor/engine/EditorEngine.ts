@@ -484,13 +484,18 @@ export class EditorEngine {
   /** Resample the backend's fixed-bucket peak array to the engine's 100 Hz grid
    *  so the renderer's `sec * 100` indexing stays consistent with audio files. */
   private resamplePeaks(backend: number[], durationSec: number): Float32Array {
-    const total = Math.max(1, Math.ceil(durationSec * 100));
+    const RATE = 100;
+    const total = Math.max(1, Math.ceil(durationSec * RATE));
     const out = new Float32Array(total);
+    // Record clipping markers (peak ≥ 0.99) like the audio `computePeaks` path,
+    // so a clipped VIDEO recording shows the same waveform markers as audio.
+    this.state.clipTimes = [];
     const n = backend.length;
     if (n === 0) return out;
     for (let i = 0; i < total; i++) {
       const bucket = Math.min(n - 1, Math.floor((i / total) * n));
       out[i] = backend[bucket];
+      if (out[i] >= 0.99) this.state.clipTimes.push(i / RATE);
     }
     return out;
   }
