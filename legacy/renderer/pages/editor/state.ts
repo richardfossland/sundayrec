@@ -109,6 +109,10 @@ export const E = {
   channelRepairLeftDb: 0,        // only for gainDb (auto-balance)
   channelRepairRightDb: 0,       // only for gainDb (auto-balance)
 
+  // Video export container + codec (for video files).
+  videoFormat: 'mp4',            // mp4 | mov | mkv
+  videoCodec: 'h264',            // h264 | h265
+
   // Loop playback
   isLooping: false,
   loopStartSec: 0,

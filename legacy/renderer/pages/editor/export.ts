@@ -79,8 +79,31 @@ function setupEnhanceSection(): void {
   if (vocalSel) vocalSel.value = E.vocalChainPreset
   if (chanSel)  chanSel.value  = E.channelRepairMode === 'gainDb' ? '' : E.channelRepairMode
 
+  // Video format/codec pickers (active-class toggles like the audio format row).
+  const vfmtBtns = document.querySelectorAll<HTMLButtonElement>('.export-vfmt-btn')
+  vfmtBtns.forEach((b) => {
+    b.classList.toggle('active', b.dataset.vfmt === E.videoFormat)
+  })
+  const vcodecBtns = document.querySelectorAll<HTMLButtonElement>('.export-vcodec-btn')
+  vcodecBtns.forEach((b) => {
+    b.classList.toggle('active', b.dataset.vcodec === E.videoCodec)
+  })
+
   if (enhanceWired) return
   enhanceWired = true
+
+  vfmtBtns.forEach((b) => {
+    b.addEventListener('click', () => {
+      E.videoFormat = b.dataset.vfmt || 'mp4'
+      vfmtBtns.forEach((x) => x.classList.toggle('active', x === b))
+    })
+  })
+  vcodecBtns.forEach((b) => {
+    b.addEventListener('click', () => {
+      E.videoCodec = b.dataset.vcodec || 'h264'
+      vcodecBtns.forEach((x) => x.classList.toggle('active', x === b))
+    })
+  })
 
   vocalSel?.addEventListener('change', () => {
     E.vocalChainPreset = vocalSel.value
@@ -420,6 +443,8 @@ export async function runExport(): Promise<void> {
       masterPreset:     E.masterPreset || undefined,
       vocalChainPreset: E.vocalChainPreset || undefined,
       channelRepair,
+      videoFormat: E.videoFormat,
+      videoCodec:  E.videoCodec,
     })
   } else {
     result = await window.api.editorExportFile({

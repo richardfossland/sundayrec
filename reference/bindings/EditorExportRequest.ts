@@ -75,4 +75,9 @@ processing: EditorProcessing | null,
  * Channel repair to apply. Overrides the repair carried by `processing`/the
  * preset, and applies on its own (without any vocal chain) when set alone.
  */
-channelRepair: EditorChannelRepair | null, };
+channelRepair: EditorChannelRepair | null, 
+/**
+ * Video codec for a video-container export (`h264` default, or `h265`/`hevc`
+ * for ~half the size). Ignored for audio formats.
+ */
+videoCodec: string | null, };

@@ -162,6 +162,10 @@ pub struct EditorExportRequest {
     /// preset, and applies on its own (without any vocal chain) when set alone.
     #[serde(default)]
     pub channel_repair: Option<EditorChannelRepair>,
+    /// Video codec for a video-container export (`h264` default, or `h265`/`hevc`
+    /// for ~half the size). Ignored for audio formats.
+    #[serde(default)]
+    pub video_codec: Option<String>,
 }
 
 /// One chapter marker (a title at a time, in seconds). The renderer-facing mirror
@@ -1235,7 +1239,7 @@ pub async fn export(req: &EditorExportRequest) -> AppResult<EditorExportResult> 
     use sundayrec_core::chapters::remap_chapters_to_keeps;
     use sundayrec_core::editor::{
         audio_export_filter_complex, audio_simple_af, build_keeps, codec_args, collision_free_path,
-        ffmetadata, is_simple_audio_export, metadata_args, mp4_codec_args, video_filter_complex,
+        ffmetadata, is_simple_audio_export, metadata_args, video_filter_complex,
         Chapter as CoreChapter, CutRegion, RecordingMetadata,
     };
     use sundayrec_core::mastering::{build_apply_pass_filters, get_preset_by_id};
@@ -1246,15 +1250,17 @@ pub async fn export(req: &EditorExportRequest) -> AppResult<EditorExportResult> 
     if !(req.duration.is_finite() && req.duration > 0.0) {
         return Err(AppError::Validation("invalid_duration".into()));
     }
-    let fmt = match req.format.as_str() {
-        "mp3" | "aac" | "wav" | "flac" | "mp4" => req.format.as_str(),
-        _ => {
-            return Err(AppError::Validation(format!(
-                "invalid_format: {}",
-                req.format
-            )))
-        }
-    };
+    // Accept any format the core knows how to encode (broad, VLC-like) — audio
+    // formats via `codec_args`, video containers (mp4/mov/mkv/m4v) via the video
+    // path. The bundled ffmpeg has the encoders; only this gate used to be narrow.
+    if !sundayrec_core::editor::is_supported_export_format(&req.format) {
+        return Err(AppError::Validation(format!(
+            "invalid_format: {}",
+            req.format
+        )));
+    }
+    let fmt = req.format.as_str();
+    let is_video = sundayrec_core::editor::is_video_container(fmt);
 
     // 1. Core plans the keep-segments from the cuts.
     let cuts: Vec<CutRegion> = req
@@ -1337,11 +1343,11 @@ pub async fn export(req: &EditorExportRequest) -> AppResult<EditorExportResult> 
     let intro = req
         .intro_path
         .as_deref()
-        .filter(|p| fmt != "mp4" && Path::new(p).exists());
+        .filter(|p| !is_video && Path::new(p).exists());
     let outro = req
         .outro_path
         .as_deref()
-        .filter(|p| fmt != "mp4" && Path::new(p).exists());
+        .filter(|p| !is_video && Path::new(p).exists());
     let has_intro = intro.is_some();
     let has_outro = outro.is_some();
     let main_input_idx = if has_intro { 1 } else { 0 };
@@ -1393,11 +1399,16 @@ pub async fn export(req: &EditorExportRequest) -> AppResult<EditorExportResult> 
     if let Some(p) = &meta_path {
         args.extend(["-i".into(), p.clone()]);
     }
-    if fmt == "mp4" {
+    if is_video {
         let (fc, v_out, a_out) = video_filter_complex(0, &keeps, &proc_filters);
         args.extend(["-filter_complex".into(), fc]);
         args.extend(["-map".into(), v_out, "-map".into(), a_out]);
-        args.extend(mp4_codec_args());
+        // Codec: H.264 (default) or H.265 when requested, container-aware flags.
+        let codec = match req.video_codec.as_deref() {
+            Some("h265") | Some("hevc") => sundayrec_core::editor::VideoCodec::H265,
+            _ => sundayrec_core::editor::VideoCodec::H264,
+        };
+        args.extend(sundayrec_core::editor::video_codec_args(fmt, codec, None));
     } else if is_simple_audio_export(&keeps, &proc_filters, has_intro, has_outro) {
         args.extend(["-af".into(), audio_simple_af(&keeps[0])]);
         args.extend(codec_args(fmt, req.bitrate, req.bit_depth));
@@ -1842,6 +1853,7 @@ mod tests {
                 vocal_chain_preset: None,
                 processing: None,
                 channel_repair: None,
+                video_codec: None,
             };
 
             let rt = tokio::runtime::Runtime::new().unwrap();

@@ -180,25 +180,90 @@ pub fn codec_args(fmt: &str, bitrate: Option<u32>, bit_depth: Option<u8>) -> Vec
     }
 }
 
-/// Standard MP4 output codec args — mirrors `editor.MP4_CODEC_ARGS`.
+/// Standard MP4 output codec args — mirrors `editor.MP4_CODEC_ARGS`. Kept as the
+/// H.264/mp4 default; [`video_codec_args`] generalises this to other containers
+/// and to H.265.
 pub fn mp4_codec_args() -> Vec<String> {
-    [
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "18",
-        "-c:a",
-        "aac",
-        "-b:a",
-        "192k",
-        "-movflags",
-        "+faststart",
-    ]
-    .into_iter()
-    .map(String::from)
-    .collect()
+    video_codec_args("mp4", VideoCodec::H264, None)
+}
+
+/// The video codec for a video export.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum VideoCodec {
+    /// H.264 / AVC (`libx264`) — universal compatibility.
+    #[default]
+    H264,
+    /// H.265 / HEVC (`libx265`) — ~half the size at the same quality, but needs a
+    /// newer player. Tagged `hvc1` so Apple/QuickTime players accept it.
+    H265,
+}
+
+/// Output containers that carry a video stream (the editor re-encodes video +
+/// audio through the filter graph). webm is intentionally excluded — it needs a
+/// VP8/VP9 + Vorbis/Opus path, not the H.264/H.265 + AAC chain here.
+pub fn is_video_container(fmt: &str) -> bool {
+    matches!(fmt, "mp4" | "mov" | "mkv" | "m4v")
+}
+
+/// Every output format the editor can export to: any video container above, or
+/// any audio format [`codec_args`] handles (including the force-to-WAV set,
+/// which still produces a valid file). The export seam validates against this.
+pub fn is_supported_export_format(fmt: &str) -> bool {
+    is_video_container(fmt)
+        || matches!(
+            fmt,
+            "mp3"
+                | "aac"
+                | "m4a"
+                | "m4b"
+                | "m4r"
+                | "caf"
+                | "wav"
+                | "flac"
+                | "mka"
+                | "ogg"
+                | "oga"
+                | "opus"
+                | "aiff"
+                | "aif"
+                | "au"
+                | "snd"
+                | "wma"
+                | "mp1"
+                | "mp2"
+                | "ac3"
+                | "eac3"
+                | "amr"
+                | "3ga"
+                | "wv"
+                | "tta"
+                | "ape"
+                | "dts"
+                | "mpc"
+                | "ra"
+                | "ram"
+                | "spx"
+                | "gsm"
+        )
+}
+
+/// Build the video + audio codec args for a video export, honouring the chosen
+/// container and codec. H.265 carries the `hvc1` tag for QuickTime/Apple
+/// compatibility; `+faststart` (web progressive playback) is only emitted for
+/// the ISO/QuickTime containers that support it (mp4/mov/m4v — NOT mkv).
+pub fn video_codec_args(container: &str, codec: VideoCodec, crf: Option<u8>) -> Vec<String> {
+    let s = |v: &str| v.to_string();
+    let crf = crf.unwrap_or(18);
+    let mut a: Vec<String> = match codec {
+        VideoCodec::H264 => vec![s("-c:v"), s("libx264")],
+        VideoCodec::H265 => vec![s("-c:v"), s("libx265"), s("-tag:v"), s("hvc1")],
+    };
+    a.extend([s("-preset"), s("veryfast"), s("-crf"), crf.to_string()]);
+    a.extend([s("-c:a"), s("aac"), s("-b:a"), s("192k")]);
+    if matches!(container, "mp4" | "mov" | "m4v") {
+        a.extend([s("-movflags"), s("+faststart")]);
+    }
+    a
 }
 
 // ── Filter graph construction ─────────────────────────────────────────────────
@@ -1056,6 +1121,68 @@ mod tests {
     #[test]
     fn no_encoder_formats_transcode_to_pcm() {
         assert_eq!(codec_args("dts", None, None), vec!["-c:a", "pcm_s16le"]);
+    }
+
+    // ── format breadth + video codecs ────────────────────────────────────────────
+
+    #[test]
+    fn mp4_codec_args_unchanged_after_generalisation() {
+        // The generalised builder must still produce the exact legacy mp4 args.
+        assert_eq!(
+            mp4_codec_args(),
+            vec![
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "18",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-movflags",
+                "+faststart"
+            ]
+        );
+    }
+
+    #[test]
+    fn video_containers_recognised() {
+        for c in ["mp4", "mov", "mkv", "m4v"] {
+            assert!(is_video_container(c), "{c} should be a video container");
+        }
+        for c in ["mp3", "wav", "webm", "flac", "opus"] {
+            assert!(!is_video_container(c), "{c} is not a video container");
+        }
+    }
+
+    #[test]
+    fn supported_export_covers_audio_and_video() {
+        for f in [
+            "mp3", "wav", "flac", "aac", "m4a", "ogg", "opus", "wma", "aiff", "mp4", "mov", "mkv",
+        ] {
+            assert!(is_supported_export_format(f), "{f} should be supported");
+        }
+        assert!(!is_supported_export_format("xyz"));
+        assert!(!is_supported_export_format("exe"));
+    }
+
+    #[test]
+    fn h265_args_carry_hvc1_tag_and_faststart_only_on_iso() {
+        let mov = video_codec_args("mov", VideoCodec::H265, None);
+        assert!(mov.windows(2).any(|w| w == ["-c:v", "libx265"]), "{mov:?}");
+        assert!(mov.windows(2).any(|w| w == ["-tag:v", "hvc1"]), "{mov:?}");
+        assert!(mov.windows(2).any(|w| w == ["-movflags", "+faststart"]));
+        // mkv does NOT support faststart.
+        let mkv = video_codec_args("mkv", VideoCodec::H265, None);
+        assert!(!mkv.iter().any(|a| a == "+faststart"), "{mkv:?}");
+    }
+
+    #[test]
+    fn video_codec_args_crf_override() {
+        let a = video_codec_args("mp4", VideoCodec::H264, Some(23));
+        assert!(a.windows(2).any(|w| w == ["-crf", "23"]), "{a:?}");
     }
 
     // ── filter graphs ──────────────────────────────────────────────────────────

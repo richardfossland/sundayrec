@@ -2404,8 +2404,17 @@
 
     <!-- Video export notice (shown instead of format picker for video files) -->
     <div id="export-video-notice" class="export-video-notice" style="display:none">
-      <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="flex-shrink:0;opacity:.7"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zm12.553 1.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/></svg>
-      <span data-i18n="editor.videoFileNotice">Videofil — eksporteres som MP4 (H.264 + AAC)</span>
+      <div class="export-section-label" data-i18n="editor.videoFormat">Video-format</div>
+      <div class="export-fmt-row">
+        <button class="export-fmt-btn export-vfmt-btn active" data-vfmt="mp4">MP4</button>
+        <button class="export-fmt-btn export-vfmt-btn" data-vfmt="mov">MOV</button>
+        <button class="export-fmt-btn export-vfmt-btn" data-vfmt="mkv">MKV</button>
+      </div>
+      <div class="export-section-label" data-i18n="editor.videoCodec" style="margin-top:8px">Video-kodek</div>
+      <div class="export-fmt-row">
+        <button class="export-fmt-btn export-vcodec-btn active" data-vcodec="h264" data-i18n="editor.codecH264">H.264 (universell)</button>
+        <button class="export-fmt-btn export-vcodec-btn" data-vcodec="h265" data-i18n="editor.codecH265">H.265 (mindre fil)</button>
+      </div>
     </div>
 
     <!-- Format picker (hidden for video files) -->

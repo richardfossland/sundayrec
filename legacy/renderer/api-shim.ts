@@ -19,8 +19,19 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 
-const AUDIO_EXT = ["mp3", "wav", "flac", "m4a", "aac", "ogg", "opus"];
-const VIDEO_EXT = ["mp4", "mov", "mkv", "webm", "avi", "m4v"];
+// Broad, VLC-like accept lists — the bundled ffmpeg demuxes all of these, and
+// the loader falls back to an ffmpeg → 8 kHz WAV decode for anything the browser
+// can't decode directly. Keep these in sync with the drag-drop sets in
+// editor-page.ts / editor/state.ts.
+const AUDIO_EXT = [
+  "mp3", "mp1", "mp2", "wav", "flac", "aac", "m4a", "m4b", "m4r", "ogg", "oga",
+  "opus", "aiff", "aif", "wma", "mka", "ac3", "eac3", "amr", "3ga", "caf", "wv",
+  "tta", "au", "snd", "ape", "dts", "mpc", "ra", "ram", "spx", "gsm",
+];
+const VIDEO_EXT = [
+  "mp4", "mov", "mkv", "m4v", "webm", "avi", "wmv", "ts", "mts", "m2ts", "flv",
+  "3gp", "asf", "f4v",
+];
 const IMAGE_EXT = ["png", "jpg", "jpeg", "webp", "gif"];
 
 /** A native file/folder picker that returns the chosen path (or null), never
@@ -510,8 +521,45 @@ const api: Record<string, unknown> = {
   editorPickVideoFile: async () =>
     pickPath({ name: "Video", extensions: VIDEO_EXT }),
   editorSaveVideo: async () => ({ ok: false }),
-  editorExportVideo: async (params: unknown) =>
-    call("editor_export", { request: params }, { ok: false }),
+  // Video export → editor_export with a video container (mp4/mov/mkv) + codec
+  // (h264/h265). Maps the renderer params to EditorExportRequest just like
+  // editorExportFile (the old raw-passthrough shape didn't match the request).
+  editorExportVideo: async (params: unknown) => {
+    const o = (params ?? {}) as Record<string, unknown>;
+    const m = (o.metadata ?? {}) as Record<string, unknown>;
+    const fmt = (o.videoFormat as string) || "mp4";
+    const chapters = Array.isArray(m.chapters)
+      ? (m.chapters as Array<Record<string, unknown>>)
+          .filter((c) => c && typeof c.time === "number" && typeof c.title === "string")
+          .map((c) => ({ time: c.time as number, title: c.title as string }))
+      : [];
+    return call(
+      "editor_export",
+      {
+        request: {
+          inputPath: o.inputPath,
+          cutRegions: o.cutRegions ?? [],
+          duration: o.duration ?? 0,
+          format: fmt,
+          outputFolder: o.outputFolder ?? "",
+          bitrate: null,
+          bitDepth: null,
+          masterPreset: (o.masterPreset as string) || null,
+          introPath: o.introPath ?? null,
+          outroPath: o.outroPath ?? null,
+          gainDb: null,
+          chapters,
+          title: (m.title as string) || null,
+          speaker: (m.speaker as string) || null,
+          description: (m.description as string) || null,
+          vocalChainPreset: (o.vocalChainPreset as string) || null,
+          channelRepair: (o.channelRepair as Record<string, unknown>) ?? null,
+          videoCodec: (o.videoCodec as string) || null,
+        },
+      },
+      { ok: false },
+    );
+  },
   editorProbeStreams: async (fp: string) =>
     call("editor_probe_streams", { inputPath: fp }, { streams: [] }),
   editorReadTranscript: async (fp: string) =>
