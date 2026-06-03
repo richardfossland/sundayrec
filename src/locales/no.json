@@ -1334,7 +1334,9 @@
     "errorPrefix": "Feil ({{code}})",
     "startFailed": "Kunne ikke starte opptaket:",
     "signalGood": "Bra",
-    "signalLoud": "Høy"
+    "signalLoud": "Høy",
+    "reconnectTitle": "Lydkilden ble frakoblet",
+    "reconnectDesc": "Kobler til på nytt automatisk — opptaket fortsetter når enheten er tilbake."
   },
   "scheduleScreen": {
     "pageTitle": "Tidsplan",

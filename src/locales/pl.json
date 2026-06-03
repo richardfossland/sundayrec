@@ -1334,7 +1334,9 @@
     "errorPrefix": "Błąd ({{code}})",
     "startFailed": "Nie udało się rozpocząć nagrywania:",
     "signalGood": "Dobry",
-    "signalLoud": "Głośny"
+    "signalLoud": "Głośny",
+    "reconnectTitle": "Źródło dźwięku zostało odłączone",
+    "reconnectDesc": "Automatyczne ponowne łączenie — nagrywanie wznawia się po powrocie urządzenia."
   },
   "scheduleScreen": {
     "pageTitle": "Harmonogram",

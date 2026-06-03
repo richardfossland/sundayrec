@@ -671,6 +671,46 @@ export function RecordingScreen({
         }}
       >
         <div style={{ width: "100%", maxWidth: 880 }}>
+          {status === "reconnecting" && (
+            <div
+              role="alert"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "12px 16px",
+                marginBottom: 18,
+                borderRadius: 12,
+                background: "var(--sr-red-tint)",
+                border: "1px solid var(--sr-red)",
+              }}
+            >
+              <span
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: "50%",
+                  background: "var(--sr-red)",
+                  animation: "sr-pulse 1.1s ease-in-out infinite",
+                  flex: "0 0 12px",
+                }}
+              />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600 }}>
+                  {t(
+                    "recordingScreen.reconnectTitle",
+                    "Lydkilden ble frakoblet",
+                  )}
+                </div>
+                <div className="sr-card-desc">
+                  {t(
+                    "recordingScreen.reconnectDesc",
+                    "Kobler til på nytt automatisk — opptaket fortsetter når enheten er tilbake.",
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
           {video && (
             <div
               className="sr-card"

@@ -1334,7 +1334,9 @@
     "errorPrefix": "Fehler ({{code}})",
     "startFailed": "Aufnahme konnte nicht gestartet werden:",
     "signalGood": "Gut",
-    "signalLoud": "Laut"
+    "signalLoud": "Laut",
+    "reconnectTitle": "Die Audioquelle wurde getrennt",
+    "reconnectDesc": "Verbindung wird automatisch wiederhergestellt — die Aufnahme läuft weiter, sobald das Gerät zurück ist."
   },
   "scheduleScreen": {
     "pageTitle": "Zeitplan",

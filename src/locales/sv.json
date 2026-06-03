@@ -1334,7 +1334,9 @@
     "errorPrefix": "Fel ({{code}})",
     "startFailed": "Kunde inte starta inspelningen:",
     "signalGood": "Bra",
-    "signalLoud": "Hög"
+    "signalLoud": "Hög",
+    "reconnectTitle": "Ljudkällan kopplades från",
+    "reconnectDesc": "Återansluter automatiskt — inspelningen fortsätter när enheten är tillbaka."
   },
   "scheduleScreen": {
     "pageTitle": "Tidsplan",

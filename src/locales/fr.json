@@ -1334,7 +1334,9 @@
     "errorPrefix": "Erreur ({{code}})",
     "startFailed": "Impossible de démarrer l'enregistrement :",
     "signalGood": "Bon",
-    "signalLoud": "Fort"
+    "signalLoud": "Fort",
+    "reconnectTitle": "La source audio a été déconnectée",
+    "reconnectDesc": "Reconnexion automatique — l’enregistrement reprend dès le retour de l’appareil."
   },
   "scheduleScreen": {
     "pageTitle": "Planning",

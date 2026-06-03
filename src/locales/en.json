@@ -1334,7 +1334,9 @@
     "errorPrefix": "Error ({{code}})",
     "startFailed": "Couldn't start the recording:",
     "signalGood": "Good",
-    "signalLoud": "Loud"
+    "signalLoud": "Loud",
+    "reconnectTitle": "The audio source disconnected",
+    "reconnectDesc": "Reconnecting automatically — recording resumes when the device is back."
   },
   "scheduleScreen": {
     "pageTitle": "Schedule",
