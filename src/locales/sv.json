@@ -1575,7 +1575,11 @@
       "webhookUrlLabel": "Webhook-URL",
       "webhookWarningTitle": "Skicka även vid varningar",
       "webhookWarningDesc": "Som standard skickas endast felmeddelanden.",
-      "testWebhook": "Testa webhook"
+      "testWebhook": "Testa webhook",
+      "smtpHint": "Egen SMTP-server (valfritt — tomt använder inbyggd e-post).",
+      "smtpHost": "SMTP-värd",
+      "smtpPort": "Port",
+      "smtpUser": "Användarnamn"
     },
     "system": {
       "languageTitle": "Språk",
@@ -1598,7 +1602,11 @@
       "autoUpdateTitle": "Uppdatera automatiskt",
       "autoUpdateDesc": "Laddar ner och installerar nya versioner tyst i bakgrunden.",
       "helpTitle": "Hjälp och utbildning",
-      "reopenGuide": "Öppna startguiden igen"
+      "reopenGuide": "Öppna startguiden igen",
+      "trayTitle": "Minimera till systemfältet",
+      "trayDesc": "Stängknappen lägger appen i fältet i stället för att avsluta.",
+      "wakeTitle": "Väck datorn ur viloläge före inspelning",
+      "wakeDesc": "Schemalägger en väckning så att en planerad inspelning aldrig missas."
     },
     "suite": {
       "introDesc": "Anslut SundayRec till systerapparna i Sunday-sviten. Allt är valfritt och av som standard — SundayRec fungerar precis som förut utan detta.",

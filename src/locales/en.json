@@ -1575,7 +1575,11 @@
       "webhookUrlLabel": "Webhook URL",
       "webhookWarningTitle": "Also send on warnings",
       "webhookWarningDesc": "By default, only error messages are sent.",
-      "testWebhook": "Test webhook"
+      "testWebhook": "Test webhook",
+      "smtpHint": "Custom SMTP server (optional — blank uses the built-in mail).",
+      "smtpHost": "SMTP host",
+      "smtpPort": "Port",
+      "smtpUser": "Username"
     },
     "system": {
       "languageTitle": "Language",
@@ -1598,7 +1602,11 @@
       "autoUpdateTitle": "Update automatically",
       "autoUpdateDesc": "Downloads and installs new versions quietly in the background.",
       "helpTitle": "Help and training",
-      "reopenGuide": "Reopen the startup guide"
+      "reopenGuide": "Reopen the startup guide",
+      "trayTitle": "Minimize to the system tray",
+      "trayDesc": "The close button tucks the app into the tray instead of quitting.",
+      "wakeTitle": "Wake the computer from sleep before recording",
+      "wakeDesc": "Schedules a wake-up so a planned recording is never missed."
     },
     "suite": {
       "introDesc": "Connect SundayRec to the sister apps in the Sunday suite. Everything is optional and off by default — SundayRec works exactly as before without it.",

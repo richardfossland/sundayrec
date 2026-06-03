@@ -1123,10 +1123,6 @@ function TabVarsler({ s, update }: TabProps) {
         icon="mail"
         pad
       >
-        {/* NOTE: `emailSmtp` / `emailSmtpPort` / `emailSmtpUser` are real
-            Settings fields but this redesign has no SMTP host/port/user inputs
-            (only the recipient). Wiring them would require adding controls and
-            changing the layout, which is out of scope here — left static. */}
         <SettingRow
           title={t(
             "settingsScreen.notifications.emailOnErrorTitle",
@@ -1154,6 +1150,53 @@ function TabVarsler({ s, update }: TabProps) {
             placeholder="richard@altafrikirke.no"
             onChange={(e) => update({ emailAddress: e.target.value })}
           />
+        </div>
+        <div
+          className="sr-card-desc"
+          style={{ marginTop: 12, marginBottom: 4 }}
+        >
+          {t(
+            "settingsScreen.notifications.smtpHint",
+            "Egen SMTP-server (valgfritt — blankt bruker innebygd e-post).",
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div className="sr-field" style={{ flex: "2 1 200px" }}>
+            <span className="sr-label">
+              {t("settingsScreen.notifications.smtpHost", "SMTP-vert")}
+            </span>
+            <input
+              className="sr-input mono"
+              type="text"
+              value={s.emailSmtp}
+              placeholder="smtp.gmail.com"
+              onChange={(e) => update({ emailSmtp: e.target.value })}
+            />
+          </div>
+          <div className="sr-field" style={{ flex: "0 1 90px" }}>
+            <span className="sr-label">
+              {t("settingsScreen.notifications.smtpPort", "Port")}
+            </span>
+            <input
+              className="sr-input mono"
+              type="number"
+              value={s.emailSmtpPort}
+              onChange={(e) =>
+                update({ emailSmtpPort: Number(e.target.value) || 587 })
+              }
+            />
+          </div>
+          <div className="sr-field" style={{ flex: "2 1 200px" }}>
+            <span className="sr-label">
+              {t("settingsScreen.notifications.smtpUser", "Brukernavn")}
+            </span>
+            <input
+              className="sr-input mono"
+              type="text"
+              value={s.emailSmtpUser}
+              onChange={(e) => update({ emailSmtpUser: e.target.value })}
+            />
+          </div>
         </div>
       </Card>
       <Card
@@ -1344,10 +1387,6 @@ function TabSystem({ s, update }: TabProps) {
         icon="gear"
         pad
       >
-        {/* NOTE: `minimizeToTray` and `wakeFromSleep` are real Settings fields
-            with no matching row in this redesign's System card (only
-            launch-at-login / show-on-startup / ask-open-editor). Adding rows
-            would alter the layout, so they're left static here. */}
         <SettingRow
           title={t(
             "settingsScreen.system.launchTitle",
@@ -1361,6 +1400,38 @@ function TabSystem({ s, update }: TabProps) {
             <LiveToggle
               on={s.launchAtLogin}
               onChange={(next) => update({ launchAtLogin: next })}
+            />
+          }
+        />
+        <SettingRow
+          title={t(
+            "settingsScreen.system.trayTitle",
+            "Minimer til systemstatusfeltet",
+          )}
+          desc={t(
+            "settingsScreen.system.trayDesc",
+            "Lukkeknappen legger appen i statusfeltet i stedet for å avslutte.",
+          )}
+          control={
+            <LiveToggle
+              on={s.minimizeToTray}
+              onChange={(next) => update({ minimizeToTray: next })}
+            />
+          }
+        />
+        <SettingRow
+          title={t(
+            "settingsScreen.system.wakeTitle",
+            "Vekk maskinen fra dvale før opptak",
+          )}
+          desc={t(
+            "settingsScreen.system.wakeDesc",
+            "Planlegger en oppvåkning slik at et planlagt opptak ikke går glipp av.",
+          )}
+          control={
+            <LiveToggle
+              on={s.wakeFromSleep}
+              onChange={(next) => update({ wakeFromSleep: next })}
             />
           }
         />

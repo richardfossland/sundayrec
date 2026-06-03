@@ -1575,7 +1575,11 @@
       "webhookUrlLabel": "Webhook-URL",
       "webhookWarningTitle": "Send også på advarsler",
       "webhookWarningDesc": "Som standard sendes kun feilmeldinger.",
-      "testWebhook": "Test webhook"
+      "testWebhook": "Test webhook",
+      "smtpHint": "Egen SMTP-server (valgfritt — blankt bruker innebygd e-post).",
+      "smtpHost": "SMTP-vert",
+      "smtpPort": "Port",
+      "smtpUser": "Brukernavn"
     },
     "system": {
       "languageTitle": "Språk",
@@ -1598,7 +1602,11 @@
       "autoUpdateTitle": "Oppdater automatisk",
       "autoUpdateDesc": "Laster ned og installerer nye versjoner stille i bakgrunnen.",
       "helpTitle": "Hjelp og opplæring",
-      "reopenGuide": "Åpne oppstartsveileder på nytt"
+      "reopenGuide": "Åpne oppstartsveileder på nytt",
+      "trayTitle": "Minimer til systemstatusfeltet",
+      "trayDesc": "Lukkeknappen legger appen i statusfeltet i stedet for å avslutte.",
+      "wakeTitle": "Vekk maskinen fra dvale før opptak",
+      "wakeDesc": "Planlegger en oppvåkning slik at et planlagt opptak ikke går glipp av."
     },
     "suite": {
       "introDesc": "Koble SundayRec til søsterappene i Sunday-suiten. Alt er valgfritt og av som standard — SundayRec fungerer akkurat som før uten dette.",

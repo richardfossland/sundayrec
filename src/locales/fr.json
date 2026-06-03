@@ -1575,7 +1575,11 @@
       "webhookUrlLabel": "URL du webhook",
       "webhookWarningTitle": "Envoyer aussi pour les avertissements",
       "webhookWarningDesc": "Par défaut, seuls les messages d'erreur sont envoyés.",
-      "testWebhook": "Tester le webhook"
+      "testWebhook": "Tester le webhook",
+      "smtpHint": "Serveur SMTP personnalisé (facultatif — vide utilise le courrier intégré).",
+      "smtpHost": "Hôte SMTP",
+      "smtpPort": "Port",
+      "smtpUser": "Nom d’utilisateur"
     },
     "system": {
       "languageTitle": "Langue",
@@ -1598,7 +1602,11 @@
       "autoUpdateTitle": "Mettre à jour automatiquement",
       "autoUpdateDesc": "Télécharge et installe les nouvelles versions discrètement en arrière-plan.",
       "helpTitle": "Aide et formation",
-      "reopenGuide": "Rouvrir le guide de démarrage"
+      "reopenGuide": "Rouvrir le guide de démarrage",
+      "trayTitle": "Réduire dans la barre d’état système",
+      "trayDesc": "Le bouton de fermeture place l’app dans la barre au lieu de quitter.",
+      "wakeTitle": "Réveiller l’ordinateur avant l’enregistrement",
+      "wakeDesc": "Programme un réveil pour ne jamais manquer un enregistrement prévu."
     },
     "suite": {
       "introDesc": "Connectez SundayRec aux applications sœurs de la suite Sunday. Tout est facultatif et désactivé par défaut — SundayRec fonctionne exactement comme avant sans cela.",
