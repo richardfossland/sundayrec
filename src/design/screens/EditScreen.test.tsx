@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { EditScreen } from "./EditScreen";
+import i18n from "@/i18n";
 
 /**
  * The ported editor screen is mostly engine-driven (Web Audio + canvas), which
@@ -28,6 +29,8 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 beforeEach(() => {
   invoke.mockClear();
   recordings = [];
+  // Deterministic language for the text assertions below.
+  void i18n.changeLanguage("no");
 });
 
 function renderEdit() {
@@ -43,7 +46,7 @@ describe("EditScreen (ported)", () => {
   it("renders the empty state with open + timeline cards", () => {
     renderEdit();
     expect(screen.getByText("Rediger")).toBeTruthy();
-    expect(screen.getByText("Ingen fil åpnet")).toBeTruthy();
+    expect(screen.getByText("Ingen fil åpen")).toBeTruthy();
     expect(screen.getByText("Åpne fil")).toBeTruthy();
     expect(screen.getByText("Tidslinje")).toBeTruthy();
   });

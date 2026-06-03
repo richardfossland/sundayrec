@@ -22,6 +22,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import type { RecordingRow } from "@/lib/bindings/RecordingRow";
 import type { EditorExportRequest } from "@/lib/bindings/EditorExportRequest";
@@ -38,16 +39,18 @@ const EXPORT_FORMATS = ["mp3", "wav", "flac", "mp4"] as const;
 type ExportFormat = (typeof EXPORT_FORMATS)[number];
 
 /** Mastering presets (two-pass loudnorm) the export can apply. `null` = none.
- *  Ids mirror the Electron editor + the Rust core preset table. */
-const MASTER_PRESETS: { id: string | null; label: string }[] = [
-  { id: null, label: "Ingen" },
-  { id: "speech-clear", label: "Tale — tydelig" },
-  { id: "speech-punchy", label: "Strømming −14" },
-  { id: "speech-natural", label: "Naturlig −19" },
-  { id: "music-speech", label: "Musikk + tale −16" },
+ *  Ids mirror the Electron editor + the Rust core preset table; labels resolve
+ *  through i18n (the catalogs already carry these preset strings). */
+const MASTER_PRESETS: { id: string | null; labelKey: string }[] = [
+  { id: null, labelKey: "editor.masterNone" },
+  { id: "speech-clear", labelKey: "editScreen.presetSpeechClear" },
+  { id: "speech-punchy", labelKey: "editScreen.presetStreaming" },
+  { id: "speech-natural", labelKey: "editScreen.presetNatural" },
+  { id: "music-speech", labelKey: "editScreen.presetMusicSpeech" },
 ];
 
 export function EditScreen() {
+  const { t } = useTranslation();
   // One engine per mounted screen.
   const engine = useMemo(() => new EditorEngine(), []);
   const snap = useSyncExternalStore(engine.subscribe, engine.getSnapshot);
@@ -285,13 +288,13 @@ export function EditScreen() {
     } catch (err) {
       setExportError(
         String(err).includes("feature_disabled")
-          ? "Eksport er ikke aktivert i denne byggevarianten."
+          ? t("editor.featureDisabled")
           : String(err),
       );
     } finally {
       setExporting(false);
     }
-  }, [engine, snap.filePath, snap.duration, format, masterPreset]);
+  }, [engine, snap.filePath, snap.duration, format, masterPreset, t]);
 
   // Measure the file's loudness (EBU R128 LUFS) so the user can judge whether
   // mastering is needed before exporting. Resets whenever the file changes.
@@ -321,10 +324,8 @@ export function EditScreen() {
   return (
     <div className="sr-content">
       <div className="sr-pagehead">
-        <h1 className="sr-pagetitle">Rediger</h1>
-        <p className="sr-pagedesc">
-          Klipp bort stillhet, normaliser og eksporter ferdig episode.
-        </p>
+        <h1 className="sr-pagetitle">{t("nav.editor")}</h1>
+        <p className="sr-pagedesc">{t("editScreen.pageDesc")}</p>
       </div>
 
       {/* ── File bar ─────────────────────────────────────────────────── */}
@@ -332,8 +333,8 @@ export function EditScreen() {
         {!snap.hasFile && !snap.loading ? (
           <EmptyState
             icon="wave"
-            title="Ingen fil åpnet"
-            desc="Åpne et opptak for å klippe, normalisere og eksportere."
+            title={t("editor.emptyTitle")}
+            desc={t("editor.emptyDesc")}
             action={
               <div
                 style={{
@@ -344,7 +345,7 @@ export function EditScreen() {
                 }}
               >
                 <Btn variant="gold" icon="folder" onClick={onPickFile}>
-                  Åpne fil
+                  {t("editScreen.openFileShort")}
                 </Btn>
                 {(recordings.data?.length ?? 0) > 0 && (
                   <Btn
@@ -352,7 +353,7 @@ export function EditScreen() {
                     icon="clock"
                     onClick={() => setShowRecents((v) => !v)}
                   >
-                    Siste opptak
+                    {t("editScreen.recentRecordings")}
                   </Btn>
                 )}
               </div>
@@ -371,12 +372,17 @@ export function EditScreen() {
               <Icon name="file" size={20} />
               <div style={{ flex: 1, minWidth: 160 }}>
                 <div style={{ fontWeight: 600 }}>
-                  {snap.loading ? "Laster …" : snap.fileName || "Uten navn"}
+                  {snap.loading
+                    ? t("editScreen.loadingShort")
+                    : snap.fileName || "—"}
                 </div>
                 <div className="sr-card-desc">
                   {formatDuration(snap.duration)}
                   {snap.clipCount > 0 && (
-                    <> · ⚠ {snap.clipCount} klipp-topper</>
+                    <>
+                      {" · ⚠ "}
+                      {t("editScreen.clipPeaks", { count: snap.clipCount })}
+                    </>
                   )}
                 </div>
               </div>
@@ -386,13 +392,13 @@ export function EditScreen() {
                 icon="clock"
                 onClick={() => setShowRecents((v) => !v)}
               >
-                Siste opptak
+                {t("editScreen.recentRecordings")}
               </Btn>
               <Btn variant="ghost" sm icon="folder" onClick={onPickFile}>
-                Åpne annen fil
+                {t("editScreen.openOtherFile")}
               </Btn>
               <Btn variant="ghost" sm icon="x" onClick={onCloseFile}>
-                Lukk fil
+                {t("editScreen.closeFile")}
               </Btn>
             </div>
 
@@ -402,18 +408,20 @@ export function EditScreen() {
                   variant={isPlaying ? "gold" : "ghost"}
                   icon="play"
                   iconFill
-                  ariaLabel="Spill / pause"
+                  ariaLabel={t("editScreen.kbdPlay")}
                   onClick={() => engine.togglePlay(false)}
                 >
-                  {isPlaying ? "Pause" : "Spill"}
+                  {isPlaying
+                    ? t("editScreen.kbdPause")
+                    : t("editScreen.kbdPlay")}
                 </Btn>
                 <Btn
                   variant={isPreviewing ? "gold" : "ghost"}
                   icon="skip"
-                  ariaLabel="Forhåndsvis uten kutt"
+                  ariaLabel={t("editScreen.previewSkip")}
                   onClick={() => engine.togglePlay(true)}
                 >
-                  Forhåndsvis
+                  {t("editScreen.previewSkip")}
                 </Btn>
                 <span
                   style={{
@@ -443,7 +451,7 @@ export function EditScreen() {
           >
             {(recordings.data?.length ?? 0) === 0 ? (
               <div className="sr-card-desc">
-                Ingen opptak i historikken ennå.
+                {t("editScreen.noRecentRecordings")}
               </div>
             ) : (
               recordings.data!.map((r) => (
@@ -504,12 +512,14 @@ export function EditScreen() {
               <Icon name="sparkle" size={20} />
               <div style={{ flex: 1, minWidth: 180 }}>
                 <div style={{ fontWeight: 600 }}>
-                  Fant antatt preken — {snap.sermon.minutes} min
+                  {t("editScreen.assumedSermon", {
+                    minutes: snap.sermon.minutes,
+                  })}
                 </div>
                 <div className="sr-card-desc">
                   {formatTime(snap.sermon.start)} –{" "}
-                  {formatTime(snap.sermon.end)}. Klipp bort alt rundt med ett
-                  klikk.
+                  {formatTime(snap.sermon.end)}.{" "}
+                  {t("editScreen.sermonBannerDesc")}
                 </div>
               </div>
               <Btn
@@ -517,14 +527,14 @@ export function EditScreen() {
                 icon="scissors"
                 onClick={() => engine.autoTrimToSermon()}
               >
-                Behold bare preken
+                {t("editScreen.keepSermonOnly")}
               </Btn>
               <Btn
                 variant="ghost"
                 sm
                 onClick={() => setAutoTrimDismissed(true)}
               >
-                Avvis
+                {t("editScreen.dismiss")}
               </Btn>
             </div>
           </Card>
@@ -532,7 +542,7 @@ export function EditScreen() {
 
       {/* ── Waveform ─────────────────────────────────────────────────── */}
       <Card
-        title="Tidslinje"
+        title={t("editScreen.timeline")}
         icon="wave"
         action={
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -541,25 +551,25 @@ export function EditScreen() {
                 className="sr-card-desc"
                 style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
               >
-                <Spinner size={13} /> Analyserer …
+                <Spinner size={13} /> {t("editScreen.analyzing")}
               </span>
             )}
             <Btn
               variant="ghost"
               sm
               icon="zoomOut"
-              ariaLabel="Zoom ut"
+              ariaLabel={t("editor.zoomOut")}
               onClick={() => engine.zoom(1.5)}
             />
             <Btn
               variant="ghost"
               sm
               icon="zoomIn"
-              ariaLabel="Zoom inn"
+              ariaLabel={t("editor.zoomIn")}
               onClick={() => engine.zoom(0.6)}
             />
             <Btn variant="ghost" sm onClick={() => engine.fitView()}>
-              Vis alt
+              {t("editor.fitAll")}
             </Btn>
           </div>
         }
@@ -588,7 +598,7 @@ export function EditScreen() {
                 pointerEvents: "none",
               }}
             >
-              Åpne en fil for å se bølgeformen.
+              {t("editor.dragHint")}
             </div>
           )}
           <canvas
@@ -598,11 +608,20 @@ export function EditScreen() {
           <div
             style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 2 }}
           >
-            <KbdHint k="Dra" label="Marker kutt" />
-            <KbdHint k="Mellomrom" label="Spill" />
-            <KbdHint k="Tab" label="Neste kutt" />
-            <KbdHint k="⌘Z" label="Angre" />
-            <KbdHint k="Høyreklikk" label="Fjern kutt" />
+            <KbdHint
+              k={t("editScreen.kbdDrag")}
+              label={t("editScreen.kbdMarkCut")}
+            />
+            <KbdHint
+              k={t("editScreen.kbdSpace")}
+              label={t("editScreen.kbdPlay")}
+            />
+            <KbdHint k="Tab" label={t("editScreen.kbdNextCut")} />
+            <KbdHint k="⌘Z" label={t("editScreen.kbdUndo")} />
+            <KbdHint
+              k={t("editScreen.kbdRightClick")}
+              label={t("editScreen.removeCut")}
+            />
           </div>
         </div>
       </Card>
@@ -624,17 +643,17 @@ export function EditScreen() {
               onClick={onNormalize}
             >
               {snap.normalized
-                ? `✓ Normalisert (${snap.audioGainDb >= 0 ? "+" : ""}${snap.audioGainDb.toFixed(1)} dB)`
-                : "Normaliser lydnivå"}
+                ? `✓ ${t("editor.normalizeApplied")} (${snap.audioGainDb >= 0 ? "+" : ""}${snap.audioGainDb.toFixed(1)} dB)`
+                : t("editScreen.normalizeLevel")}
             </Btn>
             <div className="sr-card-desc" style={{ flex: 1, minWidth: 160 }}>
               {snap.normalized
-                ? "Toppunkt nå −1 dBFS — trygg for eksport."
-                : "Justerer toppunktet til −1 dBFS for en trygg sluttmiks."}
+                ? t("editor.normalizeResult")
+                : t("editScreen.normalizeDescAudio")}
             </div>
             {snap.normalized && (
               <Btn variant="ghost" sm onClick={() => engine.resetNormalize()}>
-                Tilbakestill
+                {t("editScreen.resetBtn")}
               </Btn>
             )}
           </div>
@@ -644,7 +663,7 @@ export function EditScreen() {
       {/* ── Cut list ─────────────────────────────────────────────────── */}
       {snap.cuts.length > 0 && (
         <Card
-          title="Kutt"
+          title={t("editor.cutRegion")}
           icon="scissors"
           action={
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -656,7 +675,7 @@ export function EditScreen() {
                 disabled={!snap.canUndo}
                 onClick={() => engine.undo()}
               >
-                Angre
+                {t("editScreen.kbdUndo")}
               </Btn>
               <Btn
                 variant="ghost"
@@ -664,14 +683,17 @@ export function EditScreen() {
                 disabled={!snap.canRedo}
                 onClick={() => engine.redo()}
               >
-                Gjør om
+                {t("editScreen.redo")}
               </Btn>
               <Btn variant="danger" sm onClick={() => engine.clearAllCuts()}>
-                Fjern alle
+                {t("editor.cutsNone")}
               </Btn>
             </div>
           }
-          desc={`Beholder ${formatDuration(snap.remainingSec)} · fjerner ${formatDuration(snap.removedSec)}`}
+          desc={t("editScreen.keepRemove", {
+            keep: formatDuration(snap.remainingSec),
+            remove: formatDuration(snap.removedSec),
+          })}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {snap.cuts.map((c, i) => (
@@ -699,14 +721,14 @@ export function EditScreen() {
                   sm
                   icon="play"
                   iconFill
-                  ariaLabel="Spill rundt kuttet"
+                  ariaLabel={t("editScreen.previewSkip")}
                   onClick={() => engine.previewCut(c)}
                 />
                 <Btn
                   variant="ghost"
                   sm
                   icon="x"
-                  ariaLabel="Fjern kutt"
+                  ariaLabel={t("editScreen.removeCut")}
                   onClick={() => engine.deleteCut(i)}
                 />
               </div>
@@ -717,33 +739,39 @@ export function EditScreen() {
 
       {/* ── Metadata ─────────────────────────────────────────────────── */}
       {snap.hasFile && (
-        <Card title="Metadata" icon="list" desc="Tittel, taler, beskrivelse">
+        <Card
+          title={t("editScreen.metadata")}
+          icon="list"
+          desc={t("editScreen.metadataHint")}
+        >
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span className="sr-label">TITTEL</span>
+              <span className="sr-label">{t("editScreen.metaTitle")}</span>
               <input
                 className="sr-input"
                 value={title}
-                placeholder="F.eks. Pinsegudstjeneste, 24. mai"
+                placeholder={t("editScreen.metaTitlePlaceholder")}
                 onChange={(e) => setTitle(e.target.value)}
               />
             </label>
             <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span className="sr-label">TALER</span>
+              <span className="sr-label">{t("editScreen.metaSpeaker")}</span>
               <input
                 className="sr-input"
                 value={speaker}
-                placeholder="Talerens navn"
+                placeholder={t("editScreen.metaSpeakerPlaceholder")}
                 onChange={(e) => setSpeaker(e.target.value)}
               />
             </label>
             <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span className="sr-label">BESKRIVELSE</span>
+              <span className="sr-label">
+                {t("editScreen.metaDescription")}
+              </span>
               <textarea
                 className="sr-input"
                 value={description}
                 rows={3}
-                placeholder="Kort beskrivelse av episoden"
+                placeholder={t("editScreen.metaDescriptionPlaceholder")}
                 onChange={(e) => setDescription(e.target.value)}
                 style={{ resize: "vertical" }}
               />
@@ -754,10 +782,10 @@ export function EditScreen() {
 
       {/* ── Export ───────────────────────────────────────────────────── */}
       {snap.hasFile && (
-        <Card title="Eksporter" icon="download">
+        <Card title={t("editor.export")} icon="download">
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div>
-              <span className="sr-label">FORMAT</span>
+              <span className="sr-label">{t("editScreen.format")}</span>
               <div
                 style={{
                   display: "flex",
@@ -781,7 +809,7 @@ export function EditScreen() {
             </div>
 
             <div>
-              <span className="sr-label">LYDMASTERING</span>
+              <span className="sr-label">{t("editor.preset")}</span>
               <div
                 style={{
                   display: "flex",
@@ -800,7 +828,7 @@ export function EditScreen() {
                     }
                     onClick={() => setMasterPreset(p.id)}
                   >
-                    {p.label}
+                    {t(p.labelKey)}
                   </button>
                 ))}
               </div>
@@ -820,14 +848,16 @@ export function EditScreen() {
                   loading={analyzingLoudness}
                   onClick={onAnalyzeLoudness}
                 >
-                  Analyser lydnivå
+                  {t("editScreen.normalizeLevel")}
                 </Btn>
                 {loudness && (
                   <span className="sr-card-desc">
-                    Nå: {loudness.inputI.toFixed(1)} LUFS → mål{" "}
-                    {loudness.targetLufs.toFixed(0)} LUFS
+                    {t("editScreen.loudnessNow", {
+                      input: loudness.inputI.toFixed(1),
+                      target: loudness.targetLufs.toFixed(0),
+                    })}
                     {loudness.inputI < loudness.targetLufs - 1 &&
-                      " · mastering anbefales"}
+                      ` · ${t("editScreen.masteringAdvised")}`}
                   </span>
                 )}
               </div>
@@ -846,16 +876,21 @@ export function EditScreen() {
                 loading={exporting}
                 onClick={onExport}
               >
-                Eksporter {format.toUpperCase()}
+                {t("editor.export")} {format.toUpperCase()}
               </Btn>
               <div className="sr-card-desc" style={{ flex: 1, minWidth: 160 }}>
                 {snap.cuts.length > 0
-                  ? `${snap.cuts.length} kutt blir fjernet — beholder ${formatDuration(snap.remainingSec)}.`
-                  : "Hele filen eksporteres (ingen kutt markert)."}
+                  ? t("editScreen.cutsWillRemove", {
+                      count: snap.cuts.length,
+                      remaining: formatDuration(snap.remainingSec),
+                    })
+                  : t("editScreen.wholeFileExport")}
               </div>
             </div>
             {exportResult && (
-              <Badge kind="ok">Lagret: {baseName(exportResult)}</Badge>
+              <Badge kind="ok">
+                {t("editScreen.savedAs", { name: baseName(exportResult) })}
+              </Badge>
             )}
             {exportError && <Badge kind="err">{exportError}</Badge>}
           </div>
