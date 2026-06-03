@@ -27,7 +27,7 @@ import type { AudioDeviceList } from "@/lib/bindings/AudioDeviceList";
 import type { IntegrationSettings } from "@/lib/bindings/IntegrationSettings";
 import { LANGUAGE_NAMES, SUPPORTED_LNGS, changeLanguage } from "@/i18n";
 import { SETTINGS_QUERY_KEY } from "@/features/settings/queryKey";
-import { useInputDevices, useVideoDevices } from "@/design/hooks";
+import { useVideoDevices } from "@/design/hooks";
 import { navigateTo } from "@/lib/navigation";
 
 import { Icon } from "../Icon";
@@ -182,10 +182,16 @@ function LiveSegOpt({
  * built-in mic. The "Oppdater" button re-runs enumeration so devices plugged in
  * after launch become visible.
  */
-function AudioDevicePicker({ s, update }: TabProps) {
-  const { t } = useTranslation();
-  // Local enumeration with an explicit refetch (so "Oppdater" can re-run it —
-  // the shared `useInputDevices` hook only enumerates once on mount).
+/**
+ * Enumerate the system's input devices ONCE for the whole Lydkilde tab, with an
+ * explicit `refetch` for the "Oppdater" button. Lifting this here means the
+ * device picker and the channel-select card share a single enumeration instead
+ * of each probing the OS audio stack independently on every tab open.
+ */
+function useInputDeviceList(): {
+  inputs: AudioDeviceList["inputs"];
+  refetch: () => void;
+} {
   const [list, setList] = useState<AudioDeviceList | null>(null);
   const [nonce, setNonce] = useState(0);
   useEffect(() => {
@@ -197,8 +203,16 @@ function AudioDevicePicker({ s, update }: TabProps) {
       alive = false;
     };
   }, [nonce]);
+  return { inputs: list?.inputs ?? [], refetch: () => setNonce((n) => n + 1) };
+}
 
-  const inputs = list?.inputs ?? [];
+function AudioDevicePicker({
+  s,
+  update,
+  inputs,
+  refetch,
+}: TabProps & { inputs: AudioDeviceList["inputs"]; refetch: () => void }) {
+  const { t } = useTranslation();
   // The persisted choice. Empty/unset selects the host default device.
   const selectedName = s.deviceName ?? null;
 
@@ -283,11 +297,7 @@ function AudioDevicePicker({ s, update }: TabProps) {
             "Ser du ikke riktig enhet? Sjekk at lydkortet er koblet til.",
           )}
         </span>
-        <button
-          className="sr-btn ghost sm"
-          onClick={() => setNonce((n) => n + 1)}
-          type="button"
-        >
+        <button className="sr-btn ghost sm" onClick={refetch} type="button">
           <Icon name="refresh" size={14} />
           {t("settingsScreen.audio.refresh", "Oppdater")}
         </button>
@@ -317,10 +327,12 @@ function AudioDevicePicker({ s, update }: TabProps) {
  * Shown ONLY when stereo is selected AND the chosen device exposes >2 channels —
  * the common single-mixer case. `null` values keep the default (0, 1) routing.
  */
-function ChannelSelectCard({ s, update }: TabProps) {
+function ChannelSelectCard({
+  s,
+  update,
+  inputs,
+}: TabProps & { inputs: AudioDeviceList["inputs"] }) {
   const { t } = useTranslation();
-  const list = useInputDevices();
-  const inputs = list?.inputs ?? [];
   const selected =
     inputs.find((d) =>
       s.deviceName != null ? d.name === s.deviceName : d.is_default,
@@ -402,9 +414,16 @@ function ChannelSelectCard({ s, update }: TabProps) {
 
 function TabLydkilde({ s, update }: TabProps) {
   const { t } = useTranslation();
+  // One enumeration shared by the device picker AND the channel-select card.
+  const { inputs, refetch } = useInputDeviceList();
   return (
     <>
-      <AudioDevicePicker s={s} update={update} />
+      <AudioDevicePicker
+        s={s}
+        update={update}
+        inputs={inputs}
+        refetch={refetch}
+      />
       <Card
         title={t("settingsScreen.audio.checkTitle", "Sjekk at alt fungerer")}
         icon="shield"
@@ -461,7 +480,7 @@ function TabLydkilde({ s, update }: TabProps) {
           />
         </div>
       </Card>
-      <ChannelSelectCard s={s} update={update} />
+      <ChannelSelectCard s={s} update={update} inputs={inputs} />
       <Card
         title={t("settingsScreen.audio.sampleRateTitle", "Samplingsrate")}
         pad
