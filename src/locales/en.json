@@ -1266,7 +1266,13 @@
     "separateAudioSub": "In addition to the video file, a separate audio file is saved in the chosen format.",
     "separateAudioFormat": "Audio format",
     "cameraNoSignal": "No image",
-    "viewAll": "View all"
+    "viewAll": "View all",
+    "cdSoon": "soon",
+    "cdMin": "in {{m}} min",
+    "cdH": "in {{h}}h",
+    "cdHm": "in {{h}}h {{m}}m",
+    "cdDays": "in {{d}} days",
+    "wakeAuto": "The computer wakes automatically"
   },
   "liveScreen": {
     "title": "Live stream",

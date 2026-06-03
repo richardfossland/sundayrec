@@ -1266,7 +1266,13 @@
     "separateAudioSub": "Oprócz pliku wideo zapisywany jest osobny plik audio w wybranym formacie.",
     "separateAudioFormat": "Format audio",
     "cameraNoSignal": "Brak obrazu",
-    "viewAll": "Zobacz wszystkie"
+    "viewAll": "Zobacz wszystkie",
+    "cdSoon": "wkrótce",
+    "cdMin": "za {{m}} min",
+    "cdH": "za {{h}}h",
+    "cdHm": "za {{h}}h {{m}}m",
+    "cdDays": "za {{d}} dni",
+    "wakeAuto": "Komputer wybudza się automatycznie"
   },
   "liveScreen": {
     "title": "Transmisja na żywo",

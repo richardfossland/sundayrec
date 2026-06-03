@@ -1266,7 +1266,13 @@
     "separateAudioSub": "Ud over videofilen gemmes en separat lydfil i det valgte format.",
     "separateAudioFormat": "Lydformat",
     "cameraNoSignal": "Intet billede",
-    "viewAll": "Se alle"
+    "viewAll": "Se alle",
+    "cdSoon": "snart",
+    "cdMin": "om {{m}} min",
+    "cdH": "om {{h}}t",
+    "cdHm": "om {{h}}t {{m}}m",
+    "cdDays": "om {{d}} dage",
+    "wakeAuto": "Computeren vækkes automatisk"
   },
   "liveScreen": {
     "title": "Direkte udsendelse",

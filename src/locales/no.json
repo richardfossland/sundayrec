@@ -1266,7 +1266,13 @@
     "separateAudioSub": "I tillegg til videofilen lagres en egen lydfil i valgt format.",
     "separateAudioFormat": "Lydformat",
     "cameraNoSignal": "Ingen bilde",
-    "viewAll": "Se alle"
+    "viewAll": "Se alle",
+    "cdSoon": "snart",
+    "cdMin": "om {{m}} min",
+    "cdH": "om {{h}}t",
+    "cdHm": "om {{h}}t {{m}}m",
+    "cdDays": "om {{d}} dager",
+    "wakeAuto": "Maskinen vekkes automatisk"
   },
   "liveScreen": {
     "title": "Direkte sending",

@@ -1266,7 +1266,13 @@
     "separateAudioSub": "En plus du fichier vidéo, un fichier audio séparé est enregistré dans le format choisi.",
     "separateAudioFormat": "Format audio",
     "cameraNoSignal": "Aucune image",
-    "viewAll": "Tout voir"
+    "viewAll": "Tout voir",
+    "cdSoon": "bientôt",
+    "cdMin": "dans {{m}} min",
+    "cdH": "dans {{h}}h",
+    "cdHm": "dans {{h}}h {{m}}m",
+    "cdDays": "dans {{d}} jours",
+    "wakeAuto": "L’ordinateur se réveille automatiquement"
   },
   "liveScreen": {
     "title": "Diffusion en direct",

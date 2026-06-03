@@ -60,18 +60,48 @@ function TrustBanner() {
     queryKey: ["scheduler_status"],
     queryFn: () => invoke<ScheduleStatus>("scheduler_status"),
   });
+  const { data: settings } = useQuery<Settings>({
+    queryKey: SETTINGS_QUERY_KEY,
+    queryFn: () => invoke<Settings>("settings_get"),
+  });
+  // Tick every 30 s so the countdown to the next recording stays live.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   const nextDate = formatNextDate(status?.next);
-  const nextTime = status?.next
-    ? (() => {
-        const d = new Date(status.next as string);
-        return Number.isNaN(d.getTime())
-          ? null
-          : d.toLocaleTimeString("nb-NO", {
-              hour: "2-digit",
-              minute: "2-digit",
-            });
-      })()
-    : null;
+  const nextMs = status?.next ? new Date(status.next as string).getTime() : NaN;
+  const nextTime =
+    Number.isFinite(nextMs) && status?.next
+      ? new Date(status.next as string).toLocaleTimeString("nb-NO", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : null;
+
+  // Live "om 2t 15m" countdown to the next recording.
+  let countdown: string | null = null;
+  const remMs = Number.isFinite(nextMs) ? nextMs - nowMs : NaN;
+  if (Number.isFinite(remMs) && remMs > 0) {
+    const min = Math.round(remMs / 60_000);
+    if (min < 1) countdown = t("homeScreen.cdSoon", "snart");
+    else if (min < 60)
+      countdown = t("homeScreen.cdMin", "om {{m}} min", { m: min });
+    else if (min < 24 * 60) {
+      const h = Math.floor(min / 60);
+      const m = min % 60;
+      countdown = m
+        ? t("homeScreen.cdHm", "om {{h}}t {{m}}m", { h, m })
+        : t("homeScreen.cdH", "om {{h}}t", { h });
+    } else {
+      countdown = t("homeScreen.cdDays", "om {{d}} dager", {
+        d: Math.round(min / (24 * 60)),
+      });
+    }
+  }
+  const showWakeBadge = !!settings?.wakeFromSleep && !!nextTime;
 
   return (
     <div className="sr-banner ready" style={{ marginBottom: 16 }}>
@@ -118,6 +148,22 @@ function TrustBanner() {
             style={{ fontSize: 12.5, color: "var(--sr-text-3)", marginTop: 2 }}
           >
             {t("homeScreen.atTime", "kl. {{time}}", { time: nextTime })}
+            {countdown && <> · {countdown}</>}
+          </div>
+        )}
+        {showWakeBadge && (
+          <div
+            style={{
+              marginTop: 6,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              fontSize: 11,
+              color: "var(--sr-text-3)",
+            }}
+          >
+            <Icon name="power" size={13} />
+            {t("homeScreen.wakeAuto", "Maskinen vekkes automatisk")}
           </div>
         )}
       </div>
