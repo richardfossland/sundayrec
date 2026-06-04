@@ -38,8 +38,14 @@ pub async fn editor_segments(input_path: String) -> AppResult<Vec<EditorSegment>
 /// points). Pure/offline/deterministic — no ffmpeg, works without the `whisper`
 /// or `editor` features. Returns chapters on the original recording timeline.
 #[tauri::command]
-pub fn editor_detect_chapters(lines: Vec<EditorTranscriptLine>) -> AppResult<Vec<EditorChapter>> {
-    Ok(editor::detect_chapters(&lines))
+pub fn editor_detect_chapters(
+    lines: Vec<EditorTranscriptLine>,
+    lang: Option<String>,
+) -> AppResult<Vec<EditorChapter>> {
+    Ok(editor::detect_chapters(
+        &lines,
+        lang.as_deref().unwrap_or("no"),
+    ))
 }
 
 /// Analyse a recording's stereo channel balance and recommend a repair

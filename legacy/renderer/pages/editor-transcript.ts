@@ -279,9 +279,12 @@ async function generateChaptersFromTranscript(): Promise<void> {
   if (btn) { btn.disabled = true; btn.textContent = t('transcript.detecting', 'Analyserer tema…') }
 
   const lines = currentTranscript.segments.map(s => ({ start: s.start, text: s.text }))
+  // Use the transcript's detected language so English sermons get English
+  // Bible-name + point detection (Norwegian otherwise).
+  const lang = currentTranscript.language || 'no'
   let detected: Array<{ time: number; title: string }> = []
   try {
-    detected = (await window.api.editorDetectChapters(lines)) as Array<{ time: number; title: string }>
+    detected = (await window.api.editorDetectChapters(lines, lang)) as Array<{ time: number; title: string }>
   } catch {
     detected = []
   }

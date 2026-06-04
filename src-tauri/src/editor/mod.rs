@@ -398,11 +398,12 @@ pub struct EditorExportResult {
 }
 
 /// Detect topic chapters from a transcript (Bible references + enumeration
-/// points). Pure, offline, deterministic — no ffmpeg, so it compiles + runs
+/// points) in the transcript's language (`lang_code`: `en` → English, otherwise
+/// Norwegian). Pure, offline, deterministic — no ffmpeg, so it compiles + runs
 /// regardless of the `editor`/`whisper` features. Times are in the original
 /// recording timeline; `editor_export` remaps them through the cut-plan.
-pub fn detect_chapters(lines: &[EditorTranscriptLine]) -> Vec<EditorChapter> {
-    use sundayrec_core::chapters::{detect_chapters as core_detect, TranscriptLine};
+pub fn detect_chapters(lines: &[EditorTranscriptLine], lang_code: &str) -> Vec<EditorChapter> {
+    use sundayrec_core::chapters::{detect_chapters as core_detect, Language, TranscriptLine};
     let core_lines: Vec<TranscriptLine> = lines
         .iter()
         .map(|l| TranscriptLine {
@@ -410,7 +411,7 @@ pub fn detect_chapters(lines: &[EditorTranscriptLine]) -> Vec<EditorChapter> {
             text: l.text.clone(),
         })
         .collect();
-    core_detect(&core_lines)
+    core_detect(&core_lines, Language::from_code(lang_code))
         .into_iter()
         .map(|c| EditorChapter {
             time: c.time,

@@ -52,7 +52,7 @@ opptak/kamera).
 Du svarte på 3 av spørsmålene, og jeg implementerte dem med en gang:
 
 7. **VideoToolbox hardware-enkoder** (du: «ja») — `VideoEncoder{Software,
-   Hardware}` + `videotoolbox_codec_args` (h264/hevc_videotoolbox, `-b:v`
+Hardware}` + `videotoolbox_codec_args` (h264/hevc_videotoolbox, `-b:v`
    oppløsnings-utledet bitrate, `-realtime 1`). Opptak bruker det KUN på macOS
    (faller tilbake til software ellers). Nytt `video_encoder`-innstilling +
    «ENKODER»-velger i UI. Gjør live 4K H.265 realistisk.

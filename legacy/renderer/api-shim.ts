@@ -515,8 +515,8 @@ const api: Record<string, unknown> = {
   // Topic chapters from the transcript (Bible refs + enumeration points). Pure
   // offline detection in Rust; returns [{ time, title }] on the original
   // recording timeline. Empty array on any failure (no transcript = no chapters).
-  editorDetectChapters: async (lines: unknown) =>
-    call("editor_detect_chapters", { lines: lines ?? [] }, []),
+  editorDetectChapters: async (lines: unknown, lang?: string) =>
+    call("editor_detect_chapters", { lines: lines ?? [], lang: lang ?? null }, []),
   editorSetVideoPath: async (fp: string) =>
     call("editor_load_recording", { inputPath: fp }, { ok: false }),
   // editor_peaks → { peaks, sampleRate }; old too-large path wants { data,
