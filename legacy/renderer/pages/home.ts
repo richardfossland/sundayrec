@@ -640,6 +640,15 @@ export function setupHome(): void {
     await window.api.saveSettings({ ...settings })
     updateVideoToggleButton()
     loadVideoInfoStrip()
+    // The Home "Video på" toggle and Innstillinger → Video are ONE setting —
+    // keep the settings checkbox in sync live so they never disagree (mirrors the
+    // audio-separate toggle's cross-sync).
+    const settingsToggle = document.getElementById('opt-video-enable') as HTMLInputElement | null
+    if (settingsToggle) {
+      settingsToggle.checked = nowEnabled
+      const panel = document.getElementById('video-settings-panel')
+      if (panel) panel.style.display = nowEnabled ? '' : 'none'
+    }
 
     const pageHome = document.getElementById('page-home')
     if (nowEnabled) {
