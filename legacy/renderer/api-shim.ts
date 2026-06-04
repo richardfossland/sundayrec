@@ -654,7 +654,10 @@ const api: Record<string, unknown> = {
     ),
 
   // ── Mastering (editor_master_* / editor_mastering_analyze) ──────────────
-  masterPresets: async () => [], // TODO Phase 3: presets are client-side; no command
+  // The 4 built-in mastering presets from the core (id/label/description +
+  // targets/filters). Without this the preset dropdown was empty → the whole
+  // mastering panel was unusable.
+  masterPresets: async () => call("editor_master_presets", undefined, []),
   // editor_master_preview/apply take a single `request` struct; cancel takes jobId.
   // Mastering commands return bare structs; the consumer expects { ok, … }.
   masterPreview: async (

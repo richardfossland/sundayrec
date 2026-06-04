@@ -34,6 +34,13 @@ pub async fn editor_segments(input_path: String) -> AppResult<Vec<EditorSegment>
     editor::segments(&input_path).await
 }
 
+/// The built-in mastering presets for the editor's preset dropdown. Pure core
+/// (no ffmpeg / feature gate), so the panel is never empty.
+#[tauri::command]
+pub fn editor_master_presets() -> AppResult<Vec<crate::editor::EditorMasterPreset>> {
+    Ok(editor::master_presets())
+}
+
 /// Detect topic chapters from a transcript (Bible references + enumeration
 /// points). Pure/offline/deterministic — no ffmpeg, works without the `whisper`
 /// or `editor` features. Returns chapters on the original recording timeline.

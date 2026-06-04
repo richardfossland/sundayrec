@@ -284,6 +284,7 @@ pub fn run() {
             commands::editor::editor_load_recording,
             commands::editor::editor_peaks,
             commands::editor::editor_segments,
+            commands::editor::editor_master_presets,
             commands::editor::editor_detect_chapters,
             commands::editor::editor_diagnose_channels,
             commands::editor::editor_auto_process,

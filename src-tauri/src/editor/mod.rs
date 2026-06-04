@@ -389,6 +389,39 @@ pub struct EditorAutoProcess {
     pub summary: String,
 }
 
+/// A mastering preset for the editor's preset dropdown (mirror of
+/// [`sundayrec_core::mastering::MasterPreset`]). The renderer renders `label`/
+/// `description` and applies by `id`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "../../src/lib/bindings/EditorMasterPreset.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct EditorMasterPreset {
+    pub id: String,
+    pub label: String,
+    pub description: String,
+    pub target_lufs: f64,
+    pub target_lra: f64,
+    pub true_peak_db: f64,
+    pub filters: String,
+}
+
+/// The built-in mastering presets, for the editor's preset dropdown. Pure core —
+/// no ffmpeg, no feature gate.
+pub fn master_presets() -> Vec<EditorMasterPreset> {
+    sundayrec_core::mastering::master_presets()
+        .into_iter()
+        .map(|p| EditorMasterPreset {
+            id: p.id,
+            label: p.label,
+            description: p.description,
+            target_lufs: p.target_lufs,
+            target_lra: p.target_lra,
+            true_peak_db: p.true_peak_db,
+            filters: p.filters,
+        })
+        .collect()
+}
+
 /// The outcome of an export: where the file landed.
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
 #[ts(export, export_to = "../../src/lib/bindings/EditorExportResult.ts")]
