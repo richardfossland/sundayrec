@@ -113,6 +113,23 @@ export const E = {
   videoFormat: 'mp4',            // mp4 | mov | mkv
   videoCodec: 'h264',            // h264 | h265
 
+  // Advanced vocal-chain mixer (full per-stage processing override). When
+  // useMixer is true the export sends this object as `processing` (wins over the
+  // vocalChainPreset). Mirrors EditorProcessing / VocalChain::default().
+  useMixer: false,
+  mixer: {
+    highpassEnabled: true, highpassHz: 80,
+    denoiseEnabled: false, denoiseDb: 12, denoiseFloorDb: -25,
+    dereverbEnabled: false, dereverbStrength: 0.4,
+    gateEnabled: false, gateThresholdDb: -40, gateRatio: 2,
+    eq: [] as Array<{ freqHz: number; gainDb: number; q: number }>,
+    compEnabled: true, compThresholdDb: -18, compRatio: 3,
+    compAttackMs: 5, compReleaseMs: 80, compMakeupDb: 2,
+    deesserEnabled: false, deesserIntensity: 0.4,
+    limiterEnabled: false, limiterDb: -1,
+    gainDb: 0,
+  },
+
   // Loop playback
   isLooping: false,
   loopStartSec: 0,

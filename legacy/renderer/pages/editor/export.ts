@@ -1,9 +1,9 @@
 import { t } from '../../i18n'
 import { settings } from '../../state'
 import { E, $, clearDirty } from './state'
-import { getExportFilters } from './peaks'
 import { clearEditorDraft } from './cuts'
 import { saveMetadata } from './metadata'
+import { renderMixer, loadPresetIntoMixer, mixerProcessing } from './mixer'
 
 // ── Export + publish flow ───────────────────────────────────────────────────
 
@@ -78,6 +78,13 @@ function setupEnhanceSection(): void {
   // Sync current state into the controls.
   if (vocalSel) vocalSel.value = E.vocalChainPreset
   if (chanSel)  chanSel.value  = E.channelRepairMode === 'gainDb' ? '' : E.channelRepairMode
+  const mixerToggleSync = $('opt-use-mixer') as HTMLInputElement | null
+  const mixerControlsSync = $('mixer-controls')
+  if (mixerToggleSync) mixerToggleSync.checked = E.useMixer
+  if (mixerControlsSync) {
+    mixerControlsSync.style.display = E.useMixer ? '' : 'none'
+    if (E.useMixer) renderMixer(mixerControlsSync)
+  }
 
   // Video format/codec pickers (active-class toggles like the audio format row).
   const vfmtBtns = document.querySelectorAll<HTMLButtonElement>('.export-vfmt-btn')
@@ -105,8 +112,23 @@ function setupEnhanceSection(): void {
     })
   })
 
+  // Advanced mixer: toggle visibility + render; preset selection loads into it.
+  const mixerToggle = $('opt-use-mixer') as HTMLInputElement | null
+  const mixerControls = $('mixer-controls')
+  const syncMixerVisibility = () => {
+    if (mixerControls) mixerControls.style.display = E.useMixer ? '' : 'none'
+  }
+  mixerToggle?.addEventListener('change', () => {
+    E.useMixer = mixerToggle.checked
+    syncMixerVisibility()
+    if (E.useMixer && mixerControls) renderMixer(mixerControls)
+  })
+
   vocalSel?.addEventListener('change', () => {
     E.vocalChainPreset = vocalSel.value
+    // Keep the mixer in sync when a preset is picked, so opening it shows the
+    // preset's settings (the mixer is the editable form of the same chain).
+    if (vocalSel.value && mixerControls) loadPresetIntoMixer(vocalSel.value, mixerControls)
   })
   chanSel?.addEventListener('change', () => {
     E.channelRepairMode = chanSel.value
@@ -428,6 +450,9 @@ export async function runExport(): Promise<void> {
   const channelRepair = E.channelRepairMode
     ? { mode: E.channelRepairMode, leftDb: E.channelRepairLeftDb, rightDb: E.channelRepairRightDb }
     : undefined
+  // The advanced mixer (when enabled) overrides the preset → send full processing.
+  const processing = E.useMixer ? mixerProcessing() : undefined
+  const vocalChainPreset = E.useMixer ? undefined : (E.vocalChainPreset || undefined)
 
   if (E.isVideoFile) {
     result = await window.api.editorExportVideo({
@@ -436,12 +461,13 @@ export async function runExport(): Promise<void> {
       duration:     E.duration,
       mode,
       outputFolder: E.exportOutputFolder || undefined,
-      processing: { ffmpegFilters: getExportFilters() },
+      gainDb:     E.audioGainDb || undefined,
       introPath:  (E.includeIntroOutro && E.videoIntroPath) ? E.videoIntroPath : undefined,
       outroPath:  (E.includeIntroOutro && E.videoOutroPath) ? E.videoOutroPath : undefined,
       metadata:   E.meta,
       masterPreset:     E.masterPreset || undefined,
-      vocalChainPreset: E.vocalChainPreset || undefined,
+      vocalChainPreset,
+      processing,
       channelRepair,
       videoFormat: E.videoFormat,
       videoCodec:  E.videoCodec,
@@ -456,12 +482,13 @@ export async function runExport(): Promise<void> {
       outputFormat: fmt,
       outputBitrate:  bitrate,
       outputBitDepth: bitDepth,
-      processing: { ffmpegFilters: getExportFilters() },
+      gainDb:     E.audioGainDb || undefined,
       introPath:  (E.includeIntroOutro && settings.editorIntroPath) ? settings.editorIntroPath : undefined,
       outroPath:  (E.includeIntroOutro && settings.editorOutroPath) ? settings.editorOutroPath : undefined,
       metadata:   E.meta,
       masterPreset:     E.masterPreset || undefined,
-      vocalChainPreset: E.vocalChainPreset || undefined,
+      vocalChainPreset,
+      processing,
       channelRepair,
     })
   }

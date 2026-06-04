@@ -356,6 +356,27 @@ select:focus:not(:focus-visible) {
 .option-card.is-disabled {
   opacity: .4; cursor: not-allowed; pointer-events: none;
 }
+
+/* Advanced vocal-chain mixer (export modal). */
+.mixer-controls {
+  margin-top: 10px; display: flex; flex-direction: column; gap: 8px;
+  max-height: 320px; overflow-y: auto; padding-right: 4px;
+}
+.mixer-stage {
+  border: 1px solid var(--border2); border-radius: var(--r);
+  background: var(--surface2); padding: 8px 10px;
+}
+.mixer-stage-head {
+  display: flex; align-items: center; gap: 8px;
+  font-weight: 600; font-size: 13px; margin-bottom: 4px;
+}
+.mixer-slider-row {
+  display: grid; grid-template-columns: 110px 1fr 64px;
+  align-items: center; gap: 8px; padding: 2px 0;
+}
+.mixer-slider-label { font-size: 12px; opacity: .85; }
+.mixer-slider-row input[type="range"] { width: 100%; }
+.mixer-slider-val { font-size: 12px; text-align: right; opacity: .7; font-variant-numeric: tabular-nums; }
 .option-card input[type="radio"] {
   position: absolute; opacity: 0; pointer-events: none;
 }
