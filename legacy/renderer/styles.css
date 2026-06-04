@@ -356,6 +356,35 @@ select:focus:not(:focus-visible) {
 .option-card.is-disabled {
   opacity: .4; cursor: not-allowed; pointer-events: none;
 }
+/* Per-card capability badge: "kameraets maks" (native) or "ikke støttet". */
+.option-card-cap-badge {
+  margin-top: 4px; font-size: 10px; line-height: 1.2; letter-spacing: .02em;
+  text-transform: uppercase; padding: 1px 6px; border-radius: 999px;
+}
+.option-card-cap-badge.cap-native {
+  color: var(--gold, #f0bb47);
+  background: color-mix(in srgb, var(--gold, #f0bb47) 14%, transparent);
+}
+.option-card-cap-badge.cap-unsupported {
+  color: var(--text-3, #8899bb);
+  background: rgba(255, 255, 255, .05);
+}
+
+/* Live camera-feed resolution overlay (bottom-left of the preview) — shows what
+   the camera ACTUALLY delivers, so it's clear when it differs from the recording
+   resolution setting. */
+.video-preview-res {
+  position: absolute; left: 10px; bottom: 10px; z-index: 3;
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 9px; border-radius: 999px;
+  background: rgba(12, 16, 32, 0.72); backdrop-filter: blur(4px);
+  font-size: 12px; font-variant-numeric: tabular-nums; color: #eaeaf6;
+  pointer-events: none;
+}
+.video-preview-res::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--gold, #f0bb47); flex-shrink: 0;
+}
 
 /* Advanced vocal-chain mixer (export modal). */
 .mixer-controls {

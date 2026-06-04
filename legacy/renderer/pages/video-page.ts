@@ -224,11 +224,30 @@ export async function applyCameraCapabilities(): Promise<void> {
   // Empty/failed probe → offer everything (don't block on a probe miss).
   if (!cap || cap.supportedResolutions.length === 0) return
 
-  // Disable unsupported resolution cards.
+  // The highest supported tag = the camera's native ceiling (list is ascending).
+  const nativeTag = [...cap.supportedResolutions].pop()
+
+  // Disable unsupported resolution cards + badge the native one.
   for (const r of resInputs) {
     const ok = cap.supportedResolutions.includes(r.value)
     r.disabled = !ok
-    ;(r.closest('.option-card') as HTMLElement | null)?.classList.toggle('is-disabled', !ok)
+    const card = r.closest('.option-card') as HTMLElement | null
+    card?.classList.toggle('is-disabled', !ok)
+    // Refresh the per-card capability badge.
+    card?.querySelector('.option-card-cap-badge')?.remove()
+    if (card) {
+      const badge = document.createElement('div')
+      badge.className = 'option-card-cap-badge'
+      if (!ok) {
+        badge.textContent = t('video.resNotSupported', 'ikke støttet')
+        badge.classList.add('cap-unsupported')
+        card.appendChild(badge)
+      } else if (r.value === nativeTag) {
+        badge.textContent = t('video.resNative', 'kameraets maks')
+        badge.classList.add('cap-native')
+        card.appendChild(badge)
+      }
+    }
   }
   // Disable unsupported fps options.
   if (fpsEl) {
@@ -239,18 +258,25 @@ export async function applyCameraCapabilities(): Promise<void> {
 
   // If the current pick is now unsupported, fall back to the best supported.
   const checked = resInputs.find(r => r.checked)
-  if (checked && checked.disabled) {
-    const best = [...cap.supportedResolutions].pop() // highest supported (list is ascending)
-    const fallback = resInputs.find(r => r.value === best)
-    if (fallback) { fallback.checked = true }
-    if (warnEl) {
-      warnEl.textContent = t('video.resUnsupported', `Kameraet støtter ikke valgt oppløsning — satt til ${best}. Maks: ${cap.maxHeight}p / ${cap.maxFps} fps.`)
-      warnEl.style.display = ''
-    }
+  const fellBack = !!(checked && checked.disabled)
+  if (fellBack) {
+    const fallback = resInputs.find(r => r.value === nativeTag)
+    if (fallback) fallback.checked = true
   }
   if (fpsEl && fpsEl.selectedOptions[0]?.disabled) {
     const bestFps = [...cap.supportedFramerates].pop()
     if (bestFps != null) fpsEl.value = String(bestFps)
+  }
+
+  // Always show the camera's native ceiling; prepend a warning when we had to
+  // fall back from an unsupported pick.
+  if (warnEl) {
+    const info = `${t('video.cameraDelivers', 'Kameraet leverer maks')} ${cap.maxHeight}p · ${cap.maxFps} fps.`
+    warnEl.textContent = fellBack
+      ? `${t('video.resUnsupportedShort', 'Valgt oppløsning støttes ikke — satt til kameraets maks.')} ${info}`
+      : info
+    ;(warnEl as HTMLElement).style.color = fellBack ? 'var(--warning, #d08700)' : 'var(--text-3, #8899bb)'
+    warnEl.style.display = ''
   }
 }
 

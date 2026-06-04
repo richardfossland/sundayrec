@@ -291,6 +291,22 @@ async function applyHomeVideoDeviceSelection(): Promise<void> {
   }
 }
 
+/** Show the live feed's true resolution + fps as an overlay on the preview. */
+function showFeedResolution(video: HTMLVideoElement, stream: MediaStream): void {
+  const el = document.getElementById('video-preview-res')
+  if (!el) return
+  const s = stream.getVideoTracks()[0]?.getSettings()
+  const w = video.videoWidth || s?.width || 0
+  const h = video.videoHeight || s?.height || 0
+  const fps = s?.frameRate ? Math.round(s.frameRate) : 0
+  if (w && h) {
+    el.textContent = fps ? `${w}×${h} · ${fps} fps` : `${w}×${h}`
+    el.style.display = ''
+  } else {
+    el.style.display = 'none'
+  }
+}
+
 export function stopVideoPreview(): void {
   previewActive = false
   // Release the camera (client-side getUserMedia preview) so the recorder can
@@ -299,8 +315,10 @@ export function stopVideoPreview(): void {
   const video = document.getElementById('video-preview-video') as HTMLVideoElement | null
   const img   = document.getElementById('video-preview-img') as HTMLImageElement | null
   const phDiv = document.getElementById('video-preview-placeholder')
-  if (video) { video.srcObject = null; video.style.display = 'none' }
+  const resEl = document.getElementById('video-preview-res')
+  if (video) { video.srcObject = null; video.style.display = 'none'; video.onloadedmetadata = null }
   if (img)   { img.src = ''; img.style.display = 'none' }
+  if (resEl) { resEl.style.display = 'none' }
   if (phDiv) { phDiv.style.display = '' }
 }
 
@@ -356,6 +374,12 @@ export async function startVideoPreview(): Promise<void> {
       video.srcObject = stream
       video.style.display = ''
       await video.play().catch(() => {})
+      // Show the camera's ACTUAL delivered resolution/fps once metadata is in —
+      // makes it obvious when the live feed differs from the recording setting
+      // (e.g. a 1080p webcam with "4K" chosen). videoWidth/Height is the real
+      // decoded frame size; the track's frameRate is the negotiated rate.
+      showFeedResolution(video, stream)
+      video.onloadedmetadata = () => showFeedResolution(video, stream)
     }
     if (phDiv) phDiv.style.display = 'none'
   } catch (err) {
