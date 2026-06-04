@@ -1413,11 +1413,12 @@ function renderThumbCard(): boolean {
     subEl.textContent = 'Brennes inn i podcast-MP3'
     subEl.style.color = 'var(--green)'
   }
-  // Swap the placeholder SVG for an actual <img> preview. file:// works in
-  // the renderer because registerTrustedPath was set on app start; falling
-  // back to the icon keeps the slot from collapsing if the file disappeared.
+  // Swap the placeholder SVG for an actual <img> preview via the asset://
+  // protocol (WKWebView blocks file://). Falling back to the icon keeps the slot
+  // from collapsing if the file disappeared (onerror).
   if (iconSlot) {
-    iconSlot.innerHTML = `<img class="thumb-card-icon thumb-card-icon-home" src="file://${encodeURI(path)}" alt="" onerror="this.style.display='none'" />`
+    const src = window.api.toAssetUrl(path)
+    iconSlot.innerHTML = `<img class="thumb-card-icon thumb-card-icon-home" src="${src}" alt="" onerror="this.style.display='none'" />`
   }
   return true
 }

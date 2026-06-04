@@ -109,10 +109,12 @@ export async function loadFile(fp: string): Promise<void> {
   if (videoIoSection) videoIoSection.style.display = E.isVideoFile ? '' : 'none'
 
   if (E.isVideoFile) {
-    // Set video source via custom protocol (registered with registerSchemesAsPrivileged)
+    // Load the video via the Tauri asset:// protocol (the old Electron renderer
+    // used a custom `media://current` scheme that doesn't exist in WKWebView, so
+    // the video editor never showed a frame). convertFileSrc handles the path.
     await window.api.editorSetVideoPath(fp)
     if (E.videoEl) {
-      E.videoEl.src = 'media://current?t=' + Date.now()
+      E.videoEl.src = window.api.toAssetUrl(fp)
       E.videoEl.load()
     }
 

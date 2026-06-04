@@ -116,6 +116,7 @@ declare global {
       notifyError:         (data: unknown) => void
       notifyWeakSignal:    () => void
       on:                  (channel: string, fn: (...args: unknown[]) => void) => (() => void) | undefined
+      toAssetUrl:             (path: string) => string
       editorReadFile:         (filePath: string) => Promise<unknown>
       editorSaveFile:         (params: unknown)  => Promise<{ ok: boolean; outputPath?: string; error?: string }>
       editorPickFile:         ()                 => Promise<string | null>

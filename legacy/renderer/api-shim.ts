@@ -57,9 +57,14 @@ async function pickPath(opts: {
   }
 }
 
-// Re-exported so the unused `convertFileSrc` import is retained for the file://
-// → asset: rewrites that land as pages get wired. (Tree-shaken if truly unused.)
-void convertFileSrc;
+/** Convert a local filesystem path to an `asset://` URL WKWebView can load in an
+ *  <audio>/<video>/<img> `src`. The OLD Electron renderer used `file://` (and a
+ *  custom `media://` protocol), which WKWebView blocks — every editor preview /
+ *  mastering playback that set `file://…` was silently dead. The asset protocol
+ *  is enabled with scope `**` in tauri.conf, so this is the supported path. */
+function toAssetUrl(path: string): string {
+  return path ? convertFileSrc(path) : "";
+}
 
 /** Invoke a Tauri command, falling back to `fallback` on any error so the UI
  *  never throws while the backend is partially wired. */
@@ -487,6 +492,9 @@ const api: Record<string, unknown> = {
     call("wake_clear_failure_history", undefined, true).then(() => true),
 
   // ── Editor ──────────────────────────────────────────────────────────────
+  // Local path → asset:// URL for <audio>/<video> playback (WKWebView blocks
+  // file://). Sync — convertFileSrc returns a string.
+  toAssetUrl: (path: string) => toAssetUrl(path),
   // editor_read_file → { tooLarge, size, bytes }. The old loader expects EITHER
   // a raw byte array (→ Web Audio decode, the client-side waveform path) OR a
   // { tooLarge } marker (→ ffmpeg-extract fallback). Adapt to that.

@@ -56,7 +56,7 @@ export async function setupMasteringPanel(): Promise<void> {
     if (!out) return
     const audio = $('master-preview-audio') as HTMLAudioElement | null
     if (!audio) return
-    audio.src = 'file://' + out
+    audio.src = window.api.toAssetUrl(out)
     audio.style.display = ''
     audio.play().catch(() => {})
   })
@@ -113,7 +113,7 @@ export async function runMasterPreview(): Promise<void> {
     }
     masterPreviewPath = res.previewPath
     if (audio) {
-      audio.src = 'file://' + res.previewPath
+      audio.src = window.api.toAssetUrl(res.previewPath)
       audio.style.display = ''
       audio.play().catch(() => {})
     }
@@ -132,15 +132,15 @@ export function toggleListenOriginal(): void {
   const btn   = $('btn-master-listen-orig') as HTMLButtonElement | null
   if (!audio || !btn) return
   if (!masterOriginalPreviewPath || audio.dataset.mode !== 'orig') {
-    // Play original snippet — file:// directly (browser decodes locally).
-    audio.src = 'file://' + E.filePath
+    // Play original snippet via asset:// (WKWebView blocks file://).
+    audio.src = window.api.toAssetUrl(E.filePath)
     audio.currentTime = clampMain(E.playStartSec)
     audio.dataset.mode = 'orig'
     btn.textContent = t('master.previewListenMastered', 'Lytt mastret')
     audio.style.display = ''
     audio.play().catch(() => {})
   } else if (masterPreviewPath) {
-    audio.src = 'file://' + masterPreviewPath
+    audio.src = window.api.toAssetUrl(masterPreviewPath)
     audio.dataset.mode = 'mast'
     btn.textContent = t('master.previewListenOrig', 'Lytt original')
     audio.play().catch(() => {})
