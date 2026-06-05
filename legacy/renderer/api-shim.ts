@@ -403,6 +403,22 @@ async function syncBackendRecordingSettings(s: unknown): Promise<void> {
   }
 }
 
+// Sync the launch-at-login OS login item with the saved setting. The old toggle
+// only stored a boolean — scheduled recordings never fired after a reboot because
+// the app wasn't actually registered to start. Deduped so a settings_save that
+// didn't touch launchAtLogin doesn't re-register the login item.
+let lastLaunchAtLogin: boolean | null = null;
+async function syncLaunchAtLogin(s: unknown): Promise<void> {
+  const enabled = !!(s as { launchAtLogin?: unknown } | null)?.launchAtLogin;
+  if (enabled === lastLaunchAtLogin) return;
+  lastLaunchAtLogin = enabled;
+  try {
+    await invoke("set_launch_at_login", { enabled });
+  } catch (e) {
+    console.warn("[api-shim] set_launch_at_login failed", e);
+  }
+}
+
 const noop = (): void => {};
 const off = () => {}; // unsubscribe stub
 
@@ -487,8 +503,19 @@ const api: Record<string, unknown> = {
   saveSettings: async (s: unknown) => {
     const ok = saveSettingsLocal(s);
     void syncBackendRecordingSettings(s); // push recording-critical subset to sqlite
+    void syncLaunchAtLogin(s); // register/remove the OS login item to match the toggle
     return ok;
   },
+  // Direct control for the "Slå på"-from-a-reminder path (also persists the flag).
+  setLaunchAtLogin: async (enabled: boolean) => {
+    const s = loadSettings();
+    s.launchAtLogin = !!enabled;
+    saveSettingsLocal(s);
+    lastLaunchAtLogin = null; // force the sync through even if dedup thinks it's unchanged
+    await syncLaunchAtLogin(s);
+    return true;
+  },
+  getLaunchAtLogin: async () => call<boolean>("get_launch_at_login", undefined, false),
   exportProfile: async () => loadSettings(),
   importProfile: async () => true,
   resetSettings: async () => {
@@ -1020,6 +1047,9 @@ const api: Record<string, unknown> = {
 // fresh launch where the user records without re-saving still uses their saved
 // resolution/format/camera choices (not backend defaults). Best-effort.
 void syncBackendRecordingSettings(loadSettings());
+// Keep the OS login item in sync with the saved launch-at-login flag on boot
+// (re-registers if the OS dropped it; idempotent otherwise).
+void syncLaunchAtLogin(loadSettings());
 
 // Mark this file as a module (loaded via <script type="module">) so its
 // top-level helpers (loadSettings, api, …) stay module-scoped and don't collide

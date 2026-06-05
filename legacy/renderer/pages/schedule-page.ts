@@ -1,6 +1,7 @@
 import { t, tArr } from '../i18n'
 import { settings, patchSettings } from '../state'
 import { flashSaved, escHtml } from '../helpers'
+import { remindAutostartIfNeeded } from '../autostart-reminder'
 import type { ScheduleSlot } from '../../types'
 
 let editingSlotIndex = -1
@@ -449,6 +450,7 @@ async function saveSlot(): Promise<void> {
   if (start === stop) { alert(t('schedule.errTimes')); return }
   const slot: ScheduleSlot = { days, start, stop, ...(maxV ? { max: maxV } : {}) }
   if (!settings.slots) settings.slots = []
+  const wasAdd = editingSlotIndex < 0
   if (editingSlotIndex >= 0) settings.slots[editingSlotIndex] = slot
   else settings.slots.push(slot)
   const editor = document.getElementById('slot-editor')
@@ -456,6 +458,8 @@ async function saveSlot(): Promise<void> {
   await window.api.saveSettings(settings)
   renderSlotsList()
   updateNextRecordingPreview()
+  // Remind to enable auto-start so this weekly recording can actually fire.
+  if (wasAdd) void remindAutostartIfNeeded()
 }
 
 function autoSetStopTime(): void {

@@ -40,6 +40,29 @@ pub fn app_info() -> AppResult<AppInfo> {
     })
 }
 
+/// Register or remove the OS login item (launch-at-login) so scheduled recordings
+/// can fire after a reboot. Backs the "Start automatisk med Windows/Mac" toggle —
+/// previously that toggle only stored a boolean and never touched the OS.
+#[tauri::command]
+pub fn set_launch_at_login<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    enabled: bool,
+) -> AppResult<()> {
+    use tauri_plugin_autostart::ManagerExt;
+    let mgr = app.autolaunch();
+    let res = if enabled { mgr.enable() } else { mgr.disable() };
+    res.map_err(|e| crate::error::AppError::Internal(format!("autostart: {e}")))?;
+    Ok(())
+}
+
+/// Whether the OS login item is currently registered (source of truth = the OS,
+/// not the stored setting — they can drift if the user removes it manually).
+#[tauri::command]
+pub fn get_launch_at_login<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> bool {
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch().is_enabled().unwrap_or(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

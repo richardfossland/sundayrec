@@ -252,6 +252,7 @@
     "dayLabel": "DAY",
     "atTime": "at",
     "nextPreviewPrefix": "Next recording",
+    "autostartReminder": "The recording has been added.\n\nBut \"Start automatically with Windows/Mac\" is OFF — scheduled recordings won't start if the machine was turned off or the app is closed.\n\nTurn on auto-start now so the program is always ready?",
     "noSlotsTitle": "No weekly recordings set up yet",
     "noSlotsHint": "Click “Add a time” below to start a recurring weekly recording — e.g. Sunday at 11.",
     "sleepFixNoAdmin": "Needs administrator rights — run SundayRec as administrator",

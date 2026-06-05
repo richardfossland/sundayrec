@@ -175,6 +175,9 @@ lettre = { version = "0.11", default-features = false, features = [
 ], optional = true }
 # PU-2 deep-link scheme registration (`sundayrec://…`) for the OAuth/import flow.
 tauri-plugin-deep-link = { version = "2", optional = true }
+# Launch-at-login (OS login item) so scheduled recordings actually fire after a
+# reboot. Always compiled — auto-start is core to the unattended-recorder use case.
+tauri-plugin-autostart = "2"
 # PU-5 whisper.cpp bindings (transcription). Pulled only under `--features
 # whisper`; the build compiles libwhisper from source (a C/C++ toolchain),
 # HARDWARE-UNVERIFIED, so it stays out of the default build + CI gate.

@@ -2,6 +2,7 @@ import { t, tArr, currentLang } from '../i18n'
 import { settings } from '../state'
 import { escHtml, isoDate, flashMsg } from '../helpers'
 import { getChurchHolidays } from '../../shared/church-calendar'
+import { remindAutostartIfNeeded } from '../autostart-reminder'
 
 let calYear       = new Date().getFullYear()
 let calMonth      = new Date().getMonth()
@@ -188,6 +189,7 @@ async function saveSpecial(): Promise<void> {
   if (!settings.specialRecordings) settings.specialRecordings = []
   lastStart = start; lastStop = stop
 
+  const wasAdd = editingIndex < 0
   if (editingIndex >= 0) {
     settings.specialRecordings[editingIndex] = { date, name, start, stop }
     editingIndex = -1
@@ -203,6 +205,8 @@ async function saveSpecial(): Promise<void> {
   renderCalendar()
   const holidayNames = getChurchHolidays(new Date(date + 'T12:00:00').getFullYear())[date] ?? []
   openDayDetail(date, holidayNames.join(' · '))
+  // Remind to enable auto-start so this scheduled recording can actually fire.
+  if (wasAdd) void remindAutostartIfNeeded()
 }
 
 export function renderPlannedList(): void {

@@ -252,6 +252,7 @@
     "dayLabel": "DAG",
     "atTime": "kl.",
     "nextPreviewPrefix": "Neste opptak",
+    "autostartReminder": "Opptaket er lagt til.\n\nMen «Start automatisk med Windows/Mac» er AV — da starter ikke planlagte opptak hvis maskinen har vært slått av eller programmet er lukket.\n\nVil du slå på automatisk start nå, så programmet alltid er klart?",
     "noSlotsTitle": "Ingen ukentlige opptak satt opp ennå",
     "noSlotsHint": "Klikk «Legg til tidspunkt» nedenfor for å starte et fast ukentlig opptak — f.eks. søndag kl. 11.",
     "sleepFixNoAdmin": "Krever administratorrettigheter — kjør SundayRec som administrator",

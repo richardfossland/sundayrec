@@ -88,7 +88,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_notification::init());
+        .plugin(tauri_plugin_notification::init())
+        // Launch-at-login: registers an OS login item (LaunchAgent on macOS) so
+        // scheduled recordings fire after a reboot. Toggled by `set_launch_at_login`.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None::<Vec<&str>>,
+        ));
 
     // R7 auto-update: register the updater plugin only under `--features
     // updater` (it needs a signed feed + the public key in tauri.conf.json).
@@ -218,6 +224,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::app::app_info,
+            commands::app::set_launch_at_login,
+            commands::app::get_launch_at_login,
             commands::audio::list_input_devices,
             commands::audio::list_devices,
             commands::audio::list_video_devices,
