@@ -76,8 +76,12 @@
   <button class="btn-toast-close" id="btn-toast-close" title="Lukk" data-i18n-title="tooltip.close">×</button>
 </div>
 
-<!-- ── Titlebar drag strip (macOS double-click to zoom + drag) ── -->
-<div id="titlebar-drag" class="titlebar-drag"></div>
+<!-- ── Titlebar drag strip (drag to move + double-click to maximize) ──
+     Tauri uses the data-tauri-drag-region ATTRIBUTE (not Electron's
+     -webkit-app-region CSS, which is inert in WKWebView). With the attribute +
+     the window capabilities, this strip drags the window and double-click
+     toggles maximize. -->
+<div id="titlebar-drag" class="titlebar-drag" data-tauri-drag-region></div>
 
 <!-- ── Main ────────────────────────────────────────────────────── -->
 <main id="main">
