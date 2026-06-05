@@ -50,10 +50,13 @@ jobs:
           # dropped from the installer until the whisper.cpp arm build is sorted.
           # The leading `--` forwards the rest to cargo (tauri-action runs
           # `tauri build <args>`, and tauri-cli only passes args after `--` on).
+          # `tray` ships the menubar/tray icon (+ sundayrec:// deep-link). It
+          # builds on both runners and degrades gracefully (install failure only
+          # logs a warning), so it's safe to ship.
           - platform: macos-latest
-            args: "-- --no-default-features --features editor"
+            args: "-- --no-default-features --features editor,tray"
           - platform: windows-latest
-            args: "-- --no-default-features --features editor"
+            args: "-- --no-default-features --features editor,tray"
 
     runs-on: ${{ matrix.platform }}
     steps:
