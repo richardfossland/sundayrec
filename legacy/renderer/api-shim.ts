@@ -282,6 +282,12 @@ function backendRecordingSettings(s: Record<string, unknown>): Record<string, un
     splitMinutes: s.splitMinutes ?? 0,
     manualMaxMinutes: s.manualMaxMinutes ?? 0,
     preRollSeconds: s.preRollSeconds ?? 0,
+    // Wake-from-sleep drives the BACKEND scheduler's OS-wake arming
+    // (scheduler/mod.rs reads settings.wake_from_sleep). Must be synced or the
+    // Rust `#[serde(default = "default_true")]` re-defaults it to `true` on every
+    // settings_save → a user who turns wake OFF could never make it stick and the
+    // machine would keep waking for scheduled recordings.
+    wakeFromSleep: s.wakeFromSleep ?? true,
     // The weekly schedule + one-off recordings drive the BACKEND scheduler
     // (which couldn't see them while settings lived only in localStorage → no
     // scheduled recording ever fired). SANITISED so a single malformed entry
