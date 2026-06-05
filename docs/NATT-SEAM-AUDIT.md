@@ -67,8 +67,7 @@ lagres som nytt `sampleRateMode`-felt og synkes til recorderen i det kuraterte
 subsettet (whitelistet). Auto = recorderens trygge native-capture (ingen `-ar`,
 ingen hakkete lyd på 44,1 kHz-maskinvare); de eksplisitte modusene tvinger raten
 for den som vil. Numerisk `sampleRate` beholdes synket for klient-bruk (VU-monitor
-
-- disk-estimat). _Rigg: bekreft at et eksplisitt valg faktisk endrer opptaks-raten._
+og disk-estimat). _Rigg: bekreft at et eksplisitt valg faktisk endrer opptaks-raten._
 
 ### 2. ✅ Mikser: bekreftet skjult by-design + ryddet vekk død kode
 
