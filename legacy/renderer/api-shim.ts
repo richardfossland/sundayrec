@@ -591,15 +591,44 @@ const api: Record<string, unknown> = {
     call("get_camera_capabilities", { deviceToken: token }, null),
 
   // ── Wake from sleep (wake_* commands) ───────────────────────────────────
-  scheduleOsWakes: async () => call("wake_reschedule", undefined, { ok: true }),
-  scheduleOsWakesAdmin: async () => call("wake_reschedule", undefined, { ok: true }),
-  getSleepConfig: async () => call("wake_get_sleep_config", undefined, {}),
+  // wake_reschedule returns WakeResult { ok, … }. A FAILED reschedule must report
+  // ok:false — the old { ok:true } fallback painted a silent failure as success.
+  scheduleOsWakes: async () =>
+    call("wake_reschedule", undefined, { ok: false, reason: "error" }),
+  scheduleOsWakesAdmin: async () =>
+    call("wake_reschedule", undefined, { ok: false, reason: "error" }),
+  // SleepConfig (wake_get_sleep_config) carries NO `platform` field — but the
+  // schedule-page diagnostic branches on cfg.platform === 'darwin'/'win32' to pick
+  // the right warnings, so without it every machine fell through to "unsupported
+  // platform" (telling a Mac/Windows user wake won't work when it can). Inject the
+  // platform the webview already knows; a real backend field (if ever added) wins.
+  getSleepConfig: async () => ({
+    platform,
+    ...(await call<Record<string, unknown>>("wake_get_sleep_config", undefined, {})),
+  }),
   fixMacSleep: async () => call("wake_fix_sleep", undefined, { ok: false }),
   fixWinWakeTimers: async () => call("wake_fix_sleep", undefined, { ok: false }),
+  // Fallbacks must match the real WakeCapabilities / WakeStatus shapes — the
+  // schedule-page reads caps.knownIssues.length / status.expectedWakes.length, so a
+  // wrong-shape fallback ({canWake}/{scheduled}) made the reliability card throw and
+  // silently disappear whenever the command errored.
   wakeDetectCapabilities: async () =>
-    call("wake_capabilities", undefined, { canWake: false, reasons: [] }),
+    call("wake_capabilities", undefined, {
+      platform: "other",
+      canWakeFromSleep: false,
+      canWakeFromOff: false,
+      needsAdmin: false,
+      knownIssues: [],
+      recommendations: [],
+    }),
   wakeVerifyScheduled: async () =>
-    call("wake_verify", undefined, { ok: false, scheduled: [] }),
+    call("wake_verify", undefined, {
+      expectedWakes: [],
+      observedWakes: [],
+      hasMismatch: false,
+      onBattery: null,
+      standbyEnabled: null,
+    }),
   wakeCheckPower: async () => ({}), // TODO Phase 3: no wake_check_power command
   wakeCheckStandby: async () => ({}), // TODO Phase 3: no wake_check_standby command
   wakeTest: async (secondsAhead?: number) =>
@@ -756,8 +785,12 @@ const api: Record<string, unknown> = {
       },
     });
   },
+  // editor_probe_streams → EditorStreamInfo { hasVideo, hasAudio } | (on failure)
+  // null. The old { streams: [] } fallback was the wrong shape: the consumer does
+  // `!streams || streams.hasVideo`, so a truthy {streams:[]} made it read
+  // .hasVideo (undefined) instead of taking the null branch. Return null.
   editorProbeStreams: async (fp: string) =>
-    call("editor_probe_streams", { inputPath: fp }, { streams: [] }),
+    call("editor_probe_streams", { inputPath: fp }, null),
   editorReadTranscript: async (fp: string) =>
     call("editor_read_sidecar", { mediaPath: fp, sidecar: "transcript" }, null),
   editorWriteTranscript: async (fp: string, t: unknown) =>

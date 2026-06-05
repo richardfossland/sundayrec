@@ -207,7 +207,10 @@ async function onTestWakeClick(): Promise<void> {
     const progEl = document.getElementById('wake-test-progress')
     if (progEl) {
       if (result.ok) {
-        progEl.textContent = `${t('wake.test.success', '✓ Vekket')} — ${t('wake.test.delay', 'forsinkelse')} ${result.deltaSec}s`
+        // TestWakeResult carries no deltaSec — the precise wake delay is shown by
+        // the history card (refreshWakeReliability, called below) which reads it
+        // from the wake_failure_history entry. Don't interpolate `undefined`.
+        progEl.textContent = t('wake.test.success', '✓ Vekket')
       } else if (result.reason === 'cancelled') {
         progEl.textContent = t('wake.test.cancelled', 'Avbrutt.')
       } else {
