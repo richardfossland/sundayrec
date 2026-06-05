@@ -99,6 +99,9 @@ export function setupSchedulePage(): void {
       const card = document.getElementById('wake-reliability-card')
       if (card) card.style.display = 'none'
     }
+    // Auto-lagre toggelen umiddelbart (samme mønster som lyd/fil/video-sidene):
+    // brukeren skulle ikke måtte klikke «Lagre» for at valget tar effekt.
+    void saveScheduleSettings()
   })
   // wake-hibernate-* collapsible was removed when the Avanserte-section was
   // restructured into "Vekk maskin fra dvale" in v4.31. Handler dropped.
