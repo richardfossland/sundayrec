@@ -296,7 +296,7 @@ function backendRecordingSettings(s: Record<string, unknown>): Record<string, un
     videoEnabled: s.videoEnabled ?? false,
     videoDeviceName: s.videoDeviceName ?? null,
     videoDeviceIndex: s.videoDeviceIndex ?? null,
-    videoResolution: s.videoResolution ?? "720p",
+    videoResolution: s.videoResolution ?? "1080p",
     videoFramerate: s.videoFramerate ?? 30,
     videoContainer: s.videoContainer ?? "mp4",
     videoCodec: s.videoCodec ?? "h264",

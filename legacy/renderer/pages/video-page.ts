@@ -62,6 +62,11 @@ export function setupVideoPage(): void {
   ;['video-fps-select', 'video-container-select', 'video-codec-select', 'video-encoder-select'].forEach(id => {
     document.getElementById(id)?.addEventListener('change', autoSave)
   })
+  // Recompute the per-resolution GB/t estimates when codec or fps changes (H.265
+  // ≈ 45 % smaller, 50/60 fps a bit larger).
+  ;['video-codec-select', 'video-fps-select'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', updateSizeEstimates)
+  })
 
   // video-mode radio buttons — update keep-audio visibility + save
   document.querySelectorAll<HTMLInputElement>('input[name="video-mode"]').forEach(el => {
@@ -74,6 +79,7 @@ export function setupVideoPage(): void {
     const autoCheck = document.getElementById('opt-video-bitrate-auto') as HTMLInputElement | null
     const row = document.getElementById('video-bitrate-custom-row')
     if (row) row.style.display = autoCheck?.checked ? 'none' : ''
+    updateSizeEstimates()
   }
   document.getElementById('opt-video-bitrate-auto')?.addEventListener('change', toggleBitrateRow)
   document.getElementById('opt-video-bitrate-custom')?.addEventListener('change', toggleBitrateRow)
@@ -89,6 +95,7 @@ export function setupVideoPage(): void {
       bitrateInput.value = '50000'
       showVideoWarning(t('video.maxBitrateWarn', 'Maksimum bitrate er 50 000 kbps'))
     }
+    updateSizeEstimates()
   })
 
   document.getElementById('btn-video-save')?.addEventListener('click', async () => {
@@ -133,6 +140,11 @@ export async function refreshVideoDevices(): Promise<void> {
     const match = devices.find(d => d.name === currentName) ?? devices[0]
     selectEl.value = String(match?.index ?? 0)
     selectEl.disabled = false
+    // Gate resolution/fps NOW that a device is actually selected. Without this,
+    // the gating that runs from applyVideoSettingsToUI() on page-show saw an empty
+    // token (the list populates async) and re-enabled everything → 4K stayed
+    // selectable on a 1080p camera.
+    void applyCameraCapabilities()
   } catch {
     selectEl.innerHTML = '<option value="">Feil ved lasting</option>'
     selectEl.disabled = true
@@ -211,6 +223,41 @@ export function applyVideoSettingsToUI(): void {
 
   // Gate resolution/fps to the selected camera's advertised modes.
   void applyCameraCapabilities()
+  updateSizeEstimates()
+}
+
+// Per-resolution "auto" video bitrate (Mb/s) at H.264 / 30 fps — the same ladder
+// the recorder's bitrate_kbps() uses. The per-card GB/t labels are derived from
+// this so they react to codec (H.265 ≈ 45 % smaller), fps and a custom bitrate.
+const RES_BASE_MBPS: Record<string, number> = {
+  '480p': 3.3, '720p': 7.8, '1080p': 15.6, '2160p': 48.9,
+}
+
+function fmtGb(gbPerHour: number): string {
+  return gbPerHour >= 10 ? String(Math.round(gbPerHour)) : gbPerHour.toFixed(1)
+}
+
+/** Recompute and write the ~X GB/t estimate on each resolution card from the
+ *  current codec / fps / bitrate. Approximate but reactive (was hardcoded). */
+function updateSizeEstimates(): void {
+  const codec     = (document.getElementById('video-codec-select') as HTMLSelectElement | null)?.value ?? 'h264'
+  const fps       = parseInt((document.getElementById('video-fps-select') as HTMLSelectElement | null)?.value ?? '30', 10)
+  const customOn  = !!(document.getElementById('opt-video-bitrate-custom') as HTMLInputElement | null)?.checked
+  const customKbps = parseInt((document.getElementById('video-bitrate-value') as HTMLInputElement | null)?.value ?? '0', 10)
+
+  const codecFactor = codec === 'h265' ? 0.55 : 1   // HEVC ≈ 45 % smaller
+  const fpsFactor   = fps >= 50 ? 1.4 : 1           // 50/60 fps needs more bits
+
+  for (const tag of ['480p', '720p', '1080p', '2160p']) {
+    const el = document.getElementById('est-' + tag)
+    if (!el) continue
+    // A custom bitrate is fixed regardless of resolution → same size on every card.
+    const mbps = customOn && customKbps > 0
+      ? customKbps / 1000
+      : (RES_BASE_MBPS[tag] ?? 7.8) * codecFactor * fpsFactor
+    const gbPerHour = (mbps * 3600) / 8 / 1000 // Mb/s → MB/s → GB/h
+    el.textContent = `~${fmtGb(gbPerHour)} GB / t`
+  }
 }
 
 /**

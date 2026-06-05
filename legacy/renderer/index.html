@@ -1498,23 +1498,23 @@
             <label class="option-card">
               <input type="radio" name="video-resolution" value="480p" />
               <div class="option-card-name">480p</div>
-              <div class="option-card-desc">~1.5 GB / t</div>
+              <div class="option-card-desc" id="est-480p">~1.5 GB / t</div>
             </label>
             <label class="option-card">
-              <input type="radio" name="video-resolution" value="720p" checked />
+              <input type="radio" name="video-resolution" value="720p" />
               <div class="option-card-name">720p</div>
-              <div class="option-card-badge" data-i18n="video.recommended">Anbefalt</div>
-              <div class="option-card-desc">~3.5 GB / t</div>
+              <div class="option-card-desc" id="est-720p">~3.5 GB / t</div>
             </label>
             <label class="option-card">
-              <input type="radio" name="video-resolution" value="1080p" />
+              <input type="radio" name="video-resolution" value="1080p" checked />
               <div class="option-card-name">1080p</div>
-              <div class="option-card-desc">~7 GB / t</div>
+              <div class="option-card-badge" data-i18n="video.recommended">Anbefalt</div>
+              <div class="option-card-desc" id="est-1080p">~7 GB / t</div>
             </label>
             <label class="option-card" id="video-res-2160p">
               <input type="radio" name="video-resolution" value="2160p" />
               <div class="option-card-name">4K</div>
-              <div class="option-card-desc">~22 GB / t</div>
+              <div class="option-card-desc" id="est-2160p">~22 GB / t</div>
             </label>
           </div>
           <div id="video-res-warning" class="form-hint" style="display:none;color:var(--warning,#d08700);margin-top:4px"></div>
@@ -1541,11 +1541,11 @@
           </select>
 
           <label class="form-label mt" data-i18n="video.encoder">ENKODER</label>
-          <select class="form-input" id="video-encoder-select" style="max-width:340px">
-            <option value="software" selected data-i18n="video.encoderSoftware">Software (best kvalitet)</option>
-            <option value="hardware" data-i18n="video.encoderHardware">Hardware / VideoToolbox (raskere — anbefalt for 4K)</option>
+          <select class="form-input" id="video-encoder-select" style="max-width:420px">
+            <option value="hardware" selected data-i18n="video.encoderHardware">Hardware – VideoToolbox (lett &amp; jevn, anbefalt)</option>
+            <option value="software" data-i18n="video.encoderSoftware">Software – x264/x265 (maks kvalitet pr. byte)</option>
           </select>
-          <div class="form-hint" data-i18n="video.encoderHint">Hardware-enkoder (kun Mac) gjør 4K H.265-opptak mulig i sann-tid. Software gir best kvalitet for vanlig opptak.</div>
+          <div class="form-hint" data-i18n="video.encoderHint">Hardware (VideoToolbox, kun Mac): lav CPU-bruk → jevn live-forhåndsvisning, mindre varme/batteri, og sann-tids 4K/H.265. Svært god kvalitet ved tilstrekkelig bitrate — anbefalt for de fleste. Software (x264/x265): litt bedre kvalitet pr. filstørrelse, men bruker mye CPU og kan gjøre forhåndsvisning og målere hakkete under opptak — velg den når kvalitet pr. byte betyr aller mest og maskinen ikke gjør annet samtidig.</div>
 
           <label class="form-label mt" data-i18n="video.bitrate">BITHASTIGHET</label>
           <div style="display:flex;flex-direction:column;gap:8px">

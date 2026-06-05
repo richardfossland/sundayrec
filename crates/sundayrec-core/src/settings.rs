@@ -439,7 +439,10 @@ fn default_smtp_port() -> i32 {
     587
 }
 fn default_video_resolution() -> String {
-    "720p".to_string()
+    // 1080p is the modern default for an uploaded church service — looks much
+    // better than 720p, storage is ample, and the (now-default) hardware encoder
+    // keeps it light. Gating still caps it to the camera's native max.
+    "1080p".to_string()
 }
 fn default_video_framerate() -> i32 {
     30
@@ -696,7 +699,7 @@ mod tests {
         assert!(!s.video_enabled);
         assert_eq!(s.video_device_name, None);
         assert_eq!(s.video_device_index, None);
-        assert_eq!(s.video_resolution, "720p");
+        assert_eq!(s.video_resolution, "1080p");
         assert_eq!(s.video_framerate, 30);
         assert_eq!(s.output_mode, "combined");
         assert!(!s.keep_separate_audio);
