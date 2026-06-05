@@ -353,3 +353,51 @@ None of it blocks the default build or the gate.
 - All of these are **account/secret/identity** work, NOT code — the release
   pipeline (`release.yml`, updater plugin, signing hooks) is wired to consume
   them the moment they're provided.
+
+## Settings-sync + IPC-seam audit (natt 2026-06-05)
+
+Etter wake-from-sleep-funnet (merget i PR #2) gjorde jeg en systematisk audit av
+(a) hvilke `Settings`-felt backend-konsumentene faktisk leser vs. hva
+`syncBackendRecordingSettings` (api-shim → `settings_save`) sender, og (b) hele
+`call()`/`invoke()`-seamen i `legacy/renderer/api-shim.ts` mot Rust-signaturene.
+Bakgrunn: backend-sqlite får KUN det kuraterte opptaks-subsettet; alt utenfor det
+re-defaultes av `#[serde(default)]` ved HVER lagring.
+
+**FIKSET (gren `feat/night-settings-sync`, upushet — vent på review):**
+
+- **`filenamePattern` nådde aldri recorderen.** `scheduler::build_opts` bruker
+  `settings.filename_pattern` til opptaks-filnavnet, men feltet manglet i det
+  kuraterte subsettet → re-defaultet til `date` ved hver `saveSettings`. En
+  bruker som valgte `church`/`plain`/`datetime` fikk hvert opptak navngitt med
+  `date`-mønster. Lagt til (whitelistet, så en korrupt localStorage-verdi ikke
+  feiler HELE `settings_save`). **Rigg-sjekk:** velg et ikke-`date`-mønster, ta
+  opp → filnavnet skal følge valget.
+
+**ÅPNE SPØRSMÅL (krever din intensjon — bevisst IKKE rørt):**
+
+- **Sample-rate-valget i UI er frakoblet faktisk oppførsel.** UI-en lar deg velge
+  44.1/48/96 kHz og lagrer `sampleRate: number`, men (1) hoved-recorderen bruker
+  `sample_rate_mode`-enumet (`resolved_sample_rate`) som UI-en aldri setter →
+  alltid `Auto`/native, og (2) pre-roll bruker det gamle `sample_rate`-feltet som
+  ikke synkes → alltid 48000. Native/Auto er bevisst valgt for å unngå
+  resample-hakking, så å tvinge valget kan forringe lyd. **Spørsmål:** skal
+  UI-valget faktisk styre rate (map `sampleRate` → `sample_rate_mode` i synken),
+  eller skal vi fjerne velgeren og alltid kjøre native? Jeg gjør ingen av delene
+  uten svar.
+
+- **`stream_start` kan aldri lykkes slik den er wiret** (kun relevant i et
+  `--features streaming`-bygg; default-bygget returnerer `feature_disabled`).
+  Frontend sender `{resolution, framerate, videoBitrateKbps, destinations,
+alsoRecord}`, men Rust-kommandoen krever i tillegg `videoToken: String`,
+  `snapshotPath: String`, `overlays: Vec<OverlayConfig>` (alle påkrevd) og venter
+  `alsoRecordPath`, ikke `alsoRecord`. Disse er capture-kilde-tokens (samme
+  enhets-oppløsnings-maskineri som opptakeren) + overlay-config — kan ikke wires
+  riktig «blindt» uten en RTMP-rigg å verifisere mot. **Streaming er fortsatt et
+  rigg-only / ufullført domene** (som dokumentert ellers i denne fila); jeg lot
+  det stå framfor å sende uverifiserbar kode. Resten av seamen (~60 kommandoer)
+  ble verifisert KORREKT.
+
+**IKKE en bug (avklart):** e-post/webhook/cloud/integrasjoner leser ikke-kuraterte
+felt på backend, men frontend-metodene deres er bevisste no-op-stubs i
+`api-shim.ts` → backend drives aldri av dem. Kurert-subset-tilnærmingen er
+konsistent med at disse domenene er stubbet.

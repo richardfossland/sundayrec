@@ -153,6 +153,23 @@ const EVENT_ADAPTERS: Record<string, (p: unknown) => unknown> = {
     }
     return p;
   },
+  // EditorMasterProgress { job_id, current_sec, total_sec } (snake_case) → the
+  // mastering panel reads currentSec/totalSec. Without this, `totalSec` was
+  // undefined so the progress bar stayed frozen at 0% for the WHOLE mastering
+  // apply (looked hung even though it was working). (Found by the event-seam audit.)
+  "master-progress": (p) => {
+    const d = (p ?? {}) as {
+      job_id?: string;
+      current_sec?: number;
+      total_sec?: number;
+    };
+    return {
+      ...d,
+      jobId: d.job_id,
+      currentSec: d.current_sec,
+      totalSec: d.total_sec,
+    };
+  },
 };
 
 // ── Default settings (mirrors OLD src/main/store.ts `defaults`) ───────────────
@@ -257,6 +274,21 @@ function saveSettingsLocal(s: unknown): boolean {
 // defaults backend-side. Best-effort — a deserialize error leaves the backend
 // unchanged (no regression). `settings_save` deserializes with serde(default).
 function backendRecordingSettings(s: Record<string, unknown>): Record<string, unknown> {
+  // Channel L/R: the recorder reads TOP-LEVEL inputChannelL/R (custom_channel_map_filter
+  // records ANY two device channels into a stereo file — e.g. an X32 mixer on ch 16/17),
+  // but the audio-page stores the mapping PER DEVICE in deviceChannels[deviceId]. So the
+  // recorder never saw it → channel selection was silently ignored (always default 0/1).
+  // Translate the SELECTED device's mapping to the top-level fields; clamp 0..31 mirrors
+  // the Rust validate(). Default (0,1) is a no-op in custom_channel_map_filter, so this
+  // only changes behaviour when the user actually picked non-default channels.
+  const deviceChannels = (s.deviceChannels ?? {}) as Record<
+    string,
+    { channelL?: unknown; channelR?: unknown }
+  >;
+  const selDeviceId = (s.deviceId as string | null) ?? null;
+  const chMap = (selDeviceId && deviceChannels[selDeviceId]) || {};
+  const clampCh = (v: unknown): number | null =>
+    typeof v === "number" && Number.isInteger(v) ? Math.min(31, Math.max(0, v)) : null;
   return {
     deviceId: s.deviceId ?? null,
     deviceName: s.deviceName ?? null,
@@ -273,9 +305,22 @@ function backendRecordingSettings(s: Record<string, unknown>): Record<string, un
     keepSeparateAudio: s.videoKeepAudio !== false,
     separateAudioFormat: s.format ?? "wav",
     channels: s.channels ?? "stereo",
+    inputChannelL: clampCh(chMap.channelL),
+    inputChannelR: clampCh(chMap.channelR),
     format: s.format ?? "mp3",
     bitrate: String(s.bitrate ?? "192"),
     saveFolder: s.saveFolder ?? null,
+    // The filename pattern drives the recorder's output filename (build_opts →
+    // build_filename). Omitting it let Rust's #[serde(default)] re-default it to
+    // `date` on every settings_save, so a user who picked church/plain/datetime
+    // had every recording silently named with the `date` pattern. Whitelisted
+    // because a stale/corrupt localStorage value would otherwise fail the WHOLE
+    // settings_save (serde rejects an unknown enum), dropping ALL recorder sync.
+    filenamePattern: (["date", "church", "plain", "datetime"] as const).includes(
+      s.filenamePattern as "date" | "church" | "plain" | "datetime",
+    )
+      ? (s.filenamePattern as string)
+      : "date",
     stopOnSilence: s.stopOnSilence ?? false,
     silenceThreshold: s.silenceThreshold ?? -50,
     silenceTimeoutMinutes: s.silenceTimeoutMinutes ?? 5,
@@ -580,15 +625,44 @@ const api: Record<string, unknown> = {
     call("get_camera_capabilities", { deviceToken: token }, null),
 
   // ── Wake from sleep (wake_* commands) ───────────────────────────────────
-  scheduleOsWakes: async () => call("wake_reschedule", undefined, { ok: true }),
-  scheduleOsWakesAdmin: async () => call("wake_reschedule", undefined, { ok: true }),
-  getSleepConfig: async () => call("wake_get_sleep_config", undefined, {}),
+  // wake_reschedule returns WakeResult { ok, … }. A FAILED reschedule must report
+  // ok:false — the old { ok:true } fallback painted a silent failure as success.
+  scheduleOsWakes: async () =>
+    call("wake_reschedule", undefined, { ok: false, reason: "error" }),
+  scheduleOsWakesAdmin: async () =>
+    call("wake_reschedule", undefined, { ok: false, reason: "error" }),
+  // SleepConfig (wake_get_sleep_config) carries NO `platform` field — but the
+  // schedule-page diagnostic branches on cfg.platform === 'darwin'/'win32' to pick
+  // the right warnings, so without it every machine fell through to "unsupported
+  // platform" (telling a Mac/Windows user wake won't work when it can). Inject the
+  // platform the webview already knows; a real backend field (if ever added) wins.
+  getSleepConfig: async () => ({
+    platform,
+    ...(await call<Record<string, unknown>>("wake_get_sleep_config", undefined, {})),
+  }),
   fixMacSleep: async () => call("wake_fix_sleep", undefined, { ok: false }),
   fixWinWakeTimers: async () => call("wake_fix_sleep", undefined, { ok: false }),
+  // Fallbacks must match the real WakeCapabilities / WakeStatus shapes — the
+  // schedule-page reads caps.knownIssues.length / status.expectedWakes.length, so a
+  // wrong-shape fallback ({canWake}/{scheduled}) made the reliability card throw and
+  // silently disappear whenever the command errored.
   wakeDetectCapabilities: async () =>
-    call("wake_capabilities", undefined, { canWake: false, reasons: [] }),
+    call("wake_capabilities", undefined, {
+      platform: "other",
+      canWakeFromSleep: false,
+      canWakeFromOff: false,
+      needsAdmin: false,
+      knownIssues: [],
+      recommendations: [],
+    }),
   wakeVerifyScheduled: async () =>
-    call("wake_verify", undefined, { ok: false, scheduled: [] }),
+    call("wake_verify", undefined, {
+      expectedWakes: [],
+      observedWakes: [],
+      hasMismatch: false,
+      onBattery: null,
+      standbyEnabled: null,
+    }),
   wakeCheckPower: async () => ({}), // TODO Phase 3: no wake_check_power command
   wakeCheckStandby: async () => ({}), // TODO Phase 3: no wake_check_standby command
   wakeTest: async (secondsAhead?: number) =>
@@ -745,8 +819,12 @@ const api: Record<string, unknown> = {
       },
     });
   },
+  // editor_probe_streams → EditorStreamInfo { hasVideo, hasAudio } | (on failure)
+  // null. The old { streams: [] } fallback was the wrong shape: the consumer does
+  // `!streams || streams.hasVideo`, so a truthy {streams:[]} made it read
+  // .hasVideo (undefined) instead of taking the null branch. Return null.
   editorProbeStreams: async (fp: string) =>
-    call("editor_probe_streams", { inputPath: fp }, { streams: [] }),
+    call("editor_probe_streams", { inputPath: fp }, null),
   editorReadTranscript: async (fp: string) =>
     call("editor_read_sidecar", { mediaPath: fp, sidecar: "transcript" }, null),
   editorWriteTranscript: async (fp: string, t: unknown) =>
