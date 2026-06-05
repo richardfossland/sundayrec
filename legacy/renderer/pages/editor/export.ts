@@ -429,7 +429,11 @@ export async function runExport(): Promise<void> {
 
   if (btn)     { btn.disabled = true; btn.textContent = t('editor.exportExporting') || 'Eksporterer…' }
   if (progRow) progRow.style.display = ''
-  if (progBar) progBar.style.width   = '0%'
+  // The backend emits no export-progress events yet, so show an indeterminate
+  // sliding stripe instead of a bar frozen at 0% (which looked hung). The
+  // export-progress listener removes this class if a concrete % ever arrives.
+  if (progBar) { progBar.style.width = ''; progBar.classList.add('progress-indeterminate') }
+  if (progLbl) progLbl.textContent = t('editor.exportExporting') || 'Eksporterer…'
   if (resultRow) { resultRow.style.display = 'none' }
 
   const fmt = (document.querySelector<HTMLElement>('.export-fmt-btn.active')?.dataset.fmt ?? 'mp3') as 'mp3'|'wav'|'flac'|'aac'
@@ -494,7 +498,7 @@ export async function runExport(): Promise<void> {
   }
 
   if (progRow) progRow.style.display = 'none'
-  if (progBar) progBar.style.width   = '0%'
+  if (progBar) { progBar.classList.remove('progress-indeterminate'); progBar.style.width = '0%' }
   if (btn) { btn.disabled = false; btn.textContent = t('editor.save') || 'Eksporter' }
 
   const row  = $('editor-result-row')

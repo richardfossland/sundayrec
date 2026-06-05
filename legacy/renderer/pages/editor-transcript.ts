@@ -459,7 +459,10 @@ async function startTranscription(): Promise<void> {
 
   // 2. Transcribe
   setProgressTitle(t('transcript.progressTitle', 'Transkriberer…'))
-  updateProgressUI(0)
+  // Whisper emits no transcription progress to the frontend (only model download
+  // does) → show an indeterminate stripe for the transcription phase instead of a
+  // bar frozen at 0%. updateProgressUI() switches back to a real bar if a % arrives.
+  setProgressIndeterminate()
   activeJobId = 'whisper-' + Date.now()
   try {
     const res = await window.api.whisperTranscribe({
@@ -528,8 +531,20 @@ function setProgressTitle(title: string): void {
 function updateProgressUI(percent: number): void {
   const bar = $('transcribe-progress-bar')
   const text = $('transcribe-progress-text')
-  if (bar) bar.style.width = `${Math.max(0, Math.min(100, percent))}%`
+  // A concrete % arrived (model download, or a future transcribe emitter) →
+  // switch from the indeterminate stripe to a real bar.
+  if (bar) { bar.classList.remove('progress-indeterminate'); bar.style.width = `${Math.max(0, Math.min(100, percent))}%` }
   if (text) text.textContent = `${Math.round(percent)}%`
+}
+
+/** Show an animated indeterminate stripe for a phase whose real % the backend
+ *  doesn't report (whisper transcription). Cleared by updateProgressUI when a
+ *  concrete % arrives. */
+function setProgressIndeterminate(): void {
+  const bar = $('transcribe-progress-bar')
+  const text = $('transcribe-progress-text')
+  if (bar) { bar.style.width = ''; bar.classList.add('progress-indeterminate') }
+  if (text) text.textContent = ''
 }
 
 function updateDownloadUI(p: { id: string; bytesDownloaded: number; bytesTotal: number; fraction: number | null }): void {

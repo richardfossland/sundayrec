@@ -2928,6 +2928,22 @@ body.platform-win32  #wake-instructions-win { display: block; }
 }
 .editor-export-progress-label { font-size: 12px; color: var(--text3); white-space: nowrap; }
 
+/* Indeterminate progress: an animated sliding stripe for long operations whose
+   real percentage the backend does not report (editor export, whisper
+   transcription). Applied when the op starts; removed automatically once a
+   concrete % arrives (model download, or a future progress emitter). The
+   !important overrides the inline width the JS sets, and translateX slides the
+   stripe across the overflow-hidden track. */
+.progress-indeterminate {
+  width: 40% !important;
+  transition: none !important;
+  animation: progIndet 1.1s ease-in-out infinite;
+}
+@keyframes progIndet {
+  0%   { transform: translateX(-110%); }
+  100% { transform: translateX(275%); }
+}
+
 /* ── Editor: mastering section ────────────────────────────────── */
 .editor-master-section {
   margin-top: 16px; padding: 14px 16px;

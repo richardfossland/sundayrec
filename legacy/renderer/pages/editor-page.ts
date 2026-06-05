@@ -17,7 +17,7 @@ import { fitAll, zoomBy } from './editor/viewport'
 import { onCanvasDown, onCanvasMove, onCanvasUp, onCanvasLeave, onCanvasContextMenu, onCanvasWheel, setupMinimapInteraction, snapOutOfCut } from './editor/canvas-input'
 import { openExportModal, closeExportModal, runExport, updateExportFormatUI } from './editor/export'
 import { setupMasteringPanel } from './editor/mastering'
-import { setupStageUi, updateStageButton } from './editor/stage-ui'
+import { setupStageUi } from './editor/stage-ui'
 import { pickAndLoad, loadFile, reloadIntroOutro, updateVideoIntroOutroDisplay, updateEditorIntroOutroDisplay } from './editor/loader'
 
 // ── Setup ─────────────────────────────────────────────────────────────────
@@ -291,7 +291,8 @@ export function setupEditorPage(): void {
     const { percent } = data as { percent: number }
     const bar   = $('editor-export-progress-bar')
     const label = $('editor-export-progress-label')
-    if (bar)   bar.style.width   = Math.min(99, percent) + '%'
+    // A concrete % arrived → switch from the indeterminate stripe to a real bar.
+    if (bar)   { bar.classList.remove('progress-indeterminate'); bar.style.width = Math.min(99, percent) + '%' }
     if (label) label.textContent = `Eksporterer… ${Math.round(percent)}%`
   })
 
