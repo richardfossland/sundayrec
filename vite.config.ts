@@ -1,27 +1,37 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
+// The frontend is the ported old Electron vanilla-TS renderer under
+// `legacy/renderer/`. Vite's root is that directory, so the old `index.html`
+// (which loads `./api-shim.ts` + `./main.ts` and `styles.css`) is the entry and
+// every relative import (`../types`, `../../types`, `../../shared`, `../locales`)
+// resolves against the mirrored `legacy/{types,shared,locales}` tree unchanged.
+// No React/Tailwind — the old renderer ships its own styles.css.
+//
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss()],
+  root: "legacy/renderer",
+  plugins: [],
 
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(__dirname, "./legacy"),
     },
+  },
+
+  build: {
+    // Tauri's frontendDist is "../dist" (relative to src-tauri), i.e. repo-root
+    // /dist. From the `legacy/renderer` root that's two levels up.
+    outDir: path.resolve(__dirname, "dist"),
+    emptyOutDir: true,
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev`
   // or `tauri build`.
-  //
-  // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
-  // 2. tauri expects a fixed port, fail if that port is not available
   server: {
     port: 1420,
     strictPort: true,
@@ -34,7 +44,6 @@ export default defineConfig(async () => ({
         }
       : undefined,
     watch: {
-      // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
     },
   },

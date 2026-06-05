@@ -7,10 +7,11 @@
 //! handles gracefully (the panel shows a "not built into this build" hint).
 
 use crate::editor::{
-    self, EditorExportRequest, EditorExportResult, EditorFileRead, EditorLoudness,
-    EditorMasterApplyRequest, EditorMasterApplyResult, EditorMasterPreviewRequest,
-    EditorMasterPreviewResult, EditorMasterProgress, EditorMediaInfo, EditorPeaks, EditorSegment,
-    EditorSidecar, EditorStreamInfo, MasterEngine,
+    self, EditorAutoProcess, EditorChannelDiagnosis, EditorChapter, EditorExportRequest,
+    EditorExportResult, EditorFileRead, EditorLoudness, EditorMasterApplyRequest,
+    EditorMasterApplyResult, EditorMasterPreviewRequest, EditorMasterPreviewResult,
+    EditorMasterProgress, EditorMediaInfo, EditorPeaks, EditorSegment, EditorSidecar,
+    EditorStreamInfo, EditorTranscriptLine, MasterEngine,
 };
 use crate::error::AppResult;
 use tauri::{Emitter, State};
@@ -31,6 +32,41 @@ pub async fn editor_peaks(input_path: String) -> AppResult<EditorPeaks> {
 #[tauri::command]
 pub async fn editor_segments(input_path: String) -> AppResult<Vec<EditorSegment>> {
     editor::segments(&input_path).await
+}
+
+/// The built-in mastering presets for the editor's preset dropdown. Pure core
+/// (no ffmpeg / feature gate), so the panel is never empty.
+#[tauri::command]
+pub fn editor_master_presets() -> AppResult<Vec<crate::editor::EditorMasterPreset>> {
+    Ok(editor::master_presets())
+}
+
+/// Detect topic chapters from a transcript (Bible references + enumeration
+/// points). Pure/offline/deterministic — no ffmpeg, works without the `whisper`
+/// or `editor` features. Returns chapters on the original recording timeline.
+#[tauri::command]
+pub fn editor_detect_chapters(
+    lines: Vec<EditorTranscriptLine>,
+    lang: Option<String>,
+) -> AppResult<Vec<EditorChapter>> {
+    Ok(editor::detect_chapters(
+        &lines,
+        lang.as_deref().unwrap_or("no"),
+    ))
+}
+
+/// Analyse a recording's stereo channel balance and recommend a repair
+/// (swap / duplicate the good channel / per-channel makeup). HARDWARE-UNVERIFIED.
+#[tauri::command]
+pub async fn editor_diagnose_channels(input_path: String) -> AppResult<EditorChannelDiagnosis> {
+    editor::diagnose_channels(&input_path).await
+}
+
+/// One-click "auto-improve": diagnose channels + recommend the full best-result
+/// processing setup (channel repair + podcast vocal chain + clear mastering).
+#[tauri::command]
+pub async fn editor_auto_process(input_path: String) -> AppResult<EditorAutoProcess> {
+    editor::auto_process(&input_path).await
 }
 
 /// Measure the recording's loudness against a mastering preset (pass 1 only).

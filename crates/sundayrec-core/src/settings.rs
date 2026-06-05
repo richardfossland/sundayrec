@@ -140,12 +140,26 @@ pub struct Settings {
     /// it succeeds. dshow cameras are addressed by name, so this stays `None`.
     #[serde(default)]
     pub video_device_index: Option<i32>,
-    /// Capture resolution tag: `"480p"` | `"720p"` | `"1080p"`. Default `"720p"`.
+    /// Capture resolution tag: `"480p"` | `"720p"` | `"1080p"` | `"2160p"` (4K).
+    /// Default `"720p"`.
     #[serde(default = "default_video_resolution")]
     pub video_resolution: String,
     /// Capture frame rate (fps). Valid 1..=120, default 30.
     #[serde(default = "default_video_framerate")]
     pub video_framerate: i32,
+    /// Recording video container: `"mp4"` (default) | `"mov"`. Both are
+    /// QuickTime/ISO containers that take H.264/H.265 + AAC and `+faststart`.
+    #[serde(default = "default_video_container")]
+    pub video_container: String,
+    /// Recording video codec: `"h264"` (default, universal) | `"h265"` (HEVC,
+    /// ~half the size; for live 4K a hardware encoder is recommended).
+    #[serde(default = "default_video_codec")]
+    pub video_codec: String,
+    /// Recording video encoder backend: `"software"` (default, libx264/5 — best
+    /// quality) | `"hardware"` (VideoToolbox on macOS — realtime, needed for live
+    /// 4K H.265). Ignored off macOS (falls back to software).
+    #[serde(default = "default_video_encoder")]
+    pub video_encoder: String,
     /// Mirror the camera horizontally (preview + recording). Default false.
     /// Electron `videoFlip` — handy for front-facing / mirrored stage cameras.
     #[serde(default)]
@@ -428,6 +442,15 @@ fn default_video_resolution() -> String {
 fn default_video_framerate() -> i32 {
     30
 }
+fn default_video_container() -> String {
+    "mp4".to_string()
+}
+fn default_video_codec() -> String {
+    "h264".to_string()
+}
+fn default_video_encoder() -> String {
+    "software".to_string()
+}
 fn default_output_mode() -> String {
     "combined".to_string()
 }
@@ -451,6 +474,9 @@ impl Default for Settings {
             video_device_index: None,
             video_resolution: default_video_resolution(),
             video_framerate: default_video_framerate(),
+            video_container: default_video_container(),
+            video_codec: default_video_codec(),
+            video_encoder: default_video_encoder(),
             video_flip: false,
             output_mode: default_output_mode(),
             keep_separate_audio: false,
@@ -567,6 +593,23 @@ impl Settings {
 
         // Video capture
         self.video_framerate = clamp_i32(self.video_framerate, 1, 120);
+        // Normalise resolution/container/codec tags to the known set; anything
+        // else falls back to a safe default rather than producing bad ffmpeg args.
+        if !matches!(
+            self.video_resolution.as_str(),
+            "480p" | "720p" | "1080p" | "2160p"
+        ) {
+            self.video_resolution = default_video_resolution();
+        }
+        if !matches!(self.video_container.as_str(), "mp4" | "mov") {
+            self.video_container = default_video_container();
+        }
+        if !matches!(self.video_codec.as_str(), "h264" | "h265") {
+            self.video_codec = default_video_codec();
+        }
+        if !matches!(self.video_encoder.as_str(), "software" | "hardware") {
+            self.video_encoder = default_video_encoder();
+        }
 
         // Recording behaviour
         self.silence_threshold = clamp_i32(self.silence_threshold, -90, 0);

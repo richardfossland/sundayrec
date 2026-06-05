@@ -24,13 +24,19 @@ pub async fn probe_camera_modes(token: &str, platform: Platform) -> Vec<CameraMo
     }
     use tokio::io::AsyncReadExt;
     let input = format!("{token}:none");
+    // avfoundation only PRINTS "Supported modes:" when the requested format can't
+    // be satisfied. The old `-framerate 1` is actually SUPPORTED by some cameras
+    // (e.g. the FaceTime HD camera lists 1.0 fps), so ffmpeg opened successfully
+    // and never listed the modes → the probe came back empty and the recorder
+    // ignored the resolution setting. An impossible framerate (1000) is rejected
+    // by every camera, reliably triggering the modes listing.
     let spawn = tokio::process::Command::new(crate::media::ffmpeg::ffmpeg_path())
         .args([
             "-hide_banner",
             "-f",
             "avfoundation",
             "-framerate",
-            "1",
+            "1000",
             "-i",
         ])
         .arg(&input)

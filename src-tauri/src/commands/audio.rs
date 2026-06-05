@@ -45,6 +45,41 @@ pub async fn list_video_devices() -> AppResult<Vec<FfmpegDevice>> {
     Ok(enumerate_ffmpeg_devices().await?.video_inputs)
 }
 
+/// What a camera can actually capture, for gating the resolution/fps UI to modes
+/// the device advertises (mirror of [`sundayrec_core::capture::CameraCapabilities`]).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS, PartialEq, Eq)]
+#[ts(export, export_to = "../../src/lib/bindings/CameraCapabilities.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct CameraCapabilities {
+    pub max_width: u32,
+    pub max_height: u32,
+    pub max_fps: u32,
+    pub supported_resolutions: Vec<String>,
+    pub supported_framerates: Vec<u32>,
+}
+
+/// Probe a camera's advertised modes and summarise which resolutions / frame
+/// rates it can actually deliver, so the settings UI can disable the ones it
+/// can't (a camera that only does 720p@30 must not offer 1080p/60). `device_token`
+/// is the avfoundation index (macOS) or dshow name (Windows). On a failed probe
+/// (or non-macOS where modes aren't listed) every list is empty → the UI falls
+/// back to offering everything.
+///
+/// ⚠️ HARDWARE-UNVERIFIED — opens the real camera to list its modes.
+#[tauri::command]
+pub async fn get_camera_capabilities(device_token: String) -> AppResult<CameraCapabilities> {
+    let platform = crate::recorder::engine::current_platform();
+    let modes = crate::media::camera::probe_camera_modes(&device_token, platform).await;
+    let c = sundayrec_core::capture::summarize_camera_capabilities(&modes);
+    Ok(CameraCapabilities {
+        max_width: c.max_width,
+        max_height: c.max_height,
+        max_fps: c.max_fps,
+        supported_resolutions: c.supported_resolutions,
+        supported_framerates: c.supported_framerates,
+    })
+}
+
 /// Combined audio-probe for the settings device dropdown: enumerate the audio
 /// inputs once and shape them into the flat name lists the panel renders, in a
 /// single round-trip. Mirrors the Electron `diagnose-audio` handler.

@@ -392,8 +392,14 @@ pub(crate) fn build_opts(
     let camera_configured =
         settings.video_device_name.is_some() || settings.video_device_index.is_some();
     let video_on = video_override.unwrap_or(settings.video_enabled) && camera_configured;
+    // Video recordings use the configured container (mp4 default, or mov); audio
+    // recordings use the chosen audio format. `validate()` has already normalised
+    // `video_container` to mp4/mov, so this is always a safe extension.
     let main_ext = if video_on {
-        "mp4"
+        match settings.video_container.as_str() {
+            "mov" => "mov",
+            _ => "mp4",
+        }
     } else {
         format_ext(settings.format)
     };
@@ -441,6 +447,10 @@ pub(crate) fn build_opts(
         separate_audio_format: format_ext(settings.separate_audio_format).to_string(),
         // The probe targets this resolution so 1080p actually records 1080p.
         video_resolution: settings.video_resolution.clone(),
+        // H.264 (default) or H.265/HEVC for the recording.
+        video_codec: settings.video_codec.clone(),
+        // software (libx264/5) or hardware (VideoToolbox, mac) encoder backend.
+        video_encoder: settings.video_encoder.clone(),
         // Resolved server-side by the recorder's camera-mode probe at start.
         video_input: None,
     })

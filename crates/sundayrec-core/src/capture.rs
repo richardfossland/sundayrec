@@ -262,6 +262,67 @@ pub fn parse_avfoundation_modes(stderr: &str) -> Vec<CameraMode> {
     out
 }
 
+/// A summary of what a camera can actually capture, derived from its advertised
+/// [`CameraMode`]s. Used to GATE the UI so the user can only pick resolutions /
+/// frame rates the device supports — a camera can't record a mode that isn't in
+/// its descriptor (avfoundation/dshow reject it and the camera never opens).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CameraCapabilities {
+    /// Largest advertised width/height (the camera's native ceiling).
+    pub max_width: u32,
+    pub max_height: u32,
+    /// Highest advertised frame rate across all modes.
+    pub max_fps: u32,
+    /// Which resolution TAGS (`480p`/`720p`/`1080p`/`2160p`) the camera can
+    /// deliver — i.e. it advertises a mode at least that tall (we can downscale a
+    /// larger native mode, but never upscale to a fake higher resolution).
+    pub supported_resolutions: Vec<String>,
+    /// The standard UI frame-rate options (24/25/30/50/60) the camera can reach
+    /// natively (≤ its advertised max — we never offer frame-duplicated "fake" fps).
+    pub supported_framerates: Vec<u32>,
+}
+
+/// The resolution tags the UI offers, paired with their pixel height.
+const RES_TAGS: &[(&str, u32)] = &[
+    ("480p", 480),
+    ("720p", 720),
+    ("1080p", 1080),
+    ("2160p", 2160),
+];
+/// The frame-rate options the UI offers.
+const FPS_OPTIONS: &[u32] = &[24, 25, 30, 50, 60];
+
+/// Summarise a device's advertised modes into [`CameraCapabilities`] for UI
+/// gating. Empty input (no modes parsed) yields an all-zero summary with empty
+/// lists — the caller should then fall back to offering everything (better to let
+/// the user try than to block on a failed probe).
+pub fn summarize_camera_capabilities(modes: &[CameraMode]) -> CameraCapabilities {
+    let max_width = modes.iter().map(|m| m.width).max().unwrap_or(0);
+    let max_height = modes.iter().map(|m| m.height).max().unwrap_or(0);
+    let max_fps = modes
+        .iter()
+        .flat_map(|m| m.framerates.iter().copied())
+        .max()
+        .unwrap_or(0);
+    let supported_resolutions = RES_TAGS
+        .iter()
+        .filter(|(_, h)| max_height >= *h)
+        .map(|(tag, _)| (*tag).to_string())
+        .collect();
+    let supported_framerates = FPS_OPTIONS
+        .iter()
+        .copied()
+        .filter(|f| *f <= max_fps)
+        .collect();
+    CameraCapabilities {
+        max_width,
+        max_height,
+        max_fps,
+        supported_resolutions,
+        supported_framerates,
+    }
+}
+
 /// Pick the best INPUT mode for a target size + frame rate from the device's
 /// advertised modes. Prefers the resolution whose area is closest to the target
 /// (a landscape target won't pick a portrait mode of similar area), then the
@@ -289,14 +350,15 @@ pub fn resolve_camera_mode(
     })
 }
 
-/// Map a settings resolution tag (`"480p"`/`"720p"`/`"1080p"`) to its (width,
-/// height). Used as the camera-mode probe TARGET so a 1080p setting actually
-/// records 1080p (when the camera advertises it), not the old hardcoded 720p.
-/// Unknown tags fall back to 720p.
+/// Map a settings resolution tag (`"480p"`/`"720p"`/`"1080p"`/`"2160p"`) to its
+/// (width, height). Used as the camera-mode probe TARGET so a 1080p setting
+/// actually records 1080p (when the camera advertises it), not the old hardcoded
+/// 720p. `"2160p"` is 4K UHD (3840×2160). Unknown tags fall back to 720p.
 pub fn resolution_dims(tag: &str) -> (u32, u32) {
     match tag.trim().to_ascii_lowercase().as_str() {
         "480p" => (854, 480),
         "1080p" => (1920, 1080),
+        "2160p" | "4k" => (3840, 2160),
         // "720p" + anything unknown → 720p.
         _ => (1280, 720),
     }
@@ -351,6 +413,14 @@ pub struct CaptureOpts {
     /// that doesn't advertise that exact mode, which is why the recorder probes
     /// and fills this in. The OUTPUT still conforms to `framerate` via `-r`.
     pub video_input: Option<VideoCaptureMode>,
+    /// Video output codec — H.264 (default, universal) or H.265/HEVC (~half the
+    /// size).
+    pub video_codec: crate::editor::VideoCodec,
+    /// Use the **VideoToolbox hardware encoder** (macOS) instead of software
+    /// x264/x265. Realtime even at 4K — the right choice for live 4K H.265. The
+    /// builder honours this ONLY on macOS (`Platform::MacOS`); elsewhere it
+    /// silently falls back to software (VideoToolbox is mac-only).
+    pub hw_accel: bool,
 }
 
 impl Default for CaptureOpts {
@@ -367,6 +437,8 @@ impl Default for CaptureOpts {
             live_levels: true,
             preview_jpg: None,
             video_input: None,
+            video_codec: crate::editor::VideoCodec::H264,
+            hw_accel: false,
         }
     }
 }
@@ -519,12 +591,56 @@ pub fn build_unified_capture_args(
     // and channel count come from validated settings. Video (when present) stays a
     // simple libx264.
     if has_video {
+        // Hardware (VideoToolbox) encoding is honoured ONLY on macOS — it's the
+        // realtime path for live 4K H.265. Elsewhere we fall back to software
+        // x264/x265 (VideoToolbox is mac-only).
+        let use_hw = opts.hw_accel && matches!(platform, Platform::MacOS);
         args.push("-c:v".into());
-        args.push("libx264".into());
-        args.push("-preset".into());
-        args.push("veryfast".into());
+        if use_hw {
+            match opts.video_codec {
+                crate::editor::VideoCodec::H264 => args.push("h264_videotoolbox".into()),
+                crate::editor::VideoCodec::H265 => {
+                    args.push("hevc_videotoolbox".into());
+                    args.push("-tag:v".into());
+                    args.push("hvc1".into());
+                }
+            }
+            // VideoToolbox has no CRF — target a resolution-appropriate bitrate,
+            // and `-realtime 1` biases it for live capture. Output dims = the
+            // pinned input mode (capture doesn't scale); default to 1080p.
+            let (w, h) = opts
+                .video_input
+                .map(|m| (m.width, m.height))
+                .unwrap_or((1920, 1080));
+            args.push("-b:v".into());
+            args.push(format!(
+                "{}k",
+                crate::editor::default_video_bitrate_kbps(w, h)
+            ));
+            args.push("-realtime".into());
+            args.push("1".into());
+        } else {
+            match opts.video_codec {
+                crate::editor::VideoCodec::H264 => args.push("libx264".into()),
+                crate::editor::VideoCodec::H265 => {
+                    args.push("libx265".into());
+                    // `hvc1` tag so QuickTime/Apple players accept the HEVC stream
+                    // in an mp4/mov container.
+                    args.push("-tag:v".into());
+                    args.push("hvc1".into());
+                }
+            }
+            args.push("-preset".into());
+            args.push("veryfast".into());
+        }
         args.push("-pix_fmt".into());
         args.push("yuv420p".into());
+        // NOTE: the OUTPUT resolution is controlled by the INPUT `-video_size`
+        // (the probed/pinned camera mode above) — NOT by an output `-vf scale`.
+        // An output `-vf` on this primary output conflicted with the preview
+        // output's `-map 0:v` (ffmpeg can't feed one input stream into both a
+        // simple filtergraph AND a direct map) → the whole recording failed to
+        // produce a file. So resolution stays an input-mode concern.
         // PERFECT A/V SYNC: avfoundation cameras deliver VARIABLE frame rate (they
         // drop to ~15 fps in low light). Muxed as-is the video timeline diverges
         // from the audio and lip-sync drifts over a service. `-r <fps> -fps_mode
@@ -547,7 +663,9 @@ pub fn build_unified_capture_args(
     // Normalise leading timestamps so the file plays from t=0 in every player.
     args.push("-avoid_negative_ts".into());
     args.push("make_zero".into());
-    if has_video {
+    // `+faststart` (progressive playback) is only valid for the ISO/QuickTime
+    // containers — mp4/mov/m4v. A Matroska (.mkv) recording would reject it.
+    if has_video && matches!(ext_of(output_path), "mp4" | "mov" | "m4v") {
         args.push("-movflags".into());
         args.push("+faststart".into());
     }
@@ -892,6 +1010,165 @@ mod tests {
         // Codecs unchanged by the added telemetry filter.
         assert!(has_pair(&args, "-c:a", "aac"));
         assert!(has_pair(&args, "-c:v", "libx264"));
+    }
+
+    #[test]
+    fn capabilities_gate_resolution_and_fps_to_advertised() {
+        // A 1080p@[30] camera: 480p/720p/1080p supported (downscale), NOT 4K;
+        // fps options ≤30 (24/25/30), not 50/60.
+        let modes = vec![
+            CameraMode {
+                width: 1280,
+                height: 720,
+                framerates: vec![30],
+            },
+            CameraMode {
+                width: 1920,
+                height: 1080,
+                framerates: vec![15, 30],
+            },
+        ];
+        let cap = summarize_camera_capabilities(&modes);
+        assert_eq!(cap.max_width, 1920);
+        assert_eq!(cap.max_height, 1080);
+        assert_eq!(cap.max_fps, 30);
+        assert_eq!(cap.supported_resolutions, vec!["480p", "720p", "1080p"]);
+        assert_eq!(cap.supported_framerates, vec![24, 25, 30]);
+    }
+
+    #[test]
+    fn capabilities_4k60_camera_supports_everything() {
+        let modes = vec![CameraMode {
+            width: 3840,
+            height: 2160,
+            framerates: vec![24, 30, 60],
+        }];
+        let cap = summarize_camera_capabilities(&modes);
+        assert_eq!(
+            cap.supported_resolutions,
+            vec!["480p", "720p", "1080p", "2160p"]
+        );
+        assert_eq!(cap.supported_framerates, vec![24, 25, 30, 50, 60]);
+    }
+
+    #[test]
+    fn capabilities_empty_modes_is_all_zero() {
+        let cap = summarize_camera_capabilities(&[]);
+        assert_eq!(cap.max_height, 0);
+        assert!(cap.supported_resolutions.is_empty());
+        assert!(cap.supported_framerates.is_empty());
+    }
+
+    #[test]
+    fn resolution_dims_includes_4k() {
+        assert_eq!(resolution_dims("480p"), (854, 480));
+        assert_eq!(resolution_dims("720p"), (1280, 720));
+        assert_eq!(resolution_dims("1080p"), (1920, 1080));
+        assert_eq!(resolution_dims("2160p"), (3840, 2160));
+        assert_eq!(resolution_dims("4k"), (3840, 2160));
+        assert_eq!(resolution_dims("garbage"), (1280, 720));
+    }
+
+    #[test]
+    fn h265_recording_uses_libx265_with_hvc1_tag() {
+        let opts = CaptureOpts {
+            video_codec: crate::editor::VideoCodec::H265,
+            ..CaptureOpts::default()
+        };
+        let args = build_unified_capture_args(Platform::MacOS, Some("0"), "1", "/tmp/s.mp4", &opts);
+        assert!(has_pair(&args, "-c:v", "libx265"));
+        assert!(has_pair(&args, "-tag:v", "hvc1"));
+        // faststart still emitted for mp4.
+        assert!(has_pair(&args, "-movflags", "+faststart"));
+    }
+
+    #[test]
+    fn primary_output_has_no_vf_only_preview_does() {
+        // The primary output must NOT carry an output `-vf` — it would conflict
+        // with the preview output's `-map 0:v` (one input stream can't feed both a
+        // simple filtergraph and a direct map) and break the recording. The only
+        // `-vf` is the preview's `scale=480:-2,fps=4`.
+        let opts = CaptureOpts {
+            preview_jpg: Some("/tmp/p.jpg".into()),
+            ..CaptureOpts::default()
+        };
+        let args = build_unified_capture_args(Platform::MacOS, Some("0"), "1", "/tmp/s.mp4", &opts);
+        let vf_values: Vec<&String> = args
+            .iter()
+            .enumerate()
+            .filter(|(i, a)| *a == "-vf" && *i + 1 < args.len())
+            .map(|(i, _)| &args[i + 1])
+            .collect();
+        assert_eq!(
+            vf_values.len(),
+            1,
+            "exactly one -vf (the preview): {args:?}"
+        );
+        assert!(vf_values[0].contains("scale=480"), "{args:?}");
+    }
+
+    #[test]
+    fn hw_accel_uses_videotoolbox_on_mac_with_bitrate() {
+        let opts = CaptureOpts {
+            hw_accel: true,
+            video_codec: crate::editor::VideoCodec::H265,
+            video_input: Some(VideoCaptureMode {
+                width: 3840,
+                height: 2160,
+                input_fps: 30,
+            }),
+            ..CaptureOpts::default()
+        };
+        let args = build_unified_capture_args(Platform::MacOS, Some("0"), "1", "/tmp/s.mov", &opts);
+        assert!(has_pair(&args, "-c:v", "hevc_videotoolbox"));
+        assert!(has_pair(&args, "-tag:v", "hvc1"));
+        assert!(has_pair(&args, "-b:v", "40000k"), "4K bitrate");
+        assert!(has_pair(&args, "-realtime", "1"));
+        // No software-only preset on the hardware path.
+        assert!(
+            !args.iter().any(|a| a == "-preset"),
+            "hw path has no -preset"
+        );
+    }
+
+    #[test]
+    fn hw_accel_falls_back_to_software_off_mac() {
+        let opts = CaptureOpts {
+            hw_accel: true,
+            ..CaptureOpts::default()
+        };
+        // Windows has no VideoToolbox → software libx264 with a preset.
+        let args =
+            build_unified_capture_args(Platform::Windows, Some("Cam"), "Mic", "out.mp4", &opts);
+        assert!(has_pair(&args, "-c:v", "libx264"));
+        assert!(has_pair(&args, "-preset", "veryfast"));
+        assert!(!args.iter().any(|a| a == "h264_videotoolbox"));
+    }
+
+    #[test]
+    fn mov_recording_keeps_faststart_but_mkv_drops_it() {
+        let mov = build_unified_capture_args(
+            Platform::MacOS,
+            Some("0"),
+            "1",
+            "/tmp/s.mov",
+            &CaptureOpts::default(),
+        );
+        assert!(
+            has_pair(&mov, "-movflags", "+faststart"),
+            "mov supports faststart"
+        );
+        let mkv = build_unified_capture_args(
+            Platform::MacOS,
+            Some("0"),
+            "1",
+            "/tmp/s.mkv",
+            &CaptureOpts::default(),
+        );
+        assert!(
+            !mkv.iter().any(|a| a == "+faststart"),
+            "mkv must not get faststart"
+        );
     }
 
     #[test]

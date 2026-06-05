@@ -49,6 +49,7 @@
 pub mod audio;
 pub mod audio_analysis;
 pub mod capture;
+pub mod chapters;
 pub mod church_calendar;
 pub mod cloud;
 pub mod device_enum;
@@ -71,6 +72,7 @@ pub mod overlay;
 pub mod preflight;
 pub mod prep;
 pub mod preroll;
+pub mod processing;
 pub mod progress;
 pub mod reconnect;
 pub mod recorder;

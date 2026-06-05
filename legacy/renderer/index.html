@@ -1,0 +1,2760 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset: http://asset.localhost https://asset.localhost; media-src 'self' media: blob: asset: http://asset.localhost https://asset.localhost; connect-src 'self' ipc: http://ipc.localhost" />
+  <title>SundayRec</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- ── Sidebar ─────────────────────────────────────────────────── -->
+<nav id="sidebar" data-tauri-drag-region>
+  <div class="sidebar-top">
+    <div class="logo">
+      <svg class="logo-icon" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" aria-label="SundayRec logo">
+        <rect width="1024" height="1024" rx="180" fill="#194280"/>
+        <rect x="477.5" y="303" width="69" height="431" fill="#F0BB47"/>
+        <rect x="370" y="418" width="283" height="70" fill="#F0BB47"/>
+        <path d="M 250 304 Q 140 466 250 628" stroke="#F0BB47" stroke-width="20" stroke-linecap="round" fill="none"/>
+        <path d="M 335 350 Q 245 469 335 588" stroke="#F0BB47" stroke-width="20" stroke-linecap="round" fill="none"/>
+        <path d="M 689 350 Q 779 469 689 588" stroke="#F0BB47" stroke-width="20" stroke-linecap="round" fill="none"/>
+        <path d="M 774 304 Q 884 466 774 628" stroke="#F0BB47" stroke-width="20" stroke-linecap="round" fill="none"/>
+      </svg>
+      <span class="logo-text">SundayRec</span>
+    </div>
+  </div>
+  <ul>
+    <li><a href="#" class="nav-link active" data-page="home">
+      <svg viewBox="0 0 20 20"><path d="M10 2L2 8v10h6v-6h4v6h6V8z"/></svg>
+      <span data-i18n="nav.home">Hjem</span>
+    </a></li>
+    <li><a href="#" class="nav-link" data-page="schedule">
+      <svg viewBox="0 0 20 20"><path d="M6 2v2H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-2V2h-2v2H8V2zm8 6H6v2h8zm0 4H6v2h8z"/></svg>
+      <span data-i18n="nav.schedule">Tidsplan</span>
+    </a></li>
+    <li><a class="nav-link" data-page="live" href="#">
+      <svg viewBox="0 0 20 20" fill="currentColor"><circle cx="10" cy="10" r="3"/><circle cx="10" cy="10" r="6" stroke="currentColor" stroke-width="1" fill="none" opacity=".5"/></svg>
+      <span data-i18n="nav.live">Direkte</span>
+    </a></li>
+    <li><a href="#" class="nav-link" data-page="editor">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 10h14M3 6h3m11 0h-3M3 14h3m11 0h-3" stroke-linecap="round"/><circle cx="7.5" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="12.5" cy="14" r="1.5" fill="currentColor" stroke="none"/></svg>
+      <span data-i18n="nav.editor">Rediger</span>
+    </a></li>
+    <li><a href="#" class="nav-link" data-page="search">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd"/></svg>
+      <span data-i18n="nav.search">Søk</span>
+    </a></li>
+  </ul>
+  <div class="sidebar-bottom">
+    <a href="#" class="nav-link" data-page="settings">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg>
+      <span data-i18n="nav.settings">Innstillinger</span>
+    </a>
+    <div class="sidebar-status">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-label" data-i18n="status.ready">Alt er klart</span>
+    </div>
+    <div class="sidebar-version" id="sidebar-version">—</div>
+  </div>
+</nav>
+
+<!-- ── Update toast (bottom-right) ─────────────────────────────── -->
+<div id="update-toast" class="update-toast" style="display:none">
+  <div class="update-toast-icon"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z"/></svg></div>
+  <div class="update-toast-body">
+    <div class="update-toast-title" id="update-toast-title">Oppdatering tilgjengelig</div>
+    <div class="update-toast-text"  id="update-toast-text"></div>
+    <div class="update-toast-progress" id="update-toast-progress" style="display:none">
+      <div class="update-toast-bar" id="update-toast-bar"></div>
+    </div>
+    <div class="update-toast-actions" id="update-toast-actions" style="display:none">
+      <button class="btn-toast-install" id="btn-toast-install"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/></svg><span>Start på nytt og installer</span></button>
+    </div>
+  </div>
+  <button class="btn-toast-close" id="btn-toast-close" title="Lukk" data-i18n-title="tooltip.close">×</button>
+</div>
+
+<!-- ── Titlebar drag strip (macOS double-click to zoom + drag) ── -->
+<div id="titlebar-drag" class="titlebar-drag"></div>
+
+<!-- ── Main ────────────────────────────────────────────────────── -->
+<main id="main">
+
+  <!-- Global recording-error banner (shown from any page) -->
+  <div id="global-error-banner" class="global-error-banner" style="display:none">
+    <span class="global-error-icon">⚠️</span>
+    <div class="global-error-body">
+      <span id="global-error-msg" class="global-error-msg"></span>
+      <span id="global-error-hint" class="global-error-hint" data-i18n="error.tryAgainHint">Hvis problemet vedvarer, sjekk Sjekk system i Lyd-innstillingene eller restart programmet.</span>
+    </div>
+    <button id="global-error-close" class="global-error-close" aria-label="Lukk">✕</button>
+  </div>
+
+  <!-- ══ HJEM ══════════════════════════════════════════════════ -->
+  <section id="page-home" class="page active">
+
+    <!-- Review queue card — only visible when items are pending review -->
+    <div class="card review-queue-card" id="review-queue-card" style="display:none">
+      <div class="review-queue-header">
+        <h2 class="review-queue-title">
+          <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor" class="review-queue-icon"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+          <span data-i18n="review.queueTitle">Klare for gjennomgang og publisering</span>
+        </h2>
+        <span class="review-queue-count" id="review-queue-count"></span>
+      </div>
+      <div class="review-queue-list" id="review-queue-list">
+        <!-- Items injected by review-queue-home.ts -->
+      </div>
+    </div>
+
+    <!-- Hero: device OK -->
+    <div id="hero-ok" class="hero hero-ok">
+      <div class="hero-icon"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg></div>
+      <div class="hero-text">
+        <div class="hero-label" data-i18n="status.ok">Klar for opptak</div>
+        <div class="hero-title" id="hero-ready-title" data-i18n="home.readyTitle">Alt er klart</div>
+      </div>
+      <div class="hero-next" id="hero-next-section">
+        <div class="next-label" data-i18n="home.nextRecording">Neste opptak</div>
+        <div class="next-date" id="next-date">—</div>
+        <div class="next-countdown" id="next-countdown"></div>
+        <div class="next-wake-badge" id="next-wake-badge" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- Hero: device missing -->
+    <div id="hero-warn" class="hero hero-warn" style="display:none">
+      <div class="hero-icon"><svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"/></svg></div>
+      <div class="hero-text">
+        <div class="hero-label" data-i18n="status.warn">Krever handling</div>
+        <div class="hero-title" data-i18n="home.warnTitle">Lydmikseren er ikke tilkoblet</div>
+        <div class="hero-detail" id="hero-warn-detail" data-i18n="home.warnDetail">Koble til mikseren via USB før søndag</div>
+      </div>
+      <button class="btn-fix" id="btn-how-to-fix" data-i18n="home.howToFix">Slik løser du det</button>
+      <a href="#" class="setup-hint-link" id="btn-how-to-fix-audio">Slik setter du opp lydkilde →</a>
+    </div>
+
+    <!-- Single big recording button + video toggle -->
+    <div class="quick-row">
+      <button class="btn-record" id="btn-start-recording">
+        <span class="rec-dot-sm"></span>
+        <span data-i18n="home.startRecording">Start opptak</span>
+      </button>
+      <button class="btn-video-toggle" id="btn-video-toggle" title="Slå video på/av" data-i18n-title="tooltip.toggleVideo">
+        <svg viewBox="0 0 20 20" width="15" height="15" fill="currentColor">
+          <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zm12.553 1.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/>
+        </svg>
+        <span id="video-toggle-label">Video av</span>
+      </button>
+    </div>
+
+    <!-- Full-width VU section with signal status -->
+    <div class="vu-section">
+      <div class="vu-section-head">
+        <span class="vu-section-label" data-i18n="home.audioLevel">Lydnivå</span>
+        <div class="signal-row">
+          <span class="signal-dot" id="signal-dot"></span>
+          <span class="signal-text" id="signal-text">—</span>
+          <span class="signal-peak" id="signal-peak"></span>
+        </div>
+      </div>
+      <div class="vu-bar-group">
+        <div class="vu-bar-row">
+          <span class="vu-bar-lbl">L</span>
+          <div class="vu-bar-track">
+            <div class="vu-bar-fill" id="vu-l"></div>
+            <div class="vu-bar-peak" id="vu-peak-l"></div>
+          </div>
+          <div class="vu-bar-clip" id="vu-clip-l" title="Clip — klikk for å nullstille" data-i18n-title="tooltip.clipReset"></div>
+          <span class="vu-bar-val" id="vu-db-l">—</span>
+        </div>
+        <div class="vu-bar-row">
+          <span class="vu-bar-lbl">R</span>
+          <div class="vu-bar-track">
+            <div class="vu-bar-fill" id="vu-r"></div>
+            <div class="vu-bar-peak" id="vu-peak-r"></div>
+          </div>
+          <div class="vu-bar-clip" id="vu-clip-r" title="Clip — klikk for å nullstille" data-i18n-title="tooltip.clipReset"></div>
+          <span class="vu-bar-val" id="vu-db-r">—</span>
+        </div>
+        <div class="vu-bar-scale-row">
+          <span class="vu-bar-lbl"></span>
+          <div class="vu-bar-scale">
+            <span style="left:0%">Stille</span>
+            <span style="left:100%">Maks</span>
+          </div>
+          <div class="vu-bar-clip-spacer"></div>
+          <span class="vu-bar-val-spacer"></span>
+        </div>
+      </div>
+
+      <!-- Quick link to system-checks (moved to Settings → Lyd) -->
+      <div class="health-row" style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center">
+        <a href="#" class="setup-hint-link" id="btn-go-health" data-i18n="home.goCheck">Test og sjekk system →</a>
+      </div>
+    </div>
+
+    <!-- Video hero panel (shown when video mode is enabled) -->
+    <div id="video-preview-section" style="display:none">
+      <div class="video-preview-card">
+
+        <!-- Preview image — first and dominant -->
+        <div class="video-preview-wrap">
+          <img id="video-preview-img" class="video-preview-img" alt="" style="display:none" />
+          <video id="video-preview-video" class="video-preview-img" autoplay muted playsinline style="display:none"></video>
+          <div id="video-preview-res" class="video-preview-res" style="display:none"></div>
+          <div id="video-preview-placeholder" class="video-preview-placeholder">
+            <div class="video-placeholder-inner">
+              <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.35;margin-bottom:8px"><path d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.889L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span id="video-preview-placeholder-text" data-i18n="home.videoPreviewPrompt">Velg kamera og trykk oppdater</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Source bar — footer of the card -->
+        <div class="video-source-bar">
+          <svg viewBox="0 0 20 20" width="13" height="13" fill="currentColor" style="flex-shrink:0;opacity:.5"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zm12.553 1.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/></svg>
+          <select id="home-video-device-select" class="video-source-select">
+            <option value="">Velg kamera…</option>
+          </select>
+          <button id="btn-home-video-refresh" class="btn-icon-refresh" title="Oppdater enhetsliste" data-i18n-title="tooltip.refreshDevices">
+            <svg viewBox="0 0 20 20" width="12" height="12" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/></svg>
+          </button>
+          <button id="btn-home-video-flip" class="btn-icon-refresh btn-video-flip" title="Speil kamera horisontalt" data-i18n-title="tooltip.mirrorCamera">
+            <svg viewBox="0 0 20 20" width="14" height="14" fill="currentColor">
+              <path d="M9 4H5a1 1 0 00-1 1v10a1 1 0 001 1h4V4z" opacity=".4"/>
+              <path d="M11 4h4a1 1 0 011 1v10a1 1 0 01-1 1h-4V4z"/>
+              <rect x="9.25" y="2" width="1.5" height="16" rx=".75"/>
+            </svg>
+          </button>
+          <div id="video-progress-row" class="video-progress-badge" style="display:none">
+            <span class="rec-dot-sm" style="width:5px;height:5px"></span>
+            <span id="video-progress-bytes">0 MB</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Info strip: audio device · format · storage -->
+    <div class="info-strip">
+      <div class="info-card">
+        <div class="info-card-icon">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor"><path d="M10 2a3 3 0 00-3 3v5a3 3 0 006 0V5a3 3 0 00-3-3zm-5 8a5 5 0 0010 0h2a7 7 0 01-14 0zm5 6h4v2h-4z"/></svg>
+        </div>
+        <div class="info-card-body">
+          <div class="info-card-label" data-i18n="home.audioDevice">LYDKILDE</div>
+          <div class="info-card-value" id="home-device-name">—</div>
+          <div class="info-card-sub" id="home-device-status"></div>
+        </div>
+        <a href="#" class="info-card-action" id="btn-go-audio-page" data-i18n="home.changeSettings">Endre</a>
+      </div>
+      <div class="info-card" id="home-format-card">
+        <div class="info-card-icon">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor"><path fill-rule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h6a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"/></svg>
+        </div>
+        <div class="info-card-body">
+          <div class="info-card-label" data-i18n="home.formatLabel">FORMAT</div>
+          <div class="info-card-value" id="home-format-value">—</div>
+          <div class="info-card-sub" id="home-format-sub"></div>
+          <button class="info-card-audio-sep" id="btn-audio-separate" style="display:none">
+            <span class="audio-sep-dot" id="audio-sep-dot"></span>
+            <span id="audio-separate-label">Separat lydfil</span>
+          </button>
+        </div>
+        <a href="#" class="info-card-action" id="btn-go-audio-fmt" data-i18n="home.changeSettings">Endre</a>
+      </div>
+      <div class="info-card">
+        <div class="info-card-icon">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>
+        </div>
+        <div class="info-card-body">
+          <div class="info-card-label" data-i18n="home.storage">LAGRING</div>
+          <div class="info-card-value" id="home-storage-value">—</div>
+          <div class="info-card-sub" id="home-storage-sub"></div>
+        </div>
+        <a href="#" class="info-card-action" id="btn-go-general-page" data-i18n="home.changeSettings">Endre</a>
+      </div>
+    </div>
+
+    <!-- Video info strip — only visible when video mode is enabled -->
+    <div id="video-info-strip" class="info-strip video-info-strip" style="display:none">
+      <div class="info-card info-card-video">
+        <div class="info-card-icon">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zm12.553 1.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/></svg>
+        </div>
+        <div class="info-card-body">
+          <div class="info-card-label">KAMERA</div>
+          <div class="info-card-value" id="home-video-device-name">—</div>
+          <div class="info-card-sub" id="home-video-device-status"></div>
+        </div>
+        <a href="#" class="info-card-action" id="btn-go-video-source">Endre</a>
+      </div>
+      <div class="info-card info-card-video">
+        <div class="info-card-icon">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg>
+        </div>
+        <div class="info-card-body">
+          <div class="info-card-label">VIDEOKVALITET</div>
+          <div class="info-card-value" id="home-video-quality">—</div>
+          <div class="info-card-sub" id="home-video-mode">—</div>
+        </div>
+        <a href="#" class="info-card-action" id="btn-go-video-quality">Endre</a>
+      </div>
+    </div>
+
+    <!-- ─── Publisering / sky-info strip ──────────────────────────
+         Smart-vis: hvert kort har display:none som default; home.ts
+         setter display='' kun når innstillingen faktisk er konfigurert.
+         Holder hjem ryddig for brukere som ikke har satt opp sky/cover. -->
+    <div id="publish-info-strip" class="info-strip publish-info-strip" style="display:none">
+
+      <!-- Sky-backup-status -->
+      <div class="info-card info-card-publish" id="home-cloud-card" style="display:none">
+        <div class="info-card-icon">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor"><path d="M5.5 16a4.5 4.5 0 01-.853-8.92A5 5 0 0114 8a4.5 4.5 0 11-1 8.94l-7.5.06z"/></svg>
+        </div>
+        <div class="info-card-body">
+          <div class="info-card-label" data-i18n="home.cloudLabel">SKY-BACKUP</div>
+          <div class="info-card-value" id="home-cloud-services">—</div>
+          <div class="info-card-sub" id="home-cloud-status"></div>
+        </div>
+        <a href="#" class="info-card-action" id="btn-go-cloud" data-i18n="home.changeSettings">Endre</a>
+      </div>
+
+      <!-- Episodebilde / cover art -->
+      <div class="info-card info-card-publish" id="home-thumb-card" style="display:none">
+        <div class="info-card-icon home-thumb-icon-slot">
+          <!-- Replaced with actual <img> by home.ts when thumbnail exists -->
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor"><path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z"/></svg>
+        </div>
+        <div class="info-card-body">
+          <div class="info-card-label" data-i18n="home.thumbLabel">EPISODEBILDE</div>
+          <div class="info-card-value" id="home-thumb-name">—</div>
+          <div class="info-card-sub" id="home-thumb-sub"></div>
+        </div>
+        <a href="#" class="info-card-action" id="btn-go-thumb" data-i18n="home.changeSettings">Endre</a>
+      </div>
+
+      <!-- Transkripsjon (Whisper) -->
+      <div class="info-card info-card-publish" id="home-whisper-card" style="display:none">
+        <div class="info-card-icon">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor"><path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z"/><path d="M5.5 9.5a.5.5 0 011 0 3.5 3.5 0 007 0 .5.5 0 011 0 4.5 4.5 0 01-4 4.474V16h2a.5.5 0 010 1h-5a.5.5 0 010-1h2v-2.026a4.5 4.5 0 01-4-4.474z"/></svg>
+        </div>
+        <div class="info-card-body">
+          <div class="info-card-label" data-i18n="home.whisperLabel">TRANSKRIPSJON</div>
+          <div class="info-card-value" id="home-whisper-model">—</div>
+          <div class="info-card-sub" id="home-whisper-status"></div>
+        </div>
+        <a href="#" class="info-card-action" id="btn-go-whisper" data-i18n="home.changeSettings">Endre</a>
+      </div>
+
+    </div>
+
+    <!-- Video-mode 3-column layout — populated by relocateVuForVideoMode()
+         in home.ts when video is toggled on. The VU section, video preview
+         section and info cards are physically moved into the slots below
+         (and back when video is toggled off), so each element keeps its
+         existing ID/event handlers and update code Just Works. -->
+    <div id="video-mode-layout" class="video-mode-layout" style="display:none">
+      <div class="video-mode-top-row">
+        <div class="video-mode-preview-slot"><!-- #video-preview-section moved here --></div>
+        <div class="info-card-column"><!-- info-cards moved here --></div>
+      </div>
+      <div class="video-mode-vu-slot"><!-- .vu-section moved here (horizontal) --></div>
+    </div>
+
+    <!-- History section -->
+    <div id="home-lower">
+    <div class="section-header">
+      <h2 data-i18n="home.recentRecordings">Siste opptak</h2>
+      <div style="display:flex;gap:10px;align-items:center">
+        <a href="#" class="view-all" id="btn-clear-history" title="Slett alle opptak fra historikken" data-i18n-title="tooltip.deleteAllHistory" data-i18n="history.clearBtn">Slett alle</a>
+        <button class="btn-history-more" id="btn-history-more" title="Vedlikehold" data-i18n-title="tooltip.maintenance" aria-expanded="false">⋯</button>
+      </div>
+    </div>
+    <div id="history-more-panel" class="history-more-panel" style="display:none">
+      <a href="#" id="btn-delete-errors" data-i18n="history.clearErrors">Slett feiloppføringer</a>
+      <a href="#" id="btn-prune-history" data-i18n="history.pruneBtn">Fjern oppføringer uten fil</a>
+    </div>
+    <div style="margin-bottom:8px">
+      <input type="search" id="history-search" class="form-input" data-i18n-placeholder="history.searchPlaceholder" placeholder="Søk i historikk…" style="max-width:300px;font-size:13px;padding:6px 10px" />
+    </div>
+    <div id="history-stats" style="display:none;gap:16px;font-size:12px;color:var(--text3);margin-bottom:8px;flex-wrap:wrap">
+      <span id="stat-count"></span>
+      <span id="stat-duration"></span>
+      <span id="stat-last"></span>
+    </div>
+    <table class="rec-table">
+      <thead><tr>
+        <th data-i18n="history.date">Tidspunkt</th>
+        <th data-i18n="history.duration">Varighet</th>
+        <th data-i18n="history.filename">Filnavn</th>
+        <th data-i18n="history.status">Status</th>
+        <th style="width:32px"></th>
+      </tr></thead>
+      <tbody id="history-tbody"></tbody>
+    </table>
+    </div><!-- #home-lower -->
+
+  </section>
+
+  <!-- ══ KALENDER ══════════════════════════════════════════════ -->
+  <section id="page-schedule" class="page">
+
+    <div class="page-header">
+      <h1 data-i18n="nav.schedule">Tidsplan</h1>
+      <p class="subtitle" data-i18n="schedule.subtitle">Faste ukentlige opptak + spesialdager (jul, påske, konfirmasjon o.l.).</p>
+    </div>
+
+    <!-- How it works hint — non-intrusive, helps non-technical users -->
+    <div class="schedule-howto schedule-howto-card" id="schedule-howto-card">
+      <span class="schedule-howto-icon">💡</span>
+      <div class="schedule-howto-body">
+        <strong class="schedule-howto-strong" data-i18n="schedule.howtoTitle">Slik fungerer det:</strong>
+        <span data-i18n="schedule.howtoBody">Klikk på en dag i kalenderen for å legge til et engangsopptak (f.eks. en konfirmasjon). For faste ukentlige opptak (f.eks. gudstjeneste hver søndag kl. 11), bruk «Ukentlig tidsplan» nedenfor.</span>
+        <a href="#" class="schedule-howto-dismiss" id="btn-schedule-howto-dismiss" data-i18n="schedule.howtoDismiss">Skjul</a>
+      </div>
+    </div>
+
+    <!-- Calendar — shown first for immediate overview -->
+    <div class="cal-layout">
+      <div class="card cal-card">
+        <div class="cal-month-nav">
+          <div class="cal-nav-left">
+            <button id="cal-prev">‹</button>
+            <button id="btn-today" class="btn-today" title="Gå til i dag" data-i18n-title="tooltip.gotoToday" data-i18n="calendar.today">I dag</button>
+          </div>
+          <span id="cal-month-label" style="font-weight:700;font-size:15px"></span>
+          <div class="cal-nav-right">
+            <button id="btn-autofill" class="btn-autofill-icon" title="Legg til kirkehøytider automatisk" data-i18n-title="tooltip.autoChurchHolidays">
+              <span data-i18n="calendar.autofillShort">Kirkehøytider</span> <span id="autofill-year"></span>
+            </button>
+            <button id="cal-next">›</button>
+          </div>
+        </div>
+        <div id="cal-weekdays" class="cal-weekdays"></div>
+        <div id="cal-grid" class="cal-grid"></div>
+        <div class="cal-legend">
+          <span class="leg-dot leg-weekly"></span><span data-i18n="calendar.legendWeekly">Ukentlig</span>&nbsp;&nbsp;
+          <span class="leg-dot leg-special"></span><span data-i18n="calendar.legendSpecial">Spesialopptak</span>&nbsp;&nbsp;
+          <span class="leg-dot leg-holiday"></span><span data-i18n="calendar.legendHoliday">Kirkehøytid</span>
+        </div>
+      </div>
+      <div class="cal-right">
+        <div class="card cal-day-detail" id="cal-day-detail" style="display:none">
+          <div class="cal-day-detail-title" id="cal-day-detail-title">Mandag 2. juni</div>
+          <div class="cal-day-events" id="cal-day-events"></div>
+          <div class="form-row">
+            <label class="form-label" data-i18n="calendar.name">NAVN PÅ OPPTAK</label>
+            <input type="text" class="form-input" id="special-name" placeholder="Gudstjeneste" />
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label class="form-label" data-i18n="schedule.starts">STARTER</label>
+              <input type="time" class="form-input" id="special-start" value="11:00" />
+            </div>
+            <div>
+              <label class="form-label" data-i18n="schedule.stops">STOPPER</label>
+              <input type="time" class="form-input" id="special-stop" value="12:00" />
+            </div>
+          </div>
+          <input type="hidden" id="special-date" />
+          <button class="btn-primary mt" id="btn-add-special" data-i18n="calendar.addRecording">Legg til opptak</button>
+        </div>
+        <div class="cal-hint-card" id="cal-hint-card">
+          <span data-i18n="calendar.hintShort">Klikk på en dag for å legge til opptak</span>
+        </div>
+        <div class="card">
+          <div class="card-title" data-i18n="calendar.planned">Kommende spesialopptak</div>
+          <div id="planned-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Weekly recurring schedule -->
+    <div class="card">
+      <div class="card-title" data-i18n="schedule.title">Ukentlig tidsplan</div>
+      <p class="card-desc" data-i18n="schedule.weeklyDesc">Faste opptak som gjentas hver uke — for eksempel gudstjeneste hver søndag. Maskinen starter og stopper opptaket automatisk, selv om ingen er til stede.</p>
+      <div id="slots-list"></div>
+      <div id="schedule-next-preview" class="schedule-next-preview"></div>
+      <button class="btn-secondary mt" id="btn-add-slot" data-i18n="schedule.addSlot">Legg til tidspunkt</button>
+    </div>
+
+    <!-- Slot editor (inline) -->
+    <div class="card" id="slot-editor" style="display:none">
+      <div class="card-title" data-i18n="schedule.edit">Rediger tidspunkt</div>
+      <div class="form-row">
+        <label class="form-label" data-i18n="schedule.dayLabel">DAG</label>
+        <div class="day-picker" id="day-picker"></div>
+      </div>
+      <div class="form-row two-col">
+        <div>
+          <label class="form-label" data-i18n="schedule.starts">STARTER</label>
+          <input type="time" class="form-input" id="slot-start" value="11:00" />
+        </div>
+        <div>
+          <label class="form-label" data-i18n="schedule.stops">STOPPER</label>
+          <input type="time" class="form-input" id="slot-stop" value="12:00" />
+        </div>
+      </div>
+      <div id="slot-duration-display" style="display:none;font-size:12px;padding:2px 0 6px;color:var(--text3)"></div>
+      <div class="form-row" style="margin-top:4px">
+        <div>
+          <label class="form-label" data-i18n="schedule.max">MAKS VARIGHET (min, valgfritt)</label>
+          <input type="number" class="form-input" id="slot-max" placeholder="—" min="0" max="480" style="max-width:120px" />
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" id="btn-slot-save" data-i18n="schedule.save">Lagre</button>
+        <button class="btn-ghost" id="btn-slot-cancel" data-i18n="schedule.cancel">Avbryt</button>
+      </div>
+    </div>
+
+    <!-- Wake-from-sleep (collapsible) -->
+    <div class="card adv-card">
+      <button class="adv-toggle" id="btn-adv-toggle" aria-expanded="false">
+        <span data-i18n="schedule.wakeSectionTitle">Vekk maskin fra dvale</span>
+        <svg class="adv-toggle-chevron" id="adv-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+      <div id="adv-section" style="display:none">
+        <!-- Master toggle ─────────────────────────────────────────────── -->
+        <div class="toggle-row" style="margin-top:12px">
+          <div>
+            <div class="toggle-title" data-i18n="schedule.wakeTitle">Vekk maskin automatisk før planlagte opptak</div>
+            <div class="toggle-desc" data-i18n="schedule.wakeDesc">Maskinen vekkes ~2 min før opptaket starter.</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-wake" /><span class="toggle-track"></span></label>
+        </div>
+
+        <!-- Wake-details container: shown only when toggle is on ─────── -->
+        <div id="wake-details" style="display:none">
+
+          <!-- Hidden placeholders kept for back-compat with schedule-page.ts wake-result handler -->
+          <div id="wake-status-row" class="wake-status-row" style="display:none">
+            <span id="wake-status-dot" class="wake-status-dot"></span>
+            <span id="wake-status-text" class="wake-status-text"></span>
+            <button id="btn-schedule-wake" class="btn-ghost btn-sm" data-i18n="schedule.wakeBtn">Planlegg oppvåkning</button>
+          </div>
+
+          <!-- Sub-card: "Maskinen din" (static capability) ──────────── -->
+          <div class="wake-subcard">
+            <div class="wake-subcard-title" data-i18n="schedule.wakeCapTitle">Maskinen din</div>
+            <div id="wake-capability-row" class="wake-status-row" style="margin-top:0;padding-top:0;border-top:none">
+              <span class="wake-status-dot ok"></span>
+              <span id="wake-capability-text" class="wake-status-text" style="flex:1" data-i18n="wake.capability.loading">Sjekker maskinens vekkeegenskaper…</span>
+            </div>
+            <ul id="wake-capability-issues" class="sleep-config-detail" style="display:none;margin-top:6px;padding-left:18px"></ul>
+            <ul id="wake-capability-static" class="sleep-config-detail" style="margin-top:6px;padding-left:0;list-style:none">
+              <li><span style="color:#4ade80">✓</span> <span data-i18n="schedule.wakeCanSleep">Kan vekkes fra dvale</span></li>
+              <li><span style="color:#f87171">✗</span> <span data-i18n="schedule.wakeCannotOff">Kan ikke starte fra fullstendig avslått</span></li>
+            </ul>
+            <div class="sleep-config-detail wake-tip" data-i18n="schedule.wakeTipNote">
+              Tips: La maskinen stå i dvale (ikke slå den av) når du går hjem på lørdag kveld. Mac vekker ikke på batteri — tilkoblet strøm må være på.
+            </div>
+            <div id="wake-platform-note" class="sleep-config-detail" style="margin-top:8px;display:none;color:var(--text3)"></div>
+          </div>
+
+          <!-- Sub-card: "Status akkurat nå" (dynamic state) ─────────── -->
+          <div class="wake-subcard">
+            <div class="wake-subcard-title" data-i18n="schedule.wakeStatusTitle">Status akkurat nå</div>
+
+            <div id="wake-power-row" class="wake-status-row">
+              <span id="wake-power-dot" class="wake-status-dot"></span>
+              <span id="wake-power-text" class="wake-status-text" style="flex:1" data-i18n="wake.power.checking">Sjekker strømkilde…</span>
+            </div>
+
+            <div id="wake-standby-row" class="wake-status-row" style="display:none">
+              <span id="wake-standby-dot" class="wake-status-dot"></span>
+              <span id="wake-standby-text" class="wake-status-text" style="flex:1"></span>
+              <button id="btn-wake-standby-fix" class="btn-ghost btn-sm" style="display:none" data-i18n="wake.standby.fix">Slå av dyp dvale</button>
+            </div>
+
+            <!-- Legacy auto-fix sleep config row (kept invisible by default; populated by loadSleepConfig) -->
+            <div id="sleep-config-panel" class="sleep-config-panel" style="display:none">
+              <div id="sleep-config-loading" class="sleep-config-loading">
+                <span data-i18n="schedule.sleepChecking">Sjekker dvaleinnstillinger…</span>
+              </div>
+              <div id="sleep-config-result" style="display:none">
+                <div class="wake-status-row" style="margin-top:0;padding-top:0;border-top:none">
+                  <span id="sleep-config-dot" class="wake-status-dot"></span>
+                  <span id="sleep-config-text" class="wake-status-text" style="flex:1"></span>
+                  <button id="btn-fix-sleep" class="btn-ghost btn-sm" style="display:none" data-i18n="schedule.sleepFixBtn">Fiks automatisk</button>
+                </div>
+                <div id="sleep-config-detail" class="sleep-config-detail" style="display:none"></div>
+              </div>
+            </div>
+
+            <div id="wake-verify-row" class="wake-status-row">
+              <span id="wake-verify-dot" class="wake-status-dot"></span>
+              <span id="wake-verify-text" class="wake-status-text" style="flex:1" data-i18n="wake.verify.checking">Sjekker hva som faktisk er planlagt i OS…</span>
+              <button id="btn-wake-verify-refresh" class="btn-ghost btn-sm" data-i18n="wake.verify.refresh">Oppdater</button>
+            </div>
+
+            <div id="wake-last-test-row" class="wake-status-row">
+              <span id="wake-last-test-dot" class="wake-status-dot off"></span>
+              <span id="wake-last-test-text" class="wake-status-text" style="flex:1" data-i18n="wake.lastTest.none">Ikke testet ennå.</span>
+            </div>
+          </div>
+
+          <!-- Test-wake button (full-width, prominent) ─────────────── -->
+          <div class="btn-row wake-test-row">
+            <button class="btn-secondary wake-test-btn" id="btn-test-wake" data-i18n="wake.test.btn">Test wake nå (60 sek)</button>
+            <button class="btn-ghost btn-sm" id="btn-cancel-test-wake" style="display:none" data-i18n="wake.test.cancel">Avbryt</button>
+          </div>
+          <div id="wake-test-progress" class="sleep-config-detail" style="display:none;margin-top:8px"></div>
+
+          <!-- Always-off note kept at the bottom of wake-details -->
+          <div id="sleep-always-off-note" class="sleep-config-detail wake-tip" style="margin-top:12px" data-i18n="schedule.sleepAlwaysOffNote">
+            Vil du at maskinen alltid skal starte opptak? La den stå i dvale (ikke slå den av) og aktiver «Oppstart med Windows/Mac» i Generelt-siden.
+          </div>
+
+          <!-- Kept invisible — old reliability card host is no longer rendered separately,
+               but schedule-page.ts toggles a #wake-reliability-card element on/off to gate
+               the dynamic refresh. We retain the id with display:contents so refresh runs. -->
+          <div id="wake-reliability-card" style="display:none"></div>
+        </div>
+
+        <div class="btn-row" style="margin-top:16px">
+          <button class="btn-primary" id="btn-schedule-save" data-i18n="schedule.save">Lagre innstillinger</button>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ══ DIREKTE ═════════════════════════════════════════════════ -->
+  <section id="page-live" class="page">
+
+    <div class="page-header live-page-header">
+      <div>
+        <h1 data-i18n="live.title">Direkte sending</h1>
+        <p class="subtitle" data-i18n="live.subtitle">Stream gudstjenester direkte til YouTube, Facebook eller egen RTMP-server.</p>
+      </div>
+      <span id="live-status-pill" class="live-status-pill is-idle">
+        <span class="live-status-pill-dot"></span>
+        <span id="live-status-pill-text" data-i18n="live.statusReady">Klar</span>
+      </span>
+    </div>
+
+    <!-- Top row: preview + stats/destinations -->
+    <div class="live-grid">
+
+      <!-- Big preview -->
+      <div class="card live-preview-card">
+        <div class="live-preview-frame">
+          <img id="live-preview-img" class="live-preview-img" alt="" />
+          <div id="live-preview-placeholder" class="live-preview-placeholder">
+            <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40">
+              <rect x="6" y="10" width="36" height="28" rx="3"/>
+              <circle cx="24" cy="24" r="6"/>
+              <circle cx="24" cy="24" r="2" fill="currentColor"/>
+            </svg>
+            <div class="live-preview-placeholder-text" data-i18n="live.previewWaiting">Forhåndsvisning kommer når stream starter</div>
+          </div>
+          <div id="live-preview-overlay-tag" class="live-preview-overlay-tag" style="display:none">
+            <span class="live-preview-overlay-dot"></span>
+            <span data-i18n="live.statusLive">🔴 Live</span>
+          </div>
+        </div>
+        <div class="vu-section live-vu-section">
+          <div class="vu-section-head">
+            <span class="vu-section-label" data-i18n="home.audioLevel">Lydnivå</span>
+            <div class="signal-row">
+              <span class="signal-dot" id="live-signal-dot"></span>
+              <span class="signal-text" id="live-signal-text">—</span>
+              <span class="signal-peak" id="live-signal-peak"></span>
+            </div>
+          </div>
+          <div class="vu-bar-group">
+            <div class="vu-bar-row">
+              <span class="vu-bar-lbl">L</span>
+              <div class="vu-bar-track">
+                <div class="vu-bar-fill" id="live-vu-l"></div>
+                <div class="vu-bar-peak" id="live-vu-peak-l"></div>
+              </div>
+              <div class="vu-bar-clip" id="live-vu-clip-l" title="Clip — klikk for å nullstille" data-i18n-title="tooltip.clipReset"></div>
+              <span class="vu-bar-val" id="live-vu-db-l">—</span>
+            </div>
+            <div class="vu-bar-row">
+              <span class="vu-bar-lbl">R</span>
+              <div class="vu-bar-track">
+                <div class="vu-bar-fill" id="live-vu-r"></div>
+                <div class="vu-bar-peak" id="live-vu-peak-r"></div>
+              </div>
+              <div class="vu-bar-clip" id="live-vu-clip-r" title="Clip — klikk for å nullstille" data-i18n-title="tooltip.clipReset"></div>
+              <span class="vu-bar-val" id="live-vu-db-r">—</span>
+            </div>
+            <div class="vu-bar-scale-row">
+              <span class="vu-bar-lbl"></span>
+              <div class="vu-bar-scale">
+                <span style="left:0%">Stille</span>
+                <span style="left:100%">Maks</span>
+              </div>
+              <div class="vu-bar-clip-spacer"></div>
+              <span class="vu-bar-val-spacer"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right column: stats + destinations + quality -->
+      <div class="live-side-col">
+        <div class="card live-stats-card">
+          <div class="card-title" data-i18n="live.statsTitle">Statistikk</div>
+          <div class="live-stats-grid">
+            <div class="live-stat">
+              <div class="live-stat-label" data-i18n="live.uptime">Tid</div>
+              <div class="live-stat-value" id="live-stat-uptime">00:00</div>
+            </div>
+            <div class="live-stat">
+              <div class="live-stat-label" data-i18n="live.bitrate">Bitrate</div>
+              <div class="live-stat-value" id="live-stat-bitrate">0 kbps</div>
+            </div>
+            <div class="live-stat">
+              <div class="live-stat-label" data-i18n="live.fps">FPS</div>
+              <div class="live-stat-value" id="live-stat-fps">0</div>
+            </div>
+            <div class="live-stat">
+              <div class="live-stat-label" data-i18n="live.dropped">Tapte rammer</div>
+              <div class="live-stat-value" id="live-stat-dropped">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card live-destinations-card">
+          <div class="card-title" data-i18n="live.destinations">Destinasjoner</div>
+          <div id="live-destinations-list"></div>
+          <div id="live-destinations-empty" class="live-destinations-empty" style="display:none">
+            <p data-i18n="live.noDestinations">Ingen destinasjoner konfigurert. Gå til Innstillinger → Publisering.</p>
+          </div>
+          <a href="#" class="live-config-link" id="live-config-link" data-i18n="live.configDestinations">→ Konfigurer destinasjoner</a>
+        </div>
+
+        <div class="card live-quality-card">
+          <div class="card-title" data-i18n="publish.streamQuality">STREAM-KVALITET</div>
+          <div class="option-cards live-quality-options" style="grid-template-columns:1fr 1fr 1fr">
+            <label class="option-card">
+              <input type="radio" name="live-resolution" value="480p" />
+              <div class="option-card-name">480p</div>
+              <div class="option-card-desc">1.5 Mbps</div>
+            </label>
+            <label class="option-card">
+              <input type="radio" name="live-resolution" value="720p" checked />
+              <div class="option-card-name">720p</div>
+              <div class="option-card-badge" data-i18n="video.recommended">Anbefalt</div>
+              <div class="option-card-desc">4.5 Mbps</div>
+            </label>
+            <label class="option-card">
+              <input type="radio" name="live-resolution" value="1080p" />
+              <div class="option-card-name">1080p</div>
+              <div class="option-card-desc">6 Mbps</div>
+            </label>
+          </div>
+          <label class="form-label mt" data-i18n="publish.streamFramerate">BILDERATE</label>
+          <select id="live-framerate" class="form-input" style="max-width:200px">
+            <option value="25">25 fps</option>
+            <option value="30" selected>30 fps</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Overlays ─────────────────────────────────────────────── -->
+    <div class="card live-overlay-card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span data-i18n="live.overlays">Overlays — grafikk og presentasjon</span>
+        <button class="btn-secondary btn-sm" id="btn-add-overlay" type="button" data-i18n="live.addOverlay">+ Legg til overlay</button>
+      </div>
+      <p class="card-desc" data-i18n="live.overlaysDesc">
+        Legg over kirkens logo, lyrics fra EasyWorship (via skjerm-capture på samme maskin), eller
+        annen grafikk på det som sendes ut. Overlays påvirker bare direktesendingen — opptak gjøres rent.
+      </p>
+      <div id="overlay-list" class="overlay-list"></div>
+      <div id="overlay-empty" class="overlay-empty">
+        Ingen overlays. Klikk «+ Legg til overlay» for å begynne.
+      </div>
+    </div>
+
+    <!-- Start/Stop bar — primary button starts BOTH stream + local
+         recording (most users want a master file for editing). The
+         secondary button under is for the rare case where only the
+         livestream is needed. -->
+    <div class="live-action-bar">
+      <button class="live-start-btn" id="btn-live-start" type="button" data-also-record="true">
+        <span data-i18n="live.startBtn">🔴 Start direktesending + opptak</span>
+      </button>
+      <button class="live-start-btn-secondary" id="btn-live-start-stream-only" type="button">
+        <span data-i18n="live.startStreamOnly">Bare direktesending (uten lokal opptak)</span>
+      </button>
+      <div class="live-error" id="live-error" style="display:none"></div>
+      <div class="live-action-hint" data-i18n="live.alsoRecordHint">
+        Lokal opptaksfil havner i Siste opptak når strømmen stopper —
+        høyere bitrate enn livestreamen, klar for redigering eller podkast.
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ══ INNSTILLINGER ════════════════════════════════════════════ -->
+  <section id="page-settings" class="page">
+    <div class="inner-tabs" id="settings-tabs">
+      <button class="inner-tab active" data-tab="settings-audio" data-i18n="nav.audio">Lyd</button>
+      <button class="inner-tab" data-tab="settings-video" data-i18n="nav.video">Video</button>
+      <button class="inner-tab" data-tab="settings-files" data-i18n="nav.files">Opptak</button>
+      <button class="inner-tab" data-tab="settings-publish" data-i18n="nav.publish">Publisering</button>
+      <button class="inner-tab" data-tab="settings-notifications" data-i18n="nav.notifications">Varsler</button>
+      <button class="inner-tab" data-tab="settings-general" data-i18n="nav.system">System</button>
+      <button class="inner-tab" data-tab="settings-integrations">Sunday-suite</button>
+    </div>
+
+    <!-- ── Lydkilde ────────────────────────────────────────────── -->
+    <div id="settings-audio" class="inner-page active">
+      <div class="card">
+        <div class="card-title" data-i18n="audio.available">Tilgjengelige enheter</div>
+        <p class="card-desc" data-i18n="audio.deviceHelp">Velg mikseren eller lydkortet som tar opp lyden i kirken. USB-mikser anbefales fremfor innebygd mikrofon.</p>
+        <div id="device-list"></div>
+        <div id="device-ffmpeg-warn" class="device-warn-strip" style="display:none">
+          ⚠ Lydenheten ble ikke gjenkjent. Prøv å velge enheten på nytt — eller koble fra og koble til USB-kabelen.
+        </div>
+        <p class="form-hint" style="margin-top:12px;margin-bottom:0" data-i18n="audio.deviceNotShown">Ser du ikke riktig enhet? Kontroller at lydkortet er koblet til og at driveren er installert.</p>
+        <div class="audio-test-section">
+          <div class="audio-test-info">
+            <div class="toggle-title" data-i18n="audio.testTitle">Test lydkilde</div>
+            <div class="toggle-desc" data-i18n="audio.testDesc">Hør lyden fra valgt kilde i sanntid gjennom høyttalerne.</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn-secondary" id="btn-test-audio" data-i18n="audio.testBtn">Test lyd</button>
+            <button class="btn-secondary btn-sm" id="btn-audio-diagnose" data-i18n="audio.diagnose">Diagnose</button>
+          </div>
+        </div>
+        <div id="test-audio-warn" class="test-warn" style="display:none">
+          <span data-i18n="audio.feedbackWarn">⚠️ Pass på feedback — hold mikrofonen unna høyttalerne!</span>
+        </div>
+        <div id="test-vu-section" style="display:none;margin-top:8px">
+          <div class="vu-bar-group">
+            <div class="vu-bar-row">
+              <span class="vu-bar-lbl">L</span>
+              <div class="vu-bar-track"><div class="vu-bar-fill" id="test-vu-l"></div></div>
+            </div>
+            <div class="vu-bar-row">
+              <span class="vu-bar-lbl">R</span>
+              <div class="vu-bar-track"><div class="vu-bar-fill" id="test-vu-r"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── System health checks — moved here from Home ─────────── -->
+      <div class="card">
+        <div class="card-title" data-i18n="audio.healthTitle">Sjekk at alt fungerer</div>
+        <p class="card-desc" data-i18n="audio.healthDesc">Kjør disse før en gudstjeneste for å være sikker på at opptaket vil starte uten problemer. Vi anbefaler å kjøre et test-opptak før hver første gudstjeneste etter at noe har endret seg (ny mikser, nytt utstyr, oppdatering).</p>
+        <div class="health-row" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">
+          <button type="button" class="btn-secondary" id="btn-test-recording-settings" data-i18n="home.testRecording">
+            🎙️ Test-opptak (30 sek)
+          </button>
+          <button type="button" class="btn-secondary" id="btn-run-preflight-settings" data-i18n="home.checkSystem">
+            ✅ Sjekk system nå
+          </button>
+          <span class="health-status" id="health-status-settings" style="margin-left:8px;font-size:13px;color:var(--text3);align-self:center"></span>
+        </div>
+        <ul id="preflight-findings-settings" style="display:none;list-style:none;margin:8px 0 0 0;padding:0;font-size:13px"></ul>
+      </div>
+
+      <div class="card" id="channel-select-card" style="display:none">
+        <div class="card-title" data-i18n="audio.inputChannels">Inngangkanaler</div>
+        <p class="card-desc" data-i18n="audio.inputChannelsDesc">Velg hvilke kanaler fra lydkortet som brukes til opptak. Relevant for miksebord med mange kanaler (X32, SQ, TF osv.).</p>
+        <div class="form-row two-col">
+          <div>
+            <label class="form-label" data-i18n="audio.channelL">VENSTRE (L)</label>
+            <select class="form-input" id="channel-select-l"></select>
+          </div>
+          <div>
+            <label class="form-label" data-i18n="audio.channelR">HØYRE (R)</label>
+            <select class="form-input" id="channel-select-r"></select>
+          </div>
+        </div>
+        <p class="form-hint" data-i18n="audio.channelHint">Tip: vil du ta opp mono fra én kanal, velg samme kanal for L og R og sett Kanaler til Mono nedenfor.</p>
+      </div>
+
+      <div class="card">
+        <!-- Inngangsvolum-slideren er fjernet i v4.31 — ble bestemt at SundayRec
+             skal lagre rå audio og overlate volum/dynamikk-justering til editor.
+             Backend bruker fortsatt inputVolume-feltet i Settings (default 100,
+             dvs. ingen endring), så eksisterende brukere med en annen verdi får
+             den fortsatt anvendt. -->
+        <input type="hidden" id="input-volume" value="100" />
+
+        <div class="card-title" data-i18n="audio.channels">Kanaler</div>
+        <div class="option-cards" id="channels-group">
+          <label class="option-card">
+            <input type="radio" name="channels" value="stereo" checked />
+            <svg viewBox="0 0 32 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <path d="M4 10 Q6 4 8 10 Q10 16 12 10"/><path d="M20 10 Q22 4 24 10 Q26 16 28 10"/>
+            </svg>
+            <div class="option-card-name">Stereo</div>
+            <div class="option-card-badge">Anbefalt</div>
+          </label>
+          <label class="option-card">
+            <input type="radio" name="channels" value="monoMix" />
+            <svg viewBox="0 0 32 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <path d="M10 10 Q13 3 16 10 Q19 17 22 10"/>
+            </svg>
+            <div class="option-card-name">Mono</div>
+            <div class="option-card-desc">Miks L+R</div>
+          </label>
+          <label class="option-card">
+            <input type="radio" name="channels" value="monoL" />
+            <svg viewBox="0 0 32 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <path d="M7 10 Q10 4 13 10 Q16 16 19 10" opacity=".9"/><path d="M22 10h4" opacity=".2"/>
+            </svg>
+            <div class="option-card-name">Mono L</div>
+            <div class="option-card-desc" data-i18n="audio.leftOnly">Kun venstre</div>
+          </label>
+          <label class="option-card">
+            <input type="radio" name="channels" value="monoR" />
+            <svg viewBox="0 0 32 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <path d="M6 10h4" opacity=".2"/><path d="M13 10 Q16 4 19 10 Q22 16 25 10" opacity=".9"/>
+            </svg>
+            <div class="option-card-name">Mono R</div>
+            <div class="option-card-desc" data-i18n="audio.rightOnly">Kun høyre</div>
+          </label>
+        </div>
+
+        <div class="card-title" style="margin-top:20px" data-i18n="audio.sampleRate">Samplingsrate</div>
+        <div class="option-cards" style="grid-template-columns:1fr 1fr">
+          <label class="option-card">
+            <input type="radio" name="sampleRate" value="44100" id="sr-44" />
+            <div class="option-card-name">44 100 Hz</div>
+            <div class="option-card-desc" data-i18n="audio.sampleRateMusicDesc">Musikk, CD og podcast</div>
+          </label>
+          <label class="option-card">
+            <input type="radio" name="sampleRate" value="48000" id="sr-48" checked />
+            <div class="option-card-name">48 000 Hz</div>
+            <div class="option-card-badge">Anbefalt</div>
+            <div class="option-card-desc" data-i18n="audio.sampleRateVideoDesc">Video, Zoom og TV-utstyr</div>
+          </label>
+        </div>
+        <!-- Hidden select for compatibility with existing save logic -->
+        <select id="sample-rate" style="display:none">
+          <option value="44100">44100</option>
+          <option value="48000" selected>48000</option>
+        </select>
+
+        <!-- Lydforbedringer (kompressor + limiter + EQ) er fjernet fra opptak-
+             pipelinen i v4.31. Filosofien er nå: ta opp rått, etterbehandle i
+             editoren (Normaliser-knapp, Mastering-presets). Skjulte felter
+             beholdes med defaults så eksisterende user-settings fortsatt
+             parses uten feil. -->
+        <input type="hidden" id="opt-compressor" />
+        <input type="hidden" id="comp-threshold" value="-24" />
+        <input type="hidden" id="comp-ratio"     value="4" />
+        <input type="hidden" id="comp-attack"    value="10" />
+        <input type="hidden" id="comp-release"   value="200" />
+        <input type="hidden" id="opt-limiter"    value="true" />
+        <input type="hidden" id="limiter-ceiling" value="-1" />
+      </div>
+
+      <div class="page-footer">
+        <button class="btn-primary" id="btn-audio-save" data-i18n="audio.save">Lagre</button>
+        <button class="btn-ghost" id="btn-audio-cancel" data-i18n="audio.cancel">Avbryt</button>
+      </div>
+    </div>
+
+    <!-- ── Filer ───────────────────────────────────────────────── -->
+    <div id="settings-files" class="inner-page">
+      <div class="card">
+        <div class="card-title" data-i18n="files.saveFolder">Hvor opptakene lagres</div>
+        <p class="card-desc" data-i18n="files.saveFolderDesc">Alle opptak havner her som lokale filer. Tips: velg en mappe på en ekstern disk hvis du tar opp ofte og har stor harddisk.</p>
+        <label class="form-label" data-i18n="files.saveTo">LAGRES I</label>
+        <div class="folder-row">
+          <input type="text" class="form-input" id="save-folder" readonly />
+          <button class="btn-secondary" id="btn-pick-folder" data-i18n="files.browse">Velg mappe…</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title" data-i18n="files.pattern">Filnavn</div>
+        <p class="card-desc" data-i18n="files.smartNameDesc">Programmet gjenkjenner kirkelige høytider og kan bruke det riktige norske navnet automatisk (f.eks. «Påskedag»).</p>
+        <label class="form-label" data-i18n="files.nameFormat">NAVNEFORMAT</label>
+        <select class="form-input" id="pattern-select" style="max-width:360px">
+          <option value="date" data-i18n="files.patternDate">Dato (standard)</option>
+          <option value="church" data-i18n="files.patternChurch">Kirkelig navn + dato</option>
+          <option value="plain" data-i18n="files.patternPlain">Gudstjeneste + dato</option>
+          <option value="datetime" data-i18n="files.patternDatetime">Dato + klokkeslett</option>
+        </select>
+        <label class="form-label mt" data-i18n="files.preview">FORHÅNDSVISNING</label>
+        <div class="preview-box" id="filename-preview">2025-11-02.mp3</div>
+      </div>
+      <div class="card">
+        <div class="card-title" data-i18n="files.format">Format &amp; Kvalitet</div>
+        <div class="option-cards" id="format-group">
+          <label class="option-card format-card">
+            <input type="radio" name="format" value="mp3" checked />
+            <div class="format-card-name">MP3</div>
+            <div class="format-card-size">~85 MB / time</div>
+            <div class="option-card-desc" data-i18n="files.qualityRecommendedDesc">Anbefalt for deling og nett</div>
+          </label>
+          <label class="option-card format-card">
+            <input type="radio" name="format" value="flac" />
+            <div class="format-card-name">FLAC</div>
+            <div class="format-card-size">~300 MB / time</div>
+            <div class="option-card-desc">Tapsfri komprimering</div>
+          </label>
+          <label class="option-card format-card">
+            <input type="radio" name="format" value="wav" />
+            <div class="format-card-name">WAV</div>
+            <div class="format-card-size">~635 MB / time</div>
+            <div class="option-card-desc" data-i18n="files.formatWavDesc">Ukomprimert, høyest kvalitet</div>
+          </label>
+        </div>
+
+        <div id="mp3-quality-section">
+          <div class="card-title" style="margin-top:20px">MP3-kvalitet</div>
+          <div class="quality-scale">
+            <label class="quality-step">
+              <input type="radio" name="bitrate" value="128" />
+              <div class="quality-bars"><div class="qb qb1"></div><div class="qb qb2"></div><div class="qb qb3"></div></div>
+              <div class="quality-label">Kompakt</div>
+              <div class="quality-sub">~50 MB / time</div>
+            </label>
+            <label class="quality-step">
+              <input type="radio" name="bitrate" value="192" checked />
+              <div class="quality-bars"><div class="qb qb1"></div><div class="qb qb2"></div><div class="qb qb3"></div></div>
+              <div class="quality-label">Anbefalt</div>
+              <div class="quality-sub">~85 MB / time</div>
+            </label>
+            <label class="quality-step">
+              <input type="radio" name="bitrate" value="320" />
+              <div class="quality-bars"><div class="qb qb1"></div><div class="qb qb2"></div><div class="qb qb3"></div></div>
+              <div class="quality-label" data-i18n="files.qualityHighest">Høyeste</div>
+              <div class="quality-sub">~140 MB / time</div>
+            </label>
+          </div>
+        </div>
+        <div class="toggle-row mt">
+          <div>
+            <div class="toggle-title" data-i18n="files.autoDelete">Slett automatisk</div>
+            <div class="toggle-desc" data-i18n="files.autoDeleteDesc">Frigjør diskplass automatisk ved å slette gamle opptak</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-auto-delete" /><span class="toggle-track"></span></label>
+        </div>
+        <div id="auto-delete-days-row" class="inline-field-row" style="display:none">
+          <span class="inline-field-label" data-i18n="files.deleteAfter">Slett etter</span>
+          <input type="number" class="form-input inline-field-input" id="auto-delete-days" value="90" min="1" max="3650" />
+          <span class="inline-field-label" data-i18n="files.days">dager</span>
+        </div>
+        <div class="toggle-row mt">
+          <div>
+            <div class="toggle-title" data-i18n="files.trimSilence">Trim stillhet</div>
+            <div class="toggle-desc" data-i18n="files.trimSilenceDesc">Kutter automatisk stille sekunder i starten og slutten av opptaket</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-trim-silence" /><span class="toggle-track"></span></label>
+        </div>
+      </div>
+
+      <!-- ── Opptaksoppførsel (recording behaviour) ─────────────────── -->
+      <div class="card">
+        <div class="card-title" data-i18n="files.behaviourTitle">Opptaksoppførsel</div>
+        <p class="card-desc" data-i18n="files.behaviourDesc">Finjuster hvordan opptaket starter, beskyttes og deles opp.</p>
+
+        <div class="behaviour-subhead" data-i18n="files.whileRecording">Mens et opptak går</div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="schedule.protectTitle">Beskytt pågående opptak mot utilsiktet stopp</div>
+            <div class="toggle-desc" data-i18n="schedule.protectDesc">Krever bekreftelse for å stoppe et pågående opptak</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-protect" checked /><span class="toggle-track"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="schedule.silenceTitle">Stopp ved vedvarende stillhet</div>
+            <div class="toggle-desc" data-i18n="schedule.silenceDesc">Avslutter opptaket hvis lyden er stille i mer enn 5 minutter</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-silence" /><span class="toggle-track"></span></label>
+        </div>
+        <div id="silence-config" style="display:none;margin:4px 0 8px;padding:8px;background:var(--surface2,rgba(255,255,255,.04));border-radius:6px">
+          <div class="form-row two-col">
+            <div>
+              <label class="form-label" data-i18n="schedule.silenceThresholdLabel">GRENSE (dBFS)</label>
+              <select class="form-input" id="opt-silence-threshold">
+                <option value="-40">-40 dB</option>
+                <option value="-50" selected>-50 dB</option>
+                <option value="-60">-60 dB</option>
+                <option value="-70">-70 dB</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label" data-i18n="schedule.silenceTimeoutLabel">VARIGHET FØR STOPP</label>
+              <select class="form-input" id="opt-silence-timeout">
+                <option value="2">2 min</option>
+                <option value="5" selected>5 min</option>
+                <option value="10">10 min</option>
+                <option value="15">15 min</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="schedule.manualMaxTitle">Maks varighet — manuelle opptak</div>
+            <div class="toggle-desc" data-i18n="schedule.manualMaxDesc">Stopper automatisk etter angitt tid — unngår enorme filer ved glemt stopp</div>
+          </div>
+          <select class="form-input split-select" id="opt-manual-max">
+            <option value="0" data-i18n="schedule.splitOff">Av</option>
+            <option value="60">1 time</option>
+            <option value="120">2 timer</option>
+            <option value="180">3 timer</option>
+            <option value="240">4 timer</option>
+            <option value="360">6 timer</option>
+          </select>
+        </div>
+
+        <div class="behaviour-subhead" data-i18n="files.fileBehaviour">Filer</div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="schedule.splitTitle">Del opp filer per time</div>
+            <div class="toggle-desc" data-i18n="schedule.splitDesc">Lager ny lydfil for hvert intervall — enklere å redigere etterpå</div>
+          </div>
+          <select class="form-input split-select" id="opt-split-minutes">
+            <option value="0"  data-i18n="schedule.splitOff">Av</option>
+            <option value="30">30 min</option>
+            <option value="45">45 min</option>
+            <option value="60">60 min (1 t)</option>
+            <option value="90">90 min</option>
+            <option value="120">120 min (2 t)</option>
+          </select>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="schedule.preRollTitle">Pre-roll buffer</div>
+            <div class="toggle-desc" data-i18n="schedule.preRollDesc">Starter opptak N sekunder bakover i tid — fanger begynnelsen av talen selv om du trykker litt for sent</div>
+          </div>
+          <select class="form-input split-select" id="opt-preroll-seconds">
+            <option value="0" data-i18n="schedule.splitOff">Av</option>
+            <option value="15">15 sek</option>
+            <option value="30">30 sek</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="page-footer">
+        <button class="btn-primary" id="btn-files-save" data-i18n="files.save">Lagre</button>
+        <button class="btn-ghost" id="btn-files-cancel" data-i18n="files.cancel">Avbryt</button>
+      </div>
+    </div>
+
+    <!-- ── Publisering (sky-backup + podcast) ─────────────────────── -->
+    <div id="settings-publish" class="inner-page">
+      <div class="card">
+        <div class="card-title" data-i18n="publish.intro">Del opptakene utenfor kirken</div>
+        <p class="card-desc" data-i18n="publish.introDesc">Her setter du opp automatisk sky-backup og — hvis dere ønsker — en podcast som gjør gudstjenestene tilgjengelige i Spotify og Apple Podcasts. Alt er valgfritt.</p>
+      </div>
+
+      <!-- ── Standard episodebilde (cover art) ──────────────────── -->
+      <div class="card">
+        <div class="card-title" data-i18n="thumbnail.default.title">Standard episodebilde</div>
+        <p class="card-desc" data-i18n="thumbnail.default.subtitle">Brukes som cover art for alle prekener med mindre du overstyrer per episode.</p>
+        <div class="thumb-panel">
+          <div class="thumb-preview" id="publish-thumb-preview" data-i18n-title="thumbnail.dropHint" title="Slipp et bilde her, eller klikk for å velge">
+            <span class="thumb-placeholder" data-i18n="thumbnail.dropHint">Slipp et bilde her, eller klikk for å velge</span>
+          </div>
+          <div class="thumb-side">
+            <div class="thumb-using" id="publish-thumb-using" data-i18n="thumbnail.using.none">Ingen cover art valgt</div>
+            <div class="thumb-info" id="publish-thumb-info"></div>
+            <div class="thumb-warning" id="publish-thumb-warning" style="display:none"></div>
+            <div class="thumb-button-row">
+              <button class="btn-secondary btn-sm" id="btn-publish-thumb-pick" data-i18n="thumbnail.pick">Velg bilde</button>
+              <button class="btn-ghost btn-sm" id="btn-publish-thumb-clear" data-i18n="thumbnail.clear" style="display:none">Fjern</button>
+            </div>
+          </div>
+        </div>
+        <input type="file" id="publish-thumb-file-input" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" style="display:none">
+      </div>
+      <!-- ── Sky-backup (Google Drive / Dropbox / OneDrive) ──────── -->
+      <div class="card">
+        <div class="card-title" data-i18n="publish.title">Sky-backup</div>
+        <p class="card-desc" data-i18n="publish.desc">Last opp opptakene automatisk til Google Drive — som ekstra sikkerhet og for enkel deling.</p>
+
+        <div class="cloud-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:12px">
+
+          <!-- Google Drive -->
+          <div class="cloud-card" id="cloud-card-google-drive">
+            <div class="cloud-card-header">
+              <svg viewBox="0 0 87.3 78" width="24" height="24"><path fill="#0066da" d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3L27.5 53H0c0 1.55.4 3.1 1.2 4.5z"/><path fill="#00ac47" d="M43.65 25L30 1.4C28.65 2.2 27.5 3.3 26.7 4.7L1.2 48.85C.42 50.227.008 51.784 0 53.35h27.5z"/><path fill="#ea4335" d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.8l5.85 11.5z"/><path fill="#00832d" d="M43.65 25l13.65-23.6C55.95.6 54.4 0 52.85 0H34.45c-1.55 0-3.1.45-4.45 1.4z"/><path fill="#2684fc" d="M59.8 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.5 1.2h50.55c1.55 0 3.1-.45 4.45-1.2z"/><path fill="#ffba00" d="M73.4 26.5L60.65 4.7c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25l16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z"/></svg>
+              <div class="cloud-card-name">Google Drive</div>
+            </div>
+            <div class="cloud-disconnected">
+              <button class="btn-primary" data-cloud-connect="google-drive" data-i18n="publish.connect">Koble til</button>
+            </div>
+            <div class="cloud-connected" style="display:none">
+              <div class="cloud-card-info">
+                <div><span data-i18n="publish.account">Konto</span>: <span class="cloud-account-name cloud-info-value"></span></div>
+                <div><span data-i18n="publish.folder">Mappe</span>: <span class="cloud-folder-name cloud-info-value"></span></div>
+                <div><span data-i18n="publish.lastUpload">Siste</span>: <span class="cloud-last-upload cloud-info-value">—</span></div>
+              </div>
+              <label class="cloud-toggle-row">
+                <input type="checkbox" data-cloud-enabled="google-drive">
+                <span data-i18n="publish.enabled">Aktivert</span>
+              </label>
+              <label class="cloud-toggle-row">
+                <input type="checkbox" data-cloud-auto="google-drive">
+                <span data-i18n="publish.autoUpload">Last opp automatisk etter opptak</span>
+              </label>
+              <div class="cloud-actions-row">
+                <button class="btn-secondary btn-sm" data-cloud-pick-folder="google-drive" data-i18n="publish.pickFolder">Velg mappe…</button>
+                <button class="btn-ghost" data-cloud-disconnect="google-drive" data-i18n="publish.disconnect">Koble fra</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dropbox — skjult inntil videre. Backend-koden + tester er bevart;
+               re-aktivér ved å fjerne style="display:none" når Dropbox-app er klar
+               og DROPBOX_APP_KEY er satt i .env / GitHub Secrets. -->
+          <div class="cloud-card" id="cloud-card-dropbox" style="display:none">
+            <div class="cloud-card-header">
+              <svg viewBox="0 0 43 40" width="24" height="24"><path fill="#0061ff" d="M12.5 0L0 7.95l12.5 7.95L25 7.95zm18 0L18 7.95l12.5 7.95L43 7.95zM0 23.85l12.5 7.95L25 23.85l-12.5-7.95zm30.5-7.95L18 23.85l12.5 7.95L43 23.85zM12.5 34.45L25 26.5l-12.5-7.95L0 26.5z"/></svg>
+              <div class="cloud-card-name">Dropbox</div>
+            </div>
+            <div class="cloud-disconnected">
+              <button class="btn-primary" data-cloud-connect="dropbox" data-i18n="publish.connect">Koble til</button>
+            </div>
+            <div class="cloud-connected" style="display:none">
+              <div class="cloud-card-info">
+                <div><span data-i18n="publish.account">Konto</span>: <span class="cloud-account-name cloud-info-value"></span></div>
+                <div><span data-i18n="publish.folder">Mappe</span>: <span class="cloud-folder-name cloud-info-value"></span></div>
+                <div><span data-i18n="publish.lastUpload">Siste</span>: <span class="cloud-last-upload cloud-info-value">—</span></div>
+              </div>
+              <label class="cloud-toggle-row">
+                <input type="checkbox" data-cloud-enabled="dropbox">
+                <span data-i18n="publish.enabled">Aktivert</span>
+              </label>
+              <label class="cloud-toggle-row">
+                <input type="checkbox" data-cloud-auto="dropbox">
+                <span data-i18n="publish.autoUpload">Last opp automatisk etter opptak</span>
+              </label>
+              <div class="cloud-actions-row">
+                <button class="btn-secondary btn-sm" data-cloud-pick-folder="dropbox" data-i18n="publish.pickFolder">Velg mappe…</button>
+                <button class="btn-ghost" data-cloud-disconnect="dropbox" data-i18n="publish.disconnect">Koble fra</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- OneDrive — skjult inntil videre. Backend-koden + tester er bevart;
+               re-aktivér ved å fjerne style="display:none" når Azure-app er klar
+               og ONEDRIVE_CLIENT_ID er satt i GitHub Secrets. -->
+          <div class="cloud-card" id="cloud-card-onedrive" style="display:none">
+            <div class="cloud-card-header">
+              <svg viewBox="0 0 256 167" width="24" height="24"><path fill="#0364b8" d="M165.7 87.8L154 36.5l-12.4 31.6 13.7 19.6z"/><path fill="#0078d4" d="M154 36.5c-12.6-21.7-40.4-29-62.1-16.4-9.3 5.4-16.4 13.9-20 24l8.1 32.4 38.4-13.1z"/><path fill="#1490df" d="M80 76.5c-6-1-12-1-18 .4-12.6 3-23 12-27.8 24.2L155 122.5z"/><path fill="#28a8ea" d="M34.2 101.1C13.8 107 1.5 127.5 7.4 147.9c4.7 16.4 19.7 27.7 36.7 27.7H210l-55-53.1z"/></svg>
+              <div class="cloud-card-name">OneDrive</div>
+            </div>
+            <div class="cloud-disconnected">
+              <button class="btn-primary" data-cloud-connect="onedrive" data-i18n="publish.connect">Koble til</button>
+            </div>
+            <div class="cloud-connected" style="display:none">
+              <div class="cloud-card-info">
+                <div><span data-i18n="publish.account">Konto</span>: <span class="cloud-account-name cloud-info-value"></span></div>
+                <div><span data-i18n="publish.folder">Mappe</span>: <span class="cloud-folder-name cloud-info-value"></span></div>
+                <div><span data-i18n="publish.lastUpload">Siste</span>: <span class="cloud-last-upload cloud-info-value">—</span></div>
+              </div>
+              <label class="cloud-toggle-row">
+                <input type="checkbox" data-cloud-enabled="onedrive">
+                <span data-i18n="publish.enabled">Aktivert</span>
+              </label>
+              <label class="cloud-toggle-row">
+                <input type="checkbox" data-cloud-auto="onedrive">
+                <span data-i18n="publish.autoUpload">Last opp automatisk etter opptak</span>
+              </label>
+              <div class="cloud-actions-row">
+                <button class="btn-secondary btn-sm" data-cloud-pick-folder="onedrive" data-i18n="publish.pickFolder">Velg mappe…</button>
+                <button class="btn-ghost" data-cloud-disconnect="onedrive" data-i18n="publish.disconnect">Koble fra</button>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /cloud-grid -->
+
+        <!-- Queue-panelet rendres her av publish-page.ts -->
+        <div id="cloud-queue-anchor"></div>
+      </div>
+
+      <!-- ── Direktesending (RTMP / live-stream-destinasjoner) ───── -->
+      <div class="card" id="stream-destinations-card">
+        <div class="card-title" data-i18n="publish.streamTitle">Direktesending</div>
+        <p class="card-desc" data-i18n="publish.streamIntro">Stream gudstjenester live til YouTube, Facebook eller egen RTMP-server.</p>
+        <div id="stream-destinations-list" class="stream-destinations-list"></div>
+        <button class="btn-secondary btn-sm" id="btn-add-stream-destination" type="button" data-i18n="publish.streamAddDestination">+ Legg til destinasjon</button>
+
+        <label class="form-label mt" data-i18n="publish.streamQuality">STREAM-KVALITET</label>
+        <div class="option-cards" style="grid-template-columns:1fr 1fr 1fr">
+          <label class="option-card">
+            <input type="radio" name="stream-resolution" value="480p" />
+            <div class="option-card-name">480p</div>
+            <div class="option-card-desc">1.5 Mbps</div>
+          </label>
+          <label class="option-card">
+            <input type="radio" name="stream-resolution" value="720p" checked />
+            <div class="option-card-name">720p</div>
+            <div class="option-card-badge" data-i18n="video.recommended">Anbefalt</div>
+            <div class="option-card-desc">4.5 Mbps</div>
+          </label>
+          <label class="option-card">
+            <input type="radio" name="stream-resolution" value="1080p" />
+            <div class="option-card-name">1080p</div>
+            <div class="option-card-desc">6 Mbps</div>
+          </label>
+        </div>
+
+        <label class="form-label mt" data-i18n="publish.streamFramerate">BILDERATE</label>
+        <select id="stream-framerate" class="form-input" style="max-width:200px">
+          <option value="25">25 fps</option>
+          <option value="30" selected>30 fps</option>
+        </select>
+      </div>
+
+      <!-- ── Podcast RSS-feed (auto-publisering) ─────────────────── -->
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div class="card-title" style="margin:0">Podcast (RSS-feed)</div>
+          <label class="toggle"><input type="checkbox" id="opt-podcast-enabled"><span class="toggle-track"></span></label>
+        </div>
+        <p class="card-desc" data-i18n="publish.podcastIntro">Genererer en RSS-feed automatisk etter hvert opptak. Send feed-URL-en én gang til Spotify for Podcasters og Apple Podcasts Connect — nye gudstjenester dukker opp av seg selv.</p>
+
+        <div id="podcast-config" style="display:none;flex-direction:column;gap:12px;margin-top:8px">
+
+          <div>
+            <label class="form-label">PUBLISER VIA</label>
+            <select class="form-input" id="podcast-service" style="max-width:280px">
+              <option value="google-drive">Google Drive</option>
+              <option value="dropbox" disabled>Dropbox (kommer senere)</option>
+              <!-- OneDrive skjult inntil videre — re-aktivér når Azure-app er klar -->
+            </select>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px">
+            <div>
+              <label class="form-label" for="podcast-title">PODKAST-NAVN</label>
+              <input type="text" class="form-input" id="podcast-title" placeholder="Eks: Eksempel kirke">
+            </div>
+            <div>
+              <label class="form-label" for="podcast-author">FORFATTER / KIRKE</label>
+              <input type="text" class="form-input" id="podcast-author" placeholder="Eks: Eksempel menighet">
+            </div>
+          </div>
+
+          <div>
+            <label class="form-label" for="podcast-description">BESKRIVELSE</label>
+            <textarea class="form-input" id="podcast-description" rows="2" data-i18n-placeholder="publish.descPlaceholder" placeholder="Eks: Gudstjenester fra Eksempel kirke, hver søndag kl 11"></textarea>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+            <div>
+              <label class="form-label" for="podcast-language" data-i18n="publish.language">SPRÅK</label>
+              <select class="form-input" id="podcast-language">
+                <option value="no">Norsk</option>
+                <option value="en">English</option>
+                <option value="de">Deutsch</option>
+                <option value="sv">Svenska</option>
+                <option value="da">Dansk</option>
+                <option value="pl">Polski</option>
+                <option value="fr">Français</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label" for="podcast-category">KATEGORI</label>
+              <select class="form-input" id="podcast-category">
+                <option value="Religion &amp; Spirituality">Religion &amp; Spirituality</option>
+                <option value="Christianity">Christianity</option>
+                <option value="Society &amp; Culture">Society &amp; Culture</option>
+                <option value="Education">Education</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label" for="podcast-email">KONTAKT-E-POST</label>
+              <input type="email" class="form-input" id="podcast-email" placeholder="kontakt@kirke.no">
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px">
+            <div>
+              <label class="form-label" for="podcast-link">NETTSIDE (valgfritt)</label>
+              <input type="url" class="form-input" id="podcast-link" placeholder="https://kirke.no">
+            </div>
+            <div>
+              <label class="form-label" for="podcast-image">COVER-BILDE URL (valgfritt)</label>
+              <input type="url" class="form-input" id="podcast-image" placeholder="https://kirke.no/cover.jpg">
+            </div>
+          </div>
+
+          <div id="podcast-feed-url-row" style="display:none;background:#1a2a1f;border:1px solid #2a5a3a;border-radius:6px;padding:10px 12px">
+            <div class="feed-url-label" data-i18n="publish.feedUrlLabel">FEED-URL — send denne til Spotify og Apple Podcasts</div>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="text" class="form-input" id="podcast-feed-url" readonly style="flex:1;font-family:monospace;font-size:12px">
+              <button class="btn-secondary btn-sm" id="btn-podcast-copy-url">Kopier</button>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <button class="btn-primary" id="btn-podcast-regenerate" data-i18n="publish.regenerateFeed">Generer feed nå</button>
+            <span id="podcast-status" style="font-size:12px;color:var(--text3)"></span>
+          </div>
+
+          <!-- ── Prep-and-review (v5.0) ────────────────────────────── -->
+          <div class="prep-review-section">
+            <div class="prep-review-title" data-i18n="prep.sectionTitle">Forhåndsklargjøring og gjennomgang</div>
+            <p class="card-desc prep-review-desc" data-i18n="prep.sectionDesc">Etter hvert opptak blir det automatisk analysert (preken-deteksjon), klargjort med mastering og intro/outro, og lagt i en kø for menneskelig gjennomgang før publisering.</p>
+
+            <div class="toggle-row prep-review-toggle">
+              <div>
+                <div class="toggle-title" data-i18n="prep.enableTitle">Aktiver auto-klargjøring</div>
+                <div class="toggle-desc" data-i18n="prep.enableDesc">Kjør analyse + klargjøring etter hvert opptak</div>
+              </div>
+              <label class="toggle"><input type="checkbox" id="opt-podcast-auto-prep" checked><span class="toggle-track"></span></label>
+            </div>
+
+            <div class="prep-review-grid">
+              <div>
+                <label class="form-label" for="podcast-default-master-preset" data-i18n="prep.masterPreset">MASTERING-PRESETT</label>
+                <select class="form-input" id="podcast-default-master-preset">
+                  <option value="speech-clear" data-i18n="prep.presetSpeechClear">Tale — tydelig (anbefalt)</option>
+                  <option value="speech-natural" data-i18n="prep.presetSpeechNatural">Tale — naturlig</option>
+                  <option value="speech-punchy" data-i18n="prep.presetSpeechPunchy">Tale — kraftig</option>
+                  <option value="music-speech" data-i18n="prep.presetMusicSpeech">Musikk + tale</option>
+                </select>
+              </div>
+              <div>
+                <label class="form-label" for="podcast-default-intro" data-i18n="prep.defaultIntro">STANDARD INTRO-JINGLE</label>
+                <div class="prep-jingle-row">
+                  <input type="text" class="form-input prep-jingle-input" id="podcast-default-intro" readonly placeholder="(ingen)">
+                  <button class="btn-secondary btn-sm" id="btn-podcast-pick-intro" data-i18n="general.pickFile">Velg fil…</button>
+                  <button class="btn-ghost btn-sm" id="btn-podcast-clear-intro" aria-label="Fjern intro">×</button>
+                </div>
+              </div>
+              <div>
+                <label class="form-label" for="podcast-default-outro" data-i18n="prep.defaultOutro">STANDARD OUTRO-JINGLE</label>
+                <div class="prep-jingle-row">
+                  <input type="text" class="form-input prep-jingle-input" id="podcast-default-outro" readonly placeholder="(ingen)">
+                  <button class="btn-secondary btn-sm" id="btn-podcast-pick-outro" data-i18n="general.pickFile">Velg fil…</button>
+                  <button class="btn-ghost btn-sm" id="btn-podcast-clear-outro" aria-label="Fjern outro">×</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p class="prep-howto" data-i18n="prep.howto">
+            <strong>Slik kommer du i gang:</strong> Last opp 1-3 testopptak til Google Drive, klikk "Generer feed nå", og send URL-en som dukker opp til Spotify for Podcasters og Apple Podcasts Connect. Etter godkjenning (1-2 dager) dukker hvert nytt opptak opp automatisk.
+          </p>
+        </div>
+      </div>
+
+      <div class="page-footer">
+        <button class="btn-primary" id="btn-publish-save" data-i18n="publish.save">Lagre</button>
+        <button class="btn-ghost" id="btn-publish-cancel" data-i18n="publish.cancel">Avbryt</button>
+      </div>
+    </div>
+
+    <!-- ── Video ─────────────────────────────────────────────────── -->
+    <div id="settings-video" class="inner-page">
+      <div class="card">
+        <div class="card-title" data-i18n="video.title">Videoopptak</div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="video.enableTitle">Aktiver videoopptak</div>
+            <div class="toggle-desc" data-i18n="video.enableDesc">Tar opp video i tillegg til lyd ved hvert opptak</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-video-enable" /><span class="toggle-track"></span></label>
+        </div>
+      </div>
+
+      <div id="video-settings-panel" style="display:none">
+        <div class="card">
+          <div class="card-title" data-i18n="video.cameraTitle">Kamera</div>
+          <label class="form-label" data-i18n="video.pickCamera">VELG KAMERA</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select class="form-input" id="video-device-select" style="flex:1">
+              <option value="" data-i18n="video.cameraSearchPrompt">Trykk Oppdater for å søke etter kameraer</option>
+            </select>
+            <button class="btn-secondary" id="btn-video-refresh-devices" data-i18n="video.refresh">Oppdater</button>
+          </div>
+          <p class="form-hint" data-i18n="video.cameraHint">USB-webkamera og HDMI-opptakskort støttes på macOS og Windows.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-title" data-i18n="video.qualityTitle">Kvalitet</div>
+          <label class="form-label" data-i18n="video.resolution">OPPLØSNING</label>
+          <div class="option-cards" style="grid-template-columns:1fr 1fr 1fr 1fr">
+            <label class="option-card">
+              <input type="radio" name="video-resolution" value="480p" />
+              <div class="option-card-name">480p</div>
+              <div class="option-card-desc">~1.5 GB / t</div>
+            </label>
+            <label class="option-card">
+              <input type="radio" name="video-resolution" value="720p" checked />
+              <div class="option-card-name">720p</div>
+              <div class="option-card-badge" data-i18n="video.recommended">Anbefalt</div>
+              <div class="option-card-desc">~3.5 GB / t</div>
+            </label>
+            <label class="option-card">
+              <input type="radio" name="video-resolution" value="1080p" />
+              <div class="option-card-name">1080p</div>
+              <div class="option-card-desc">~7 GB / t</div>
+            </label>
+            <label class="option-card" id="video-res-2160p">
+              <input type="radio" name="video-resolution" value="2160p" />
+              <div class="option-card-name">4K</div>
+              <div class="option-card-desc">~22 GB / t</div>
+            </label>
+          </div>
+          <div id="video-res-warning" class="form-hint" style="display:none;color:var(--warning,#d08700);margin-top:4px"></div>
+
+          <label class="form-label mt" data-i18n="video.framerate">BILDERATE</label>
+          <select class="form-input" id="video-fps-select" style="max-width:200px">
+            <option value="24">24 fps</option>
+            <option value="25">25 fps</option>
+            <option value="30" selected data-i18n="video.fps30Recommended">30 fps (Anbefalt)</option>
+            <option value="50">50 fps</option>
+            <option value="60">60 fps</option>
+          </select>
+
+          <label class="form-label mt" data-i18n="video.container">FORMAT</label>
+          <select class="form-input" id="video-container-select" style="max-width:200px">
+            <option value="mp4" selected>MP4</option>
+            <option value="mov">MOV (QuickTime)</option>
+          </select>
+
+          <label class="form-label mt" data-i18n="video.codec">VIDEO-KODEK</label>
+          <select class="form-input" id="video-codec-select" style="max-width:280px">
+            <option value="h264" selected data-i18n="video.codecH264">H.264 (universell)</option>
+            <option value="h265" data-i18n="video.codecH265">H.265 / HEVC (mindre fil)</option>
+          </select>
+
+          <label class="form-label mt" data-i18n="video.encoder">ENKODER</label>
+          <select class="form-input" id="video-encoder-select" style="max-width:340px">
+            <option value="software" selected data-i18n="video.encoderSoftware">Software (best kvalitet)</option>
+            <option value="hardware" data-i18n="video.encoderHardware">Hardware / VideoToolbox (raskere — anbefalt for 4K)</option>
+          </select>
+          <div class="form-hint" data-i18n="video.encoderHint">Hardware-enkoder (kun Mac) gjør 4K H.265-opptak mulig i sann-tid. Software gir best kvalitet for vanlig opptak.</div>
+
+          <label class="form-label mt" data-i18n="video.bitrate">BITHASTIGHET</label>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <label class="video-bitrate-radio">
+              <input type="radio" name="video-bitrate" id="opt-video-bitrate-auto" checked />
+              <span data-i18n="video.bitrateAuto">Automatisk (anbefalt — basert på oppløsning)</span>
+            </label>
+            <label class="video-bitrate-radio">
+              <input type="radio" name="video-bitrate" id="opt-video-bitrate-custom" />
+              <span data-i18n="video.bitrateCustom">Egendefinert</span>
+            </label>
+          </div>
+          <div id="video-bitrate-custom-row" class="inline-field-row" style="display:none">
+            <input type="number" class="form-input inline-field-input" id="video-bitrate-value" value="4000" min="500" max="50000" />
+            <span class="inline-field-label">kbps</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title" data-i18n="video.outputFormat">Utdataformat</div>
+          <p class="card-desc" data-i18n="video.outputFormatDesc">Velg om lyd og video skal kombineres til én fil eller lagres separat.</p>
+          <div class="option-cards" style="grid-template-columns:1fr 1fr">
+            <label class="option-card">
+              <input type="radio" name="video-mode" value="combined" checked />
+              <svg viewBox="0 0 32 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                <rect x="2" y="4" width="28" height="12" rx="2"/>
+                <path d="M10 10h12"/>
+                <path d="M8 7l2 3-2 3"/>
+              </svg>
+              <div class="option-card-name" data-i18n="video.combinedName">Kombinert MP4</div>
+              <div class="option-card-desc" data-i18n="video.combinedDesc">Lyd + video i én fil — klar for YouTube</div>
+            </label>
+            <label class="option-card">
+              <input type="radio" name="video-mode" value="separate" />
+              <svg viewBox="0 0 32 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                <rect x="1" y="3" width="13" height="14" rx="2"/>
+                <rect x="18" y="3" width="13" height="14" rx="2"/>
+                <path d="M5 10h5M22 8v4"/>
+              </svg>
+              <div class="option-card-name" data-i18n="video.separateName">Separate filer</div>
+              <div class="option-card-desc" data-i18n="video.separateDesc">Lyd og video lagres hver for seg</div>
+            </label>
+          </div>
+          <div id="video-split-warning" class="notice-warn" style="display:none" data-i18n="video.splitWarning">
+            Delt opptak er aktivt — video lagres alltid som separat fil uavhengig av valget over. Deaktiver automatisk oppdeling i planleggingsinnstillingene for å kombinere lyd og video til én MP4.
+          </div>
+          <p class="form-hint" id="video-split-hint" data-i18n="video.splitHint">Ved automatisk oppdeling av filer brukes alltid separate filer.</p>
+
+          <!-- Keep audio toggle — only visible when "combined" mode is selected -->
+          <div id="video-keep-audio-row" class="toggle-row video-keep-audio-row">
+            <div class="video-keep-audio-text">
+              <div class="toggle-title" data-i18n="video.keepAudioTitle">Behold separat lydfil</div>
+              <div class="toggle-desc" data-i18n="video.keepAudioDesc">Lagrer også den høykvalitets lydfilen ved siden av den kombinerte MP4</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="opt-video-keep-audio" checked /><span class="toggle-track"></span></label>
+          </div>
+
+          <!-- Unified-recorder toggle — default ON since v4.51. Single
+               ffmpeg opens both camera and microphone in one process so
+               A/V sync is frame-accurate from the first frame. Power
+               users can opt out if they hit an unusual edge case. -->
+          <!-- Perfekt A/V-synk er ALLTID på (unified recorder): én ffmpeg-prosess
+               for lyd + bilde. Valget er fjernet — det skal alltid være perfekt
+               sync. `useUnifiedRecorder` tvinges til true i video-page.ts. -->
+        </div>
+      </div>
+
+      <div class="page-footer">
+        <button class="btn-primary" id="btn-video-save" data-i18n="general.save">Lagre</button>
+        <button class="btn-ghost" id="btn-video-cancel" data-i18n="general.cancel">Avbryt</button>
+      </div>
+    </div>
+
+    <!-- ── Varsler ───────────────────────────────────────────────── -->
+    <div id="settings-notifications" class="inner-page">
+      <div class="card">
+        <div class="card-title" data-i18n="notify.systemTitle">Systemvarsler</div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="general.notifyStart">Varsel på PC når opptak starter</div>
+            <div class="toggle-desc" data-i18n="general.notifyStartDesc">Vises som systemvarsel når en planlagt session begynner.</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-notify-start" checked /><span class="toggle-track"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="general.notifyStop">Varsel på PC når opptak avsluttes</div>
+            <div class="toggle-desc" data-i18n="general.notifyStopDesc">Klikk varselet for å gå rett til filen.</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-notify-stop" checked /><span class="toggle-track"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="schedule.reminderTitle">Påminnelse før opptak</div>
+            <div class="toggle-desc" data-i18n="schedule.reminderDesc">Systemvarsel N minutter før planlagt opptak starter</div>
+          </div>
+          <select class="form-input split-select" id="opt-reminder-minutes">
+            <option value="0" data-i18n="schedule.splitOff">Av</option>
+            <option value="5">5 min</option>
+            <option value="10">10 min</option>
+            <option value="15">15 min</option>
+            <option value="30">30 min</option>
+          </select>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title" data-i18n="notify.emailTitle">E-postvarsler</div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="general.emailError">Send e-post ved feil</div>
+            <div class="toggle-desc" data-i18n="general.emailErrorDesc">Sender e-post til ansvarlig hvis opptaket mislykkes</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-email-error" /><span class="toggle-track"></span></label>
+        </div>
+        <div id="email-section" style="display:none">
+          <label class="form-label mt" data-i18n="general.sendTo">SEND TIL</label>
+          <input type="email" class="form-input" id="email-address" placeholder="navn@kirke.no" />
+
+          <!-- Gmail OAuth — primary path so users don't have to deal with
+               app-passwords + SMTP server names. The button toggles between
+               "connect" and "disconnect/email" via JS in publish-page.ts. -->
+          <div class="email-oauth-block" style="margin-top:16px">
+            <label class="form-label" data-i18n="notify.emailMethodLabel">SENDEMETODE</label>
+            <div class="email-oauth-card" id="email-gmail-card">
+              <div class="email-oauth-row">
+                <svg viewBox="0 0 48 48" width="22" height="22" style="flex-shrink:0"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24c0 3.55.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>
+                <div class="email-oauth-text">
+                  <div class="email-oauth-title" data-i18n="notify.emailGmailTitle">Logg inn med Google</div>
+                  <div class="email-oauth-sub" id="email-gmail-status" data-i18n="notify.emailGmailDesc">Send via din Gmail-konto — ingen SMTP-konfig.</div>
+                </div>
+                <button type="button" class="btn-secondary btn-sm" id="btn-email-gmail-connect" data-i18n="notify.emailGmailConnect">Koble til</button>
+                <button type="button" class="btn-ghost btn-sm" id="btn-email-gmail-disconnect" style="display:none" data-i18n="notify.emailGmailDisconnect">Koble fra</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Advanced: SMTP — collapsed by default. Power users (kirker med
+               egen mail-server) kan utvide; vanlige brukere ser kun Gmail-knappen. -->
+          <details class="email-advanced" id="email-smtp-advanced" style="margin-top:16px">
+            <summary class="email-advanced-summary" data-i18n="notify.emailAdvanced">Avansert: bruk SMTP i stedet</summary>
+            <div class="email-advanced-body">
+              <label class="form-label mt" data-i18n="notify.smtpServer">E-POSTTJENESTE (SMTP)</label>
+              <input type="text" class="form-input" id="email-smtp" placeholder="smtp.gmail.com" />
+              <div class="form-hint" data-i18n="notify.smtpHint">Gmail: smtp.gmail.com · Outlook: smtp.office365.com</div>
+              <label class="form-label mt" data-i18n="notify.smtpUser">BRUKERNAVN (E-POSTADRESSE)</label>
+              <input type="text" class="form-input" id="email-user" placeholder="din@epost.no" />
+              <label class="form-label mt" data-i18n="notify.smtpPass">PASSORD / APP-PASSORD</label>
+              <div class="pass-row">
+                <input type="password" class="form-input" id="email-pass" />
+                <button type="button" class="btn-link" id="btn-clear-smtp-pass" style="display:none" data-i18n="general.clearPass">Fjern</button>
+              </div>
+              <div class="form-hint" data-i18n="notify.smtpPassHint">Gmail krever et «App-passord» fra kontosikkerhetsinnstillingene.</div>
+              <input type="hidden" id="email-port" value="587" />
+            </div>
+          </details>
+
+          <button type="button" class="btn-secondary" id="btn-test-email" style="margin-top:12px" data-i18n="general.testEmail">Test e-post</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" data-i18n="notify.webhookTitle">Webhook (Slack / Discord / Teams)</div>
+        <div class="card-desc notify-webhook-intro" data-i18n="notify.webhookIntro">
+          Send varsler til en chat-kanal i tillegg til e-post. Lim inn webhook-URL fra Slack, Discord eller Teams.
+        </div>
+        <label class="form-label" data-i18n="general.webhookUrl">WEBHOOK-URL</label>
+        <input type="url" class="form-input" id="webhook-url" placeholder="https://hooks.slack.com/services/..." />
+        <div class="form-hint" data-i18n="notify.webhookHint">Slack: https://hooks.slack.com/... · Discord: https://discord.com/api/webhooks/...</div>
+        <div class="toggle-row mt">
+          <div>
+            <div class="toggle-title" data-i18n="notify.webhookOnWarn">Send også på advarsler</div>
+            <div class="toggle-desc" data-i18n="notify.webhookOnWarnDesc">Som standard sendes kun feilmeldinger. Slå på dette for å få beskjed også ved mindre problemer.</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-webhook-on-warn" /><span class="toggle-track"></span></label>
+        </div>
+        <button type="button" class="btn-secondary" id="btn-test-webhook" style="margin-top:12px" data-i18n="notify.testWebhook">Test webhook</button>
+      </div>
+      <div class="page-footer">
+        <button class="btn-primary" id="btn-varsler-save" data-i18n="general.save">Lagre</button>
+        <button class="btn-ghost" id="btn-varsler-cancel" data-i18n="general.cancel">Avbryt</button>
+      </div>
+    </div>
+
+    <!-- ── System ────────────────────────────────────────────── -->
+    <div id="settings-general" class="inner-page">
+      <div class="card">
+        <div class="card-title" data-i18n="general.language">Språk</div>
+        <p class="card-desc" data-i18n="general.langCardDesc">Velg språket du foretrekker. SundayRec støtter syv språk — alle menyer og varsler tilpasses umiddelbart.</p>
+        <label class="form-label" data-i18n="general.appLanguage">APPSPRÅK</label>
+        <select class="form-input" id="language-select" style="max-width:280px">
+          <option value="no">🇳🇴 Norsk</option>
+          <option value="en">🇬🇧 English</option>
+          <option value="de">🇩🇪 Deutsch</option>
+          <option value="sv">🇸🇪 Svenska</option>
+          <option value="da">🇩🇰 Dansk</option>
+          <option value="pl">🇵🇱 Polski</option>
+          <option value="fr">🇫🇷 Français</option>
+        </select>
+        <div class="form-hint" data-i18n="general.langHint">Endringen trer i kraft etter at du trykker Lagre.</div>
+      </div>
+      <div class="card">
+        <div class="card-title" data-i18n="general.profile">Kirkeprofil</div>
+        <p class="card-desc" style="margin-bottom:12px" data-i18n="general.profileDesc">Brukes i filnavn, varslings-e-poster og podcast-RSS. Disse feltene er valgfrie men anbefalt.</p>
+        <label class="form-label" data-i18n="general.church">MENIGHET / KIRKE</label>
+        <input type="text" class="form-input" id="church-name" data-i18n-placeholder="general.churchPlaceholder" placeholder="Alta Frikirke" />
+        <label class="form-label mt" data-i18n="general.responsible">ANSVARLIG PERSON</label>
+        <input type="text" class="form-input" id="responsible-person" data-i18n-placeholder="general.responsiblePlaceholder" placeholder="Navn" />
+        <div class="form-hint" data-i18n="general.responsibleHint">Personen som får e-post hvis opptaket feiler (krever e-postvarsler i Varsler-fanen).</div>
+      </div>
+      <div class="card">
+        <div class="card-title" data-i18n="general.system">System</div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="general.autoStart">Start automatisk med Windows/Mac</div>
+            <div class="toggle-desc" data-i18n="general.autoStartDesc">Kjører stille i bakgrunnen — ingen handling nødvendig</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-autostart" /><span class="toggle-track"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="general.showOnStartup">Vis vindu ved oppstart</div>
+            <div class="toggle-desc" data-i18n="general.showOnStartupDesc">Åpner vinduet automatisk når programmet starter. Ellers starter det diskret i systemfeltet.</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-show-on-startup" /><span class="toggle-track"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="general.askOpenEditor">Spør om redigering etter opptak</div>
+            <div class="toggle-desc" data-i18n="general.askOpenEditorDesc">Vis varsel om å åpne filen i Rediger etter at opptaket er fullført</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-ask-open-editor" checked /><span class="toggle-track"></span></label>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title" data-i18n="general.updates">Oppdateringer</div>
+        <div class="update-row">
+          <span data-i18n="general.currentVersion">Nåværende versjon:</span>
+          <span id="app-version" class="version-badge">—</span>
+        </div>
+        <div id="update-status-row" class="update-status-row">
+          <span class="update-status-dot" id="update-status-dot"></span>
+          <span id="update-status-text" class="update-status-text">—</span>
+        </div>
+        <div class="update-progress-wrap" id="update-progress-wrap" style="display:none">
+          <div class="update-progress-bar" id="update-progress-bar"></div>
+        </div>
+        <div class="toggle-row" style="margin-top:8px">
+          <div>
+            <div class="toggle-title" data-i18n="general.autoUpdate">Oppdater automatisk</div>
+            <div class="toggle-desc" data-i18n="general.autoUpdateDesc">Laster ned og installerer nye versjoner stille i bakgrunnen</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-auto-update" checked /><span class="toggle-track"></span></label>
+        </div>
+        <div class="btn-row mt">
+          <button class="btn-secondary" id="btn-check-updates" data-i18n="general.checkNow">Se etter oppdateringer</button>
+          <button class="btn-primary" id="btn-restart-install" style="display:none" data-i18n="update.restartInstall">↺ Start på nytt og installer</button>
+        </div>
+      </div>
+      <!-- "Rediger — standardklipp"-kortet er fjernet i v4.31. Brukeren setter
+           intro/outro direkte fra editor-fanen — det vil samtidig oppdatere
+           Settings.editorIntroPath/OutroPath og bruke den som default neste
+           gang en fil åpnes. Trenger ikke duplisert UI her. -->
+
+      <div class="card">
+        <div class="card-title" data-i18n="general.helpTitle">Hjelp og opplæring</div>
+        <p class="card-desc" data-i18n="general.helpDesc">Åpne oppstartsveilederen på nytt — nyttig hvis det kommer ny ansvarlig person, eller hvis du bare vil sjekke at alt er riktig satt opp.</p>
+        <button type="button" class="btn-secondary" id="btn-show-onboarding" style="margin-top:8px" data-i18n="general.openOnboarding">
+          Åpne oppstartsveileder
+        </button>
+      </div>
+
+      <div class="page-footer">
+        <button class="btn-primary" id="btn-general-save" data-i18n="general.save">Lagre</button>
+        <button class="btn-ghost" id="btn-general-cancel" data-i18n="general.cancel">Avbryt</button>
+      </div>
+    </div>
+
+    <div id="settings-integrations" class="inner-page">
+      <div class="card">
+        <div class="card-title">Sunday-suite</div>
+        <p class="card-desc">Koble SundayRec til søsterappene i Sunday-suiten. Alt er valgfritt og av som standard — SundayRec fungerer akkurat som før uten dette.</p>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title">Aktiver Sunday-suite-integrasjoner</div>
+            <div class="toggle-desc">Hovedbryter. Når den er av kjøres ingen integrasjonskode.</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-integrations-enabled" /><span class="toggle-track"></span></label>
+        </div>
+      </div>
+      <div class="card" id="integrations-verbatim-card">
+        <div class="card-title">Verbatim — pro-teksting</div>
+        <p class="card-desc">Send et videoopptak til Verbatim for profesjonell teksting (per-ord-sikkerhet, ordliste, styling). Tekstingen kommer tilbake som transkripsjon på opptaket. Krever at Verbatim er installert.</p>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title">Vis «Send til Verbatim» i editoren</div>
+            <div class="toggle-desc">Legger til en knapp på videoopptak i transkripsjons-panelet.</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-integrations-verbatim" /><span class="toggle-track"></span></label>
+        </div>
+      </div>
+      <div class="card" id="integrations-song-card">
+        <div class="card-title">SundaySong — CCLI/TONO-rapportering</div>
+        <p class="card-desc">Send sanglisten (fra Stage-importen) til SundaySong etter publisering. SundaySong bygger automatiske CCLI- og TONO-lisensrapporter for menigheten.</p>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title">Aktiver SundaySong-rapportering</div>
+            <div class="toggle-desc">Legger til «Send til SundaySong»-knapp på opptakets publi­serings­panel.</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-integrations-song" /><span class="toggle-track"></span></label>
+        </div>
+        <div id="integrations-song-key-row" style="margin-top:12px">
+          <label class="form-label">SUNDAYSONG API-NØKKEL</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="password" class="form-input" id="integration-song-apikey" placeholder="Lim inn API-nøkkel…" style="max-width:360px" autocomplete="off" />
+            <button class="btn-ghost btn-sm" id="btn-song-apikey-save">Lagre</button>
+          </div>
+          <div class="form-hint" id="integration-song-apikey-status"></div>
+        </div>
+        <div class="form-hint" style="margin-top:8px">
+          Menighets-ID (church_id) settes i Tilkobling-feltet under.
+        </div>
+      </div>
+      <div class="card" id="integrations-connection-card">
+        <div class="card-title">Tilkobling</div>
+        <p class="card-desc">Delte felt brukt av Song- og Plan-integrasjonene.</p>
+        <label class="form-label">MENIGHETS-ID (church_id)</label>
+        <input type="text" class="form-input" id="integration-church-id" placeholder="UUID fra SundaySong/SundayPlan" style="max-width:420px" />
+        <label class="form-label mt">SUNDAYSONG API-URL (valgfri, standard: https://api.sundaysong.com)</label>
+        <input type="text" class="form-input" id="integration-song-api-url" placeholder="https://api.sundaysong.com" style="max-width:420px" />
+        <label class="form-label mt">SUNDAYPLAN API-URL (valgfri)</label>
+        <input type="text" class="form-input" id="integration-plan-api-url" placeholder="https://din-menighet.supabase.co" style="max-width:420px" />
+        <div style="margin-top:12px">
+          <button class="btn-ghost btn-sm" id="btn-integrations-connection-save">Lagre tilkobling</button>
+        </div>
+      </div>
+      <div class="card" id="integrations-plan-card">
+        <div class="card-title">SundayPlan — tjeneste-bevisst opptak</div>
+        <p class="card-desc">Hent kommende tjenester fra Plan: SundayRec planlegger opptak automatisk og fyller inn tittel og taler. Etter publisering rapporteres streaming-status tilbake til Plan. <strong>Krever at SundayPlan-backend er oppe (Supabase).</strong></p>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title">Aktiver SundayPlan-synkronisering</div>
+            <div class="toggle-desc">Sjekk Plan for kommende tjenester og skriv tilbake streaming-status.</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-integrations-plan" /><span class="toggle-track"></span></label>
+        </div>
+      </div>
+      <div class="card" id="integrations-stage-card">
+        <div class="card-title">SundayStage — auto-kapitler</div>
+        <p class="card-desc">Importer Stage sin cue-logg etter gudstjenesten for å sette kapittelmarkører automatisk (sangtitler, preken, skriftlesing) og bygge opp setlisten for lisensiering.</p>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title">Vis «Importer Stage-kapitler» i editoren</div>
+            <div class="toggle-desc">Legger til en knapp i analyse-panelet som lar deg velge Stage-manifestet.</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-integrations-stage" /><span class="toggle-track"></span></label>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ══ REDIGER ═════════════════════════════════════════════════ -->
+  <!-- ──────────────────────────────────────────────────────────────────
+       SEARCH — full-text search across all transcripts
+       ────────────────────────────────────────────────────────────────── -->
+  <section id="page-search" class="page">
+    <div class="page-header">
+      <h1 data-i18n="search.title">Søk i prekener</h1>
+      <p class="page-subtitle" data-i18n="search.subtitle">Søk på tvers av alle transkriberte opptak. Klikk på et treff for å åpne opptaket på det punktet.</p>
+    </div>
+
+    <div class="search-controls">
+      <input
+        type="search"
+        id="search-query"
+        class="form-input search-query-input"
+        placeholder="Søk etter ord eller fraser…"
+        data-i18n-placeholder="search.placeholder"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button class="btn-secondary btn-sm" id="btn-search-reindex" data-i18n="search.reindex">↻ Oppdater indeks</button>
+    </div>
+
+    <div id="search-index-status" class="search-index-status" data-i18n="search.indexing">Bygger indeks…</div>
+
+    <div id="search-results" class="search-results"></div>
+
+    <div id="search-empty" class="search-empty" style="display:none">
+      <div class="search-empty-icon">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="21" cy="21" r="12"/>
+          <path d="M30 30l9 9" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="search-empty-title" data-i18n="search.noTranscriptsTitle">Ingen transkripsjoner ennå</div>
+      <div class="search-empty-desc" data-i18n="search.noTranscriptsDesc">Åpne et opptak i Rediger og klikk Transkriber for å bygge opp et søkbart arkiv. Når du har én eller flere transkripsjoner, vises de her.</div>
+    </div>
+  </section>
+
+  <section id="page-editor" class="page">
+
+    <!-- Drag-and-drop file overlay -->
+    <div id="editor-drop-overlay" class="editor-drop-overlay">
+      <div class="editor-drop-overlay-icon">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M24 32V16M24 16l-6 6M24 16l6 6" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="6" y="30" width="36" height="12" rx="3" opacity=".35"/>
+        </svg>
+      </div>
+      <div class="editor-drop-overlay-text" data-i18n="editor.dropFile">Slipp lyd- eller videofil her</div>
+    </div>
+
+    <!-- Empty state -->
+    <div id="editor-empty" class="editor-empty">
+      <div class="editor-empty-dropzone" id="editor-empty-dropzone">
+        <div class="editor-empty-icon">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="4" y="16" width="40" height="16" rx="3" stroke-opacity=".3"/>
+            <path d="M4 24h40" stroke-opacity=".3"/>
+            <path d="M12 20v8M20 18v12M28 21v6M36 19v10" stroke-linecap="round"/>
+            <path d="M8 34l4-4m0 0l4 4m-4-4v8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".5"/>
+          </svg>
+        </div>
+        <div class="editor-empty-title" data-i18n="editor.emptyTitleDrop">Slipp fil her — eller klikk for å åpne</div>
+        <div class="editor-empty-desc" data-i18n="editor.emptyDesc">Velg en lyd- eller videofil for å begynne å redigere. Du kan trimme starten og slutten, eller klippe ut deler fra midten.</div>
+        <button class="btn-primary" id="btn-editor-open" data-i18n="editor.openFile">Åpne fil…</button>
+      </div>
+      <div class="editor-empty-recents" id="editor-empty-recents" style="display:none">
+        <div class="editor-empty-recents-title" data-i18n="editor.recentTitle">Nylig brukte filer</div>
+        <div id="editor-empty-recents-list"></div>
+      </div>
+      <div class="editor-empty-review" id="editor-empty-review" style="display:none">
+        <a href="#" id="editor-empty-review-link" class="editor-empty-review-link" data-i18n="editor.gotoReview">Gjennomgangs-kø →</a>
+      </div>
+    </div>
+
+    <!-- Loading state -->
+    <div id="editor-loading" class="editor-loading" style="display:none">
+      <div class="editor-loading-spin"></div>
+      <div data-i18n="editor.loading">Laster inn lydfil…</div>
+    </div>
+
+    <!-- Workspace -->
+    <div id="editor-workspace" style="display:none">
+
+      <!-- Review-mode banner (prep-and-review v5.0) — shown only when entered
+           from the home queue. Tells the user "this is ready, just press publish". -->
+      <div id="editor-review-banner" style="display:none;background:linear-gradient(135deg,rgba(127,196,136,0.15),rgba(122,170,255,0.08));border:1px solid rgba(127,196,136,0.4);border-radius:10px;padding:14px 18px;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="font-size:22px">✨</div>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:14px;color:#7fc488;margin-bottom:2px">Klargjort for publisering</div>
+            <div class="editor-review-banner-detail-text" id="editor-review-banner-detail" data-i18n="review.bannerDetail">Vi har detektert prekenen og foreslått trim. Gå over og trykk publiser.</div>
+          </div>
+        </div>
+        <!-- Per-episode jingle override -->
+        <div style="margin-top:12px;padding-top:10px;border-top:1px dashed rgba(255,255,255,0.08);display:flex;gap:14px;flex-wrap:wrap;font-size:12px;align-items:center">
+          <div>
+            <span style="color:var(--text3);margin-right:6px">Intro:</span>
+            <select id="editor-review-intro-select" class="form-input" style="font-size:12px;padding:4px 8px;min-width:140px">
+              <option value="default">Standard fra innstillinger</option>
+              <option value="none">Ingen</option>
+              <option value="custom">Velg annen…</option>
+            </select>
+            <span id="editor-review-intro-label" style="color:var(--text2);margin-left:6px;font-size:11px"></span>
+          </div>
+          <div>
+            <span style="color:var(--text3);margin-right:6px">Outro:</span>
+            <select id="editor-review-outro-select" class="form-input" style="font-size:12px;padding:4px 8px;min-width:140px">
+              <option value="default">Standard fra innstillinger</option>
+              <option value="none">Ingen</option>
+              <option value="custom">Velg annen…</option>
+            </select>
+            <span id="editor-review-outro-label" style="color:var(--text2);margin-left:6px;font-size:11px"></span>
+          </div>
+        </div>
+        <!-- Attention reasons (if any) -->
+        <div id="editor-review-attention" style="display:none;margin-top:10px;padding:8px 10px;background:rgba(255,180,107,0.1);border-left:3px solid #ffb46b;border-radius:4px;font-size:12px;color:#ffb46b"></div>
+        <!-- Three big primary action buttons -->
+        <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+          <button id="btn-review-publish" class="btn-primary" style="background:#7fc488;color:#0d1a12;font-weight:700;padding:10px 18px;border-radius:8px;border:none;cursor:pointer;font-size:14px;flex:1;min-width:200px">
+            ✓ Godkjenn og publiser
+          </button>
+          <button id="btn-review-edit" class="btn-secondary" data-i18n="editor.reviewEdit">
+            ↻ Endre detaljer
+          </button>
+          <button id="btn-review-discard" class="btn-ghost" data-i18n="editor.reviewDiscard">
+            ✗ Ikke publiser denne uka
+          </button>
+        </div>
+      </div>
+
+      <!-- File + transport header -->
+      <div class="editor-header editor-header-sticky">
+        <div class="editor-file-row">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor" style="flex-shrink:0;opacity:.6"><path d="M4 4a2 2 0 012-2h4l2 2h4a2 2 0 012 2v9a2 2 0 01-2 2H6a2 2 0 01-2-2z"/></svg>
+          <span id="editor-filename" class="editor-filename"></span>
+          <span id="editor-dirty-dot" class="editor-dirty-dot" title="Ulagrede endringer" data-i18n-title="tooltip.unsavedChanges" style="display:none">●</span>
+          <span id="editor-header-summary" class="editor-header-summary"></span>
+          <span style="flex:1"></span>
+          <button class="btn-ghost btn-sm" id="btn-editor-change" data-i18n="editor.openOther">Åpne annen fil</button>
+          <button class="btn-ghost btn-sm" id="btn-editor-close" data-i18n="editor.closeFile">Lukk fil</button>
+        </div>
+        <div class="editor-transport">
+          <button class="btn-editor-play" id="btn-editor-play" title="Spill av" data-i18n-title="tooltip.play">
+            <svg id="editor-play-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M6.3 4.6a1 1 0 011.4 0l6 5a1 1 0 010 1.6l-6 5A1 1 0 016 15.4V4.6z"/></svg>
+          </button>
+          <button class="btn-editor-play btn-editor-preview" id="btn-editor-preview" title="Spill forhåndsvisning (hopper over kuttede deler)" data-i18n-title="tooltip.preview">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 4l6 6-6 6V4z" fill="currentColor" stroke="none"/><path d="M14 4v12" stroke-linecap="round"/></svg>
+          </button>
+          <button class="btn-editor-play btn-editor-loop" id="btn-editor-loop" title="Loope avspilling" data-i18n-title="tooltip.loop">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 10a6 6 0 016-6h4M14 4l2 2-2 2M16 10a6 6 0 01-6 6H6M6 16l-2-2 2-2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="editor-time">
+            <span class="editor-time-cur" id="editor-time-cur">0:00:00</span>
+            <span class="editor-time-sep">/</span>
+            <span class="editor-time-tot" id="editor-time-tot">0:00:00</span>
+          </div>
+          <div id="editor-clip-badge" class="editor-clip-badge" style="display:none" title="Klikk for å hoppe til første klipp" data-i18n-title="tooltip.jumpToClip"></div>
+        </div>
+      </div>
+
+      <!-- Video preview panel (only shown for video files) -->
+      <div id="editor-video-panel" class="editor-video-panel" style="display:none">
+        <video id="editor-video" class="editor-video" preload="auto" playsinline></video>
+      </div>
+
+      <!-- Minimap -->
+      <div class="editor-minimap-wrap">
+        <canvas id="editor-minimap" class="editor-minimap" height="44"></canvas>
+        <div id="editor-minimap-vp" class="editor-minimap-vp"></div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="editor-toolbar">
+        <div class="editor-zoom-group">
+          <button class="btn-editor-tool" id="btn-zoom-in" title="Zoom inn" data-i18n-title="tooltip.zoomIn">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8zm6-2a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1H6a1 1 0 110-2h1V7a1 1 0 011-1z"/></svg>
+          </button>
+          <button class="btn-editor-tool" id="btn-zoom-out" title="Zoom ut" data-i18n-title="tooltip.zoomOut">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8zm3 1a1 1 0 011-1h4a1 1 0 110 2H6a1 1 0 01-1-1z"/></svg>
+          </button>
+          <button class="btn-editor-tool" id="btn-zoom-fit" title="Vis hele filen" data-i18n-title="tooltip.fitAll">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a1 1 0 000 2h14a1 1 0 100-2H3zm0 5a1 1 0 000 2h14a1 1 0 100-2H3zm0 5a1 1 0 000 2h14a1 1 0 100-2H3z"/></svg>
+          </button>
+        </div>
+        <div class="editor-drag-hint" data-i18n="editor.dragHint">Klikk og dra for å markere et kutt</div>
+        <button class="btn-ghost btn-sm" id="btn-editor-undo-all" data-i18n="editor.cutsNone" style="display:none">Fjern alle kutt</button>
+      </div>
+
+      <!-- Keyboard shortcut hints -->
+      <div class="editor-kbd-hints">
+        <span class="editor-kbd-hint"><span class="kbd">Space</span> Spill/pause</span>
+        <span class="editor-kbd-hint"><span class="kbd">←</span><span class="kbd">→</span> 5s · <span class="kbd">Shift</span>+<span class="kbd">←→</span> 1s</span>
+        <span class="editor-kbd-hint"><span class="kbd">Tab</span> Neste kutt</span>
+        <span class="editor-kbd-hint"><span class="kbd">P</span> <span data-i18n="editor.kbdJumpToSermon">Hopp til preken</span></span>
+        <span class="editor-kbd-hint"><span class="kbd">L</span> Loop</span>
+        <span class="editor-kbd-hint"><span class="kbd">+</span><span class="kbd">−</span> Zoom</span>
+        <span class="editor-kbd-hint"><span class="kbd">F</span> Fit</span>
+        <span class="editor-kbd-hint"><span class="kbd">⌘Z</span> Angre</span>
+        <span class="editor-kbd-hint"><span class="kbd">Esc</span> Stopp</span>
+      </div>
+
+      <!-- Main waveform canvas -->
+      <div class="editor-canvas-wrap" id="editor-canvas-wrap">
+        <canvas id="editor-canvas" class="editor-canvas"></canvas>
+      </div>
+
+      <!-- Lydnivå: peak normalization (Premiere-style "Normalize Max Peaks") -->
+      <div id="editor-normalize-panel" class="editor-normalize-panel">
+        <button class="btn-normalize" id="btn-normalize-peak" type="button">
+          <svg class="btn-normalize-icon" viewBox="0 0 20 20" fill="currentColor" width="16" height="16" aria-hidden="true">
+            <path d="M3 17a1 1 0 010-2h14a1 1 0 110 2H3zm2-4a1 1 0 01-1-1V8a1 1 0 112 0v4a1 1 0 01-1 1zm4 0a1 1 0 01-1-1V5a1 1 0 112 0v7a1 1 0 01-1 1zm4 0a1 1 0 01-1-1V3a1 1 0 112 0v9a1 1 0 01-1 1zm4 0a1 1 0 01-1-1V8a1 1 0 112 0v4a1 1 0 01-1 1z"/>
+          </svg>
+          <span class="btn-normalize-label" id="btn-normalize-label" data-i18n="editor.normalizePeak">Normaliser lydnivå</span>
+        </button>
+        <span class="editor-normalize-status" id="editor-normalize-status" data-i18n="editor.normalizeHint">Justerer toppunktet til -1 dBFS for trygg sluttmiks.</span>
+        <button class="editor-normalize-reset" id="btn-normalize-reset" type="button" style="display:none" data-i18n="editor.normalizeReset">↺ Tilbakestill</button>
+      </div>
+
+      <!-- Intro/Outro panel (collapsible — primary path is drag-and-drop onto timeline) -->
+      <div class="editor-chapters-panel editor-io-panel editor-io-panel--compact editor-io-panel--collapsed" id="editor-io-panel">
+        <div class="editor-chapters-header editor-io-panel-header" id="editor-io-panel-header">
+          <div class="editor-chapters-title">
+            <svg class="editor-io-chevron" id="editor-io-chevron" viewBox="0 0 20 20" fill="currentColor" width="12" height="12" style="opacity:.6"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+            <span data-i18n="editor.ioTitle">Intro &amp; Outro</span>
+            <span class="editor-io-hint" data-i18n="editor.ioDragHint">— eller dra fil til timeline</span>
+          </div>
+          <label class="editor-io-include-label" onclick="event.stopPropagation()">
+            <span class="toggle" style="transform:scale(.8);transform-origin:right center;cursor:pointer">
+              <input type="checkbox" id="editor-include-io" />
+              <span class="toggle-track"></span>
+            </span>
+            <span style="font-size:12px;font-weight:400;color:var(--text2)">Inkluder ved eksport</span>
+          </label>
+        </div>
+        <div style="background:var(--surface);padding:10px 12px;display:flex;flex-direction:column;gap:8px">
+          <!-- Audio intro/outro (shown for audio files) -->
+          <div id="editor-audio-io-section">
+            <div class="editor-io-file-row">
+              <span class="editor-io-file-label">INTRO</span>
+              <span class="editor-io-file-path" id="editor-intro-display">Ingen fil valgt</span>
+              <button class="btn-secondary btn-sm" id="btn-editor-pick-intro" data-i18n="general.pickFile">Velg fil…</button>
+              <button class="btn-ghost btn-sm" id="btn-editor-clear-intro" style="display:none">✕</button>
+            </div>
+            <div class="editor-io-file-row">
+              <span class="editor-io-file-label">OUTRO</span>
+              <span class="editor-io-file-path" id="editor-outro-display">Ingen fil valgt</span>
+              <button class="btn-secondary btn-sm" id="btn-editor-pick-outro" data-i18n="general.pickFile">Velg fil…</button>
+              <button class="btn-ghost btn-sm" id="btn-editor-clear-outro" style="display:none">✕</button>
+            </div>
+          </div>
+          <!-- Video intro/outro (shown for video files) -->
+          <div id="editor-video-io-section" style="display:none">
+            <div class="editor-io-file-row">
+              <span class="editor-io-file-label">VIDEO-INTRO</span>
+              <span class="editor-io-file-path" id="editor-video-intro-display">Ingen fil valgt</span>
+              <button class="btn-secondary btn-sm" id="btn-editor-pick-video-intro" data-i18n="general.pickFile">Velg fil…</button>
+              <button class="btn-ghost btn-sm" id="btn-editor-clear-video-intro" style="display:none">✕</button>
+            </div>
+            <div class="editor-io-file-row">
+              <span class="editor-io-file-label">VIDEO-OUTRO</span>
+              <span class="editor-io-file-path" id="editor-video-outro-display">Ingen fil valgt</span>
+              <button class="btn-secondary btn-sm" id="btn-editor-pick-video-outro" data-i18n="general.pickFile">Velg fil…</button>
+              <button class="btn-ghost btn-sm" id="btn-editor-clear-video-outro" style="display:none">✕</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cut list -->
+      <div class="editor-cuts-panel" id="editor-cuts-panel" style="display:none">
+        <div class="editor-cuts-header" data-i18n="editor.cutsTitle">Kuttede regioner</div>
+        <div id="editor-cuts-list"></div>
+      </div>
+
+      <!-- Metadata panel -->
+      <div class="editor-meta-panel" id="editor-meta-panel">
+        <div class="editor-meta-header" id="btn-meta-toggle">
+          <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>
+          <span data-i18n="editor.metaTitle">Metadata</span>
+          <span class="editor-meta-badge" id="editor-meta-badge" style="display:none">●</span>
+          <svg class="editor-meta-chevron" id="editor-meta-chevron" viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+        </div>
+        <div class="editor-meta-body" id="editor-meta-body" style="display:none">
+          <div class="meta-form-grid">
+            <div class="meta-form-row">
+              <label class="form-label" data-i18n="editor.metaTitle2">TITTEL</label>
+              <input type="text" class="form-input" id="meta-title" placeholder="Gudstjeneste" />
+            </div>
+            <div class="meta-form-row">
+              <label class="form-label" data-i18n="editor.metaSpeaker">TALER</label>
+              <input type="text" class="form-input" id="meta-speaker" placeholder="Pastor Ola Nordmann" />
+            </div>
+          </div>
+          <div class="meta-form-row">
+            <label class="form-label" data-i18n="editor.metaDesc">BESKRIVELSE</label>
+            <textarea class="form-input" id="meta-description" rows="2" placeholder="Kort beskrivelse av gudstjenesten…"></textarea>
+          </div>
+          <button class="btn-ghost btn-sm" id="btn-meta-save" data-i18n="editor.metaSave">Lagre metadata</button>
+        </div>
+      </div>
+
+      <!-- Analyse panel (merged: segments + chapters) -->
+      <div class="editor-chapters-panel" id="editor-segments-panel">
+        <div class="editor-chapters-header">
+          <div class="editor-chapters-title">
+            <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M3 6a1 1 0 000 2h14a1 1 0 100-2H3zm0 5a1 1 0 000 2h14a1 1 0 100-2H3z" clip-rule="evenodd"/></svg>
+            <span data-i18n="editor.analyzeTitle">Analyser opptak</span>
+          </div>
+          <button class="btn-ghost btn-sm" id="btn-stage-import" style="display:none" title="Importer kapitler fra SundayStage cue-logg">↧ Stage-kapitler</button>
+          <button class="btn-primary btn-sm" id="btn-detect-segments" data-i18n="editor.analyzeRun">▶ Analyser opptak</button>
+        </div>
+        <div class="editor-analyze-body" id="editor-analyze-body">
+          <div id="editor-segments-analyzing" style="display:none" class="editor-segments-analyzing">
+            <span class="editor-segments-spinner"></span> <span data-i18n="editor.analyzing">Analyserer…</span>
+          </div>
+          <div id="editor-analyze-summary" class="editor-analyze-summary" style="display:none"></div>
+          <div id="editor-analyze-controls" class="editor-analyze-controls" style="display:none">
+            <div class="editor-analyze-controls-title" data-i18n="editor.analyzeShowOnTimeline">På tidslinjen vises:</div>
+            <label class="editor-analyze-toggle">
+              <input type="checkbox" id="editor-show-speech" checked />
+              <span class="editor-analyze-swatch" style="background:rgba(72,187,120,0.35)"></span>
+              <span data-i18n="editor.analyzeSpeech">Tale-segmenter</span>
+            </label>
+            <label class="editor-analyze-toggle">
+              <input type="checkbox" id="editor-show-music" checked />
+              <span class="editor-analyze-swatch" style="background:rgba(99,179,237,0.4)"></span>
+              <span data-i18n="editor.analyzeMusic">Musikk-segmenter</span>
+            </label>
+            <label class="editor-analyze-toggle">
+              <input type="checkbox" id="editor-show-silence" />
+              <span class="editor-analyze-swatch" style="background:rgba(150,150,160,0.25)"></span>
+              <span data-i18n="editor.analyzeSilence">Stillhet</span>
+            </label>
+          </div>
+          <button class="btn-ghost btn-sm" id="btn-apply-auto-trim" style="display:none" data-i18n="editor.markSermon">↦ Marker preken automatisk</button>
+          <div id="editor-auto-trim-hint" class="editor-analyze-hint" style="display:none" data-i18n="editor.markSermonHint">Trimmer alt før og etter den uthevede preken-blokken.</div>
+          <div id="editor-sermon-picker-wrap" class="editor-sermon-picker-wrap" style="display:none">
+            <label class="editor-sermon-picker-lbl" data-i18n="editor.sermonPickerLabel">Er ikke dette prekenen?</label>
+            <select id="editor-sermon-picker" class="editor-sermon-picker"></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Auto-trim suggestion banner (shown after auto-analyse completes) -->
+      <div id="editor-suggestion-banner" class="editor-suggestion-banner" style="display:none">
+        <div class="editor-suggestion-icon">✨</div>
+        <div class="editor-suggestion-body">
+          <div class="editor-suggestion-title" data-i18n="editor.suggestionTitle">Forslag klart</div>
+          <div class="editor-suggestion-detail" id="editor-suggestion-detail"></div>
+        </div>
+        <div class="editor-suggestion-actions">
+          <button class="btn-primary btn-sm" id="btn-suggestion-apply" data-i18n="editor.suggestionApply">Bruk forslag</button>
+          <button class="btn-ghost btn-sm" id="btn-suggestion-dismiss" data-i18n="editor.suggestionDismiss">Lukk</button>
+        </div>
+      </div>
+
+      <!-- Remaining duration after cuts -->
+      <div id="editor-remaining" class="editor-remaining" style="display:none">
+        <svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"/></svg>
+        <span class="editor-remaining-label" data-i18n="editor.remainingLabel">Resultat:</span>
+        <span class="editor-remaining-dur" id="editor-remaining-dur">—</span>
+      </div>
+
+      <!-- Transcription panel -->
+      <div id="editor-transcript-section" class="editor-transcript-section">
+        <div class="editor-transcript-header">
+          <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="opacity:.7"><path d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h8a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"/></svg>
+          <span class="editor-transcript-title" data-i18n="transcript.title">Transkribering</span>
+          <span style="flex:1"></span>
+          <button class="btn-primary btn-sm" id="btn-transcribe" data-i18n="transcript.start">▶ Transkriber</button>
+          <button class="btn-ghost btn-sm" id="btn-transcript-export" style="display:none" data-i18n="transcript.export">↧ SRT</button>
+          <button class="btn-ghost btn-sm" id="btn-transcript-export-vtt" style="display:none" data-i18n="transcript.exportVtt">↧ VTT</button>
+          <button class="btn-ghost btn-sm" id="btn-transcript-verbatim" style="display:none" title="Send til Verbatim for pro-teksting">→ Verbatim</button>
+          <button class="btn-ghost btn-sm" id="btn-transcript-delete" style="display:none" data-i18n="transcript.delete">Slett</button>
+        </div>
+        <div id="editor-transcript-body" class="editor-transcript-body">
+          <div class="editor-transcript-empty" data-i18n="transcript.empty">Ingen transkripsjon ennå. Klikk «Transkriber» for å lage søkbar tekst av talen — tar 5-15 minutter avhengig av lengde og valgt modell.</div>
+        </div>
+      </div>
+
+      <!-- Transcribe modal: choose model + language -->
+      <div id="transcribe-modal" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true">
+        <div class="modal modal-sm transcribe-modal">
+          <h2 data-i18n="transcript.modalTitle">Transkriber tale til tekst</h2>
+          <p class="modal-desc" data-i18n="transcript.modalDesc">Bruker lokal AI (whisper.cpp) — ingen data sendes til skyen. Velg modell og språk.</p>
+
+          <label class="form-label" data-i18n="transcript.modelLabel">MODELL</label>
+          <div id="transcribe-model-list" class="transcribe-model-list"></div>
+
+          <label class="form-label mt" data-i18n="transcript.langLabel">SPRÅK</label>
+          <select id="transcribe-language" class="form-input">
+            <option value="auto" data-i18n="transcript.langAuto">Auto-detekter</option>
+            <option value="no" selected>Norsk</option>
+            <option value="en">English</option>
+            <option value="sv">Svenska</option>
+            <option value="da">Dansk</option>
+            <option value="de">Deutsch</option>
+            <option value="fr">Français</option>
+            <option value="pl">Polski</option>
+            <option value="es">Español</option>
+          </select>
+
+          <label class="transcribe-translate-row mt">
+            <input type="checkbox" id="transcribe-translate" />
+            <span data-i18n="transcript.translateToEn">Oversett til engelsk samtidig</span>
+          </label>
+
+          <div class="modal-actions">
+            <button class="btn-ghost" id="btn-transcribe-cancel" data-i18n="transcript.cancel">Avbryt</button>
+            <button class="btn-primary" id="btn-transcribe-start" data-i18n="transcript.run">Start</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transcribe progress modal -->
+      <div id="transcribe-progress-modal" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true" data-no-escape>
+        <div class="modal modal-sm transcribe-progress-modal">
+          <h2 id="transcribe-progress-title" data-i18n="transcript.progressTitle">Transkriberer…</h2>
+          <div class="transcribe-progress-bar-wrap">
+            <div id="transcribe-progress-bar" class="transcribe-progress-bar"></div>
+          </div>
+          <div id="transcribe-progress-text" class="transcribe-progress-text"></div>
+          <div class="modal-actions">
+            <button class="btn-ghost" id="btn-transcribe-progress-cancel" data-i18n="transcript.cancel">Avbryt</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mastering (publishable-ready audio) -->
+      <div id="editor-master-section" class="editor-master-section" style="display:none">
+        <div class="editor-master-header">
+          <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="opacity:.7"><path d="M5 4a1 1 0 00-1 1v10a1 1 0 102 0V5a1 1 0 00-1-1zm5 0a1 1 0 00-1 1v10a1 1 0 102 0V5a1 1 0 00-1-1zm5 0a1 1 0 00-1 1v10a1 1 0 102 0V5a1 1 0 00-1-1z"/></svg>
+          <span class="editor-master-title" data-i18n="master.title">Mastering (klargjør for publisering)</span>
+        </div>
+        <div class="editor-master-intro" data-i18n="master.intro">Standardiserer lydstyrke og lydkvalitet for podkast / streaming.</div>
+
+        <div class="editor-master-preset-row">
+          <label class="export-section-label" for="master-preset-select" data-i18n="master.presetLabel">Forhåndsinnstilling</label>
+          <select id="master-preset-select" class="form-input form-input-sm"></select>
+        </div>
+        <div id="master-preset-desc" class="editor-master-desc"></div>
+
+        <div class="editor-master-actions">
+          <button class="btn-ghost btn-sm" id="btn-master-preview" data-i18n="master.preview">Lytt på forhåndsvisning</button>
+          <button class="btn-ghost btn-sm" id="btn-master-listen-orig" data-i18n="master.previewListenOrig" style="display:none">Lytt original</button>
+          <button class="btn-primary btn-sm" id="btn-master-apply" data-i18n="master.apply">Mastre fil</button>
+          <button class="btn-ghost btn-sm" id="btn-master-cancel" data-i18n="master.cancel" style="display:none">Avbryt</button>
+        </div>
+
+        <div id="master-status-row" class="editor-master-status" style="display:none">
+          <div class="editor-export-progress-bar-wrap">
+            <div class="editor-export-progress-bar" id="master-progress-bar"></div>
+          </div>
+          <span class="editor-export-progress-label" id="master-status-label">…</span>
+        </div>
+
+        <div id="master-result-row" class="editor-master-result" style="display:none">
+          <svg viewBox="0 0 20 20" fill="currentColor" style="color:var(--green)"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>
+          <span id="master-result-text"></span>
+          <button class="btn-ghost btn-sm" id="btn-master-open-folder" data-i18n="master.openFolder" style="display:none">Åpne mappe</button>
+          <button class="btn-ghost btn-sm" id="btn-master-listen-done" data-i18n="master.listen" style="display:none">Lytt</button>
+        </div>
+
+        <audio id="master-preview-audio" style="display:none" controls></audio>
+      </div>
+
+      <!-- Episode-bilde (cover art) — between mastering and save bar -->
+      <div id="editor-thumb-section" class="editor-thumb-section" style="display:none">
+        <div class="editor-master-header">
+          <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="opacity:.7"><path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l3-4 2 3 3-5 4 6z"/></svg>
+          <span class="editor-master-title" data-i18n="thumbnail.section.title">Episodebilde</span>
+        </div>
+        <div class="thumb-panel">
+          <div class="thumb-preview" id="editor-thumb-preview" data-i18n-title="thumbnail.dropHint" title="Slipp et bilde her, eller klikk for å velge">
+            <span class="thumb-placeholder" data-i18n="thumbnail.dropHint">Slipp et bilde her, eller klikk for å velge</span>
+          </div>
+          <div class="thumb-side">
+            <div class="thumb-using" id="editor-thumb-using" data-i18n="thumbnail.using.none">Ingen cover art valgt</div>
+            <div class="thumb-info" id="editor-thumb-info"></div>
+            <div class="thumb-warning" id="editor-thumb-warning" style="display:none"></div>
+            <div class="thumb-button-row">
+              <button class="btn-secondary btn-sm" id="btn-editor-thumb-pick" data-i18n="thumbnail.pick">Velg bilde</button>
+              <button class="btn-ghost btn-sm" id="btn-editor-thumb-reset" data-i18n="thumbnail.resetToDefault" style="display:none">Tilbakestill til standard</button>
+              <button class="btn-ghost btn-sm" id="btn-editor-thumb-clear" data-i18n="thumbnail.clear" style="display:none">Fjern</button>
+            </div>
+          </div>
+        </div>
+        <input type="file" id="editor-thumb-file-input" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" style="display:none">
+      </div>
+
+      <!-- Save bar -->
+      <div class="editor-save-bar">
+        <div id="editor-export-progress-row" class="editor-export-progress-row" style="display:none">
+          <div class="editor-export-progress-bar-wrap">
+            <div class="editor-export-progress-bar" id="editor-export-progress-bar"></div>
+          </div>
+          <span class="editor-export-progress-label" id="editor-export-progress-label">Eksporterer…</span>
+        </div>
+        <div id="editor-result-row" class="editor-result-row" style="display:none">
+          <svg viewBox="0 0 20 20" fill="currentColor" style="color:var(--green)"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>
+          <span id="editor-result-text"></span>
+        </div>
+        <button class="btn-primary" id="btn-editor-save" data-i18n="editor.save">Lagre redigert fil</button>
+      </div>
+
+    </div><!-- /workspace -->
+
+  </section>
+
+
+</main>
+
+<!-- Editor prompt toast (post-recording) -->
+<div id="editor-prompt-toast" class="editor-prompt-toast" style="display:none">
+  <div class="update-toast-body">
+    <div class="update-toast-title" data-i18n="editor.promptTitle">Vil du redigere opptaket?</div>
+    <div class="update-toast-actions" style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn-toast-install" id="btn-editor-prompt-open" data-i18n="editor.promptOpen">Åpne i Rediger</button>
+      <button class="btn-ghost btn-sm" id="btn-editor-prompt-dismiss">✕</button>
+    </div>
+  </div>
+</div>
+
+<!-- Editor export modal -->
+<div id="editor-export-modal" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true" data-no-escape>
+  <div class="modal export-modal">
+    <h2 data-i18n="editor.exportTitle">Eksporter lydfil</h2>
+
+    <!-- Video export notice (shown instead of format picker for video files) -->
+    <div id="export-video-notice" class="export-video-notice" style="display:none">
+      <div class="export-section-label" data-i18n="editor.videoFormat">Video-format</div>
+      <div class="export-fmt-row">
+        <button class="export-fmt-btn export-vfmt-btn active" data-vfmt="mp4">MP4</button>
+        <button class="export-fmt-btn export-vfmt-btn" data-vfmt="mov">MOV</button>
+        <button class="export-fmt-btn export-vfmt-btn" data-vfmt="mkv">MKV</button>
+      </div>
+      <div class="export-section-label" data-i18n="editor.videoCodec" style="margin-top:8px">Video-kodek</div>
+      <div class="export-fmt-row">
+        <button class="export-fmt-btn export-vcodec-btn active" data-vcodec="h264" data-i18n="editor.codecH264">H.264 (universell)</button>
+        <button class="export-fmt-btn export-vcodec-btn" data-vcodec="h265" data-i18n="editor.codecH265">H.265 (mindre fil)</button>
+      </div>
+    </div>
+
+    <!-- Format picker (hidden for video files) -->
+    <div id="export-fmt-section">
+      <div class="export-section-label" data-i18n="editor.exportFormat">Format</div>
+      <div class="export-fmt-row">
+        <button class="export-fmt-btn active" data-fmt="mp3">MP3</button>
+        <button class="export-fmt-btn" data-fmt="wav">WAV</button>
+        <button class="export-fmt-btn" data-fmt="flac">FLAC</button>
+        <button class="export-fmt-btn" data-fmt="aac">AAC</button>
+      </div>
+    </div>
+
+    <!-- Format options -->
+    <div id="export-mp3-opts" class="export-fmt-opts">
+      <div class="export-section-label" data-i18n="editor.exportBitrate">Bitrate</div>
+      <select class="form-input form-input-sm" id="export-bitrate">
+        <option value="128">128 kbps</option>
+        <option value="192" selected>192 kbps (standard)</option>
+        <option value="256">256 kbps</option>
+        <option value="320" data-i18n="editor.export320kbps">320 kbps (høy kvalitet)</option>
+      </select>
+    </div>
+    <div id="export-wav-opts" class="export-fmt-opts" style="display:none">
+      <div class="export-section-label" data-i18n="editor.exportBitDepth">Bithybde</div>
+      <select class="form-input form-input-sm" id="export-bitdepth">
+        <option value="16" selected>16-bit (CD-kvalitet)</option>
+        <option value="24">24-bit (studio)</option>
+      </select>
+    </div>
+    <div id="export-aac-opts" class="export-fmt-opts" style="display:none">
+      <div class="export-section-label" data-i18n="editor.exportBitrate">Bitrate</div>
+      <select class="form-input form-input-sm" id="export-aac-bitrate">
+        <option value="128">128 kbps</option>
+        <option value="192" selected>192 kbps</option>
+        <option value="256">256 kbps</option>
+      </select>
+    </div>
+
+    <!-- Destination -->
+    <div class="export-section-label" data-i18n="editor.exportDest">Destinasjon</div>
+    <div class="export-dest-row">
+      <button class="export-dest-btn active" data-dest="same" data-i18n="editor.exportDestSame">Samme mappe</button>
+      <button class="export-dest-btn" data-dest="folder" data-i18n="editor.exportDestFolder">Velg mappe…</button>
+      <button class="export-dest-btn" data-dest="replace" data-i18n="editor.exportDestReplace">Erstatt original</button>
+    </div>
+    <div id="export-folder-path" class="export-folder-path" style="display:none"></div>
+
+    <!-- Gain summary (peak normalization) -->
+    <div class="export-proc-row" id="export-proc-row" style="display:none">
+      <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="opacity:.5"><path d="M3 17a1 1 0 010-2h14a1 1 0 110 2H3zm2-4a1 1 0 01-1-1V8a1 1 0 112 0v4a1 1 0 01-1 1zm4 0a1 1 0 01-1-1V5a1 1 0 112 0v7a1 1 0 01-1 1zm4 0a1 1 0 01-1-1V3a1 1 0 112 0v9a1 1 0 01-1 1zm4 0a1 1 0 01-1-1V8a1 1 0 112 0v4a1 1 0 01-1 1z"/></svg>
+      <span id="export-proc-summary" class="export-proc-summary"></span>
+    </div>
+    <div class="export-io-row" id="export-io-row" style="display:none">
+      <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="opacity:.5"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/></svg>
+      <span id="export-io-summary" class="export-proc-summary"></span>
+    </div>
+
+    <!-- Audio enhancement (channel repair + vocal chain + one-click auto) -->
+    <div class="export-publish-section" id="export-enhance-section" style="display:none">
+      <div class="export-section-label" data-i18n="editor.enhanceTitle">Lydforbedring</div>
+      <button class="btn-primary btn-sm" id="btn-auto-enhance" style="margin-bottom:8px" data-i18n="editor.autoEnhance">✨ Automatisk lydforbedring (ett klikk)</button>
+      <div id="enhance-summary" class="export-proc-summary" style="display:none;margin-bottom:8px;opacity:.85"></div>
+      <label class="export-field-label" data-i18n="editor.vocalChain" style="display:block;margin-bottom:4px">Stemmebehandling</label>
+      <select id="enhance-vocal-chain" class="export-select" style="margin-bottom:8px;width:100%">
+        <option value="">Ingen</option>
+        <option value="voice-light">Stemme — lett</option>
+        <option value="voice-podcast">Podkast-stemme (anbefalt)</option>
+        <option value="voice-noisy-room">Støyete rom</option>
+      </select>
+      <label class="export-field-label" data-i18n="editor.channelRepair" style="display:block;margin-bottom:4px">Kanalreparasjon</label>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px">
+        <select id="enhance-channel-repair" class="export-select" style="flex:1">
+          <option value="">Ingen</option>
+          <option value="swapLr">Bytt venstre/høyre</option>
+          <option value="duplicateLeft">Bruk venstre kanal (begge)</option>
+          <option value="duplicateRight">Bruk høyre kanal (begge)</option>
+          <option value="monoMix">Bland til mono</option>
+        </select>
+        <button class="btn-ghost btn-sm" id="btn-diagnose-channels" data-i18n="editor.diagnoseChannels">Diagnostiser</button>
+      </div>
+      <div id="enhance-channel-diag" class="export-proc-summary" style="display:none;opacity:.75"></div>
+
+      <label class="video-bitrate-radio" style="margin-top:10px">
+        <input type="checkbox" id="opt-use-mixer" />
+        <span data-i18n="editor.useMixer">🎛 Avansert lydmikser (overstyrer stemmebehandling)</span>
+      </label>
+      <div id="mixer-controls" class="mixer-controls" style="display:none"></div>
+    </div>
+
+    <!-- Publishing options -->
+    <div class="export-publish-section" id="export-publish-section">
+      <div class="export-section-label" data-i18n="editor.exportPublish">Publisering</div>
+      <div id="export-publish-options" class="export-publish-options"></div>
+      <a href="#" id="export-publish-configure" class="export-publish-configure" style="display:none" data-i18n="editor.exportPublishConfigure">Konfigurer publisering →</a>
+      <div id="export-publish-progress" class="export-publish-progress" style="display:none"></div>
+    </div>
+
+    <div class="btn-row mt">
+      <button class="btn-primary" id="btn-export-confirm" data-i18n="editor.exportConfirm">Eksporter</button>
+      <button class="btn-primary" id="btn-export-and-publish" style="display:none" data-i18n="editor.exportAndPublish">Eksporter og publiser</button>
+      <button class="btn-ghost" id="btn-export-cancel" data-i18n="editor.cancel">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODALS ════════════════════════════════════════════════════ -->
+
+<!-- Manual recording modal -->
+<div id="modal-manual" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h2 data-i18n="manual.title">Start opptak</h2>
+    <p data-i18n="manual.subtitle">Opptaket starter med en gang og du stopper det selv når du er ferdig.</p>
+
+    <!-- Audio source -->
+    <label class="form-label" data-i18n="manual.source">LYDKILDE</label>
+    <select class="form-input" id="manual-device"></select>
+
+    <!-- Video source — only shown when video mode is enabled -->
+    <div id="manual-video-section" style="display:none">
+      <div class="manual-section-divider">
+        <svg viewBox="0 0 20 20" width="13" height="13" fill="currentColor"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zm12.553 1.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/></svg>
+        <span>Videokilde</span>
+      </div>
+      <select class="form-input" id="manual-video-device">
+        <option value="">Laster enheter…</option>
+      </select>
+      <div id="manual-video-hint" class="manual-video-hint" style="display:none"></div>
+    </div>
+
+    <label class="form-label mt" data-i18n="manual.filename">NAVN PÅ FIL (valgfritt)</label>
+    <input type="text" class="form-input" id="manual-filename" placeholder="Gudstjeneste" />
+    <div class="btn-row mt">
+      <button class="btn-danger" id="btn-manual-start"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/></svg><span data-i18n="manual.start">Start opptak nå</span></button>
+      <button class="btn-ghost" id="btn-manual-cancel" data-i18n="manual.cancel">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<!-- Recording overlay -->
+<div id="recording-overlay" class="recording-overlay" style="display:none">
+  <div class="rec-pulse-ring"></div>
+  <div class="rec-layout">
+
+    <!-- Full-width VU section -->
+    <div class="rec-vu-section">
+      <div class="rec-vu-header">
+        <div class="rec-indicator">
+          <div class="rec-dot-big"></div>
+          <div>
+            <div class="rec-live" data-i18n="recording.live">TAR OPP NÅ</div>
+            <div class="rec-device-name" id="rec-device-name"></div>
+          </div>
+        </div>
+        <div class="rec-sig-status">
+          <span class="rec-sig-dot" id="rec-sig-dot"></span>
+          <span class="rec-sig-label" id="rec-sig-label">—</span>
+        </div>
+        <div class="rec-peak-readout">
+          <span class="rec-peak-ch">L</span>
+          <span class="rec-peak-db" id="rec-vu-db-l">—</span>
+          <span class="rec-peak-sep">·</span>
+          <span class="rec-peak-ch">R</span>
+          <span class="rec-peak-db" id="rec-vu-db-r">—</span>
+          <span class="rec-peak-unit">dBFS</span>
+        </div>
+      </div>
+      <div class="vu-bar-group rec-vu-bars">
+        <div class="vu-bar-row">
+          <span class="vu-bar-lbl rec-vu-lbl">L</span>
+          <div class="vu-bar-track">
+            <div class="vu-bar-fill" id="rec-vu-l"></div>
+            <div class="vu-bar-peak" id="rec-vu-peak-l"></div>
+          </div>
+          <div class="vu-bar-clip rec-vu-clip-el" id="rec-vu-clip-l" title="Clip — klikk for å nullstille" data-i18n-title="tooltip.clipReset"></div>
+        </div>
+        <div class="vu-bar-row">
+          <span class="vu-bar-lbl rec-vu-lbl">R</span>
+          <div class="vu-bar-track">
+            <div class="vu-bar-fill" id="rec-vu-r"></div>
+            <div class="vu-bar-peak" id="rec-vu-peak-r"></div>
+          </div>
+          <div class="vu-bar-clip rec-vu-clip-el" id="rec-vu-clip-r" title="Clip — klikk for å nullstille" data-i18n-title="tooltip.clipReset"></div>
+        </div>
+        <div class="vu-bar-scale-row">
+          <span class="rec-vu-lbl"></span>
+          <div class="vu-bar-scale">
+            <span style="left:0%">−60</span>
+            <span style="left:20%">−48</span>
+            <span style="left:40%">−36</span>
+            <span style="left:60%">−24</span>
+            <span style="left:80%">−12</span>
+            <span style="left:100%">0</span>
+          </div>
+          <div class="vu-bar-clip-spacer"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls strip -->
+    <div class="rec-controls-row">
+      <div class="rec-timer-block">
+        <div class="rec-timer" id="rec-timer">00:00:00</div>
+        <div class="rec-meta">
+          <div class="rec-meta-item">
+            <div class="rec-meta-label" data-i18n="recording.filesize">filstørrelse</div>
+            <div class="rec-meta-val" id="rec-size">0 MB</div>
+          </div>
+          <div class="rec-meta-item">
+            <div class="rec-meta-label" data-i18n="recording.diskLeft">diskplass igjen</div>
+            <div class="rec-meta-val" id="rec-disk">—</div>
+          </div>
+        </div>
+        <div class="rec-savepath" id="rec-savepath"></div>
+      </div>
+      <div class="rec-autostop" id="rec-autostop" style="display:none">
+        <div class="rec-autostop-label">Auto-stopp om</div>
+        <div class="rec-autostop-countdown" id="rec-autostop-countdown">—</div>
+        <div class="rec-autostop-actions">
+          <button class="btn-extend" id="btn-extend-30">+ 30 min</button>
+          <button class="btn-cancel-sched" id="btn-cancel-autostop">Avbryt auto-stopp</button>
+        </div>
+      </div>
+      <button class="btn-stop-big" id="btn-stop-overlay" data-i18n="recording.stop">Trykk for å stoppe opptaket</button>
+    </div>
+
+    <!-- Video preview inside recording overlay (only shown when video is active) -->
+    <div id="rec-video-section" class="rec-video-section" style="display:none">
+      <div class="rec-video-header">
+        <div style="display:flex;align-items:center;gap:6px">
+          <svg viewBox="0 0 20 20" width="13" height="13" fill="currentColor" style="opacity:.7"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zm12.553 1.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/></svg>
+          <span class="rec-video-label">KAMERA</span>
+          <span id="rec-video-bytes" class="rec-video-bytes">0 MB</span>
+        </div>
+      </div>
+      <div class="rec-video-wrap">
+        <img id="rec-video-preview-img" class="rec-video-img" alt="" style="display:none" />
+        <div id="rec-video-placeholder" class="rec-video-placeholder">Starter kamera…</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="rec-reconnect" class="rec-reconnect" style="display:none">
+    <span class="rec-reconnect-icon">⚠</span>
+    <span class="rec-reconnect-text" data-i18n="recording.reconnecting">Lydkilde frakoblet — kobler til på nytt</span>
+    <span class="rec-reconnect-countdown" id="rec-reconnect-countdown">10</span>
+    <span class="rec-reconnect-unit" data-i18n="recording.reconnectSecs">s</span>
+  </div>
+</div>
+
+<!-- Stop confirm — primary action is "continue" so an accidental Enter doesn't stop -->
+<div id="modal-confirm-stop" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true" aria-labelledby="modal-confirm-stop-title">
+  <div class="modal modal-sm">
+    <h2 id="modal-confirm-stop-title" data-i18n="recording.confirmTitle">Stopp opptak?</h2>
+    <p data-i18n="recording.confirmBody">Opptaket vil bli lagret frem til nå.</p>
+    <div class="btn-row mt">
+      <button class="btn-primary" id="btn-confirm-cancel" data-i18n="recording.confirmCancel" autofocus>Fortsett opptak</button>
+      <button class="btn-danger" id="btn-confirm-stop" data-i18n="recording.confirmStop">Ja, stopp</button>
+    </div>
+  </div>
+</div>
+
+<!-- Onboarding first-run wizard -->
+<div id="onboarding-overlay" class="ob-overlay" style="display:none">
+  <div class="ob-card">
+    <div class="ob-header">
+      <div class="ob-progress" id="ob-progress"></div>
+      <button class="ob-skip-btn" id="ob-btn-skip-all">Hopp over</button>
+    </div>
+    <div class="ob-body" id="ob-body"></div>
+  </div>
+</div>
+
+<!-- Audio diagnostic modal -->
+<div id="audio-diagnose-modal" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Lydenhetsdiagnose</span>
+      <button class="modal-close" id="btn-audio-diagnose-close">×</button>
+    </div>
+    <pre id="audio-diagnose-body" class="diagnose-body"></pre>
+    <p class="diagnose-hint" data-i18n="general.diagnoseHint">Kopier dette og send til support hvis opptak ikke fungerer.</p>
+  </div>
+</div>
+
+<!-- Note modal -->
+<div id="modal-note" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true">
+  <div class="modal modal-sm">
+    <h2 data-i18n="history.noteTitle">Notat</h2>
+    <p data-i18n="history.noteDesc">Skriv et notat til dette opptaket (valgfritt)</p>
+    <textarea id="note-textarea" class="form-input" rows="3"
+      data-i18n-placeholder="history.notePlaceholder"
+      placeholder="Skriv notat…"
+      style="width:100%;resize:vertical;min-height:70px;font-size:14px;line-height:1.5"></textarea>
+    <div class="btn-row mt">
+      <button class="btn-primary" id="btn-note-save" data-i18n="history.noteSave">Lagre notat</button>
+      <button class="btn-ghost" id="btn-note-cancel" data-i18n="history.noteCancel">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cloud folder picker modal -->
+<div id="cloud-folder-modal" class="modal-backdrop cloud-folder-backdrop" style="display:none" role="dialog" aria-modal="true">
+  <div class="modal modal-sm cloud-folder-modal">
+    <div class="cloud-folder-modal-header">
+      <h2 id="cloud-folder-modal-title">Velg mappe…</h2>
+      <button id="cloud-folder-modal-close" class="btn-ghost cloud-folder-modal-close" aria-label="Lukk">×</button>
+    </div>
+    <div id="cloud-folder-list" class="cloud-folder-list"></div>
+  </div>
+</div>
+
+<script type="module" src="./api-shim.ts"></script>
+<script type="module" src="./main.ts"></script>
+</body>
+</html>

@@ -177,11 +177,20 @@ pub struct RecordingOpts {
     /// chosen from `Settings::separate_audio_format`. Drives the extract codec via
     /// the shared `audio_encode_args` seam.
     pub separate_audio_format: String,
-    /// Capture resolution tag (`"480p"`/`"720p"`/`"1080p"`) from settings — the
-    /// camera-mode probe TARGET, so a 1080p setting records 1080p (when the camera
-    /// advertises it). Empty → 720p. Serialized (it roundtrips through the planner).
+    /// Capture resolution tag (`"480p"`/`"720p"`/`"1080p"`/`"2160p"`) from
+    /// settings — the camera-mode probe TARGET, so a 1080p setting records 1080p
+    /// (when the camera advertises it). Empty → 720p. Serialized (it roundtrips
+    /// through the planner).
     #[serde(default)]
     pub video_resolution: String,
+    /// Recording video codec tag (`"h264"`/`"h265"`) from settings. Empty/unknown
+    /// → H.264. Drives the `-c:v` choice in the capture args.
+    #[serde(default)]
+    pub video_codec: String,
+    /// Recording video encoder backend (`"software"`/`"hardware"`) from settings.
+    /// `"hardware"` → VideoToolbox on macOS (realtime 4K); ignored off macOS.
+    #[serde(default)]
+    pub video_encoder: String,
     /// The camera INPUT mode the recorder probed at start (a size + framerate the
     /// device actually advertises). NOT sent by the frontend — it's resolved
     /// server-side so avfoundation doesn't reject an unsupported size/rate. `None`
@@ -288,6 +297,11 @@ pub fn build_record_args(
         // The probed camera mode (resolved in `start`); pins a size/rate the
         // device actually advertises so avfoundation opens the camera.
         video_input: opts.video_input,
+        video_codec: match opts.video_codec.as_str() {
+            "h265" | "hevc" => sundayrec_core::editor::VideoCodec::H265,
+            _ => sundayrec_core::editor::VideoCodec::H264,
+        },
+        hw_accel: opts.video_encoder == "hardware",
     };
     build_unified_capture_args(
         platform,
@@ -1853,6 +1867,8 @@ mod tests {
             keep_separate_audio: false,
             separate_audio_format: "wav".into(),
             video_resolution: "720p".into(),
+            video_codec: "h264".into(),
+            video_encoder: "software".into(),
             video_input: None,
         }
     }
@@ -2268,6 +2284,8 @@ mod tests {
             keep_separate_audio: true,
             separate_audio_format: "wav".into(),
             video_resolution: "1080p".into(),
+            video_codec: "h264".into(),
+            video_encoder: "software".into(),
             video_input: None,
         };
         let json = serde_json::to_string(&o).unwrap();

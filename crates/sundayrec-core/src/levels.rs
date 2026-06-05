@@ -138,6 +138,36 @@ fn parse_db_token(token: &str) -> f64 {
     }
 }
 
+/// Parse the file-wide **noise floor** (dBFS) from an astats summary, used to
+/// pick a one-click processing preset (clean vs noisy recording). astats prints
+/// `Noise floor dB: <value>` per-channel and once in its `Overall` block; the
+/// Overall block is printed LAST, so we return the value from the LAST matching
+/// line. `-inf`/`nan` and non-finite tokens are ignored (return `None`), as is a
+/// summary with no noise-floor line at all.
+pub fn parse_noise_floor_db(stderr: &str) -> Option<f64> {
+    const MARKER: &str = "Noise floor dB:";
+    let mut last: Option<f64> = None;
+    for line in stderr.lines() {
+        if let Some(idx) = line.find(MARKER) {
+            let tail = line[idx + MARKER.len()..].trim();
+            let token: String = tail
+                .chars()
+                .take_while(|c| !c.is_whitespace())
+                .collect::<String>()
+                .to_ascii_lowercase();
+            if token.contains("inf") || token.contains("nan") {
+                continue;
+            }
+            if let Ok(v) = token.parse::<f64>() {
+                if v.is_finite() {
+                    last = Some(v);
+                }
+            }
+        }
+    }
+    last
+}
+
 /// Extract `N` from a `… Channel: N` line, ignoring address noise / whitespace.
 fn parse_channel_header(line: &str) -> Option<u32> {
     let idx = line.find(CHANNEL_MARKER)?;
@@ -260,6 +290,25 @@ mod tests {
         let lv = parse_levels(chunk).expect("nan levels parse to floor");
         assert_eq!(lv.peak_db_left, SILENCE_FLOOR_DB);
         assert_eq!(lv.peak_db_right, None);
+    }
+
+    #[test]
+    fn noise_floor_takes_last_overall_value() {
+        let chunk = "\
+[Parsed_astats_0 @ 0x1] Channel: 1
+[Parsed_astats_0 @ 0x1] Noise floor dB: -58.2
+[Parsed_astats_0 @ 0x1] Channel: 2
+[Parsed_astats_0 @ 0x1] Noise floor dB: -57.9
+[Parsed_astats_0 @ 0x1] Overall
+[Parsed_astats_0 @ 0x1] Noise floor dB: -55.1";
+        assert_eq!(parse_noise_floor_db(chunk), Some(-55.1));
+    }
+
+    #[test]
+    fn noise_floor_none_when_absent_or_non_finite() {
+        assert_eq!(parse_noise_floor_db("no stats here"), None);
+        assert_eq!(parse_noise_floor_db("Noise floor dB: -inf"), None);
+        assert_eq!(parse_noise_floor_db("Noise floor dB: nan"), None);
     }
 
     #[test]
