@@ -353,16 +353,6 @@ export async function startRecordingWithOpts(opts: RecordingOpts): Promise<void>
 
 // ── Audio error translation ──────────────────────────────────────────────────
 
-function translateAudioError(err: Error): string {
-  switch (err.name) {
-    case 'NotAllowedError':      return t('recording.errorPermission',    'Mikrofontilgang nektet — sjekk systeminnstillingene')
-    case 'NotFoundError':        return t('recording.errorDeviceNotFound', 'Lydenheten ble ikke funnet — sjekk lydkort og tillatelser')
-    case 'OverconstrainedError': return t('recording.errorOverconstrained','Lydenheten støtter ikke valgte innstillinger')
-    case 'NotReadableError':     return t('recording.errorNotReadable',    'Lydenheten er i bruk av et annet program')
-    default:                     return err.message
-  }
-}
-
 // Maps error codes from native-recorder (main process) to user-facing strings
 export function translateNativeError(code: string): string {
   switch (code) {

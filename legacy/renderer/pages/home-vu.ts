@@ -1,5 +1,5 @@
 import { settings } from '../state'
-import { buildInputRouter, getAudioDevices, rVuChannel } from '../audio/capture'
+import { buildInputRouter, rVuChannel } from '../audio/capture'
 import { makeVuState, tickVU, stopVuState } from '../audio/vu'
 import type { VuState } from '../audio/vu'
 import { t } from '../i18n'

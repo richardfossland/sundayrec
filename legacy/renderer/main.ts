@@ -2,7 +2,7 @@ import { loadLocale, setApplyHook } from './i18n'
 import { updateSettings } from './state'
 import type { Settings, IntegrationSettings, ServiceLink } from '../types'
 
-import { setupHome, refreshHome, loadRecentHistory, startVideoPreview, stopVideoPreview, loadVideoInfoStrip, deactivateHome } from './pages/home'
+import { setupHome, refreshHome, stopVideoPreview, loadVideoInfoStrip, deactivateHome } from './pages/home'
 import { stopVU, setupClipReset } from './pages/home-vu'
 import { setupAudioPage, applyAudioSettingsToUI, renderDeviceList, stopMonitoring } from './pages/audio-page'
 import { setupSchedulePage, applyScheduleSettingsToUI, renderDayPickers, renderSlotsList } from './pages/schedule-page'

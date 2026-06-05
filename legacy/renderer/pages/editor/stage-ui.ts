@@ -41,8 +41,8 @@ async function runStageImport(): Promise<void> {
   const manifestPath = await pickFile(['.json'])
   if (!manifestPath) return
 
-  const wasStreamed = !!(window.api as unknown as Record<string, unknown>)  // henter fra stream-settings hvis tilgjengelig
-  // Enkelt: sjekk om SundayRec faktisk streamet (settings.streamDestinations)
+  // Sjekk om SundayRec faktisk streamet (settings.streamDestinations) →
+  // sendes som was_streamed til stage_import_manifest.
   const settings = await window.api.getSettings()
   const isStreaming = !!(settings as { streamDestinations?: unknown[] }).streamDestinations?.length
 

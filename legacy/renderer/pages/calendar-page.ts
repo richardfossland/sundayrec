@@ -1,5 +1,5 @@
 import { t, tArr, currentLang } from '../i18n'
-import { settings, patchSettings } from '../state'
+import { settings } from '../state'
 import { escHtml, isoDate, flashMsg } from '../helpers'
 import { getChurchHolidays } from '../../shared/church-calendar'
 

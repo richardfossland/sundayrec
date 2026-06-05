@@ -138,7 +138,6 @@ export function xToMainSec(x: number, W: number): number {
 /** Returns 'intro' | 'main' | 'outro' for a given pixel x. Used by drag-and-drop
  *  to route a dropped file to the right intro/outro slot. */
 export function getRegionAtX(x: number, W: number): 'intro' | 'main' | 'outro' {
-  const g = getLayoutGeom(W)
   // The user's UX expectation is: drop on LEFT third = intro, RIGHT third = outro.
   // We honour that geometrically even when the actual intro slot is narrow
   // (or absent), so users can SET an intro by dragging onto the left third

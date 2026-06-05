@@ -1,4 +1,3 @@
-import { t } from '../../i18n'
 import { settings } from '../../state'
 import type { RecordingMetadata } from '../../../types'
 import { E, $, clearDirty, VIDEO_EXTS, PROBE_EXTS, WEB_AUDIO_EXTS } from './state'

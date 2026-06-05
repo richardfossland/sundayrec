@@ -1,7 +1,7 @@
 import { t, currentLang } from '../i18n'
 import { settings, patchSettings } from '../state'
-import { fmtCountdown, fmtStorageHours, fmtDate, escHtml, flashMsg } from '../helpers'
-import { startVU, stopVU } from './home-vu'
+import { fmtCountdown, fmtStorageHours, fmtDate, flashMsg } from '../helpers'
+import { startVU } from './home-vu'
 import { getAudioDevices } from '../audio/capture'
 import { refreshReviewQueue, setupReviewQueueListeners } from './review-queue-home'
 
@@ -107,7 +107,6 @@ function relocateVuForVideoMode(enabled: boolean): void {
 }
 
 type HomeVideoDevice = { name: string; index: number }
-let homeVideoDevices: HomeVideoDevice[] = []
 
 function applyVideoFlipState(): void {
   const flipped = settings.videoFlip ?? false
@@ -225,7 +224,6 @@ export async function refreshHomeVideoDevices(): Promise<void> {
 
   try {
     const devices = await window.api.listVideoDevices() as HomeVideoDevice[]
-    homeVideoDevices = devices
     sel.innerHTML = ''
 
     const blank = document.createElement('option')

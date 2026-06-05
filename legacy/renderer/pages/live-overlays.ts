@@ -79,7 +79,7 @@ function renderOverlayRow(ov: OverlayConfig): string {
   const chromaOn = !!ov.chromaKey
   const chromaColor = ov.chromaKey?.color ?? '#00FF00'
   const chromaSim   = ov.chromaKey?.similarity ?? 0.10
-  const chromaBlend = ov.chromaKey?.blend ?? 0.10
+  // NB: chroma "blend" har ingen UI-kontroll ennå (fast 0.1 i updateChroma).
 
   return `
   <div class="overlay-row" data-overlay-id="${escHtml(ov.id)}">

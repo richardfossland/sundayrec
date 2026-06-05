@@ -106,7 +106,7 @@ export async function refreshVideoDevices(): Promise<void> {
   if (!selectEl) return
 
   selectEl.disabled = true
-  const oldVal = selectEl.value
+  // (selection is restored by videoDeviceName below, not the transient value)
   selectEl.innerHTML = '<option>Leter etter kameraer…</option>'
 
   try {
