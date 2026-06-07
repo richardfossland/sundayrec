@@ -40,6 +40,7 @@ pub mod media;
 // source-discovery/pixfmt/input-arg logic is `sundayrec_core::ndi`; this seam
 // returns `feature_disabled` (default) or a clear "NDI SDK not bundled" error.
 pub mod ndi;
+pub mod platform;
 pub mod preflight;
 // PU-3 podcast RSS publish — default-off `publish` feature (NETWORK-UNVERIFIED).
 // The XML shaping is `sundayrec_core::feed`; this seam maps history + writes/uploads.
@@ -84,7 +85,27 @@ pub fn run() {
         .with_target(false)
         .init();
 
-    let builder = tauri::Builder::default()
+    // Windows orphan-guard: before anything spawns, put THIS process in a Job
+    // Object that kills its children when it dies (even on a Task-Manager kill), so
+    // a crashed/force-quit SundayRec never leaves an ffmpeg holding the audio
+    // device. No-op off Windows. (FIKS 2b.)
+    crate::platform::guard_child_processes();
+
+    let builder = tauri::Builder::default();
+    // Single-instance MUST be the FIRST plugin (Tauri requirement). A second launch
+    // focuses the existing window instead of starting another process — the
+    // root-cause fix for the piled-up instances that crashed Windows Audio. (FIKS 1.)
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        use tauri::Manager;
+        tracing::info!("a second SundayRec launch was blocked — focusing the existing window");
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.show();
+            let _ = w.unminimize();
+            let _ = w.set_focus();
+        }
+    }));
+    let builder = builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
@@ -382,6 +403,20 @@ pub fn run() {
             commands::update::update_download_install,
             commands::update::update_relaunch,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        // FIKS 2a: on app exit, stop every capture sidecar FIRST so nothing keeps
+        // the audio/camera device open (graceful complement to the Job Object).
+        // Best-effort — `stop()` is safe to call when idle.
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                use tauri::Manager;
+                app_handle
+                    .state::<recorder::engine::RecorderEngine>()
+                    .stop();
+                app_handle.state::<media::preview::PreviewEngine>().stop();
+                app_handle.state::<audio::vu::VuEngine>().stop();
+                tracing::info!("app exit requested — stopped recorder/preview/vu sidecars");
+            }
+        });
 }

@@ -104,6 +104,11 @@ tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2.7.1"
 # `process` plugin: relaunch/exit, used by the updater flow later.
 tauri-plugin-process = "2"
+# Single-instance lock: a second launch focuses the running window instead of
+# starting another process. On a shared church PC users kept re-opening the app,
+# piling up instances that each grab audio and crash the Windows Audio service —
+# this is the root-cause fix for that. Desktop-only (the only target here).
+tauri-plugin-single-instance = "2"
 # Native notifications — the scheduler (Fase 5) fires "recording starts in N
 # min" reminders and preflight/missed alerts from the backend, even when the
 # window is hidden in the tray.
@@ -233,6 +238,16 @@ tauri-plugin-updater = { version = "2", optional = true }
 # the `asio` feature).
 [target.'cfg(windows)'.dependencies]
 ringbuf = "0.4"
+# Win32 Job Object APIs for the orphan-guard (`platform::guard_child_processes`):
+# put the process in a kill-on-close job so no ffmpeg child outlives SundayRec,
+# even on a hard kill. `windows-sys` (raw FFI) is chosen over `windows` for its
+# far more stable API surface. Tauri already pulls it transitively.
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }
 
 # ── macOS-only: trackpad haptics (Force Touch) ───────────────────────────────
 # The editor fires subtle haptic taps via `NSHapticFeedbackManager`. These are
