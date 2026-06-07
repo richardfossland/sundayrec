@@ -191,6 +191,10 @@ pub struct RecordingOpts {
     /// `"hardware"` → VideoToolbox on macOS (realtime 4K); ignored off macOS.
     #[serde(default)]
     pub video_encoder: String,
+    /// Windows escape hatch: force the legacy ffmpeg DirectShow audio path instead
+    /// of the modern cpal (WASAPI/ASIO) capture. Default `false`. No effect on macOS.
+    #[serde(default)]
+    pub classic_directshow: bool,
     /// The camera INPUT mode the recorder probed at start (a size + framerate the
     /// device actually advertises). NOT sent by the frontend — it's resolved
     /// server-side so avfoundation doesn't reject an unsupported size/rate. `None`
@@ -497,28 +501,13 @@ impl RecorderEngine {
                 ))
             }
         };
-        // ASIO devices are NOT dshow/avfoundation inputs, so they won't appear in
-        // the ffmpeg device list — detect them first and skip the ffmpeg match. The
-        // capture itself runs through cpal (see `run_asio_session` below); this
-        // `FfmpegDevice` only carries the name for history/labels. Always `false`
-        // off-Windows / without the `asio` feature, so non-ASIO + macOS are
-        // unaffected and fall through to the normal ffmpeg match.
-        let wants_asio = crate::audio::asio::is_asio_device(&opts.audio_device_name);
-        // `audio` is `mut` so the ASIO branch can REASSIGN it to a real dshow match
-        // on fallback (ASIO failed → record via WASAPI/dshow instead). For a
-        // genuine ASIO device the synthetic entry only carries the name for labels.
-        let mut audio = if wants_asio {
-            FfmpegDevice::new(opts.audio_device_name.clone(), "asio", None)
-        } else {
-            find_best_device_match(&inv.audio_inputs, &opts.audio_device_name)
-                .cloned()
-                .ok_or_else(|| {
-                    AppError::Recording(format!(
-                        "no audio device matched '{}'",
-                        opts.audio_device_name
-                    ))
-                })?
-        };
+        // Match the selected mic against ffmpeg's dshow/avfoundation list. On
+        // Windows the cpal capture path (below) addresses the device BY NAME via
+        // cpal, so a dshow match is not required there — keep it OPTIONAL so an
+        // ASIO-only / cpal-only device doesn't error here. It is still needed for
+        // the macOS path and the Windows dshow fallback.
+        let dshow_audio: Option<FfmpegDevice> =
+            find_best_device_match(&inv.audio_inputs, &opts.audio_device_name).cloned();
         // Video resolution uses the dedicated video-input list + the video match
         // ladder (F2.1). None unless the user enabled video AND a name matches.
         let video = match &opts.video_device_name {
@@ -558,23 +547,34 @@ impl RecorderEngine {
             }
         }
 
-        // ── ASIO capture branch (Windows pro audio) ─────────────────────────
-        // When the selected device is an ASIO interface we capture the audio via
-        // cpal and pipe it into ffmpeg (ffmpeg can't open ASIO). This is a
-        // SELF-CONTAINED supervisor (`run_asio_session`) — split/reconnect/preroll
-        // are out of scope for the ASIO path (v1); everything else (audio-only AND
-        // video+ASIO) flows through it. Non-ASIO + macOS skip this entirely.
-        if wants_asio {
+        // ── Windows: capture audio via cpal (modern API), not ffmpeg/dshow ──────
+        // dshow is an old API that splits pro interfaces into stereo pairs and is
+        // the source of the Windows instability. So on Windows we capture audio
+        // ourselves with cpal — WASAPI for normal devices, ASIO for pro interfaces
+        // — and pipe it into ffmpeg (which still does the camera via dshow + all
+        // encoding). dshow audio remains only as an automatic fallback if cpal
+        // can't start, and the `classic_directshow` setting forces it. macOS keeps
+        // the ffmpeg avfoundation path (run_session) entirely.
+        // `cfg!(windows)` (not `#[cfg]`) so this compiles on every platform — the
+        // call signature is type-checked on macOS even though it only RUNS on
+        // Windows (DCE'd elsewhere; `run_cpal_session` has a non-Windows stub).
+        if cfg!(windows) && !opts.classic_directshow {
+            use crate::recorder::cpal_capture::{run_cpal_session, CpalHostKind};
+            let host_kind = if crate::audio::asio::is_asio_device(&opts.audio_device_name) {
+                CpalHostKind::Asio
+            } else {
+                CpalHostKind::Wasapi
+            };
             let (stop_tx, stop_rx) = tokio::sync::mpsc::channel::<()>(1);
             let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<AppResult<()>>();
             let sup_app = app.clone();
             let last_state = Arc::clone(&self.last_state);
-            // CLONE what the ASIO attempt needs so the originals survive for the
-            // dshow/WASAPI fallback below if ASIO fails to start.
-            let (opts_asio, video_asio, pool_asio) = (opts.clone(), video.clone(), pool.clone());
+            // CLONE what the cpal attempt needs so the originals survive for the
+            // dshow fallback below if cpal fails to start.
+            let (opts_c, video_c, pool_c) = (opts.clone(), video.clone(), pool.clone());
             let supervisor = tauri::async_runtime::spawn(async move {
-                crate::recorder::asio::run_asio_session(
-                    sup_app, pool_asio, opts_asio, video_asio, stop_rx, ready_tx, last_state,
+                run_cpal_session(
+                    host_kind, sup_app, pool_c, opts_c, video_c, stop_rx, ready_tx, last_state,
                 )
                 .await;
             });
@@ -587,40 +587,42 @@ impl RecorderEngine {
                     return Ok(());
                 }
                 ready => {
-                    // ASIO failed to start (driver busy/absent, device vanished, or
+                    // cpal couldn't start (driver busy/absent, device vanished, or
                     // the supervisor died). Don't fail the recording — fall back to
-                    // the WASAPI/dshow capture automatically and notify the UI.
+                    // the dshow capture automatically and notify the UI.
                     supervisor.abort();
                     let err = match ready {
                         Ok(Err(e)) => e,
                         _ => AppError::Recording(
-                            "ASIO recorder supervisor exited before signalling".into(),
+                            "cpal recorder supervisor exited before signalling".into(),
                         ),
                     };
-                    match find_best_device_match(&inv.audio_inputs, &opts.audio_device_name).cloned()
-                    {
-                        Some(dshow) => {
-                            tracing::warn!(
-                                "recorder: ASIO start failed ({err}); falling back to WASAPI/dshow"
-                            );
-                            let _ = app.emit(
-                                ERROR_EVENT,
-                                RecordingEvent {
-                                    code: "asio_fallback".into(),
-                                    message: format!(
-                                        "ASIO utilgjengelig ({err}) — bruker WASAPI i stedet"
-                                    ),
-                                },
-                            );
-                            audio = dshow; // continue into the normal path below
-                        }
-                        // The device exists ONLY as ASIO (no dshow shadow) — there is
-                        // nothing to fall back to, so surface the real ASIO error.
-                        None => return Err(err),
-                    }
+                    tracing::warn!(
+                        "recorder: cpal {host_kind:?} start failed ({err}); falling back to dshow"
+                    );
+                    let _ = app.emit(
+                        ERROR_EVENT,
+                        RecordingEvent {
+                            code: "cpal_fallback".into(),
+                            message: format!(
+                                "Moderne lyd-motor utilgjengelig ({err}) — bruker DirectShow"
+                            ),
+                        },
+                    );
+                    // fall through to the dshow run_session path below.
                 }
             }
         }
+
+        // dshow/avfoundation path: macOS always; Windows only when cpal is disabled
+        // (`classic_directshow`) or failed to start (fallback above). Needs a real
+        // ffmpeg device match — an ASIO-only device with no dshow shadow errors here.
+        let audio = dshow_audio.ok_or_else(|| {
+            AppError::Recording(format!(
+                "no audio device matched '{}'",
+                opts.audio_device_name
+            ))
+        })?;
 
         let (stop_tx, stop_rx) = tokio::sync::mpsc::channel::<()>(1);
         // The "ready" handshake MUST be async: the command awaits it on a Tauri
@@ -1976,6 +1978,7 @@ mod tests {
             video_resolution: "720p".into(),
             video_codec: "h264".into(),
             video_encoder: "software".into(),
+            classic_directshow: false,
             video_input: None,
         }
     }
@@ -2393,6 +2396,7 @@ mod tests {
             video_resolution: "1080p".into(),
             video_codec: "h264".into(),
             video_encoder: "software".into(),
+            classic_directshow: false,
             video_input: None,
         };
         let json = serde_json::to_string(&o).unwrap();

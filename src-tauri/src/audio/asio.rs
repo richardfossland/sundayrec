@@ -233,7 +233,11 @@ pub fn merge_audio_inputs(
 }
 
 // ── Real ASIO enumeration (Windows + feature only) ───────────────────────────
+// cpal 0.17: `SampleRate` is a plain `u32` (no `.0`), and `name()` is deprecated
+// but is still the human device name we match settings against — hence the
+// module-wide `allow(deprecated)`.
 #[cfg(all(target_os = "windows", feature = "asio"))]
+#[allow(deprecated)]
 mod imp {
     use super::*;
     use cpal::traits::{DeviceTrait, HostTrait};
@@ -257,8 +261,8 @@ mod imp {
         if let Ok(configs) = device.supported_input_configs() {
             for cfg in configs {
                 input_channels = input_channels.max(cfg.channels());
-                rate_min = rate_min.min(cfg.min_sample_rate().0);
-                rate_max = rate_max.max(cfg.max_sample_rate().0);
+                rate_min = rate_min.min(cfg.min_sample_rate());
+                rate_max = rate_max.max(cfg.max_sample_rate());
             }
         }
         if let Ok(configs) = device.supported_output_configs() {
@@ -278,7 +282,7 @@ mod imp {
 
         let default_sample_rate = device
             .default_input_config()
-            .map(|c| c.sample_rate().0)
+            .map(|c| c.sample_rate())
             .unwrap_or(0);
 
         AsioDevice {

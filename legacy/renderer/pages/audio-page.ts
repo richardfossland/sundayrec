@@ -45,6 +45,14 @@ export function setupAudioPage(): void {
   // Multi-channel L/R mapping selects (persist the device's channel choice).
   document.getElementById('channel-select-l')?.addEventListener('change', autoSave)
   document.getElementById('channel-select-r')?.addEventListener('change', autoSave)
+
+  // Windows-only "classic DirectShow" escape hatch: reveal the card on Windows and
+  // persist the toggle. On macOS the card stays hidden (no DirectShow there).
+  if (/win/i.test(navigator.userAgent)) {
+    const card = document.getElementById('classic-audio-card')
+    if (card) card.style.display = ''
+    document.getElementById('opt-classic-dshow')?.addEventListener('change', autoSave)
+  }
   // NB: compressor/limiter/EQ/input-volume controls are hidden inert inputs
   // (record-raw philosophy — see saveAudioSettings); no listeners needed.
 
@@ -74,6 +82,8 @@ export function applyAudioSettingsToUI(): void {
     r.checked = r.value === srMode
   })
   updateVolGradient()
+  const classicEl = document.getElementById('opt-classic-dshow') as HTMLInputElement | null
+  if (classicEl) classicEl.checked = !!settings.classicDirectshow
   const compEl = document.getElementById('opt-compressor') as HTMLInputElement | null
   if (compEl) {
     compEl.checked = !!settings.compEnabled
@@ -105,6 +115,7 @@ async function saveAudioSettings(): Promise<void> {
 
   const srMode = ((document.querySelector('input[name="sampleRate"]:checked') as HTMLInputElement | null)
     ?.value ?? 'auto') as 'auto' | 'r44100' | 'r48000'
+  const classicDirectshow = !!(document.getElementById('opt-classic-dshow') as HTMLInputElement | null)?.checked
 
   // NB: the compressor/limiter/EQ/input-volume fields are NOT saved here. They are
   // hidden, inert inputs (record-raw philosophy since v4.31 — dynamics/EQ live in
@@ -116,6 +127,7 @@ async function saveAudioSettings(): Promise<void> {
     deviceChannels,
     channels:       ((document.querySelector('input[name="channels"]:checked') as HTMLInputElement | null)?.value ?? 'stereo') as ChannelMode,
     sampleRateMode: srMode,
+    classicDirectshow,
     // Keep the numeric sampleRate in sync for client-side use (VU monitor + disk
     // estimate). Auto → 48 kHz as a reasonable estimate; the recorder itself uses
     // sampleRateMode (auto = native, no -ar).

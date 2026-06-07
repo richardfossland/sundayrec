@@ -173,6 +173,12 @@ pub struct Settings {
     /// Also keep the standalone high-quality audio file next to a combined MP4?
     #[serde(default)]
     pub keep_separate_audio: bool,
+    /// Windows ONLY escape hatch: force the legacy ffmpeg **DirectShow** audio
+    /// capture instead of the modern cpal (WASAPI/ASIO) path. Default `false` —
+    /// cpal is the standard Windows capture (more stable, full multichannel via
+    /// ASIO). Flip on only if cpal misbehaves on a specific rig. No effect on macOS.
+    #[serde(default)]
+    pub classic_directshow: bool,
     /// Container/codec for the standalone audio file extracted alongside a video
     /// recording when `keep_separate_audio` is on. Default `Wav` (lossless, the
     /// safe choice for a "keep the clean audio" sidecar).
@@ -489,6 +495,7 @@ impl Default for Settings {
             video_flip: false,
             output_mode: default_output_mode(),
             keep_separate_audio: false,
+            classic_directshow: false,
             separate_audio_format: default_separate_audio_format(),
             av_sync: true,
 

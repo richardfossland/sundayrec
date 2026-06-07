@@ -1,94 +1,104 @@
-//! Windows ASIO capture session — the I/O shell that records from a cpal ASIO
-//! input stream by piping its routed PCM into the existing ffmpeg sidecar.
+//! Windows cpal capture session — records from a cpal input stream (WASAPI by
+//! default, ASIO for pro interfaces) by piping its routed PCM into the existing
+//! ffmpeg sidecar.
 //!
 //! ## Why this exists
 //!
-//! SundayRec records via an ffmpeg sidecar, and ffmpeg CANNOT open an ASIO
-//! device. So when the user picks an ASIO interface we capture the audio
-//! ourselves with cpal (the only ASIO route in Rust), and pipe the raw PCM into
-//! ffmpeg's `stdin` (`-f f32le -i pipe:0`) — ffmpeg still does ALL the
-//! encoding/muxing (and, for a video session, the camera via dshow as input 0).
-//! This keeps the entire downstream pipeline (codecs, containers, history,
-//! preview) unchanged; only the AUDIO SOURCE differs.
+//! SundayRec records via an ffmpeg sidecar, and on Windows ffmpeg's only audio
+//! input is **dshow** (DirectShow) — an old API that splits pro multichannel
+//! interfaces into stereo pairs and is the source of the "works sometimes"
+//! Windows instability. ffmpeg has NO WASAPI input and CANNOT do ASIO. So on
+//! Windows we capture the audio ourselves with **cpal** (whose Windows host is
+//! WASAPI, plus ASIO when built with `--features asio`) and pipe the raw PCM into
+//! ffmpeg's `stdin` (`-f f32le -i pipe:0`) — ffmpeg still does ALL encoding/muxing
+//! (and, for a video session, the camera via dshow as input 0). The entire
+//! downstream pipeline (codecs, containers, history, preview) is unchanged; only
+//! the AUDIO SOURCE moves from dshow to cpal.
+//!
+//! macOS is untouched: ffmpeg `avfoundation` → Core Audio already exposes the
+//! aggregate device as one, so the engine keeps its existing path there.
 //!
 //! ## Architecture (mirrors [`crate::recorder::two_process`]'s self-contained shape)
 //!
 //! ```text
-//!   cpal ASIO stream  ──(routed f32 PCM)──►  ringbuf  ──►  writer task  ──►  ffmpeg stdin
-//!   (dedicated thread; the Stream is !Send                 (tokio task)        │
-//!    so it is built + held on its own thread,                                  ▼
-//!    exactly like audio/vu.rs)                                            encode/mux → file
+//!   cpal stream (WASAPI|ASIO) ─(routed f32 PCM)─► ringbuf ─► writer task ─► ffmpeg stdin
+//!   (dedicated thread; the Stream is !Send                  (tokio task)        │
+//!    so it is built + held on its own thread,                                   ▼
+//!    exactly like audio/vu.rs)                                             encode/mux → file
 //! ```
 //!
 //!   - **Stop = EOF on the pipe.** stdin carries PCM, so we CANNOT also send the
-//!     `q` graceful-stop nudge the rest of the recorder uses. Instead the writer
-//!     drains the ring, drops `ChildStdin` (EOF), and ffmpeg finalises the
-//!     container cleanly.
-//!   - **Channel routing in the callback** ([`crate::audio::asio::build_route_plan`]):
-//!     the callback copies only the chosen channel indices, so the pipe carries
-//!     exactly the recorded layout and ffmpeg needs no `pan` filter.
+//!     `q` graceful-stop nudge; the writer drains the ring, drops `ChildStdin`
+//!     (EOF), and ffmpeg finalises the container cleanly.
+//!   - **Channel routing + sample conversion in the callback**: the callback
+//!     converts ANY sample format to f32 (cpal `from_sample`, so 24-bit pro
+//!     devices work) and copies only the chosen channel indices
+//!     ([`crate::audio::asio::build_route_plan`]), so the pipe carries exactly the
+//!     recorded layout and ffmpeg needs no `pan` filter.
 //!
-//! ## v1 scope (the rest falls back to the dshow/WASAPI path)
+//! ## Scope (the rest falls back to the dshow path)
 //!
-//! Audio-only AND video+ASIO are supported. **Split, reconnect, preroll, live
-//! levels and stop-on-silence are NOT** wired on the ASIO path (they assume an
-//! ffmpeg-managed input / a `q` stop). Manual-max auto-stop IS honoured (it is a
-//! host timer). A cpal stream error ends the session cleanly (finalise what we
-//! have) rather than reconnecting — same honest boundary as the two-process path.
+//! Audio-only AND video+cpal-audio are supported. **Split, reconnect, preroll,
+//! live levels and stop-on-silence are NOT** wired on the cpal path (they assume
+//! an ffmpeg-managed input / a `q` stop). Manual-max auto-stop IS honoured. A cpal
+//! stream error ends the session cleanly (finalise what we have) rather than
+//! reconnecting — same honest boundary as the two-process path. When cpal can't
+//! START, the engine falls back to the dshow capture automatically (see
+//! `engine::start`).
 //!
-//! ## ⚠️ HARDWARE-UNVERIFIED — Windows + ASIO only
+//! ## ⚠️ HARDWARE-UNVERIFIED — Windows only
 //!
-//! All of this compiles only under `#[cfg(all(target_os = "windows", feature =
-//! "asio"))]` and can only be exercised on a Windows rig with an ASIO driver
-//! (ASIO4ALL suffices). The pure parts (arg building, channel routing) live in
-//! [`sundayrec_core::capture`] / [`crate::audio::asio`] and ARE unit-tested
-//! off-Windows. Off-Windows this module is a stub that signals a clear error
-//! (it is never reached — `is_asio_device` is `false` there).
+//! The capture path compiles only under `#[cfg(windows)]` (ASIO host-open under
+//! the extra `feature = "asio"`) and can only be exercised on a Windows rig. The
+//! pure parts (arg building, channel routing) live in [`sundayrec_core::capture`]
+//! / [`crate::audio::asio`] and ARE unit-tested off-Windows. Off-Windows this
+//! module is a stub that signals a clear error (never reached — the engine only
+//! routes here on Windows).
 
-#[cfg(all(target_os = "windows", feature = "asio"))]
-pub use imp::run_asio_session;
+/// Which cpal host to capture through. WASAPI is the default Windows path
+/// (replaces dshow for normal devices); ASIO is the pro-interface path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CpalHostKind {
+    Wasapi,
+    Asio,
+}
 
-#[cfg(not(all(target_os = "windows", feature = "asio")))]
-use crate::error::AppResult;
-#[cfg(not(all(target_os = "windows", feature = "asio")))]
-use crate::recorder::engine::RecordingOpts;
-#[cfg(not(all(target_os = "windows", feature = "asio")))]
-use tauri::AppHandle;
+#[cfg(windows)]
+pub use imp::run_cpal_session;
 
-/// Off-Windows / feature-off stub. Never called in practice (the recorder only
-/// branches here when [`crate::audio::asio::is_asio_device`] is true, which is
-/// always `false` here), but it keeps `start()` reading identically on every
-/// platform. Signals a clear error through the ready channel.
-#[cfg(not(all(target_os = "windows", feature = "asio")))]
+#[cfg(not(windows))]
 #[allow(clippy::too_many_arguments)]
-pub async fn run_asio_session(
-    _app: AppHandle,
+pub async fn run_cpal_session(
+    _host_kind: CpalHostKind,
+    _app: tauri::AppHandle,
     _pool: Option<sqlx::SqlitePool>,
-    _opts: RecordingOpts,
+    _opts: crate::recorder::engine::RecordingOpts,
     _video: Option<sundayrec_core::device_match::FfmpegDevice>,
     _stop_rx: tokio::sync::mpsc::Receiver<()>,
-    ready_tx: tokio::sync::oneshot::Sender<AppResult<()>>,
+    ready_tx: tokio::sync::oneshot::Sender<crate::error::AppResult<()>>,
     _last_state: std::sync::Arc<std::sync::Mutex<sundayrec_core::recorder::RecorderState>>,
 ) {
     let _ = ready_tx.send(Err(crate::error::AppError::Recording(
-        "ASIO capture is only available on Windows builds compiled with --features asio".into(),
+        "cpal capture is only available on Windows".into(),
     )));
 }
 
-#[cfg(all(target_os = "windows", feature = "asio"))]
+#[cfg(windows)]
+#[allow(deprecated)] // cpal 0.17 deprecates `name()`; still the human device name we match settings against.
 mod imp {
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::{Arc, Mutex};
 
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-    use cpal::SampleFormat;
+    use cpal::{FromSample, Sample, SampleFormat};
     use sqlx::SqlitePool;
-    use sundayrec_core::capture::{build_asio_audio_args, build_asio_video_args};
+    use sundayrec_core::capture::{build_cpal_pipe_audio_args, build_cpal_pipe_video_args};
     use sundayrec_core::device_match::FfmpegDevice;
     use sundayrec_core::recorder::RecorderState;
     use tauri::{AppHandle, Emitter};
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
+    use super::CpalHostKind;
     use crate::audio::asio::{build_route_plan, route_frame, ChannelRoute};
     use crate::db::store::{insert_recording, RecordingRow};
     use crate::error::{AppError, AppResult};
@@ -98,148 +108,168 @@ mod imp {
         FINISHED_EVENT, STATE_EVENT,
     };
 
-    /// Ring capacity in f32 samples: ~500 ms of stereo audio at 96 kHz
-    /// (96000 × 2 × 0.5 ≈ 96k). A generous cushion so a transient writer/pipe
-    /// stall never drops samples; on overrun the callback drops the newest block
-    /// (and bumps a counter) rather than ever blocking the real-time thread.
+    /// Ring capacity in f32 samples: ~500 ms of stereo audio at 96 kHz. A generous
+    /// cushion so a transient writer/pipe stall never drops samples; on overrun the
+    /// callback drops the newest block (and bumps a counter) — it never blocks the
+    /// real-time thread.
     const RING_CAPACITY: usize = 96_000;
 
-    /// Resolve the OUTPUT channel count for a route plan (1 for mono modes, 2 for
-    /// stereo) — the number of samples the plan emits per input frame.
+    /// Open the requested cpal host. WASAPI is always available on Windows; ASIO
+    /// only when compiled with `--features asio`.
+    fn open_host(kind: CpalHostKind) -> Result<cpal::Host, String> {
+        match kind {
+            CpalHostKind::Wasapi => cpal::host_from_id(cpal::HostId::Wasapi)
+                .map_err(|e| format!("could not open WASAPI host: {e}")),
+            CpalHostKind::Asio => {
+                #[cfg(feature = "asio")]
+                {
+                    cpal::host_from_id(cpal::HostId::Asio)
+                        .map_err(|e| format!("could not open ASIO host: {e}"))
+                }
+                #[cfg(not(feature = "asio"))]
+                {
+                    Err("ASIO support not compiled in (build with --features asio)".to_string())
+                }
+            }
+        }
+    }
+
+    /// Find an input device by name (empty → host default).
+    fn find_device(host: &cpal::Host, name: &str) -> Result<cpal::Device, String> {
+        if name.is_empty() {
+            return host
+                .default_input_device()
+                .ok_or_else(|| "no default input device".to_string());
+        }
+        host.input_devices()
+            .map_err(|e| format!("listing input devices: {e}"))?
+            .find(|d| d.name().ok().as_deref() == Some(name))
+            .ok_or_else(|| format!("input device not found: {name}"))
+    }
+
+    /// The OUTPUT channel count of a route plan (1 mono / 2 stereo).
     fn out_channels(plan: &[ChannelRoute]) -> u8 {
         plan.len() as u8
     }
 
-    /// Probe an ASIO device's stream config WITHOUT keeping the (`!Send`) handle:
-    /// returns the native sample rate, total input-channel count, and sample
-    /// format as plain `Copy` values the async side can use to build the ffmpeg
-    /// args. Runs on a blocking thread (cpal host calls block).
-    fn probe_asio_config(device_name: &str) -> AppResult<(u32, u16, SampleFormat)> {
-        let host = cpal::host_from_id(cpal::HostId::Asio)
-            .map_err(|e| AppError::Recording(format!("could not open ASIO host: {e}")))?;
-        let device = host
-            .devices()
-            .map_err(|e| AppError::Recording(format!("listing ASIO devices: {e}")))?
-            .find(|d| d.name().ok().as_deref() == Some(device_name))
-            .ok_or_else(|| AppError::Recording(format!("ASIO device not found: {device_name}")))?;
+    /// Probe a device's stream config WITHOUT keeping the (`!Send`) handle: returns
+    /// the native sample rate, total input-channel count, and sample format as
+    /// plain `Copy` values for building the ffmpeg args. Runs on a blocking thread.
+    fn probe_config(
+        host_kind: CpalHostKind,
+        device_name: &str,
+    ) -> AppResult<(u32, u16, SampleFormat)> {
+        let host = open_host(host_kind).map_err(AppError::Recording)?;
+        let device = find_device(&host, device_name).map_err(AppError::Recording)?;
         let cfg = device
             .default_input_config()
-            .map_err(|e| AppError::Recording(format!("querying ASIO input config: {e}")))?;
-        Ok((cfg.sample_rate().0, cfg.channels(), cfg.sample_format()))
+            .map_err(|e| AppError::Recording(format!("querying input config: {e}")))?;
+        Ok((cfg.sample_rate(), cfg.channels(), cfg.sample_format()))
     }
 
-    /// The cpal ASIO stream thread. Opens the device, builds an input stream whose
-    /// callback routes the chosen channels into `prod`, plays it, then parks until
-    /// `stop` flips — at which point it drops the stream (stopping capture). The
-    /// `!Send` `Stream` never leaves this thread (the same discipline as
-    /// `audio/vu.rs`). Reports the build result through `built_tx` exactly once.
+    /// Build an input stream for sample type `T`: convert each sample to f32 via
+    /// cpal `from_sample` (covers i16/i32/f32/**I24**/u16/…), route the chosen
+    /// channels, and push into the ring. `conv` + `scratch` are allocated once here,
+    /// never in the real-time callback.
+    #[allow(clippy::too_many_arguments)]
+    fn build_typed<T>(
+        device: &cpal::Device,
+        config: &cpal::StreamConfig,
+        total: usize,
+        plan: Vec<ChannelRoute>,
+        mut prod: ringbuf::HeapProd<f32>,
+        dropped: Arc<AtomicU64>,
+        err_fn: impl FnMut(cpal::StreamError) + Send + 'static,
+    ) -> Result<cpal::Stream, cpal::BuildStreamError>
+    where
+        T: cpal::SizedSample,
+        f32: FromSample<T>,
+    {
+        use ringbuf::traits::Producer;
+        let mut conv: Vec<f32> = Vec::with_capacity(4096);
+        let mut scratch: Vec<f32> = Vec::with_capacity(4096);
+        device.build_input_stream(
+            config,
+            move |data: &[T], _: &cpal::InputCallbackInfo| {
+                if total == 0 {
+                    return;
+                }
+                conv.clear();
+                conv.extend(data.iter().map(|&s| f32::from_sample(s)));
+                scratch.clear();
+                for frame in conv.chunks_exact(total) {
+                    route_frame(&plan, frame, &mut scratch);
+                }
+                let pushed = prod.push_slice(&scratch);
+                if pushed < scratch.len() {
+                    dropped.fetch_add((scratch.len() - pushed) as u64, Ordering::Relaxed);
+                }
+            },
+            err_fn,
+            None,
+        )
+    }
+
+    /// The cpal stream thread. Reopens the host (the `!Send` `Stream`/`Device`
+    /// never leave this thread, exactly like `audio/vu.rs`), builds + plays the
+    /// stream, then parks until `stop` flips and drops it. Reports the build result
+    /// through `built_tx` exactly once.
     #[allow(clippy::too_many_arguments)]
     fn stream_thread(
+        host_kind: CpalHostKind,
         device_name: String,
         sample_rate: u32,
         total_channels: u16,
         sample_format: SampleFormat,
         plan: Vec<ChannelRoute>,
-        mut prod: ringbuf::HeapProd<f32>,
+        prod: ringbuf::HeapProd<f32>,
         stop: Arc<AtomicBool>,
         dropped: Arc<AtomicU64>,
         built_tx: std::sync::mpsc::Sender<Result<(), String>>,
         err_tx: tokio::sync::mpsc::Sender<String>,
     ) {
-        use ringbuf::traits::Producer;
-
         let build = (|| -> Result<cpal::Stream, String> {
-            let host = cpal::host_from_id(cpal::HostId::Asio)
-                .map_err(|e| format!("could not open ASIO host: {e}"))?;
-            let device = host
-                .devices()
-                .map_err(|e| format!("listing ASIO devices: {e}"))?
-                .find(|d| d.name().ok().as_deref() == Some(device_name.as_str()))
-                .ok_or_else(|| format!("ASIO device not found: {device_name}"))?;
-
+            let host = open_host(host_kind)?;
+            let device = find_device(&host, &device_name)?;
             let config = cpal::StreamConfig {
                 channels: total_channels,
-                sample_rate: cpal::SampleRate(sample_rate),
+                sample_rate, // cpal 0.17: SampleRate is a plain u32
                 buffer_size: cpal::BufferSize::Default,
             };
             let total = total_channels as usize;
-            let dropped_cb = Arc::clone(&dropped);
             // On a device error mid-recording (USB pulled, driver reset) cpal calls
-            // this — tell the supervisor so it finalises what we have instead of
-            // hanging on a pipe that will never get more data.
+            // this — tell the supervisor so it finalises instead of hanging on a
+            // pipe that will never get more data.
             let err_fn = move |e: cpal::StreamError| {
-                tracing::error!("ASIO input stream error: {e}");
+                tracing::error!("cpal input stream error: {e}");
                 let _ = err_tx.try_send(e.to_string());
             };
 
-            // Route an interleaved block into the ring. Real-time safe: a reused
-            // scratch buffer (allocated once here, never in the callback) and a
-            // lock-free push. On overrun we drop the newest block + count it.
-            let mut scratch: Vec<f32> = Vec::with_capacity(4096);
-            let route_block = move |samples: &[f32],
-                                    prod: &mut ringbuf::HeapProd<f32>,
-                                    scratch: &mut Vec<f32>| {
-                if total == 0 {
-                    return;
-                }
-                scratch.clear();
-                for frame in samples.chunks_exact(total) {
-                    route_frame(&plan, frame, scratch);
-                }
-                let pushed = prod.push_slice(scratch);
-                if pushed < scratch.len() {
-                    dropped_cb.fetch_add((scratch.len() - pushed) as u64, Ordering::Relaxed);
-                }
-            };
-
+            use cpal::SampleFormat as SF;
             let stream = match sample_format {
-                SampleFormat::F32 => device.build_input_stream(
-                    &config,
-                    move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                        route_block(data, &mut prod, &mut scratch)
-                    },
-                    err_fn,
-                    None,
-                ),
-                SampleFormat::I32 => {
-                    let mut conv: Vec<f32> = Vec::with_capacity(4096);
-                    device.build_input_stream(
-                        &config,
-                        move |data: &[i32], _: &cpal::InputCallbackInfo| {
-                            conv.clear();
-                            conv.extend(data.iter().map(|&s| s as f32 / i32::MAX as f32));
-                            route_block(&conv, &mut prod, &mut scratch)
-                        },
-                        err_fn,
-                        None,
-                    )
+                SF::I8 => build_typed::<i8>(&device, &config, total, plan, prod, dropped, err_fn),
+                SF::I16 => build_typed::<i16>(&device, &config, total, plan, prod, dropped, err_fn),
+                SF::I24 => {
+                    build_typed::<cpal::I24>(&device, &config, total, plan, prod, dropped, err_fn)
                 }
-                SampleFormat::I16 => {
-                    let mut conv: Vec<f32> = Vec::with_capacity(4096);
-                    device.build_input_stream(
-                        &config,
-                        move |data: &[i16], _: &cpal::InputCallbackInfo| {
-                            conv.clear();
-                            conv.extend(data.iter().map(|&s| s as f32 / i16::MAX as f32));
-                            route_block(&conv, &mut prod, &mut scratch)
-                        },
-                        err_fn,
-                        None,
-                    )
-                }
-                other => return Err(format!("unsupported ASIO sample format: {other:?}")),
+                SF::I32 => build_typed::<i32>(&device, &config, total, plan, prod, dropped, err_fn),
+                SF::U8 => build_typed::<u8>(&device, &config, total, plan, prod, dropped, err_fn),
+                SF::U16 => build_typed::<u16>(&device, &config, total, plan, prod, dropped, err_fn),
+                SF::F32 => build_typed::<f32>(&device, &config, total, plan, prod, dropped, err_fn),
+                SF::F64 => build_typed::<f64>(&device, &config, total, plan, prod, dropped, err_fn),
+                other => return Err(format!("unsupported sample format: {other:?}")),
             }
-            .map_err(|e| format!("building ASIO input stream: {e}"))?;
+            .map_err(|e| format!("building input stream: {e}"))?;
 
-            stream.play().map_err(|e| format!("starting ASIO stream: {e}"))?;
+            stream
+                .play()
+                .map_err(|e| format!("starting stream: {e}"))?;
             Ok(stream)
         })();
 
         match build {
             Ok(stream) => {
                 let _ = built_tx.send(Ok(()));
-                // Hold the stream alive until stop. Parking (not busy-looping) keeps
-                // the thread idle; the audio callback runs on cpal's own thread.
                 while !stop.load(Ordering::Relaxed) {
                     std::thread::sleep(std::time::Duration::from_millis(50));
                 }
@@ -269,8 +299,7 @@ mod imp {
                     bytes.extend_from_slice(&s.to_le_bytes());
                 }
                 if stdin.write_all(&bytes).await.is_err() {
-                    // ffmpeg closed its input (e.g. it died) — nothing more to do.
-                    break;
+                    break; // ffmpeg closed its input (e.g. it died)
                 }
             } else if stop.load(Ordering::Relaxed) {
                 break; // stop requested and ring drained
@@ -282,10 +311,11 @@ mod imp {
         drop(stdin); // EOF → ffmpeg flushes + finalises the container
     }
 
-    /// Run an ASIO capture session (audio-only OR video+ASIO-audio). See the
-    /// module header for the architecture and scope.
+    /// Run a cpal capture session (audio-only OR video+cpal-audio) over the given
+    /// host. See the module header for architecture and scope.
     #[allow(clippy::too_many_arguments)]
-    pub async fn run_asio_session(
+    pub async fn run_cpal_session(
+        host_kind: CpalHostKind,
         app: AppHandle,
         pool: Option<SqlitePool>,
         opts: RecordingOpts,
@@ -294,11 +324,16 @@ mod imp {
         ready_tx: tokio::sync::oneshot::Sender<AppResult<()>>,
         last_state: Arc<Mutex<RecorderState>>,
     ) {
+        let label = match host_kind {
+            CpalHostKind::Wasapi => "WASAPI",
+            CpalHostKind::Asio => "ASIO",
+        };
+
         // ── Resolve device config + routing (pure once probed) ───────────────
         let device_name = opts.audio_device_name.clone();
         let probe = {
             let name = device_name.clone();
-            tokio::task::spawn_blocking(move || probe_asio_config(&name)).await
+            tokio::task::spawn_blocking(move || probe_config(host_kind, &name)).await
         };
         let (sample_rate, total_channels, sample_format) = match probe {
             Ok(Ok(v)) => v,
@@ -307,9 +342,7 @@ mod imp {
                 return;
             }
             Err(e) => {
-                let _ = ready_tx.send(Err(AppError::Recording(format!(
-                    "ASIO probe task failed: {e}"
-                ))));
+                let _ = ready_tx.send(Err(AppError::Recording(format!("probe task failed: {e}"))));
                 return;
             }
         };
@@ -325,7 +358,7 @@ mod imp {
         // ── Build ffmpeg args (audio-only or video+pipe) ─────────────────────
         let has_video = video.is_some();
         let args: Vec<String> = match &video {
-            Some(v) => build_asio_video_args(
+            Some(v) => build_cpal_pipe_video_args(
                 &v.name,
                 opts.framerate.max(1),
                 sample_rate,
@@ -334,9 +367,9 @@ mod imp {
                 opts.sample_rate,
                 opts.bitrate_kbps,
                 video_codec_of(&opts),
-                None, // live preview wiring deferred for the ASIO path (v1)
+                None, // live preview wiring deferred for the cpal path
             ),
-            None => build_asio_audio_args(
+            None => build_cpal_pipe_audio_args(
                 sample_rate,
                 out_ch,
                 &opts.output_path,
@@ -347,7 +380,7 @@ mod imp {
 
         // ── Spawn ffmpeg, take stdin + drain stderr ──────────────────────────
         let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
-        tracing::info!(?arg_refs, device = %device_name, sample_rate, out_ch, "recorder: ASIO capture starting");
+        tracing::info!(?arg_refs, host = label, device = %device_name, sample_rate, out_ch, ?sample_format, "recorder: cpal capture starting");
         let mut child = match spawn_ffmpeg(&arg_refs).await {
             Ok(c) => c,
             Err(e) => {
@@ -360,7 +393,7 @@ mod imp {
             None => {
                 let _ = child.start_kill();
                 let _ = ready_tx.send(Err(AppError::Recording(
-                    "ffmpeg gave no stdin pipe for ASIO audio".into(),
+                    "ffmpeg gave no stdin pipe for cpal audio".into(),
                 )));
                 return;
             }
@@ -381,17 +414,16 @@ mod imp {
         };
 
         let (built_tx, built_rx) = std::sync::mpsc::channel::<Result<(), String>>();
-        // A device error mid-recording (USB pulled, driver reset) arrives here from
-        // cpal's error callback so the supervisor can finalise gracefully.
         let (err_tx, mut err_rx) = tokio::sync::mpsc::channel::<String>(1);
         let st_name = device_name.clone();
         let st_plan = plan.clone();
         let st_stop = Arc::clone(&stop);
         let st_dropped = Arc::clone(&dropped);
         let stream_handle = std::thread::Builder::new()
-            .name("asio-capture".into())
+            .name("cpal-capture".into())
             .spawn(move || {
                 stream_thread(
+                    host_kind,
                     st_name,
                     sample_rate,
                     total_channels,
@@ -409,14 +441,15 @@ mod imp {
             Err(e) => {
                 let _ = child.start_kill();
                 let _ = ready_tx.send(Err(AppError::Recording(format!(
-                    "could not spawn ASIO capture thread: {e}"
+                    "could not spawn cpal capture thread: {e}"
                 ))));
                 return;
             }
         };
 
         // Wait for the stream to actually build + play before reporting ready, so a
-        // bad device fails the Start call instead of silently producing nothing.
+        // bad device fails the Start call (→ engine falls back to dshow) instead of
+        // silently producing nothing.
         match tokio::task::spawn_blocking(move || built_rx.recv()).await {
             Ok(Ok(Ok(()))) => {}
             Ok(Ok(Err(e))) => {
@@ -432,7 +465,7 @@ mod imp {
                 stop.store(true, Ordering::Relaxed);
                 let _ = stream_handle.join();
                 let _ = ready_tx.send(Err(AppError::Recording(
-                    "ASIO capture thread exited before signalling".into(),
+                    "cpal capture thread exited before signalling".into(),
                 )));
                 return;
             }
@@ -443,7 +476,7 @@ mod imp {
         set_state(&app, &last_state, RecorderState::Recording);
         let _ = ready_tx.send(Ok(()));
 
-        // ── Run until stop / auto-stop / ffmpeg or stream death ──────────────
+        // ── Run until stop / auto-stop / device or ffmpeg death ──────────────
         let auto_stop = opts.manual_max_minutes;
         let auto_stop_fut = async {
             if auto_stop == 0 {
@@ -455,18 +488,15 @@ mod imp {
         tokio::pin!(auto_stop_fut);
 
         tokio::select! {
-            _ = stop_rx.recv() => tracing::info!("recorder: ASIO — graceful stop requested"),
-            _ = &mut auto_stop_fut => tracing::info!("recorder: ASIO — manual-max auto-stop"),
+            _ = stop_rx.recv() => tracing::info!("recorder: cpal — graceful stop requested"),
+            _ = &mut auto_stop_fut => tracing::info!("recorder: cpal — manual-max auto-stop"),
             msg = err_rx.recv() => {
-                // The ASIO device errored mid-recording (USB pulled / driver reset).
-                // Finalise what we captured and tell the UI plainly.
-                let reason = msg.unwrap_or_else(|| "ASIO device error".into());
-                tracing::warn!(%reason, "recorder: ASIO — device error, finalising");
+                let reason = msg.unwrap_or_else(|| "audio device error".into());
+                tracing::warn!(%reason, "recorder: cpal — device error, finalising");
                 emit_error(&app, "device_disconnected", &reason);
             }
             status = child.wait() => {
-                // ffmpeg died on its own — surface a classified error.
-                tracing::warn!(?status, "recorder: ASIO — ffmpeg exited unexpectedly");
+                tracing::warn!(?status, "recorder: cpal — ffmpeg exited unexpectedly");
                 let tail = stderr_tail.lock().map(|g| g.clone()).unwrap_or_default();
                 emit_error(&app, "ffmpeg_exited", tail.lines().last().unwrap_or("ffmpeg stopped"));
             }
@@ -474,7 +504,7 @@ mod imp {
 
         // ── Tear down: stop stream → writer EOF → ffmpeg finalises ───────────
         set_state(&app, &last_state, RecorderState::Stopping);
-        stop.store(true, Ordering::Relaxed); // stream thread drops the Stream; writer drains then EOFs
+        stop.store(true, Ordering::Relaxed);
         let _ = writer.await; // closes stdin (EOF)
         let _ = child.wait().await; // ffmpeg finalises the container
         let _ = stream_handle.join();
@@ -483,7 +513,7 @@ mod imp {
         }
         let dropped_total = dropped.load(Ordering::Relaxed);
         if dropped_total > 0 {
-            tracing::warn!(dropped_total, "recorder: ASIO — ring overran, samples dropped");
+            tracing::warn!(dropped_total, "recorder: cpal — ring overran, samples dropped");
         }
 
         // ── History + finished event ─────────────────────────────────────────
@@ -502,7 +532,7 @@ mod imp {
             );
         }
         set_state(&app, &last_state, RecorderState::Stopped);
-        tracing::info!("recorder: ASIO session stopped cleanly");
+        tracing::info!(host = label, "recorder: cpal session stopped cleanly");
     }
 
     /// Map the recording opts' video-codec tag to the core enum (H.264 default).
@@ -514,9 +544,8 @@ mod imp {
         }
     }
 
-    /// Emit a `recording://state` payload and update the shared last-state mirror so
-    /// `recording_status` stays consistent. The ASIO path has no reconnects and no
-    /// armed auto-stop deadline to report.
+    /// Emit a `recording://state` payload and update the shared last-state mirror.
+    /// The cpal path has no reconnects and no armed auto-stop deadline to report.
     fn set_state(app: &AppHandle, last_state: &Arc<Mutex<RecorderState>>, to: RecorderState) {
         if let Ok(mut g) = last_state.lock() {
             *g = to;
@@ -560,7 +589,7 @@ mod imp {
             note: None,
         };
         if let Err(e) = insert_recording(pool, row).await {
-            tracing::error!("recorder: ASIO failed to write history row: {e}");
+            tracing::error!("recorder: cpal failed to write history row: {e}");
         }
     }
 
@@ -572,7 +601,7 @@ mod imp {
     {
         let mut lines = BufReader::new(stderr).lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            tracing::trace!(target: "asio_ffmpeg", "{line}");
+            tracing::trace!(target: "cpal_ffmpeg", "{line}");
             if let Ok(mut t) = tail.lock() {
                 t.push_str(&line);
                 t.push('\n');

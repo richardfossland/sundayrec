@@ -184,6 +184,9 @@ export interface Settings {
    *  kHz mixer); the explicit modes force that rate. Maps 1:1 to the Rust
    *  `SampleRate` enum. */
   sampleRateMode?: 'auto' | 'r44100' | 'r48000'
+  /** Windows ONLY escape hatch: force the legacy ffmpeg DirectShow audio capture
+   *  instead of the modern cpal (WASAPI/ASIO) path. Default false. No effect on Mac. */
+  classicDirectshow?: boolean
   /** Input gain as percentage. Valid: 0–200. Default: 100 */
   inputVolume: number
   /** Bass EQ gain in dB. Valid: -24–+24. Default: 0 */

@@ -451,6 +451,8 @@ pub(crate) fn build_opts(
         video_codec: settings.video_codec.clone(),
         // software (libx264/5) or hardware (VideoToolbox, mac) encoder backend.
         video_encoder: settings.video_encoder.clone(),
+        // Windows: force legacy DirectShow audio instead of cpal (WASAPI/ASIO).
+        classic_directshow: settings.classic_directshow,
         // Resolved server-side by the recorder's camera-mode probe at start.
         video_input: None,
     })

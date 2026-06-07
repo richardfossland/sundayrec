@@ -89,7 +89,7 @@ updater = ["dep:tauri-plugin-updater"]
 # as one). Building this on Windows needs the Steinberg ASIO SDK + LLVM/Clang +
 # MSVC — see `docs/BUILD_ASIO.md`. cpal's asio build script is a no-op on
 # non-Windows targets, so `--features asio` is harmless on macOS/Linux CI.
-asio = ["cpal/asio", "dep:ringbuf"]
+asio = ["cpal/asio"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -109,17 +109,15 @@ tauri-plugin-process = "2"
 # window is hidden in the tray.
 tauri-plugin-notification = "2"
 
-# Native audio I/O (CoreAudio / WASAPI) — used by the VU metering engine to
-# read microphone levels in Rust, so the webview never needs `getUserMedia`. The
-# Windows-only `asio` feature turns on `cpal/asio` (see [features]).
-cpal = "0.15"
+# Native audio I/O (CoreAudio / WASAPI / ASIO) — drives the VU metering engine
+# AND the Windows cpal capture path (WASAPI default, ASIO for pro interfaces)
+# that pipes PCM into the ffmpeg sidecar. Pinned to 0.17.3: 0.17 added 24-bit
+# (`I24`) sample support — common native format for pro USB interfaces + ASIO4ALL
+# that 0.15 could not represent — and 0.17.3 carries the ASIO linker fixes (0.17.1
+# had broken ASIO). The Windows-only `asio` feature turns on `cpal/asio` (see
+# [features]).
+cpal = "0.17.3"
 
-# Lock-free SPSC ring buffer between the cpal ASIO real-time callback (producer)
-# and the pipe-writer task (consumer): the audio callback must NEVER block on pipe
-# I/O, so it pushes routed PCM into the ring and the writer drains it into ffmpeg's
-# stdin. Pulled ONLY under `--features asio` (the only consumer is the Windows ASIO
-# capture path). See `recorder::asio`.
-ringbuf = { version = "0.4", optional = true }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -225,6 +223,16 @@ sha2 = { version = "0.10", optional = true }
 # real update needs a signed release + keypair, so it stays out of the default
 # build + CI gate. NETWORK/GUI-UNVERIFIED.
 tauri-plugin-updater = { version = "2", optional = true }
+
+# ── Windows-only: cpal capture pipe buffer ───────────────────────────────────
+# Lock-free SPSC ring buffer between the cpal real-time callback (producer) and
+# the pipe-writer task (consumer): the audio callback must NEVER block on pipe
+# I/O, so it pushes routed PCM into the ring and the writer drains it into
+# ffmpeg's stdin. Used by BOTH the WASAPI (default Windows) and ASIO capture
+# paths in `recorder::cpal_capture`, so it's a Windows-target dep (not tied to
+# the `asio` feature).
+[target.'cfg(windows)'.dependencies]
+ringbuf = "0.4"
 
 # ── macOS-only: trackpad haptics (Force Touch) ───────────────────────────────
 # The editor fires subtle haptic taps via `NSHapticFeedbackManager`. These are

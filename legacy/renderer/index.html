@@ -967,6 +967,21 @@
         <input type="hidden" id="limiter-ceiling" value="-1" />
       </div>
 
+      <!-- Windows-only advanced escape hatch: on Windows audio is captured via the
+           modern cpal engine (WASAPI for normal devices, ASIO for pro interfaces).
+           This forces the legacy DirectShow path if the modern one misbehaves on a
+           specific rig. Revealed by audio-page.ts only on Windows. -->
+      <div class="card" id="classic-audio-card" style="display:none">
+        <div class="card-title" data-i18n="audio.engineTitle">Lyd-motor (avansert)</div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title" data-i18n="audio.classicDshow">Klassisk lyd-motor (DirectShow)</div>
+            <div class="toggle-desc" data-i18n="audio.classicDshowDesc">SundayRec bruker normalt en moderne Windows-lyd-motor (WASAPI, eller ASIO for proff lydutstyr). Slå dette på bare hvis opptak er ustabilt på denne maskinen — da brukes den gamle DirectShow-veien i stedet.</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="opt-classic-dshow" /><span class="toggle-track"></span></label>
+        </div>
+      </div>
+
       <div class="page-footer">
         <button class="btn-primary" id="btn-audio-save" data-i18n="audio.save">Lagre</button>
         <button class="btn-ghost" id="btn-audio-cancel" data-i18n="audio.cancel">Avbryt</button>

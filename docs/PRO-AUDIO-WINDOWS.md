@@ -1,15 +1,17 @@
-# Bruke SundayRec med pro-lydkort på Windows (ASIO)
+# Windows-lyd i SundayRec: moderne lyd-motor (WASAPI + ASIO)
 
-SundayRec støtter **ASIO** på Windows — en lav-latens lyddriver-standard som proff
-lydutstyr bruker. Det løser to vanlige problemer med store lydkort/miksere (f.eks.
-Soundcraft MADI-USB, Behringer X32, RME, Focusrite):
+På Windows tar SundayRec opp lyd via en **moderne lyd-motor** i stedet for det
+gamle DirectShow-API-et som ga ustabile opptak («virker av og til»). Du trenger
+ikke gjøre noe — det skjer automatisk:
 
-- **Alle kanaler under én enhet.** Windows' vanlige lydvei (DirectShow/WASAPI)
-  deler et flerkanals lydkort opp i flere «stereopar». ASIO viser hele kortet som
-  **én enhet** der du kan velge nøyaktig hvilke inn-kanaler du vil ta opp
-  (f.eks. kanal 9 og 10 fra en mikser).
-- **Mer stabilt.** ASIO snakker direkte med produsentens driver, med færre ledd å
-  gå gjennom — som regel mer robust enn den generiske Windows-veien.
+- **Vanlige enheter (USB-mikrofon, lydkort): WASAPI.** Windows' moderne lyd-API.
+  Mer stabilt enn den gamle DirectShow-veien.
+- **Proff lydutstyr (Soundcraft MADI-USB, Behringer X32, RME, Focusrite): ASIO.**
+  Når en ASIO-driver er installert, vises hele kortet som **én enhet** med **alle
+  kanaler** (DirectShow delte dem i «stereopar», så du f.eks. ikke fikk tak i kanal
+  9/10). ASIO gir også lavest latens og mest stabil pro-lyd.
+
+macOS er upåvirket — der brukes Core Audio (via ffmpeg), som allerede fungerer bra.
 
 ## Slik gjør du
 
@@ -23,27 +25,37 @@ Soundcraft MADI-USB, Behringer X32, RME, Focusrite):
    **kanalvelger** (Venstre / Høyre). Velg hvilke inn-kanaler opptaket skal bruke.
 4. **Ta opp som vanlig.** Lyd-only og lyd + video fungerer begge.
 
-## Hvis ASIO ikke er tilgjengelig
+## Robusthet og fallback
 
-Finner SundayRec ingen ASIO-driver, brukes **WASAPI automatisk** i stedet — alt
-fungerer som før, bare uten den samlede flerkanals-visningen. Skulle en ASIO-enhet
-feile akkurat når et opptak starter (driveren opptatt, kortet frakoblet), faller
-SundayRec **automatisk tilbake til WASAPI** og gir en melding om det, slik at
-opptaket ikke ryker.
+Skulle den moderne motoren ikke klare å starte (driveren opptatt, kortet
+frakoblet i det opptaket begynner), faller SundayRec **automatisk tilbake til den
+gamle DirectShow-veien** og gir en melding om det, slik at opptaket ikke ryker.
+Trekkes lydkortet ut midt i et opptak, avsluttes opptaket pent (filen blir lagret)
+med en tydelig melding.
+
+## Hvis noe oppfører seg rart: «Klassisk lyd-motor»
+
+Under **Innstillinger → Lyd → Lyd-motor (avansert)** finnes en bryter **«Klassisk
+lyd-motor (DirectShow)»** (kun synlig på Windows, av som standard). Slå den på for
+å tvinge den gamle DirectShow-veien hvis den moderne motoren oppfører seg dårlig på
+en bestemt maskin. De fleste skal la den stå av.
 
 ## macOS
 
-På macOS trengs ikke ASIO: Core Audio viser allerede et samle-lydkort som én
-enhet med alle kanaler. SundayRec fungerer der som før, uendret.
+På macOS trengs ingenting av dette: Core Audio viser allerede et samle-lydkort som
+én enhet med alle kanaler, og SundayRec bruker ffmpeg/avfoundation som før —
+uendret.
 
 ---
 
 ## For utviklere / lisens
 
-ASIO-støtten er en **Windows-only, valgfri** Cargo-feature (`asio`). Bygg-oppsett:
-se [`BUILD_ASIO.md`](./BUILD_ASIO.md).
+Lydfangst på Windows går gjennom `cpal` (`recorder::cpal_capture`): **WASAPI** er
+standard og krever ingen feature; **ASIO** er en valgfri Cargo-feature (`asio`)
+fordi den lenker mot Steinberg ASIO SDK. Begge piper rå PCM inn i ffmpeg-sidecaren.
+Bygg-oppsett for ASIO: se [`BUILD_ASIO.md`](./BUILD_ASIO.md).
 
-### Tredjeparts-komponenter brukt av ASIO-veien
+### Tredjeparts-komponenter brukt av Windows-lyd-veien
 
 | Komponent    | Bruk                                   | Lisens                                            |
 | ------------ | -------------------------------------- | ------------------------------------------------- |

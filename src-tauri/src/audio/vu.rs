@@ -25,7 +25,8 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::SampleFormat;
+// `Sample` provides the ergonomic `f32::from_sample(s)`; `FromSample` is the bound.
+use cpal::{FromSample, Sample};
 use sundayrec_core::audio::{PeakMeters, VuLevels};
 use tauri::{AppHandle, Emitter};
 
@@ -180,11 +181,79 @@ impl VuMeters {
     }
 }
 
+/// De-interleave an interleaved f32 block per channel and observe peak + RMS into
+/// the meters. Real-time safe: a bounded, allocation-free pass per block (one
+/// scalar per channel per callback). Shared by every sample-format path.
+fn observe_levels(data: &[f32], chans: usize, m: &VuMeters) {
+    if chans == 0 {
+        return;
+    }
+    for ch in 0..chans {
+        let mut peak = 0.0_f32;
+        let mut sum_sq = 0.0_f64;
+        let mut n = 0u64;
+        let mut i = ch;
+        while i < data.len() {
+            let s = data[i];
+            if s.is_finite() {
+                let a = s.abs();
+                if a > peak {
+                    peak = a;
+                }
+                sum_sq += (s as f64) * (s as f64);
+                n += 1;
+            }
+            i += chans;
+        }
+        m.peak.observe(ch, peak);
+        let r = if n == 0 {
+            0.0
+        } else {
+            (sum_sq / n as f64).sqrt() as f32
+        };
+        m.rms.observe(ch, r);
+    }
+}
+
+/// Build a VU input stream for sample type `T`, converting each sample to f32 via
+/// cpal's `FromSample` so EVERY format (i16/i32/f32/**I24**/u16/…) is handled
+/// uniformly — important because pro ASIO/WASAPI devices commonly deliver 24- or
+/// 32-bit integer. The scratch buffer is allocated once here, never in the
+/// real-time callback.
+fn build_vu_stream_typed<T>(
+    device: &cpal::Device,
+    config: &cpal::StreamConfig,
+    channels: usize,
+    meters: Arc<VuMeters>,
+) -> Result<cpal::Stream, cpal::BuildStreamError>
+where
+    T: cpal::SizedSample,
+    f32: FromSample<T>,
+{
+    let mut scratch: Vec<f32> = Vec::new();
+    device.build_input_stream(
+        config,
+        move |data: &[T], _: &cpal::InputCallbackInfo| {
+            scratch.clear();
+            scratch.reserve(data.len());
+            for &s in data {
+                scratch.push(f32::from_sample(s));
+            }
+            observe_levels(&scratch, channels, &meters);
+        },
+        |e| tracing::error!("VU input stream error: {e}"),
+        None,
+    )
+}
+
 /// Resolve an input device by name (or host default), then build + return a
 /// running-capable cpal stream that writes per-block peak/RMS into `VuMeters`.
 ///
 /// ⚠️ HARDWARE-UNVERIFIED — see the module header. This is the only function
 /// that touches real audio hardware.
+#[allow(deprecated)] // cpal 0.17 deprecates `name()`; it is still the human device
+                     // name we match settings against (id()-based identity is a
+                     // separate, larger change — see docs/BUILD_ASIO.md TODO).
 fn build_vu_stream(device_name: Option<&str>) -> AppResult<(cpal::Stream, Arc<VuMeters>)> {
     let host = cpal::default_host();
 
@@ -210,77 +279,21 @@ fn build_vu_stream(device_name: Option<&str>) -> AppResult<(cpal::Stream, Arc<Vu
         peak: PeakMeters::new(channels),
         rms: PeakMeters::new(channels),
     });
-    let meters_cb = Arc::clone(&meters);
 
-    let err_fn = |e| tracing::error!("VU input stream error: {e}");
-
-    // De-interleave per channel and observe peak + RMS. Real-time safe: a small,
-    // bounded, allocation-free pass per block (we observe one scalar per channel
-    // per callback rather than buffering).
-    let observe = move |data: &[f32], chans: usize, m: &VuMeters| {
-        if chans == 0 {
-            return;
-        }
-        for ch in 0..chans {
-            // `step_by` gives this channel's samples from the interleaved block.
-            let mut peak = 0.0_f32;
-            let mut sum_sq = 0.0_f64;
-            let mut n = 0u64;
-            let mut i = ch;
-            while i < data.len() {
-                let s = data[i];
-                if s.is_finite() {
-                    let a = s.abs();
-                    if a > peak {
-                        peak = a;
-                    }
-                    sum_sq += (s as f64) * (s as f64);
-                    n += 1;
-                }
-                i += chans;
-            }
-            m.peak.observe(ch, peak);
-            let r = if n == 0 {
-                0.0
-            } else {
-                (sum_sq / n as f64).sqrt() as f32
-            };
-            m.rms.observe(ch, r);
-        }
-    };
-
+    use cpal::SampleFormat as SF;
+    let m = Arc::clone(&meters);
     let stream = match supported.sample_format() {
-        SampleFormat::F32 => {
-            let m = Arc::clone(&meters_cb);
-            device.build_input_stream(
-                &config,
-                move |data: &[f32], _: &cpal::InputCallbackInfo| observe(data, channels, &m),
-                err_fn,
-                None,
-            )
-        }
-        SampleFormat::I16 => {
-            // i16 → f32 in a reused scratch buffer (allocated once here, never in
-            // the callback) to keep the real-time path allocation-free.
-            let m = Arc::clone(&meters_cb);
-            let mut scratch: Vec<f32> = Vec::new();
-            device.build_input_stream(
-                &config,
-                move |data: &[i16], _: &cpal::InputCallbackInfo| {
-                    scratch.clear();
-                    scratch.reserve(data.len());
-                    for &s in data {
-                        scratch.push(s as f32 / i16::MAX as f32);
-                    }
-                    observe(&scratch, channels, &m);
-                },
-                err_fn,
-                None,
-            )
-        }
+        SF::I8 => build_vu_stream_typed::<i8>(&device, &config, channels, m),
+        SF::I16 => build_vu_stream_typed::<i16>(&device, &config, channels, m),
+        SF::I24 => build_vu_stream_typed::<cpal::I24>(&device, &config, channels, m),
+        SF::I32 => build_vu_stream_typed::<i32>(&device, &config, channels, m),
+        SF::U8 => build_vu_stream_typed::<u8>(&device, &config, channels, m),
+        SF::U16 => build_vu_stream_typed::<u16>(&device, &config, channels, m),
+        SF::F32 => build_vu_stream_typed::<f32>(&device, &config, channels, m),
+        SF::F64 => build_vu_stream_typed::<f64>(&device, &config, channels, m),
         other => {
             return Err(AppError::Audio(format!(
-                "unsupported input sample format: {other:?} (f32 and i16 supported)"
+                "unsupported input sample format: {other:?}"
             )))
         }
     }

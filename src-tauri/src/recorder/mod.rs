@@ -15,8 +15,8 @@
 //! and can only be proven on a rig. See [`engine`] for what is verified by tests
 //! vs what the manual smoke-test must confirm.
 
-pub mod asio;
 pub mod concat;
+pub mod cpal_capture;
 pub mod engine;
 pub mod preroll;
 pub mod recovery;

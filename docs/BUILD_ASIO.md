@@ -18,14 +18,18 @@ to be set for the build to succeed.
 
 ## cpal version
 
-We currently build ASIO on **cpal 0.15** (the version already used for VU
-metering). The riskiest unknown is whether `cpal/asio` links on our toolchain —
-prove it with the spike (below) before building anything on top.
+We build on **cpal 0.17.3** (pinned in `src-tauri/Cargo.toml`). This is required,
+not optional:
 
-> If 0.15's ASIO path fails to compile/link, bump cpal toward **0.17.3** (0.17.1
-> had broken ASIO; 0.17.3 carries the linker fixes). A bump is a breaking change
-> for `src-tauri/src/audio/{vu,devices}.rs` and must be re-verified. **Record the
-> version that actually worked here** when this is settled on a real Windows box.
+- **24-bit support.** cpal 0.15 could NOT represent 24-bit audio (`ASIOSTInt24LSB`
+  → `default_input_config` errored), and 24-bit is the most common native format
+  for pro USB interfaces + ASIO4ALL. cpal 0.17 added the `I24` sample format, so
+  the recorder now handles 16/24/32-bit int and 32/64-bit float uniformly (via
+  cpal's `from_sample` conversion).
+- **ASIO linker fixes.** 0.17.1 had broken ASIO; 0.17.3 carries the fixes.
+
+The spike (below) prints each device's sample format — confirm your interface
+shows up (a 24-bit device that printed nothing on 0.15 now enumerates).
 
 ---
 

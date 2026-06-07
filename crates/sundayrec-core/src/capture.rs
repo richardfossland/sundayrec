@@ -143,10 +143,11 @@ pub fn audio_encode_args(
     a
 }
 
-/// ffmpeg args for an **audio-only ASIO capture**: raw interleaved 32-bit float
-/// PCM arrives on `pipe:0` (the cpal ASIO callback already de-interleaved and
-/// routed the chosen channels, so the pipe carries EXACTLY the output channels —
-/// no `pan` filter is needed), and ffmpeg only encodes + muxes to `output_path`.
+/// ffmpeg args for an **audio-only cpal capture** (Windows WASAPI or ASIO): raw
+/// interleaved 32-bit float PCM arrives on `pipe:0` (the cpal callback already
+/// de-interleaved and routed the chosen channels, so the pipe carries EXACTLY the
+/// output channels — no `pan` filter is needed), and ffmpeg only encodes + muxes
+/// to `output_path`.
 ///
 /// `input_sample_rate` MUST be the cpal stream's actual rate: raw PCM has no
 /// header, so ffmpeg has to be told how to interpret the bytes on `pipe:0`.
@@ -155,10 +156,10 @@ pub fn audio_encode_args(
 /// `Some` (a resample) or is omitted to keep the native rate — same convention as
 /// [`audio_encode_args`].
 ///
-/// This is the ASIO analogue of [`build_unified_capture_args`]'s audio-only path;
-/// the difference is the INPUT (`-f f32le -i pipe:0` instead of `-f dshow/-f
+/// This is the cpal-pipe analogue of [`build_unified_capture_args`]'s audio-only
+/// path; the difference is the INPUT (`-f f32le -i pipe:0` instead of `-f dshow/-f
 /// avfoundation`). Stop is by EOF on the pipe, so there is no `q`-stop coupling.
-pub fn build_asio_audio_args(
+pub fn build_cpal_pipe_audio_args(
     input_sample_rate: u32,
     channels: u8,
     output_path: &str,
@@ -189,19 +190,19 @@ pub fn build_asio_audio_args(
     args
 }
 
-/// ffmpeg args for a **video + ASIO-audio capture** (Windows): the camera comes
-/// from dshow (input 0) and the routed ASIO PCM arrives on `pipe:0` (input 1).
-/// This is the two-clock case — the dshow camera and the ASIO interface run on
-/// independent clocks — so the audio is drift-corrected with
+/// ffmpeg args for a **video + cpal-audio capture** (Windows WASAPI or ASIO): the
+/// camera comes from dshow (input 0) and the routed cpal PCM arrives on `pipe:0`
+/// (input 1). This is the two-clock case — the dshow camera and the cpal audio
+/// interface run on independent clocks — so the audio is drift-corrected with
 /// `aresample=async=1000:first_pts=0` (same as the dshow A/V path) and BOTH inputs
 /// get `-use_wallclock_as_timestamps 1` so ffmpeg head-aligns them by real arrival
 /// time (the single-process analogue of the two-process start_time probe). The
 /// video is conformed to CFR (`-r/-fps_mode cfr`) to stay locked to the audio.
 ///
-/// ⚠️ The dual-clock A/V sync here is the riskiest part of ASIO support and is
+/// ⚠️ The dual-clock A/V sync here is the riskiest part of the cpal path and is
 /// HARDWARE-UNVERIFIED — it must be lip-sync checked on a Windows rig.
 #[allow(clippy::too_many_arguments)]
-pub fn build_asio_video_args(
+pub fn build_cpal_pipe_video_args(
     camera_dshow_name: &str,
     framerate: u32,
     input_sample_rate: u32,
@@ -1650,7 +1651,7 @@ mod tests {
     fn asio_audio_args_use_f32le_pipe_input() {
         // The pipe carries raw f32 PCM the cpal callback already routed, so the
         // input is `-f f32le -ar <stream rate> -ac <routed ch> -i pipe:0`.
-        let args = build_asio_audio_args(48_000, 2, "/rec/service.wav", None, 192);
+        let args = build_cpal_pipe_audio_args(48_000, 2, "/rec/service.wav", None, 192);
         assert!(has_pair(&args, "-f", "f32le"));
         assert!(has_pair(&args, "-ar", "48000"), "input rate is mandatory for raw PCM");
         assert!(has_pair(&args, "-i", "pipe:0"));
@@ -1666,7 +1667,7 @@ mod tests {
     fn asio_audio_args_mono_and_output_resample() {
         // Mono mode → 1 channel on the pipe AND in the output; an explicit output
         // sample rate becomes a (second) `-ar` AFTER the input args (a resample).
-        let args = build_asio_audio_args(96_000, 1, "/rec/talk.mp3", Some(48_000), 256);
+        let args = build_cpal_pipe_audio_args(96_000, 1, "/rec/talk.mp3", Some(48_000), 256);
         assert!(has_pair(&args, "-ac", "1"));
         assert!(has_pair(&args, "-c:a", "libmp3lame"));
         assert!(has_pair(&args, "-b:a", "256k"));
@@ -1677,7 +1678,7 @@ mod tests {
 
     #[test]
     fn asio_video_args_two_inputs_dshow_video_and_pipe_audio() {
-        let args = build_asio_video_args(
+        let args = build_cpal_pipe_video_args(
             "Logitech BRIO",
             30,
             48_000,

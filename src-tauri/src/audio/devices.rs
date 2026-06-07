@@ -47,6 +47,7 @@ pub struct AudioDeviceList {
 /// Summarise one device's capabilities. Never fails hard: a device that refuses
 /// to report a name or configs is reported with what we could read (defaults of
 /// 0 channels / empty rates) rather than aborting the whole enumeration.
+#[allow(deprecated)] // cpal 0.17 deprecates `name()`; still the human name we match on.
 fn summarise_input(device: &cpal::Device, is_default: bool) -> AudioDevice {
     let name = device
         .name()
@@ -65,8 +66,9 @@ fn summarise_input(device: &cpal::Device, is_default: bool) -> AudioDevice {
 
     for cfg in &configs {
         max_channels = max_channels.max(cfg.channels());
-        rate_min = rate_min.min(cfg.min_sample_rate().0);
-        rate_max = rate_max.max(cfg.max_sample_rate().0);
+        // cpal 0.17: SampleRate is a plain `u32` (no `.0`).
+        rate_min = rate_min.min(cfg.min_sample_rate());
+        rate_max = rate_max.max(cfg.max_sample_rate());
     }
 
     let sample_rates: Vec<u32> = if rate_min == u32::MAX {
@@ -88,6 +90,7 @@ fn summarise_input(device: &cpal::Device, is_default: bool) -> AudioDevice {
 }
 
 /// Enumerate input devices on the default host.
+#[allow(deprecated)] // cpal 0.17 deprecates `name()`; still the human name we match on.
 pub fn list_input_devices() -> AppResult<AudioDeviceList> {
     let host = cpal::default_host();
 
