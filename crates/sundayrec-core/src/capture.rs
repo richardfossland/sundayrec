@@ -1261,9 +1261,21 @@ mod tests {
         // square's pixel count exceeds 1080p, but it can't fill a 16:9 4K frame, so
         // 2160p must stay GATED (no upscale). Native 16:9 ceiling is 1080p.
         let modes = vec![
-            CameraMode { width: 1920, height: 1080, framerates: vec![30] },
-            CameraMode { width: 1552, height: 1552, framerates: vec![30] },
-            CameraMode { width: 1280, height: 720, framerates: vec![15, 30] },
+            CameraMode {
+                width: 1920,
+                height: 1080,
+                framerates: vec![30],
+            },
+            CameraMode {
+                width: 1552,
+                height: 1552,
+                framerates: vec![30],
+            },
+            CameraMode {
+                width: 1280,
+                height: 720,
+                framerates: vec![15, 30],
+            },
         ];
         let cap = summarize_camera_capabilities(&modes);
         assert_eq!(cap.supported_resolutions, vec!["480p", "720p", "1080p"]);
@@ -1653,7 +1665,10 @@ mod tests {
         // input is `-f f32le -ar <stream rate> -ac <routed ch> -i pipe:0`.
         let args = build_cpal_pipe_audio_args(48_000, 2, "/rec/service.wav", None, 192);
         assert!(has_pair(&args, "-f", "f32le"));
-        assert!(has_pair(&args, "-ar", "48000"), "input rate is mandatory for raw PCM");
+        assert!(
+            has_pair(&args, "-ar", "48000"),
+            "input rate is mandatory for raw PCM"
+        );
         assert!(has_pair(&args, "-i", "pipe:0"));
         // Output codec from the .wav extension; routed channel count flows to -ac.
         assert!(has_pair(&args, "-c:a", "pcm_s16le"));
@@ -1694,7 +1709,9 @@ mod tests {
         assert!(has_pair(&args, "-i", "pipe:0"));
         // Both inputs wall-clock stamped for head alignment (the two-clock case).
         assert_eq!(
-            args.iter().filter(|a| *a == "-use_wallclock_as_timestamps").count(),
+            args.iter()
+                .filter(|a| *a == "-use_wallclock_as_timestamps")
+                .count(),
             2
         );
         // Drift correction + CFR video lock.
