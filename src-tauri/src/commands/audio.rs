@@ -13,7 +13,9 @@ use sundayrec_core::device_match::FfmpegDevice;
 use crate::audio::asio::{
     list_asio_devices, list_asio_input_channels, merge_audio_inputs, AudioChannel, TaggedAudioInput,
 };
-use crate::audio::device_enum::{enumerate_ffmpeg_devices, DeviceInventory};
+use crate::audio::device_enum::{
+    enumerate_ffmpeg_devices, enumerate_ffmpeg_devices_cached, DeviceInventory,
+};
 use crate::audio::devices::{list_input_devices as enumerate_inputs, AudioDeviceList};
 use crate::audio::vu::VuEngine;
 use crate::error::AppResult;
@@ -68,7 +70,9 @@ pub async fn list_audio_input_channels(device_id: String) -> AppResult<Vec<Audio
 /// real devices; only the pure argument/parse helpers are tested.
 #[tauri::command]
 pub async fn list_devices() -> AppResult<DeviceInventory> {
-    enumerate_ffmpeg_devices().await
+    // Cached (1.5 s): the picker often asks for audio + video back-to-back; this
+    // folds those into one spawn. Record/diagnose use the uncached path.
+    enumerate_ffmpeg_devices_cached().await
 }
 
 /// List ONLY the camera (video) devices ffmpeg can see, for the settings camera
@@ -80,7 +84,9 @@ pub async fn list_devices() -> AppResult<DeviceInventory> {
 /// pure parse helpers in `sundayrec_core::device_enum` are unit-tested.
 #[tauri::command]
 pub async fn list_video_devices() -> AppResult<Vec<FfmpegDevice>> {
-    Ok(enumerate_ffmpeg_devices().await?.video_inputs)
+    // Cached (1.5 s) — see `list_devices`. The recorder resolves the camera via
+    // the uncached path at start, so a stale picker list never affects a capture.
+    Ok(enumerate_ffmpeg_devices_cached().await?.video_inputs)
 }
 
 /// What a camera can actually capture, for gating the resolution/fps UI to modes

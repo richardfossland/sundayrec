@@ -128,6 +128,36 @@ pub async fn enumerate_ffmpeg_devices() -> AppResult<DeviceInventory> {
     Ok(parse_inventory(&stderr_buf))
 }
 
+/// Short time-to-live for the cached enumeration below. Long enough to fold the
+/// device picker's back-to-back calls (audio list + video list + the "is it seen
+/// by ffmpeg" warn) into ONE `ffmpeg -list_devices` spawn — which on Windows
+/// dshow can take hundreds of ms — but short enough that a freshly-plugged device
+/// shows up almost immediately.
+const ENUM_CACHE_TTL: std::time::Duration = std::time::Duration::from_millis(1500);
+
+type EnumCache = std::sync::Mutex<Option<(std::time::Instant, DeviceInventory)>>;
+static ENUM_CACHE: EnumCache = std::sync::Mutex::new(None);
+
+/// Enumerate ffmpeg devices for the UI device picker, reusing a result from the
+/// last [`ENUM_CACHE_TTL`] if available. ONLY for the informational picker path —
+/// the recorder's `start()`, diagnostics, and the test-recording all call the
+/// uncached [`enumerate_ffmpeg_devices`] so the record-critical decision is never
+/// made on a stale list.
+pub async fn enumerate_ffmpeg_devices_cached() -> AppResult<DeviceInventory> {
+    if let Ok(guard) = ENUM_CACHE.lock() {
+        if let Some((at, inv)) = guard.as_ref() {
+            if at.elapsed() < ENUM_CACHE_TTL {
+                return Ok(inv.clone());
+            }
+        }
+    }
+    let inv = enumerate_ffmpeg_devices().await?;
+    if let Ok(mut guard) = ENUM_CACHE.lock() {
+        *guard = Some((std::time::Instant::now(), inv.clone()));
+    }
+    Ok(inv)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
