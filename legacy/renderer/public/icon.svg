@@ -1,0 +1,18 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2A4E92"></stop><stop offset="1" stop-color="#172F5E"></stop></linearGradient>
+    <radialGradient id="glow" cx="0.26" cy="0.2" r="0.95"><stop offset="0" stop-color="#ffffff" stop-opacity="0.12"></stop><stop offset="0.55" stop-color="#ffffff" stop-opacity="0"></stop></radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2D58A"></stop><stop offset="1" stop-color="#EBB84B"></stop></linearGradient>
+    <clipPath id="clip"><rect width="1024" height="1024" rx="228"></rect></clipPath>
+  </defs>
+  <g clip-path="url(#clip)">
+    <rect width="1024" height="1024" fill="url(#bg)"></rect>
+    <rect width="1024" height="1024" fill="url(#glow)"></rect>
+    <path d="M 701.3 375.6 A 161.3 161.3 0 0 1 701.3 583.0" fill="none" stroke="#EBB84B" stroke-width="15" stroke-linecap="round"></path>
+    <path d="M 322.7 375.6 A 161.3 161.3 0 0 0 322.7 583.0" fill="none" stroke="#EBB84B" stroke-width="15" stroke-linecap="round"></path>
+    <path d="M 766.5 301.6 A 270.8 270.8 0 0 1 766.5 657.0" fill="none" stroke="#EBB84B" stroke-width="15" stroke-linecap="round"></path>
+    <path d="M 257.4 301.6 A 270.8 270.8 0 0 0 257.4 657.0" fill="none" stroke="#EBB84B" stroke-width="15" stroke-linecap="round"></path>
+    <rect x="479.5" y="320.0" width="65.0" height="425.8" rx="6.2" fill="url(#gold)"></rect>
+    <rect x="376.8" y="437.6" width="270.4" height="65.0" rx="6.2" fill="url(#gold)"></rect>
+  </g>
+</svg>
