@@ -563,7 +563,7 @@ export interface CloudQueueStatus {
 }
 
 // ── Sunday-suite integrations ───────────────────────────────────────────────
-// Opt-in connection to the sister apps (Stage, Plan, Song, Verbatim). Every
+// Opt-in connection to the sister apps (Stage, Plan, Song, SundayEdit). Every
 // flag defaults off; when `enabled` is false nothing in src/main/integrations/
 // runs and the renderer hides the whole "Sunday-suite" section. The recording
 // core (recorder.ts / scheduler.ts) never reads these.
@@ -596,7 +596,7 @@ export interface ServiceLink {
 export interface IntegrationSettings {
   /** Master opt-in for the entire Sunday-suite area. */
   enabled: boolean
-  verbatim?: { enabled: boolean }
+  sundayedit?: { enabled: boolean }
   stage?: { enabled: boolean; manifestFolder?: string }
   song?: { enabled: boolean; autoSubmitUsage?: boolean }
   plan?: { enabled: boolean; autoSchedule?: boolean }

@@ -1,7 +1,7 @@
-//! Verbatim / SundayEdit hand-off helpers.
+//! SundayEdit hand-off helpers.
 //!
-//! Pure port of `src/main/integrations/verbatim.ts`: build the
-//! `verbatim://import?…` deep link, and parse a Verbatim-exported subtitle file
+//! Pure port of the Electron SundayEdit integration helper: build the
+//! `sundayedit://import?…` deep link, and parse a SundayEdit-exported subtitle file
 //! (SRT / WebVTT) into the recording's `TranscriptData` sidecar shape so
 //! SundayRec's transcript search/editor consume it unchanged. The deep-link
 //! *launch* and the sidecar *write* are the shell's side effects; the URL
@@ -9,9 +9,9 @@
 
 use crate::whisper::{TranscriptData, TranscriptSegment};
 
-/// Options for the Verbatim deep link. Mirrors the Electron `VerbatimImportOptions`.
+/// Options for the SundayEdit deep link.
 #[derive(Debug, Clone, Default)]
-pub struct VerbatimImportOptions {
+pub struct SundayEditImportOptions {
     pub video_path: String,
     pub language: Option<String>,
     pub context: Option<String>,
@@ -20,7 +20,7 @@ pub struct VerbatimImportOptions {
 
 /// Percent-encode a query-parameter value (RFC 3986 unreserved kept; everything
 /// else `%XX`). Matches `URLSearchParams` for the characters we emit (spaces
-/// become `%20`, not `+`, which Verbatim's parser decodes identically).
+/// become `%20`, not `+`, which SundayEdit's parser decodes identically).
 fn encode_component(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
@@ -34,10 +34,10 @@ fn encode_component(s: &str) -> String {
     out
 }
 
-/// Build the `verbatim://import` deep link. Mirrors `buildVerbatimDeepLink`:
+/// Build the `sundayedit://import` deep link. Mirrors `buildSundayEditDeepLink`:
 /// always carries `path` + `returnTo=sundayrec`; adds `language`/`context` when
 /// present and a comma-joined `glossary` when non-empty. Pure.
-pub fn build_verbatim_deep_link(opts: &VerbatimImportOptions) -> String {
+pub fn build_sundayedit_deep_link(opts: &SundayEditImportOptions) -> String {
     let mut params = vec![format!("path={}", encode_component(&opts.video_path))];
     if let Some(lang) = opts.language.as_deref().filter(|s| !s.is_empty()) {
         params.push(format!("language={}", encode_component(lang)));
@@ -52,7 +52,7 @@ pub fn build_verbatim_deep_link(opts: &VerbatimImportOptions) -> String {
         ));
     }
     params.push("returnTo=sundayrec".to_string());
-    format!("verbatim://import?{}", params.join("&"))
+    format!("sundayedit://import?{}", params.join("&"))
 }
 
 /// Parse one `HH:MM:SS,mmm` / `HH:MM:SS.mmm` timestamp into seconds. Mirrors the
@@ -167,7 +167,7 @@ pub fn parse_subtitles(text: &str) -> Vec<TranscriptSegment> {
 }
 
 /// Convert subtitle text into the `TranscriptData` sidecar shape (model
-/// `"verbatim"`). Mirrors `subtitlesToTranscript`: duration is the last
+/// `"sundayedit"`). Mirrors `subtitlesToTranscript`: duration is the last
 /// segment's end (0 when empty); `created_at` is supplied by the shell.
 pub fn subtitles_to_transcript(
     text: &str,
@@ -178,7 +178,7 @@ pub fn subtitles_to_transcript(
     let duration = segments.last().map(|s| s.end).unwrap_or(0.0);
     TranscriptData {
         version: 1,
-        model: "verbatim".to_string(),
+        model: "sundayedit".to_string(),
         language: language.unwrap_or("auto").to_string(),
         duration,
         created_at,
@@ -193,11 +193,11 @@ mod tests {
 
     #[test]
     fn deep_link_carries_path_and_return_to() {
-        let link = build_verbatim_deep_link(&VerbatimImportOptions {
+        let link = build_sundayedit_deep_link(&SundayEditImportOptions {
             video_path: "/rec/sermon.mp4".into(),
             ..Default::default()
         });
-        assert!(link.starts_with("verbatim://import?"));
+        assert!(link.starts_with("sundayedit://import?"));
         assert!(link.contains("path=%2Frec%2Fsermon.mp4"));
         assert!(link.contains("returnTo=sundayrec"));
         // No language/context/glossary params when unset.
@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn deep_link_includes_optional_params_encoded() {
-        let link = build_verbatim_deep_link(&VerbatimImportOptions {
+        let link = build_sundayedit_deep_link(&SundayEditImportOptions {
             video_path: "/v.mp4".into(),
             language: Some("no".into()),
             context: Some("Preken. Taler: Ola".into()),
@@ -241,7 +241,7 @@ mod tests {
     #[test]
     fn subtitles_to_transcript_sets_model_and_duration() {
         let t = subtitles_to_transcript("00:00:00,000 --> 00:00:10,000\nText", Some("no"), 42);
-        assert_eq!(t.model, "verbatim");
+        assert_eq!(t.model, "sundayedit");
         assert_eq!(t.language, "no");
         assert_eq!(t.duration, 10.0);
         assert_eq!(t.created_at, 42);

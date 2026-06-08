@@ -39,15 +39,15 @@ let onSeekCallback: ((sec: number) => void) | null = null
 
 const $ = (id: string) => document.getElementById(id)
 
-// Extensions that route to the Verbatim hand-off (video only — Verbatim is a
+// Extensions that route to the SundayEdit hand-off (video only — SundayEdit is a
 // video-captioning tool). Mirrors the editor's video set, kept local so this
 // panel has no dependency on editor-page internals.
-const VERBATIM_VIDEO_EXTS = new Set([
+const SUNDAYEDIT_VIDEO_EXTS = new Set([
   '.mp4', '.mov', '.m4v', '.avi', '.wmv', '.mkv', '.webm', '.flv', '.ts', '.mts', '.m2ts', '.3gp',
 ])
 function isVideoPath(p: string): boolean {
   const ext = ('.' + (p.split('.').pop()?.toLowerCase() ?? ''))
-  return VERBATIM_VIDEO_EXTS.has(ext)
+  return SUNDAYEDIT_VIDEO_EXTS.has(ext)
 }
 
 export function setupTranscriptPanel(onSeek: (sec: number) => void): void {
@@ -59,7 +59,7 @@ export function setupTranscriptPanel(onSeek: (sec: number) => void): void {
   $('btn-transcript-export')?.addEventListener('click', exportSrt)
   $('btn-transcript-export-vtt')?.addEventListener('click', exportVtt)
   $('btn-transcript-delete')?.addEventListener('click', deleteTranscript)
-  $('btn-transcript-verbatim')?.addEventListener('click', sendToVerbatim)
+  $('btn-transcript-sundayedit')?.addEventListener('click', sendToSundayEdit)
 
   // Probe availability once at startup so the button can be disabled with
   // an inline explanation if the binary didn't ship (CI build issue,
@@ -98,27 +98,27 @@ async function checkBinaryAvailabilityOnce(): Promise<void> {
   }
 }
 
-// ── Verbatim hand-off (Sunday-suite integration) ───────────────────────────
-// Shows the "→ Verbatim" button only when the integration is enabled AND the
+// ── SundayEdit hand-off (Sunday-suite integration) ───────────────────────────
+// Shows the "→ SundayEdit" button only when the integration is enabled AND the
 // open file is a video. Reads the opt-in settings each load so toggling them
 // in Settings reflects on the next file open.
-async function updateVerbatimButton(): Promise<void> {
-  const btn = $('btn-transcript-verbatim') as HTMLElement | null
+async function updateSundayEditButton(): Promise<void> {
+  const btn = $('btn-transcript-sundayedit') as HTMLElement | null
   if (!btn) return
   let show = false
   try {
     if (currentFilePath && isVideoPath(currentFilePath)) {
       const s = await window.api.getIntegrationSettings()
-      show = !!s.enabled && !!s.verbatim?.enabled
+      show = !!s.enabled && !!s.sundayedit?.enabled
     }
   } catch { show = false }
   btn.style.display = show ? '' : 'none'
 }
 
-// Sends the open video to Verbatim, primed with sermon context + the speaker
+// Sends the open video to SundayEdit, primed with sermon context + the speaker
 // name as a glossary term (improves recognition of the name). Fire-and-forget
-// from the user's perspective; Verbatim returns captions out-of-band.
-async function sendToVerbatim(): Promise<void> {
+// from the user's perspective; SundayEdit returns captions out-of-band.
+async function sendToSundayEdit(): Promise<void> {
   if (!currentFilePath) return
   let context = 'Preken'
   const glossary: string[] = []
@@ -127,17 +127,17 @@ async function sendToVerbatim(): Promise<void> {
     if (meta?.speaker) { context = `Preken. Taler: ${meta.speaker}`; glossary.push(meta.speaker) }
   } catch { /* no metadata — generic context */ }
 
-  const btn = $('btn-transcript-verbatim') as HTMLButtonElement | null
+  const btn = $('btn-transcript-sundayedit') as HTMLButtonElement | null
   try {
-    const res = await window.api.verbatimSend({ videoPath: currentFilePath, context, glossary })
+    const res = await window.api.sundayEditSend({ videoPath: currentFilePath, context, glossary })
     if (!res.ok && btn) {
-      btn.textContent = res.error === 'verbatim_not_installed'
-        ? t('integrations.verbatimMissing', 'Verbatim ikke funnet')
-        : t('integrations.verbatimFailed', 'Kunne ikke åpne')
-      setTimeout(() => { btn.textContent = '→ Verbatim' }, 2500)
+      btn.textContent = res.error === 'sundayedit_not_installed'
+        ? t('integrations.sundayEditMissing', 'SundayEdit ikke funnet')
+        : t('integrations.sundayEditFailed', 'Kunne ikke åpne')
+      setTimeout(() => { btn.textContent = '→ SundayEdit' }, 2500)
     }
   } catch {
-    if (btn) { btn.textContent = t('integrations.verbatimFailed', 'Kunne ikke åpne'); setTimeout(() => { btn.textContent = '→ Verbatim' }, 2500) }
+    if (btn) { btn.textContent = t('integrations.sundayEditFailed', 'Kunne ikke åpne'); setTimeout(() => { btn.textContent = '→ SundayEdit' }, 2500) }
   }
 }
 
@@ -146,7 +146,7 @@ export async function loadTranscriptForFile(filePath: string): Promise<void> {
   currentFilePath = filePath
   currentTranscript = null
   renderPanel()
-  void updateVerbatimButton()
+  void updateSundayEditButton()
   // Try to load sidecar
   try {
     const sidecar = await window.api.editorReadTranscript?.(filePath) as TranscriptData | null

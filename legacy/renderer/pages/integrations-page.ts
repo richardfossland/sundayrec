@@ -12,17 +12,17 @@ const $ = (id: string) => document.getElementById(id)
 
 export async function setupIntegrationsPage(): Promise<void> {
   const masterEl     = $('opt-integrations-enabled')  as HTMLInputElement | null
-  const verbatimEl   = $('opt-integrations-verbatim') as HTMLInputElement | null
+  const sundayEditEl   = $('opt-integrations-sundayedit') as HTMLInputElement | null
   const stageEl      = $('opt-integrations-stage')    as HTMLInputElement | null
   const songEl       = $('opt-integrations-song')     as HTMLInputElement | null
   const planEl       = $('opt-integrations-plan')     as HTMLInputElement | null
-  if (!masterEl || !verbatimEl || !stageEl || !songEl) return
+  if (!masterEl || !sundayEditEl || !stageEl || !songEl) return
 
-  const cards = ['integrations-verbatim-card', 'integrations-song-card', 'integrations-plan-card', 'integrations-stage-card', 'integrations-connection-card']
+  const cards = ['integrations-sundayedit-card', 'integrations-song-card', 'integrations-plan-card', 'integrations-stage-card', 'integrations-connection-card']
 
   const applyEnabledState = (): void => {
     const on = masterEl.checked
-    ;[verbatimEl, stageEl, songEl, planEl].filter(Boolean).forEach(el => { (el as HTMLInputElement).disabled = !on })
+    ;[sundayEditEl, stageEl, songEl, planEl].filter(Boolean).forEach(el => { (el as HTMLInputElement).disabled = !on })
     cards.forEach(id => {
       const el = $(id)
       if (el) el.style.opacity = on ? '' : '0.5'
@@ -32,11 +32,11 @@ export async function setupIntegrationsPage(): Promise<void> {
   }
 
   // Load current settings
-  let current = { enabled: false, verbatim: { enabled: false }, stage: { enabled: false }, song: { enabled: false }, connection: { churchId: '', songApiUrl: '' } }
+  let current = { enabled: false, sundayedit: { enabled: false }, stage: { enabled: false }, song: { enabled: false }, connection: { churchId: '', songApiUrl: '' } }
   try {
     const s = await window.api.getIntegrationSettings()
     masterEl.checked   = !!s.enabled
-    verbatimEl.checked = !!s.verbatim?.enabled
+    sundayEditEl.checked = !!s.sundayedit?.enabled
     stageEl.checked    = !!s.stage?.enabled
     songEl.checked     = !!s.song?.enabled
     if (planEl) planEl.checked = !!s.plan?.enabled
@@ -65,8 +65,8 @@ export async function setupIntegrationsPage(): Promise<void> {
     void window.api.setIntegrationSettings({ enabled: masterEl.checked })
     applyEnabledState()
   })
-  verbatimEl.addEventListener('change', () => {
-    void window.api.setIntegrationSettings({ verbatim: { enabled: verbatimEl.checked } })
+  sundayEditEl.addEventListener('change', () => {
+    void window.api.setIntegrationSettings({ sundayedit: { enabled: sundayEditEl.checked } })
   })
   stageEl.addEventListener('change', () => {
     void window.api.setIntegrationSettings({ stage: { enabled: stageEl.checked } })

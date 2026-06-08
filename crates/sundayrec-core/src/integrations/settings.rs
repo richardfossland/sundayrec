@@ -5,7 +5,7 @@
 //! `src/main/ipc/integrations.ts`. Everything here is a decision — the actual
 //! persistence (a JSON blob under the `integrations` settings key) is the shell's.
 //!
-//! The whole area is **opt-in**: `enabled` gates it, and each peer (verbatim /
+//! The whole area is **opt-in**: `enabled` gates it, and each peer (sundayedit /
 //! stage / song / plan) carries its own `enabled` so toggling one never enables
 //! the others. API keys are NOT stored here — they live in the OS keychain
 //! (mirrors the SMTP-password pattern), exactly as in Electron.
@@ -51,8 +51,9 @@ pub struct PeerToggle {
 pub struct IntegrationSettings {
     #[serde(default)]
     pub enabled: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub verbatim: Option<PeerToggle>,
+    // `alias = "verbatim"` keeps settings saved under the old working-title key loadable.
+    #[serde(default, alias = "verbatim", skip_serializing_if = "Option::is_none")]
+    pub sundayedit: Option<PeerToggle>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stage: Option<PeerToggle>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -94,7 +95,7 @@ pub fn merge_settings(
 ) -> IntegrationSettings {
     IntegrationSettings {
         enabled: patch.enabled,
-        verbatim: patch.verbatim.or(current.verbatim),
+        sundayedit: patch.sundayedit.or(current.sundayedit),
         stage: patch.stage.or(current.stage),
         song: patch.song.or(current.song),
         plan: patch.plan.or(current.plan),

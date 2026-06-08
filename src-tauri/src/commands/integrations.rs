@@ -5,12 +5,12 @@
 //! opt-in integration settings (stored as a JSON blob under the `integrations`
 //! kv key), read a recording's `.service.json` sidecar, the SundaySong API-key
 //! keychain slot + usage submission, the SundayPlan fetch/update, and the
-//! Verbatim send/import hand-off. Stage import already lives in
+//! SundayEdit send/import hand-off. Stage import already lives in
 //! `commands::review::stage_import_manifest`.
 //!
 //! The pure mappers (settings merge, usage-payload shaping, plan metadata/
-//! schedule, verbatim deep link + subtitle parse, sidecar paths) are unit-tested
-//! in `sundayrec_core::integrations`. The HTTP submissions + the `verbatim://`
+//! schedule, sundayedit deep link + subtitle parse, sidecar paths) are unit-tested
+//! in `sundayrec_core::integrations`. The HTTP submissions + the `sundayedit://`
 //! launch are **NETWORK-UNVERIFIED** (they reuse the always-present `reqwest` and
 //! the tauri opener — no new dep, no feature gate); they return structured
 //! `{ ok, error }` results rather than throwing, exactly like the Electron
@@ -26,8 +26,8 @@ use sundayrec_core::integrations::settings::{
     merge_patch_json, parse_settings, IntegrationSettings,
 };
 use sundayrec_core::integrations::song::build_usage_payloads;
-use sundayrec_core::integrations::verbatim::{
-    build_verbatim_deep_link, subtitles_to_transcript, VerbatimImportOptions,
+use sundayrec_core::integrations::sundayedit::{
+    build_sundayedit_deep_link, subtitles_to_transcript, SundayEditImportOptions,
 };
 use sundayrec_core::integrations::{service_link_path, transcript_sidecar_path, ServiceLink};
 
@@ -344,14 +344,14 @@ pub async fn integrations_plan_update_service(
     }
 }
 
-// ── Verbatim / SundayEdit hand-off ───────────────────────────────────────────
+// ── SundayEdit hand-off ───────────────────────────────────────────
 
-/// Launch Verbatim/SundayEdit with a recording via the `verbatim://import` deep
+/// Launch SundayEdit with a recording via the `sundayedit://import` deep
 /// link, primed with sermon context + glossary. Returns `ok=false` with
-/// `verbatim_not_installed` when the OS has no handler for the scheme.
+/// `sundayedit_not_installed` when the OS has no handler for the scheme.
 /// NETWORK/HARDWARE-UNVERIFIED (the launch needs the peer app installed).
 #[tauri::command]
-pub async fn integrations_verbatim_send(
+pub async fn integrations_sundayedit_send(
     app: tauri::AppHandle,
     video_path: String,
     language: Option<String>,
@@ -361,7 +361,7 @@ pub async fn integrations_verbatim_send(
     if video_path.is_empty() {
         return Ok(OpResult::err("invalid_path"));
     }
-    let link = build_verbatim_deep_link(&VerbatimImportOptions {
+    let link = build_sundayedit_deep_link(&SundayEditImportOptions {
         video_path,
         language,
         context,
@@ -373,16 +373,16 @@ pub async fn integrations_verbatim_send(
             ok: true,
             ..Default::default()
         }),
-        Err(_) => Ok(OpResult::err("verbatim_not_installed")),
+        Err(_) => Ok(OpResult::err("sundayedit_not_installed")),
     }
 }
 
-/// Import a Verbatim-exported subtitle file (SRT/VTT) into the recording's
+/// Import a SundayEdit-exported subtitle file (SRT/VTT) into the recording's
 /// `.transcript.json` sidecar so it shows up in transcript search + the editor.
 /// The parse/convert is the pure `subtitles_to_transcript`; the fs read/write is
 /// the I/O here. Returns `no_captions_parsed` when the file yields no segments.
 #[tauri::command]
-pub fn integrations_verbatim_import(
+pub fn integrations_sundayedit_import(
     recording_path: String,
     subtitle_path: String,
     language: Option<String>,

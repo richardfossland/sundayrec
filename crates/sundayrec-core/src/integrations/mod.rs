@@ -31,7 +31,7 @@ pub mod plan;
 pub mod settings;
 pub mod song;
 pub mod stage;
-pub mod verbatim;
+pub mod sundayedit;
 
 /// The service-link sidecar path for a recording: the file beside it with the
 /// extension swapped for `.service.json` (e.g. `/rec/2026-05-31.mp3` →
@@ -43,7 +43,7 @@ pub fn service_link_path(recording_path: &str) -> String {
 }
 
 /// The transcript sidecar path (`<name>.transcript.json`) for a recording, used
-/// by the Verbatim caption import. Mirrors the Electron `importVerbatimCaptions`
+/// by the SundayEdit caption import. Mirrors the Electron `importSundayEditCaptions`
 /// path build (`base + '.transcript.json'`).
 pub fn transcript_sidecar_path(recording_path: &str) -> String {
     swap_extension(recording_path, ".transcript.json")

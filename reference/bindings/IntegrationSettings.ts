@@ -6,4 +6,4 @@ import type { PeerToggle } from "./PeerToggle";
  * The full opt-in integration settings bag. Mirrors `IntegrationSettings`
  * field-for-field (camelCase). `enabled` is the master opt-in for the area.
  */
-export type IntegrationSettings = { enabled: boolean, verbatim?: PeerToggle | null, stage?: PeerToggle | null, song?: PeerToggle | null, plan?: PeerToggle | null, connection?: IntegrationConnection | null, };
+export type IntegrationSettings = { enabled: boolean, sundayedit?: PeerToggle | null, stage?: PeerToggle | null, song?: PeerToggle | null, plan?: PeerToggle | null, connection?: IntegrationConnection | null, };

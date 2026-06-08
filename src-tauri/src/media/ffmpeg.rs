@@ -16,7 +16,7 @@ use crate::error::{AppError, AppResult};
 
 // ── Binary resolution ──────────────────────────────────────────────────────
 //
-// Resolution order (first hit wins), mirrored from the Verbatim/SundayEdit
+// Resolution order (first hit wins), mirrored from the SundayEdit
 // implementation but with `SUNDAYREC_*` env names:
 //   1. Env override (SUNDAYREC_FFMPEG / SUNDAYREC_FFPROBE) — dev + tests.
 //   2. Bundled sidecar next to the app executable — production. Tauri's

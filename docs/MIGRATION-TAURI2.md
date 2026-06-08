@@ -32,7 +32,7 @@
 5. **Typesikker kontrakt:** alle delte typer genereres med **ts-rs** (som søstrene).
 6. **Test fra dag én:** Rust unit/integrasjon + frontend (vitest/RTL) + CI som
    signerer/bygger Mac+Win fra start. Maskinvare-tester manuelt for recorder/wake/stream.
-7. **Maks gjenbruk av suite-presedens:** Verbatim (ffmpeg-sidecar, signering,
+7. **Maks gjenbruk av suite-presedens:** SundayEdit (ffmpeg-sidecar, signering,
    updater, whisper-rs, keyring), SundayStudio (cpal/hound/ebur128 Rust-audio).
 
 ---
@@ -45,7 +45,7 @@
 | Backend                        | Node main (~75 filer, ad hoc)                        | **Rust**, ren domenekjerne + tynt kommandolag, tokio                               |
 | Frontend                       | vanilla TS ~13k linjer                               | **React 19 + Tailwind v4** + TanStack Query + Zustand                              |
 | Kontrakt                       | ipcMain (142) + `window.api` (116 invoke + 40 event) | `#[tauri::command]` + `emit`/`listen`, typer via **ts-rs**                         |
-| ffmpeg                         | `ffmpeg-static` + child_process (31 spawn)           | **sidecar** `externalBin` + `tokio::process` (Verbatim-mønster)                    |
+| ffmpeg                         | `ffmpeg-static` + child_process (31 spawn)           | **sidecar** `externalBin` + `tokio::process` (SundayEdit-mønster)                  |
 | **Lyd-metering/VU**            | webview `getUserMedia` + Web Audio                   | **Rust `cpal`** → nivåer via event (som SundayStudio; fjerner webview-avhengighet) |
 | Lagring                        | `electron-store` JSON                                | **SQLite via sqlx**                                                                |
 | Hemmeligheter                  | `safeStorage`                                        | **`keyring`** (apple/windows native)                                               |
@@ -90,7 +90,7 @@ Hver fase: **Mål · Kilde å speile (adferd) · Rust/Tauri-mapping · Exit-krit
   (mac avfoundation `vid:aud` / win dshow 2×`-i` + aresample), stderr-parsing,
   stdin `'q'`, watchdog. Speil `unified-recorder.ts`, `recorder-utils.ts`.
 - **Skall:** scaffold Tauri 2 + React 19 + Tailwind v4; `sundayrec-core` Rust-crate;
-  ffmpeg-sidecar (kopier Verbatims `fetch-ffmpeg.mjs` + `externalBin`); sqlx-schema;
+  ffmpeg-sidecar (kopier SundayEdits `fetch-ffmpeg.mjs` + `externalBin`); sqlx-schema;
   keyring; ts-rs-søm; logger; feilmodell; CI som signerer Mac + bygger Win + `latest.json`.
 - **Exit:** tom app installerer + auto-oppdaterer signert; VU + kamera-preview vises
   drevet av Rust; én recorder-prototype tar opp 30 s synket klipp.
@@ -146,7 +146,7 @@ OAuth-callback, notifikasjoner. Speil `scheduler.ts`, `wake.ts`, `wake-verificat
 ### Fase 6 — Cloud, OAuth, integrasjoner, whisper, mailer · ~5–7 uker
 
 OAuth (Drive/YouTube/Gmail via deep-link/loopback), opplastingskøer, prep-episode,
-review-queue, Verbatim/Stage/Song/Plan-integrasjoner, **whisper-rs**, SMTP (**lettre**),
+review-queue, SundayEdit/Stage/Song/Plan-integrasjoner, **whisper-rs**, SMTP (**lettre**),
 webhook. Speil `cloud/*`, `publish/*`, `prep-episode.ts`, `review-queue.ts`,
 `integrations/*`, `whisper*.ts`, `mailer.ts`, `webhook.ts`.
 **Exit:** koble Google, laste opp, transkribere, sende varsel.
@@ -189,7 +189,7 @@ valgfri import av eksisterende test-innstillinger. Release v1.0 → arkiver Elec
 | Recorder-robusthet i Rust          | 0/3  | Tidlig spike + bygg solid + maskinvare-test på ekte rigg                                               |
 | NDI libndi FFI                     | 7    | Tidlig spike i fasen; isoler bak trait så den kan stubbes                                              |
 | OAuth redirect-schemes             | 6    | Gjenbruk dagens loopback-mønster; test per provider                                                    |
-| Signering/notarisering             | 0    | Kopier Verbatim/SundayStage release.yml + secrets                                                      |
+| Signering/notarisering             | 0    | Kopier SundayEdit/SundayStage release.yml + secrets                                                    |
 | Scope (stor app)                   | alle | Vertikale skiver, ren kjerne, CI fra dag én                                                            |
 
 ## 6. Recorder-spike scope (Fase 0 Spike B → bygges ut i Fase 3)

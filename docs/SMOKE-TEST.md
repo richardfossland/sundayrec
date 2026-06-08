@@ -642,10 +642,10 @@ gated behind a default-off feature.
 ### Sunday-suite integrations (no feature) — 11 handlers
 
 Mirrors `src/main/ipc/integrations.ts`. Typed opt-in settings + the Song/Plan/
-Verbatim hand-offs. The mappers (settings shallow-merge, usage-payload shaping +
-idempotency key, plan metadata/schedule, verbatim deep link + SRT/VTT parse,
+SundayEdit hand-offs. The mappers (settings shallow-merge, usage-payload shaping +
+idempotency key, plan metadata/schedule, sundayedit deep link + SRT/VTT parse,
 sidecar paths) are unit-tested in `sundayrec-core::integrations`; the HTTP
-submissions + the `verbatim://` launch reuse the always-present `reqwest`/opener
+submissions + the `sundayedit://` launch reuse the always-present `reqwest`/opener
 (no new dep, no feature) and are **NETWORK-UNVERIFIED**.
 
 1. `integrations_get_settings` / `integrations_set_settings` round-trip the
@@ -664,9 +664,9 @@ submissions + the `verbatim://` launch reuse the always-present `reqwest`/opener
    `integrations_plan_update_service` PATCHes `was_streamed_flag`/`recording_url`.
    - **Expected:** `plan_not_ready` until `plan.enabled` + a `planApiUrl` are set;
      `no_church_id` without one. // NETWORK-UNVERIFIED.
-5. `integrations_verbatim_send` opens `verbatim://import?…`; `..._import` parses a
-   Verbatim SRT/VTT into the recording's `.transcript.json`.
-   - **Expected:** `verbatim_not_installed` when no scheme handler;
+5. `integrations_sundayedit_send` opens `sundayedit://import?…`; `..._import` parses a
+   SundayEdit SRT/VTT into the recording's `.transcript.json`.
+   - **Expected:** `sundayedit_not_installed` when no scheme handler;
      `no_captions_parsed` when the subtitle file yields no segments. // NETWORK-UNVERIFIED.
 
 (SundayStage manifest import is `stage_import_manifest`, covered by §PU-6.)

@@ -1,5 +1,5 @@
 # Build, sign, notarize, and publish SundayRec for macOS + Windows on a version
-# tag. Mirrors the proven SundayEdit/Verbatim release flow.
+# tag. Mirrors the proven SundayEdit release flow.
 #
 # Cut a release:   npm version <patch|minor|major>   (bumps package.json)
 #                  # bump src-tauri/tauri.conf.json "version" + Cargo.toml to match
