@@ -118,14 +118,15 @@ jobs:
           # `npm run tauri signer generate` (pubkey is in tauri.conf.json).
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # macOS code-signing + notarization (Developer ID, team 784GN847G4).
-          # NOTE: all these secrets must exist before tagging — an *empty*
-          # APPLE_CERTIFICATE makes tauri-action run `security import` and fail.
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # macOS code-signing + notarization. Reuses the existing Electron-era
+          # secrets (Developer ID, team 784GN847G4) under tauri-action's names,
+          # so nothing has to be re-entered. MAC_CERTS = base64 .p12,
+          # APPLE_APP_SPECIFIC_PASSWORD = the notarization app password.
+          APPLE_CERTIFICATE: ${{ secrets.MAC_CERTS }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: "Developer ID Application: Richard Fossland (784GN847G4)"
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: ${{ github.ref_name }}
