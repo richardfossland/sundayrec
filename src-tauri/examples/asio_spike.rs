@@ -18,6 +18,7 @@
 //! still compile everywhere the workspace does.
 
 #[cfg(all(target_os = "windows", feature = "asio"))]
+#[allow(deprecated)] // cpal 0.17 deprecates `Device::name`; still the human device name we match against — same pattern as audio/asio.rs::imp.
 fn main() {
     use cpal::traits::{DeviceTrait, HostTrait};
 
@@ -57,8 +58,8 @@ fn main() {
                     println!(
                         "   input  : {} ch, {}–{} Hz, {:?}",
                         cfg.channels(),
-                        cfg.min_sample_rate().0,
-                        cfg.max_sample_rate().0,
+                        cfg.min_sample_rate(),
+                        cfg.max_sample_rate(),
                         cfg.sample_format(),
                     );
                 }
@@ -72,8 +73,8 @@ fn main() {
                     println!(
                         "   output : {} ch, {}–{} Hz, {:?}",
                         cfg.channels(),
-                        cfg.min_sample_rate().0,
-                        cfg.max_sample_rate().0,
+                        cfg.min_sample_rate(),
+                        cfg.max_sample_rate(),
                         cfg.sample_format(),
                     );
                 }
