@@ -4,11 +4,22 @@ Recording for church services — the Tauri 2 rebuild of the Electron SundayRec,
 on the same foundation as the rest of the Sunday suite (Tauri 2 + Rust +
 React 19 + Tailwind v4 + ts-rs).
 
-The Electron app (`../../sundayrec`) is the **behavioural specification**, not a
-template. We reuse the _knowledge_ — hardened ffmpeg arguments, device parsers,
-error classification, silence/watchdog logic — but rebuild the _structure_
-cleanly in Rust. See [`docs/MIGRATION-TAURI2.md`](docs/MIGRATION-TAURI2.md) for
-the living, phase-by-phase plan.
+> **This is the official SundayRec.** It supersedes the original Electron app
+> (versions ≤ 4.55.0). The legacy Electron source is preserved on the
+> [`electron-legacy`](https://github.com/richardfossland/sundayrec/tree/electron-legacy)
+> branch (tag `v4.55.0`) and is no longer maintained.
+>
+> **Upgrading from 4.x:** download the latest installer from
+> [Releases](https://github.com/richardfossland/sundayrec/releases/latest). The
+> new app replaces the old one. Your **recordings are safe** (they live in your
+> chosen save folder); app **settings must be re-entered** (the new version
+> stores them separately).
+
+The legacy Electron app (now the `electron-legacy` branch) is the **behavioural
+specification**, not a template. We reuse the _knowledge_ — hardened ffmpeg
+arguments, device parsers, error classification, silence/watchdog logic — but
+rebuild the _structure_ cleanly in Rust. See
+[`docs/MIGRATION-TAURI2.md`](docs/MIGRATION-TAURI2.md) for the phase-by-phase plan.
 
 ## Status — Fase 0-fundament
 
