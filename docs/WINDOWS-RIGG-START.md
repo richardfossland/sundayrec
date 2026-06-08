@@ -83,6 +83,7 @@ npm run tauri build -- --no-default-features --features editor,tray
 ```
 
 Røyktest (se `WINDOWS-PROCESS-HYGIENE.md` for full liste):
+
 - Vanlig USB-mic → ta opp → ren fil; loggen viser `cpal capture starting host=WASAPI`.
 - Klikk app-ikonet 5× raskt → KUN én `SundayRec.exe` i Oppgavebehandling.
 - Start opptak → drep `SundayRec.exe` via Oppgavebehandling → INGEN `ffmpeg.exe` igjen.
