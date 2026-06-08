@@ -71,11 +71,16 @@ pub(crate) async fn access_token(
     let status = resp.status();
     let text = resp.text().await.unwrap_or_default();
     if !status.is_success() {
+        // Classify from the body, but do NOT put the raw response into the error:
+        // it's persisted to the queue's `last_error` and shown in the UI. Surface
+        // only the status; the full body goes to the (local) debug log.
+        tracing::debug!(%status, "cloud token refresh failed");
         return match oauth::classify_refresh_error(&text) {
             oauth::RefreshErrorKind::InvalidGrant => TokenOutcome::NeedsReauth,
-            oauth::RefreshErrorKind::Other => {
-                TokenOutcome::Transient(format!("refresh {status}: {text}"))
-            }
+            oauth::RefreshErrorKind::Other => TokenOutcome::Transient(format!(
+                "token-oppdatering feilet (HTTP {})",
+                status.as_u16()
+            )),
         };
     }
     match oauth::parse_token_response(&text, now_ms()) {
@@ -279,6 +284,27 @@ pub fn spawn(pool: SqlitePool, config: Option<GoogleOAuthConfig>) {
     tauri::async_runtime::spawn(async move {
         if config.is_none() {
             tracing::info!("cloud upload worker idle: Google OAuth client not configured");
+        }
+        // Crash recovery: an entry left in `Uploading` was interrupted by a crash /
+        // force-quit mid-upload. `select_next` only picks `Pending`, so without this
+        // it would sit stuck forever and that backup would silently never happen.
+        // At boot any `Uploading` is stale → requeue it (the upload restarts fresh).
+        if let Ok(mut entries) = store::load_queue(&pool).await {
+            let stale: Vec<String> = entries
+                .iter()
+                .filter(|e| e.status == queue::UploadStatus::Uploading)
+                .map(|e| e.id.clone())
+                .collect();
+            if !stale.is_empty() {
+                queue::reset_stale_uploading(&mut entries);
+                tracing::info!(
+                    "cloud upload: requeued {} interrupted upload(s) from a previous session",
+                    stale.len()
+                );
+                for id in &stale {
+                    let _ = persist_entry(&pool, &entries, id).await;
+                }
+            }
         }
         loop {
             let Some(cfg) = config.as_ref() else {

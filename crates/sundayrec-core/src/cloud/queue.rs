@@ -154,6 +154,24 @@ pub fn select_next(entries: &[QueueEntry], now_ms: i64) -> Option<String> {
         .map(|e| e.id.clone())
 }
 
+/// Reset any entry left in `Uploading` back to `Pending`, returning how many were
+/// reset. An entry only reaches `Uploading` while the worker is actively pushing
+/// it; if the app crashed or was force-quit mid-upload it stays `Uploading` in the
+/// DB forever, and [`select_next`] (which only picks `Pending`) would NEVER retry
+/// it — that backup is silently lost. Call this ONCE at worker startup: at boot
+/// any `Uploading` is stale by definition, so it's safe to requeue. (Resumable
+/// sessions aren't persisted, so the retry restarts the upload from scratch.)
+pub fn reset_stale_uploading(entries: &mut [QueueEntry]) -> usize {
+    let mut reset = 0;
+    for e in entries.iter_mut() {
+        if e.status == UploadStatus::Uploading {
+            e.status = UploadStatus::Pending;
+            reset += 1;
+        }
+    }
+    reset
+}
+
 /// Transition an entry to `uploading` and increment its attempt count, as
 /// `processQueue` does just before calling `uploadFile`. No-op if the id is
 /// unknown.
@@ -362,6 +380,31 @@ mod tests {
         mark_uploading(&mut q, "a");
         assert_eq!(q[0].status, UploadStatus::Uploading);
         assert_eq!(q[0].attempts, 1);
+    }
+
+    #[test]
+    fn reset_stale_uploading_requeues_only_uploading() {
+        let mut q = vec![
+            QueueEntry {
+                status: UploadStatus::Uploading,
+                ..drive_entry("stuck", "/a")
+            },
+            QueueEntry {
+                status: UploadStatus::Pending,
+                ..drive_entry("pend", "/b")
+            },
+            QueueEntry {
+                status: UploadStatus::Failed,
+                ..drive_entry("dead", "/c")
+            },
+        ];
+        // A stuck `Uploading` is invisible to select_next until reset.
+        assert_eq!(select_next(&q, 1_000_000), Some("pend".to_string()));
+        let n = reset_stale_uploading(&mut q);
+        assert_eq!(n, 1);
+        assert_eq!(q[0].status, UploadStatus::Pending); // requeued
+        assert_eq!(q[1].status, UploadStatus::Pending); // untouched
+        assert_eq!(q[2].status, UploadStatus::Failed); // untouched
     }
 
     #[test]

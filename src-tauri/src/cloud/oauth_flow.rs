@@ -189,8 +189,12 @@ async fn post_form(url: &str, body: String) -> AppResult<String> {
         .await
         .map_err(|e| AppError::Internal(format!("token body: {e}")))?;
     if !status.is_success() {
+        // Don't surface the raw token-endpoint body (it reaches the UI). Status
+        // only; the body goes to the local debug log for troubleshooting.
+        tracing::debug!(%status, "cloud token endpoint error");
         return Err(AppError::Internal(format!(
-            "token endpoint returned {status}: {text}"
+            "token endpoint returned HTTP {}",
+            status.as_u16()
         )));
     }
     Ok(text)
