@@ -171,6 +171,15 @@ export function setupGeneralPage(): void {
     setUpdateStatus('error', t('update.error', 'Kunne ikke sjekke for oppdateringer'))
     console.warn('Update error:', msg)
   })
+
+  // Auto-check on launch + hourly, mirroring the Electron app's updater (which
+  // checked on startup and every 60 min). Listeners above are registered first,
+  // so the synthesized update-* events reach the UI. Gated on the autoUpdate
+  // setting; the manual "Se etter oppdateringer" button always works.
+  if (settings.autoUpdate !== false) {
+    void window.api.checkForUpdates()
+    setInterval(() => { void window.api.checkForUpdates() }, 60 * 60 * 1000)
+  }
 }
 
 export function applyGeneralSettingsToUI(): void {

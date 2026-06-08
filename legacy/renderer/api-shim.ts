@@ -424,6 +424,38 @@ async function syncLaunchAtLogin(s: unknown): Promise<void> {
 const noop = (): void => {};
 const off = () => {}; // unsubscribe stub
 
+// ── Updater bridge ──────────────────────────────────────────────────────────
+// The Tauri updater commands are POLLED (update_status / update_check /
+// update_download_install / update_relaunch) rather than event-emitting, so the
+// shim synthesizes the Electron-style `update-*` events the renderer listens for
+// (see general-page.ts). These channels have no Rust emitter, so `on()` keeps
+// their callbacks in this local registry and `checkForUpdates`/`installUpdate`
+// drive them.
+type UpdateStatus =
+  | { phase: "idle" | "checking" | "upToDate" }
+  | { phase: "available"; version: string }
+  | { phase: "downloading"; version: string; percent: number }
+  | { phase: "readyToInstall"; version: string }
+  | { phase: "error"; message?: string };
+const LOCAL_CHANNELS = new Set([
+  "update-checking",
+  "update-available",
+  "update-not-available",
+  "update-download-progress",
+  "update-downloaded",
+  "update-error",
+]);
+const localListeners: Record<string, Array<(p: unknown) => void>> = {};
+function emitLocal(channel: string, payload?: unknown): void {
+  for (const fn of localListeners[channel] ?? []) {
+    try {
+      fn(payload);
+    } catch {
+      /* a listener error must not break the updater flow */
+    }
+  }
+}
+
 // Platform from the webview UA (the renderer's init() also checks this).
 const platform = navigator.userAgent.toLowerCase().includes("mac")
   ? "darwin"
@@ -621,8 +653,57 @@ const api: Record<string, unknown> = {
   getAppVersion: async () =>
     (await call<{ version?: string }>("app_info", undefined, {})).version ?? "—",
   getPlatform: async () => platform,
-  checkForUpdates: async () => ({ available: false }),
-  installUpdate: async () => true,
+  checkForUpdates: async () => {
+    emitLocal("update-checking");
+    try {
+      const st = await invoke<UpdateStatus>("update_check");
+      if (st.phase === "available") {
+        emitLocal("update-available", { version: st.version });
+        return { available: true, version: st.version };
+      }
+      if (st.phase === "error") {
+        emitLocal("update-error", st.message ?? "error");
+        return { available: false };
+      }
+      emitLocal("update-not-available");
+      return { available: false };
+    } catch (e) {
+      emitLocal("update-error", String(e));
+      return { available: false };
+    }
+  },
+  installUpdate: async () => {
+    let timer: ReturnType<typeof setInterval> | undefined;
+    try {
+      // Poll the engine status for download progress while the install runs.
+      timer = setInterval(() => {
+        void invoke<UpdateStatus>("update_status")
+          .then((st) => {
+            if (st.phase === "downloading")
+              emitLocal("update-download-progress", { percent: st.percent });
+            else if (st.phase === "readyToInstall")
+              emitLocal("update-downloaded", { version: st.version });
+          })
+          .catch(() => {});
+      }, 400);
+      const st = await invoke<UpdateStatus>("update_download_install");
+      clearInterval(timer);
+      if (st.phase === "readyToInstall") {
+        emitLocal("update-downloaded", { version: st.version });
+        await invoke("update_relaunch");
+        return true;
+      }
+      if (st.phase === "error") {
+        emitLocal("update-error", st.message ?? "error");
+        return false;
+      }
+      return true;
+    } catch (e) {
+      if (timer !== undefined) clearInterval(timer);
+      emitLocal("update-error", String(e));
+      return false;
+    }
+  },
   getLogs: async () => [],
   getLogFilePath: async () => null,
   // Comprehensive diagnose: backend gathers system/devices/ffmpeg/disk/
@@ -1073,6 +1154,15 @@ const api: Record<string, unknown> = {
   // Map the old Electron channel to its Tauri event and forward the payload.
   // Unknown channels (no Rust emitter yet) return a harmless no-op unsubscribe.
   on: (channel: string, fn: (...args: unknown[]) => void) => {
+    // Frontend-synthesized updater channels (no Rust emitter) — keep locally.
+    if (LOCAL_CHANNELS.has(channel)) {
+      (localListeners[channel] ??= []).push(fn as (p: unknown) => void);
+      return () => {
+        localListeners[channel] = (localListeners[channel] ?? []).filter(
+          (g) => g !== fn,
+        );
+      };
+    }
     const evt = EVENT_MAP[channel];
     if (!evt) return off;
     let unlisten: UnlistenFn | undefined;

@@ -24,7 +24,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 # the cost is acceptable for the value; the model is downloaded at runtime via the
 # UI (`whisper_download_model`). Both run real ffmpeg/inference (HARDWARE-
 # UNVERIFIED). Build with `--no-default-features` and they return `feature_disabled`.
-default = ["editor", "whisper", "tray"]
+default = ["editor", "whisper", "tray", "updater"]
 # PU-1: SMTP/Gmail error+test alerts. Pulls `lettre` for the SMTP transport (the
 # Gmail-API path reuses the already-present `reqwest`).
 email = ["dep:lettre"]

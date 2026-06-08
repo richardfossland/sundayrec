@@ -54,14 +54,14 @@ jobs:
           # builds on both runners and degrades gracefully (install failure only
           # logs a warning), so it's safe to ship.
           - platform: macos-latest
-            args: "-- --no-default-features --features editor,tray"
+            args: "-- --no-default-features --features editor,tray,updater"
           # Windows adds `asio`: a low-latency, single-device multichannel audio
           # backend for pro interfaces (the dshow path splits them into stereo
           # pairs). It needs the Steinberg ASIO SDK + LLVM + MSVC at build time —
           # set up by the windows-only steps below (see docs/BUILD_ASIO.md). The
           # recorder falls back to WASAPI automatically when no ASIO driver exists.
           - platform: windows-latest
-            args: "-- --no-default-features --features editor,tray,asio"
+            args: "-- --no-default-features --features editor,tray,asio,updater"
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -113,13 +113,20 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Signing is intentionally NOT wired here yet: this is an UNSIGNED
-          # prerelease. Even an *empty* APPLE_CERTIFICATE env makes tauri-action
-          # run `security import` and fail ("failed to import keychain
-          # certificate"), so the APPLE_* / TAURI_SIGNING_* vars are omitted
-          # entirely. To enable signing later, add the secrets back here (see
-          # docs/DISTRIBUTION.md) and flip includeUpdaterJson when the updater
-          # keypair lands.
+          # Updater signing — REQUIRED for auto-update. Signs latest.json + the
+          # per-platform artifacts with the keypair from
+          # `npm run tauri signer generate` (pubkey is in tauri.conf.json).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS code-signing + notarization (Developer ID, team 784GN847G4).
+          # NOTE: all these secrets must exist before tagging — an *empty*
+          # APPLE_CERTIFICATE makes tauri-action run `security import` and fail.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "SundayRec ${{ github.ref_name }}"
@@ -132,6 +139,6 @@ jobs:
             - Windows: "More info" ▸ "Run anyway".
           releaseDraft: true
           prerelease: true
-          # Phase 9: flip to true once the updater plugin + keypair are in place.
-          includeUpdaterJson: false
+          # Generates latest.json (the updater feed) alongside the installers.
+          includeUpdaterJson: true
           args: ${{ matrix.args }}
