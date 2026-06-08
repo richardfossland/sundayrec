@@ -9,6 +9,14 @@
 </head>
 <body>
 
+<!-- ── Deprecation notice — this Electron build is superseded by the new SundayRec ── -->
+<div id="deprecation-banner" style="position:fixed;left:0;right:0;bottom:0;z-index:99999;display:flex;align-items:center;gap:12px;justify-content:center;flex-wrap:wrap;padding:10px 16px;background:linear-gradient(90deg,#172F5E,#2A4E92);color:#fff;font-size:13px;border-top:2px solid #EBB84B;box-shadow:0 -4px 16px rgba(0,0,0,.25)">
+  <span style="font-weight:700;color:#F2D58A" data-i18n="deprecation.title">Utdatert versjon</span>
+  <span data-i18n="deprecation.body">Denne versjonen av SundayRec er erstattet av en ny, ombygd versjon. Last ned den nye for å fortsette å få oppdateringer og forbedringer.</span>
+  <button id="btn-deprecation-download" style="background:#EBB84B;color:#172F5E;border:none;border-radius:6px;padding:6px 14px;font-weight:700;cursor:pointer" data-i18n="deprecation.download">Last ned ny versjon</button>
+  <button id="btn-deprecation-dismiss" aria-label="Lukk" title="Lukk" style="background:transparent;color:#fff;border:none;font-size:18px;cursor:pointer;line-height:1;padding:4px 8px">×</button>
+</div>
+
 <!-- ── Sidebar ─────────────────────────────────────────────────── -->
 <nav id="sidebar">
   <div class="sidebar-top">

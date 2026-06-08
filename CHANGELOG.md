@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.55.0] — 2026-06-08
+
+### Deprecated — Siste Electron-versjon
+
+SundayRec er bygget om fra grunnen (Tauri + Rust) for bedre stabilitet og ytelse.
+Denne Electron-versjonen er den **siste** og vedlikeholdes ikke videre.
+
+- Lagt til et varsel nederst i appen om at versjonen er utdatert, med en knapp
+  som åpner nedlastingssiden for den nye SundayRec.
+- Opptakene dine er trygge (de ligger i den mappen du har valgt). Appens
+  innstillinger må settes på nytt i den nye versjonen.
+
+---
+
 ## [4.54.1] — 2026-05-27
 
 ### Fixed — In-app oppdatering på macOS

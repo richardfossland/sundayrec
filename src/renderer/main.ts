@@ -62,6 +62,7 @@ declare global {
       pickFolder:          () => Promise<string | null>
       openFolder:          (p: string) => Promise<void>
       revealFile:          (p: string) => Promise<void>
+      openExternal:        (url: string) => Promise<void>
       clearSmtpPassword:   () => Promise<boolean>
       testEmail:           () => Promise<{ ok: boolean; error?: string }>
       updateHistoryNote:   (ts: number, note: string) => Promise<void>
@@ -389,6 +390,17 @@ async function init(): Promise<void> {
   setupClipReset()
   setupSettingsTabs()
   setupGlobalEscape()
+
+  // Deprecation notice — this Electron build is superseded by the new SundayRec.
+  // The download button opens the GitHub releases page (stable URL) in the
+  // system browser; dismiss hides it for this session (reappears next launch).
+  document.getElementById('btn-deprecation-download')?.addEventListener('click', () => {
+    void window.api.openExternal('https://github.com/richardfossland/sundayrec/releases/latest')
+  })
+  document.getElementById('btn-deprecation-dismiss')?.addEventListener('click', () => {
+    const b = document.getElementById('deprecation-banner')
+    if (b) b.style.display = 'none'
+  })
 
   window.openEditorWithFile = openEditorWithFile
   window.openEditorReviewMode = openEditorReviewMode

@@ -67,6 +67,7 @@ contextBridge.exposeInMainWorld('api', {
   pickFolder:     ()         => ipcRenderer.invoke('pick-folder'),
   openFolder:     (p: string) => ipcRenderer.invoke('open-folder', p),
   revealFile:     (p: string) => ipcRenderer.invoke('reveal-file', p),
+  openExternal:   (url: string) => ipcRenderer.invoke('open-external', url),
 
   clearSmtpPassword: ()      => ipcRenderer.invoke('clear-smtp-password'),
   testEmail:        ()       => ipcRenderer.invoke('test-email'),

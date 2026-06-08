@@ -38,6 +38,14 @@ export function registerFilesIpc(ctx: FilesIpcContext): void {
     shell.showItemInFolder(p)
   })
 
+  // Open an external https URL in the system browser. Restricted to https so a
+  // compromised renderer can't launch arbitrary schemes/files. Used by the
+  // deprecation banner to send users to the new SundayRec download page.
+  ipcMain.handle('open-external', (_, url: string) => {
+    if (typeof url !== 'string' || !/^https:\/\//i.test(url)) return
+    return shell.openExternal(url)
+  })
+
   ipcMain.handle('pick-audio-file', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender) ?? ctx.mainWindow
     if (!win) return null

@@ -978,5 +978,10 @@
     "info": {
       "size": "{w}×{h} px · {size}"
     }
+  },
+  "deprecation": {
+    "title": "Föråldrad version",
+    "body": "Den här versionen av SundayRec har ersatts av en ny, ombyggd version. Ladda ner den nya för att fortsätta få uppdateringar och förbättringar.",
+    "download": "Ladda ner ny version"
   }
 }
