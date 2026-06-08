@@ -20,6 +20,7 @@ import { settings } from '../state'
 import { startMonitorStream, stopMonitorStream, reconnectMonitorStream, getAudioDevices } from '../audio/capture'
 import type { MonitorSession } from '../audio/capture'
 import { makeVuState, tickVU, stopVuState } from '../audio/vu'
+import { RecordingWaveform } from '../audio/waveform'
 import { fmtCountdown, flashMsg, isoDate } from '../helpers'
 import { stopVU as stopHomeVU } from './home-vu'
 import { stopMonitoring as stopAudioPageMonitoring } from './audio-page'
@@ -65,6 +66,26 @@ let schedStopTimer: ReturnType<typeof setTimeout>  | null = null
 let schedCntTimer:  ReturnType<typeof setInterval> | null = null
 
 const recVu = makeVuState()
+
+// Premium scrolling waveform for the recording overlay (driven by the same VU
+// pipeline, tapped once — see startMonitoring's tickVU onSignal callback).
+let recWaveform: RecordingWaveform | null = null
+
+/** dBFS (−60..0) → 0..1 envelope height (matches the VU bar mapping). */
+function dbToEnvHeight(db: number): number {
+  return (Math.max(-60, Math.min(0, db)) + 60) / 60
+}
+
+/** Instantaneous linear peak (max |sample|) from a reused VU time-domain buffer. */
+function bufferPeak(buf: Float32Array | null): number {
+  if (!buf) return 0
+  let m = 0
+  for (let i = 0; i < buf.length; i++) {
+    const a = buf[i] < 0 ? -buf[i] : buf[i]
+    if (a > m) m = a
+  }
+  return m
+}
 
 // ── Setup ────────────────────────────────────────────────────────────────────
 
@@ -429,10 +450,25 @@ async function startMonitoring(opts: RecordingOpts): Promise<void> {
     analyserR: monitorSession.vuAnalyserR
   })
 
+  // Premium scrolling waveform — same source as the VU meter, tapped once.
+  const wfCanvas = document.getElementById('rec-waveform') as HTMLCanvasElement | null
+  if (wfCanvas) {
+    recWaveform = new RecordingWaveform(wfCanvas)
+    recWaveform.start()
+  }
+
   tickVU(recVu, vuL, vuPkL, vuDbL, vuR, vuPkR, vuDbR, (dbL, dbR) => {
     updateRecSignalStatus(dbL, dbR)
     if (cL && recVu.smL > -0.5) cL.classList.add('clip')
     if (cR && recVu.smR > -0.5) cR.classList.add('clip')
+    if (recWaveform) {
+      // PEAK halo = instantaneous transient (from raw PCM); RMS core = the
+      // smoothed body. Both as 0..1 perceptual heights; combine L/R (louder).
+      const pk = Math.max(bufferPeak(recVu.bufL), bufferPeak(recVu.bufR))
+      const peakH = dbToEnvHeight(pk > 0 ? 20 * Math.log10(pk) : -60)
+      const rmsH = Math.max(dbToEnvHeight(dbL), dbToEnvHeight(dbR))
+      recWaveform.push(peakH, rmsH)
+    }
   })
 
   // Signal check — warn if input is near-silent 15 s into recording
@@ -467,6 +503,7 @@ async function startMonitoring(opts: RecordingOpts): Promise<void> {
 
 async function stopMonitoring(): Promise<void> {
   stopVuState(recVu)
+  if (recWaveform) { recWaveform.destroy(); recWaveform = null }
   if (recTimerIval)     { clearInterval(recTimerIval);     recTimerIval     = null }
   if (signalCheckTimer) { clearTimeout(signalCheckTimer);  signalCheckTimer = null }
 

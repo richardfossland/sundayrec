@@ -1216,6 +1216,17 @@ select.form-input {
 
 /* VU section */
 .rec-vu-section { width: 100%; min-width: 0; }
+
+/* Premium scrolling waveform (canvas draws its own gradient bg). Rounded box
+   clips the bitmap; soft ring + shadow frame it like a DAW timeline. */
+.rec-waveform {
+  display: block;
+  width: 100%;
+  height: 132px;
+  margin: 10px 0 16px;
+  border-radius: 12px;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.28), inset 0 0 0 1px rgba(240, 187, 71, 0.12);
+}
 .rec-vu-header {
   display: flex; align-items: center; justify-content: space-between;
   gap: 12px 18px; flex-wrap: wrap;
