@@ -385,6 +385,7 @@ pub fn run() {
             commands::streaming::stream_status,
             commands::streaming::stream_start,
             commands::streaming::stream_stop,
+            commands::streaming::stream_preview_path,
             commands::streaming::stream_set_key,
             commands::streaming::stream_delete_key,
             // R3 NDI source discovery + receiver (STUB; gated by `ndi`).

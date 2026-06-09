@@ -459,7 +459,10 @@ async function onStartStopClick(alsoRecord: boolean): Promise<void> {
       resolution,
       framerate,
       videoBitrateKbps: settings.streamVideoBitrate ?? undefined,
-      destinations: dests.map(d => ({ id: d.id, name: d.name, rtmpUrl: d.rtmpUrl, enabled: true })),
+      // Full destination view (incl. hasKey — these are pre-filtered on hasKey)
+      // so the backend's StreamDestinationView deserialize succeeds.
+      destinations: dests.map(d => ({ id: d.id, name: d.name, rtmpUrl: d.rtmpUrl, enabled: true, hasKey: true })),
+      overlays: settings.streamOverlays ?? [],
       alsoRecord,
     })
     if (!result.ok) {
