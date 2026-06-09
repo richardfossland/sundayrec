@@ -1112,10 +1112,42 @@ const api: Record<string, unknown> = {
   // streamStatus shape (idle) matches old fields; live telemetry arrives via the
   // streaming://stats event. The action commands are wired:
   streamStatus: async () => call("stream_status", undefined, streamStatusStub),
-  streamStart: async (params: unknown) =>
-    call("stream_start", params as Record<string, unknown>, { ok: false }),
+  // stream_start resolves device tokens / snapshot / record-path itself from
+  // settings — the renderer only sends the stream CONFIG. Map the resolution to
+  // the backend enum's lowercase tag ("720p" → "p720"), pass full destination
+  // views (incl. hasKey) + overlays, and surface the real error.
+  streamStart: async (params: unknown) => {
+    const p = (params ?? {}) as {
+      resolution?: string;
+      framerate?: number;
+      videoBitrateKbps?: number;
+      audioBitrateKbps?: number;
+      destinations?: unknown[];
+      overlays?: unknown[];
+      alsoRecord?: boolean;
+    };
+    const resMap: Record<string, string> = {
+      "480p": "p480",
+      "720p": "p720",
+      "1080p": "p1080",
+    };
+    try {
+      const status = await invoke("stream_start", {
+        destinations: p.destinations ?? [],
+        resolution: resMap[p.resolution ?? "720p"] ?? "p720",
+        framerate: p.framerate ?? 30,
+        videoBitrateKbps: p.videoBitrateKbps ?? null,
+        audioBitrateKbps: p.audioBitrateKbps ?? null,
+        alsoRecord: !!p.alsoRecord,
+        overlays: p.overlays ?? [],
+      });
+      return { ok: true, ...(status as object) };
+    } catch (e) {
+      return { ok: false, error: ipcErrText(e) };
+    }
+  },
   streamStop: async () => call("stream_stop", undefined, true).then(() => true),
-  streamPreviewPath: async () => "", // TODO Phase 3: no stream_preview_path command
+  streamPreviewPath: async () => call("stream_preview_path", undefined, ""),
   streamSetKey: async (destId: string, key: string) =>
     call("stream_set_key", { destId, key }, true).then(() => true),
   streamDeleteKey: async (destId: string) =>
