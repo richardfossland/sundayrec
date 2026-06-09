@@ -219,14 +219,17 @@ pub async fn transcribe(
         let text = state
             .full_get_segment_text(i)
             .map_err(|e| AppError::Internal(format!("whisper text: {e}")))?;
+        // whisper t is centiseconds → ms. saturating_mul defends against a
+        // pathological timestamp wrapping i64 (impossible for real audio, but
+        // free insurance rather than a silent wrap).
         let from = state
             .full_get_segment_t0(i)
             .map_err(|e| AppError::Internal(format!("whisper t0: {e}")))?
-            * 10; // whisper t is centiseconds → ms
+            .saturating_mul(10);
         let to = state
             .full_get_segment_t1(i)
             .map_err(|e| AppError::Internal(format!("whisper t1: {e}")))?
-            * 10;
+            .saturating_mul(10);
         transcription.push(whisper::WhisperRawSegment {
             offsets: whisper::WhisperOffsets { from, to },
             text,
@@ -365,12 +368,31 @@ fn read_wav_f32(path: &std::path::Path) -> AppResult<Vec<f32>> {
     if bytes.len() < 44 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
         return Err(AppError::Internal("not a WAV file".into()));
     }
-    // Find the `data` chunk.
+    // Walk the chunks: validate `fmt ` is the mono 16 kHz the convert step
+    // promised, then read the `data` chunk.
     let mut i = 12;
     while i + 8 <= bytes.len() {
         let id = &bytes[i..i + 4];
         let size =
             u32::from_le_bytes([bytes[i + 4], bytes[i + 5], bytes[i + 6], bytes[i + 7]]) as usize;
+        // The ffmpeg convert step forces `-ac 1 -ar 16000`; assert it rather than
+        // trust it blindly, so a future change to the args can't silently feed
+        // whisper mis-rated or interleaved audio.
+        if id == b"fmt " && size >= 16 && i + 8 + 16 <= bytes.len() {
+            let fmt = i + 8;
+            let channels = u16::from_le_bytes([bytes[fmt + 2], bytes[fmt + 3]]);
+            let rate = u32::from_le_bytes([
+                bytes[fmt + 4],
+                bytes[fmt + 5],
+                bytes[fmt + 6],
+                bytes[fmt + 7],
+            ]);
+            if channels != 1 || rate != 16_000 {
+                return Err(AppError::Internal(format!(
+                    "unexpected WAV format ({channels} ch, {rate} Hz; whisper needs mono 16 kHz)"
+                )));
+            }
+        }
         if id == b"data" {
             let start = i + 8;
             let end = (start + size).min(bytes.len());
@@ -428,6 +450,59 @@ mod tests {
         // After clear, a fresh register succeeds again.
         guard.clear("ggml-base");
         assert!(guard.register("ggml-base").is_some());
+    }
+
+    /// Build a minimal PCM WAV (canonical RIFF/fmt /data) for the reader tests.
+    #[cfg(feature = "whisper")]
+    fn wav_bytes(channels: u16, rate: u32, samples: &[i16]) -> Vec<u8> {
+        let data: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
+        let mut b = Vec::new();
+        b.extend_from_slice(b"RIFF");
+        b.extend_from_slice(&(36u32 + data.len() as u32).to_le_bytes());
+        b.extend_from_slice(b"WAVE");
+        b.extend_from_slice(b"fmt ");
+        b.extend_from_slice(&16u32.to_le_bytes());
+        b.extend_from_slice(&1u16.to_le_bytes()); // PCM
+        b.extend_from_slice(&channels.to_le_bytes());
+        b.extend_from_slice(&rate.to_le_bytes());
+        let byte_rate = rate * channels as u32 * 2;
+        b.extend_from_slice(&byte_rate.to_le_bytes());
+        b.extend_from_slice(&(channels * 2).to_le_bytes()); // block align
+        b.extend_from_slice(&16u16.to_le_bytes()); // bits per sample
+        b.extend_from_slice(b"data");
+        b.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        b.extend_from_slice(&data);
+        b
+    }
+
+    #[cfg(feature = "whisper")]
+    #[test]
+    fn read_wav_f32_accepts_mono_16k_and_normalises() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("ok.wav");
+        std::fs::write(&p, wav_bytes(1, 16_000, &[0, 16_384, -16_384])).unwrap();
+        let out = read_wav_f32(&p).unwrap();
+        assert_eq!(out.len(), 3);
+        assert!((out[0] - 0.0).abs() < 1e-6);
+        assert!((out[1] - 0.5).abs() < 1e-3);
+        assert!((out[2] + 0.5).abs() < 1e-3);
+    }
+
+    #[cfg(feature = "whisper")]
+    #[test]
+    fn read_wav_f32_rejects_stereo_or_wrong_rate() {
+        let dir = tempfile::tempdir().unwrap();
+        let stereo = dir.path().join("stereo.wav");
+        std::fs::write(&stereo, wav_bytes(2, 16_000, &[0, 0])).unwrap();
+        let err = read_wav_f32(&stereo).unwrap_err();
+        assert!(err.to_string().contains("mono 16 kHz"));
+
+        let wrong_rate = dir.path().join("44k.wav");
+        std::fs::write(&wrong_rate, wav_bytes(1, 44_100, &[0])).unwrap();
+        assert!(read_wav_f32(&wrong_rate)
+            .unwrap_err()
+            .to_string()
+            .contains("mono 16 kHz"));
     }
 
     #[cfg(not(feature = "whisper"))]
