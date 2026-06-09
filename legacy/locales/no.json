@@ -13,7 +13,7 @@
     "general": "Generelt",
     "editor": "Rediger",
     "live": "Direkte",
-    "search": "Søk"
+    "search": "Søk & historikk"
   },
   "status": {
     "ready": "Alt er klart",
@@ -77,7 +77,8 @@
     },
     "cloudLabel": "SKY-BACKUP",
     "thumbLabel": "EPISODEBILDE",
-    "whisperLabel": "TRANSKRIPSJON"
+    "whisperLabel": "TRANSKRIPSJON",
+    "seeAll": "Se alle →"
   },
   "update": {
     "available": "Ny versjon {v} er tilgjengelig — laster ned…",
@@ -935,9 +936,9 @@
     "exportVtt": "↧ VTT"
   },
   "search": {
-    "title": "Søk i prekener",
-    "subtitle": "Søk på tvers av alle transkriberte opptak. Klikk på et treff for å åpne opptaket på det punktet.",
-    "placeholder": "Søk etter ord eller fraser…",
+    "title": "Søk & historikk",
+    "subtitle": "Søk i preken-tekst eller filnavn, og se hele opptakshistorikken. Klikk et tekst-treff for å åpne opptaket på det punktet.",
+    "placeholder": "Søk i preken eller filnavn…",
     "reindex": "↻ Oppdater indeks",
     "indexing": "Bygger indeks…",
     "recent": "Nylig transkribert",
@@ -951,7 +952,9 @@
     "noTranscriptsTitle": "Ingen transkripsjoner ennå",
     "noTranscriptsDesc": "Åpne et opptak i Rediger og klikk Transkriber for å bygge opp et søkbart arkiv. Når du har én eller flere transkripsjoner, vises de her.",
     "indexFailed": "Klarte ikke laste indeks",
-    "fileNotFound": "Originalfilen ble ikke funnet. Den kan ha blitt flyttet eller slettet."
+    "fileNotFound": "Originalfilen ble ikke funnet. Den kan ha blitt flyttet eller slettet.",
+    "noRecordingsTitle": "Ingen opptak ennå",
+    "noRecordingsDesc": "Når du har tatt opp en gudstjeneste, dukker den opp her. Transkriber et opptak i Rediger for å kunne søke i selve preken-teksten."
   },
   "thumbnail": {
     "section": {

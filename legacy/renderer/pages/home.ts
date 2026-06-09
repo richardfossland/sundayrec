@@ -1,9 +1,10 @@
 import { t, currentLang } from '../i18n'
 import { settings, patchSettings } from '../state'
-import { fmtCountdown, fmtStorageHours, fmtDate, flashMsg } from '../helpers'
+import { fmtCountdown, fmtStorageHours, fmtDate } from '../helpers'
 import { startVU } from './home-vu'
 import { getAudioDevices } from '../audio/capture'
 import { refreshReviewQueue, setupReviewQueueListeners } from './review-queue-home'
+import type { RecordingEntry } from './history'
 
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 
@@ -13,7 +14,6 @@ export function deactivateHome(): void {
   // navigating away from home (so the page stays clean if returned to).
   relocateVuForVideoMode(false)
 }
-let fullHistory: RecordingEntry[] = []
 
 // ── Video preview state ──────────────────────────────────────────────────────
 
@@ -818,44 +818,12 @@ export function setupHome(): void {
     document.querySelector<HTMLElement>('#settings-tabs .inner-tab[data-tab="settings-audio"]')?.click()
   })
 
-  document.getElementById('btn-prune-history')?.addEventListener('click', async e => {
+  // "Se alle →" jumps to the merged «Søk & historikk» tab — the full history +
+  // its tools (delete / note / prune / clear) and sermon search now live there.
+  // Home only shows the 5 most recent recordings.
+  document.getElementById('home-see-all')?.addEventListener('click', e => {
     e.preventDefault()
-    const removed = await window.api.pruneHistory()
-    await loadRecentHistory()
-    if (removed === 0) flashMsg(document.getElementById('btn-prune-history'), t('history.pruneNone', 'Ingen å rydde'), true)
-  })
-
-  document.getElementById('btn-clear-history')?.addEventListener('click', async e => {
-    e.preventDefault()
-    if (!confirm(t('history.confirmClear', 'Slett hele historikken?'))) return
-    await window.api.clearHistory()
-    fullHistory = []
-    renderHistoryRows(document.getElementById('history-tbody'), [], false)
-    updateHistoryStats([])
-  })
-
-  document.getElementById('btn-delete-errors')?.addEventListener('click', async e => {
-    e.preventDefault()
-    const errors = fullHistory.filter(r => r.status === 'error')
-    if (!errors.length) return
-    if (!confirm(t('history.confirmDeleteErrors', `Slett ${errors.length} feiloppføringer?`).replace('{n}', String(errors.length)))) return
-    for (const r of errors) {
-      if (r.timestamp) await window.api.deleteHistoryEntry(r.timestamp)
-    }
-    await loadRecentHistory()
-  })
-
-  document.getElementById('history-search')?.addEventListener('input', e => {
-    const q = (e.target as HTMLInputElement).value
-    filterAndRenderHistory(q)
-  })
-
-  document.getElementById('btn-history-more')?.addEventListener('click', () => {
-    const panel = document.getElementById('history-more-panel')
-    const btn   = document.getElementById('btn-history-more')
-    const open  = panel?.style.display !== 'none'
-    if (panel) panel.style.display = open ? 'none' : 'flex'
-    btn?.setAttribute('aria-expanded', String(!open))
+    window.showPage('search')
   })
 
   const onDeviceChange = (): void => {
@@ -917,7 +885,7 @@ export async function refreshHome(): Promise<void> {
   await Promise.all([
     loadNextRecording(next),
     loadDiskSpace(),
-    loadRecentHistory(),
+    renderRecentRecordings(),
     checkStatus(next),
     loadHomeInfoStrip(),
     refreshReviewQueue(),
@@ -1065,195 +1033,66 @@ async function loadDiskSpace(): Promise<void> {
   if (diskMetaEl) diskMetaEl.textContent = `${gb.toFixed(0)} GB`
 }
 
-export async function loadRecentHistory(): Promise<void> {
-  fullHistory = ((await window.api.getHistory()) ?? []) as RecordingEntry[]
-  const searchEl = document.getElementById('history-search') as HTMLInputElement | null
-  filterAndRenderHistory(searchEl?.value ?? '')
-}
-
-function filterAndRenderHistory(query: string): void {
-  const q = query.toLowerCase().trim()
-  const rows = q
-    ? fullHistory.filter(r =>
-        (r.filename ?? '').toLowerCase().includes(q) ||
-        (r.date ?? '').includes(q) ||
-        (r.note  ?? '').toLowerCase().includes(q))
-    : fullHistory
-  renderHistoryRows(document.getElementById('history-tbody'), rows, true)
-  updateHistoryStats(fullHistory)
-}
-
-function updateHistoryStats(history: RecordingEntry[]): void {
-  const statsEl = document.getElementById('history-stats')
-  if (!statsEl) return
-  const ok = history.filter(r => r.status === 'ok')
-  if (!ok.length) { statsEl.style.display = 'none'; return }
-  statsEl.style.display = 'flex'
-  const countEl    = document.getElementById('stat-count')
-  const durationEl = document.getElementById('stat-duration')
-  const lastEl     = document.getElementById('stat-last')
-  if (countEl) countEl.textContent = `${ok.length} ${t('history.totalCount', 'opptak')}`
-  let totalSec = 0
-  for (const r of ok) {
-    // formatDuration returns "Xt Ym" (e.g. "1t 30m" or "75m")
-    const m = (r.duration || '').match(/^(?:(\d+)t\s*)?(\d+)m$/)
-    if (!m) continue
-    totalSec += (parseInt(m[1] ?? '0') || 0) * 3600 + parseInt(m[2]) * 60
-  }
-  const th = Math.floor(totalSec / 3600), tm = Math.round((totalSec % 3600) / 60)
-  if (durationEl) durationEl.textContent = th > 0
-    ? `${th} t ${tm} min ${t('history.totalDuration', 'totalt')}`
-    : `${tm} min ${t('history.totalDuration', 'totalt')}`
-  if (lastEl && ok[0]?.date)
-    lastEl.textContent = `${t('history.lastRecording', 'sist')} ${fmtDate(ok[0].date)}`
-}
-
-export function renderHistoryRows(tbody: HTMLElement | null, rows: RecordingEntry[], showReveal: boolean): void {
+/**
+ * Compact «Siste opptak» on home: the 5 most-recent recordings as a light,
+ * read-only list (open-in-editor on row click + reveal/edit icons). The full
+ * history with its tools (delete / note / prune / clear) and sermon search now
+ * live in the «Søk & historikk» tab — reached via the "Se alle →" link.
+ */
+export async function renderRecentRecordings(): Promise<void> {
+  const tbody = document.getElementById('home-recent')
   if (!tbody) return
+  const history = ((await window.api.getHistory()) ?? []) as RecordingEntry[]
+  const recent = history.slice(0, 5)
   tbody.innerHTML = ''
-  if (!rows.length) {
+  if (!recent.length) {
     const td = Object.assign(document.createElement('td'), {
-      colSpan: 6,
+      colSpan: 4,
       textContent: t('history.empty', 'Ingen opptak ennå')
     })
-    td.style.cssText = 'color:var(--text3);text-align:center;padding:20px'
-    const tr = document.createElement('tr')
-    tr.appendChild(td); tbody.appendChild(tr)
+    td.style.cssText = 'color:var(--text3);text-align:center;padding:16px'
+    const tr = document.createElement('tr'); tr.appendChild(td); tbody.appendChild(tr)
     return
   }
-  // Group audio+video pairs from the same session into a single row.
-  // finishSessionAsync adds audio first, then video (note='Video'), so in the
-  // newest-first history list the video entry appears just before the audio entry.
-  const grouped: Array<{ r: RecordingEntry; videoEntry: RecordingEntry | null }> = []
-  {
-    let i = 0
-    while (i < rows.length) {
-      const curr = rows[i], next = rows[i + 1]
-      const isPair = next && curr.date === next.date && curr.startTime === next.startTime &&
-        ((curr.note === 'Video' && next.note !== 'Video') ||
-         (next.note === 'Video' && curr.note !== 'Video'))
-      if (isPair) {
-        const [audio, video] = curr.note === 'Video' ? [next, curr] : [curr, next]
-        grouped.push({ r: audio, videoEntry: video })
-        i += 2
-      } else {
-        grouped.push({ r: curr, videoEntry: null })
-        i++
-      }
-    }
-  }
-  grouped.forEach(({ r, videoEntry }, idx) => {
+  recent.forEach((r, idx) => {
     const tr = document.createElement('tr')
     tr.className = 'hist-row'
     tr.style.animationDelay = `${idx * 0.04}s`
     const badgeCls = r.status === 'ok' || r.status === 'complete' ? 'ok' : r.status === 'error' ? 'error' : 'sched'
     tr.dataset.status = badgeCls
-    const badge    = Object.assign(document.createElement('span'), { className: `badge badge-${badgeCls}`, textContent: t(`history.${r.status}`, r.status) })
-    const tdStatus = document.createElement('td'); tdStatus.appendChild(badge)
-    const tdActions = document.createElement('td'); tdActions.style.cssText = 'white-space:nowrap'
 
-    if (showReveal && r.path) {
+    const timeStr = r.startTime ? ` kl. ${r.startTime}` : ''
+    const cells = [r.date ? `${fmtDate(r.date)}${timeStr}` : '—', r.duration ?? '—', r.filename ?? '—']
+    cells.forEach((text, i) => {
+      const td = document.createElement('td')
+      td.textContent = text
+      if (i === 2 && r.path) td.title = r.path
+      tr.appendChild(td)
+    })
+
+    // Read-only actions: reveal + open-in-editor (no delete/note on the home
+    // overview — those live in the «Søk & historikk» tab).
+    const tdActions = document.createElement('td')
+    tdActions.style.cssText = 'white-space:nowrap;display:flex;align-items:center;gap:3px'
+    if (r.path) {
       const aReveal = document.createElement('a')
       aReveal.href = '#'; aReveal.className = 'hist-action'
       aReveal.title = 'Vis i Finder / Utforsker'
       aReveal.innerHTML = '<svg viewBox="0 0 20 20"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5zM5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"/></svg>'
-      aReveal.addEventListener('click', e => { e.preventDefault(); window.api.revealFile(r.path!) })
+      aReveal.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); window.api.revealFile(r.path!) })
       tdActions.appendChild(aReveal)
 
       const aEdit = document.createElement('a')
       aEdit.href = '#'; aEdit.className = 'hist-action'
       aEdit.title = t('editor.title', 'Rediger lydfil')
       aEdit.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 10h14M3 6h3m11 0h-3M3 14h3m11 0h-3" stroke-linecap="round"/><circle cx="7.5" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="12.5" cy="14" r="1.5" fill="currentColor" stroke="none"/></svg>'
-      aEdit.addEventListener('click', e => { e.preventDefault(); window.openEditorWithFile(r.path!) })
+      aEdit.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); window.openEditorWithFile(r.path!) })
       tdActions.appendChild(aEdit)
+
+      tr.style.cursor = 'pointer'
+      tr.addEventListener('click', () => window.openEditorWithFile(r.path!))
     }
-    if (showReveal && videoEntry?.path) {
-      const aRevealVid = document.createElement('a')
-      aRevealVid.href = '#'; aRevealVid.className = 'hist-action'
-      aRevealVid.title = 'Vis videofil i Finder'
-      aRevealVid.innerHTML = '<svg viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zm12.553-1.106A1 1 0 0115 5v10a1 1 0 01-1.553.832l-5-3.333a1 1 0 010-1.664l5-3.333a1 1 0 01.106-.072z"/></svg>'
-      aRevealVid.addEventListener('click', e => { e.preventDefault(); window.api.revealFile(videoEntry.path!) })
-      tdActions.appendChild(aRevealVid)
-    }
-
-    const aNote = document.createElement('a')
-    aNote.href = '#'; aNote.className = 'hist-action'
-    aNote.title = r.note ? t('history.editNote', 'Rediger notat') : t('history.addNote', 'Legg til notat')
-    aNote.innerHTML = r.note
-      ? '<svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>'
-      : '<svg viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>'
-    aNote.addEventListener('click', e => {
-      e.preventDefault()
-      showNoteModal(r.note ?? '', async (newNote: string) => {
-        r.note = newNote.trim() || undefined
-        await window.api.updateHistoryNote(r.timestamp!, newNote.trim())
-        const fileCell = tr.cells[2]
-        const existing = fileCell.querySelector('.hist-note')
-        if (existing) existing.remove()
-        if (r.note) {
-          const noteEl = Object.assign(document.createElement('div'), { className: 'hist-note', textContent: r.note })
-          fileCell.appendChild(noteEl)
-        }
-        aNote.title = r.note ? t('history.editNote', 'Rediger notat') : t('history.addNote', 'Legg til notat')
-        aNote.innerHTML = r.note
-          ? '<svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>'
-          : '<svg viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>'
-      })
-    })
-    tdActions.appendChild(aNote)
-
-    const aDel = document.createElement('a')
-    aDel.href = '#'; aDel.className = 'hist-action hist-del'
-    aDel.title = t('history.deleteEntry', 'Slett oppføring')
-    aDel.innerHTML = '<svg viewBox="0 0 20 20"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"/></svg>'
-    aDel.addEventListener('click', async e => {
-      e.preventDefault()
-      if (r.timestamp) await window.api.deleteHistoryEntry(r.timestamp)
-      if (videoEntry?.timestamp) await window.api.deleteHistoryEntry(videoEntry.timestamp)
-      const idx = fullHistory.findIndex(h => h.timestamp === r.timestamp)
-      if (idx >= 0) fullHistory.splice(idx, 1)
-      if (videoEntry?.timestamp) {
-        const vidIdx = fullHistory.findIndex(h => h.timestamp === videoEntry.timestamp)
-        if (vidIdx >= 0) fullHistory.splice(vidIdx, 1)
-      }
-      tr.remove()
-      if (!tbody.querySelector('tr')) renderHistoryRows(tbody, [], false)
-      updateHistoryStats(fullHistory)
-    })
-    tdActions.appendChild(aDel)
-    tdActions.style.cssText = 'white-space:nowrap;display:flex;align-items:center;gap:3px'
-
-    const timeStr  = r.startTime ? ` kl. ${r.startTime}` : ''
-    const cells = [r.date ? `${fmtDate(r.date)}${timeStr}` : '—', r.duration ?? '—', r.filename ?? '—']
-    cells.forEach((text, i) => {
-      const td = document.createElement('td')
-      td.textContent = text
-      if (i === 2) {
-        if (r.path) td.title = r.path
-        if (r.note) {
-          td.appendChild(Object.assign(document.createElement('div'), { className: 'hist-note', textContent: r.note }))
-        }
-        if (videoEntry?.filename) {
-          const vidDiv = Object.assign(document.createElement('div'), { className: 'hist-note', textContent: `📹 ${videoEntry.filename}` })
-          if (videoEntry.path) vidDiv.title = videoEntry.path
-          td.appendChild(vidDiv)
-        }
-        // Cloud upload indicators
-        const cloudNames: Record<string, string> = { 'google-drive': 'GD', 'dropbox': 'DB', 'onedrive': 'OD' }
-        const cloudTitles: Record<string, string> = { 'google-drive': 'Google Drive', 'dropbox': 'Dropbox', 'onedrive': 'OneDrive' }
-        const uploaded = r.cloudUploaded ?? []
-        if (uploaded.length) {
-          const cloudDiv = document.createElement('div')
-          cloudDiv.className = 'hist-note'
-          cloudDiv.style.cssText = 'color:var(--blue,#60a5fa);font-size:11px'
-          cloudDiv.textContent = uploaded.map(s => `☁ ${cloudNames[s] ?? s}`).join(' ')
-          cloudDiv.title = uploaded.map(s => cloudTitles[s] ?? s).join(', ')
-          td.appendChild(cloudDiv)
-        }
-      }
-      tr.appendChild(td)
-    })
-    tr.appendChild(tdStatus); tr.appendChild(tdActions)
+    tr.appendChild(tdActions)
     tbody.appendChild(tr)
   })
 }
@@ -1502,50 +1341,4 @@ async function renderWhisperCard(): Promise<boolean> {
     subEl.style.color = 'var(--green)'
   }
   return true
-}
-
-function showNoteModal(currentNote: string, onSave: (note: string) => void): void {
-  const modal    = document.getElementById('modal-note') as HTMLDivElement | null
-  const textarea = document.getElementById('note-textarea') as HTMLTextAreaElement | null
-  if (!modal || !textarea) return
-  textarea.value = currentNote
-  modal.style.display = 'flex'
-  setTimeout(() => textarea.focus(), 50)
-
-  const saveBtn   = document.getElementById('btn-note-save')
-  const cancelBtn = document.getElementById('btn-note-cancel')
-
-  const close = () => {
-    modal.style.display = 'none'
-    saveBtn?.removeEventListener('click', handleSave)
-    cancelBtn?.removeEventListener('click', handleCancel)
-    modal.removeEventListener('click', handleBackdrop)
-    document.removeEventListener('keydown', handleKey)
-  }
-  const handleSave    = () => { onSave(textarea.value); close() }
-  const handleCancel  = () => close()
-  const handleBackdrop = (e: MouseEvent) => { if (e.target === modal) close() }
-  const handleKey     = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') close()
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { onSave(textarea.value); close() }
-  }
-  saveBtn?.addEventListener('click', handleSave)
-  cancelBtn?.addEventListener('click', handleCancel)
-  modal.addEventListener('click', handleBackdrop)
-  document.addEventListener('keydown', handleKey)
-}
-
-// Type helpers
-interface RecordingEntry {
-  date?: string
-  startTime?: string
-  duration?: string
-  filename?: string
-  path?: string
-  status: string
-  timestamp?: number
-  note?: string
-  fileSizeBytes?: number
-  durationSec?: number
-  cloudUploaded?: string[]
 }

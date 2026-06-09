@@ -13,7 +13,7 @@
     "general": "Ogólne",
     "editor": "Edycja",
     "live": "Na żywo",
-    "search": "Szukaj"
+    "search": "Wyszukiwanie i historia"
   },
   "status": {
     "ready": "Wszystko gotowe",
@@ -77,7 +77,8 @@
     },
     "cloudLabel": "KOPIA W CHMURZE",
     "thumbLabel": "OKŁADKA ODCINKA",
-    "whisperLabel": "TRANSKRYPCJA"
+    "whisperLabel": "TRANSKRYPCJA",
+    "seeAll": "Zobacz wszystkie →"
   },
   "update": {
     "available": "Dostępna nowa wersja {v} — pobieranie…",
@@ -930,9 +931,9 @@
     "exportVtt": "↧ VTT"
   },
   "search": {
-    "title": "Szukaj w kazaniach",
-    "subtitle": "Szukaj we wszystkich transkrybowanych nagraniach. Kliknij wynik, aby otworzyć nagranie w tym punkcie.",
-    "placeholder": "Szukaj słów lub fraz…",
+    "title": "Wyszukiwanie i historia",
+    "subtitle": "Przeszukuj tekst kazania lub nazwę pliku i przeglądaj całą historię nagrań. Kliknij trafienie, aby otworzyć nagranie w tym miejscu.",
+    "placeholder": "Szukaj w kazaniu lub nazwie pliku…",
     "reindex": "↻ Odśwież indeks",
     "indexing": "Budowanie indeksu…",
     "recent": "Niedawno transkrybowane",
@@ -946,7 +947,9 @@
     "noTranscriptsTitle": "Brak transkrypcji",
     "noTranscriptsDesc": "Otwórz nagranie w edytorze i kliknij Transkrybuj, aby zbudować przeszukiwalne archiwum.",
     "indexFailed": "Nie można załadować indeksu",
-    "fileNotFound": "Plik źródłowy nie znaleziony. Mógł zostać przeniesiony lub usunięty."
+    "fileNotFound": "Plik źródłowy nie znaleziony. Mógł zostać przeniesiony lub usunięty.",
+    "noRecordingsTitle": "Brak nagrań",
+    "noRecordingsDesc": "Gdy nagrasz nabożeństwo, pojawi się tutaj. Transkrybuj nagranie w Edycji, aby przeszukiwać tekst kazania."
   },
   "thumbnail": {
     "section": {

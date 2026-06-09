@@ -24,7 +24,7 @@ import { RecordingWaveform } from '../audio/waveform'
 import { fmtCountdown, flashMsg, isoDate } from '../helpers'
 import { stopVU as stopHomeVU } from './home-vu'
 import { stopMonitoring as stopAudioPageMonitoring } from './audio-page'
-import { loadRecentHistory, stopVideoPreview, startVideoPreview } from './home'
+import { renderRecentRecordings, stopVideoPreview, startVideoPreview } from './home'
 import { showEditorPrompt } from './editor-page'
 import type { RecordingOpts } from '../../types'
 
@@ -172,7 +172,7 @@ export function setupRecording(): void {
     window.api.on('recording-finished', (entry) => {
       const rec = entry as { path?: string; splitRestart?: boolean } | undefined
       if (!rec?.splitRestart) hideOverlay()
-      loadRecentHistory()
+      renderRecentRecordings()
       if (rec?.path && !rec.splitRestart && settings.askOpenEditor !== false) showEditorPrompt(rec.path)
     }),
     window.api.on('recording-error', (data) => {
@@ -180,7 +180,7 @@ export function setupRecording(): void {
       // Stop monitoring (VU timer + mic stream) before hiding overlay — same as normal stop
       stopMonitoring().catch(err => console.error('[recording] stopMonitoring on error:', err))
       hideOverlay()
-      loadRecentHistory()
+      renderRecentRecordings()
       const msg = d?.message ?? (d?.error ? translateNativeError(d.error) : null)
       if (msg) showGlobalError(msg)
     }),

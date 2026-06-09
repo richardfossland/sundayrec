@@ -1,36 +1,39 @@
 /**
- * Search page — full-text search across all transcript sidecars.
+ * «Søk & historikk» — the merged sermon-search + recording-history tab.
  *
- * On first activation we ask the main process for every `.transcript.json`
- * sidecar in known recording folders. The renderer builds an in-memory
- * index of (filePath, segmentIndex, text) tuples and serves search results
- * by linear scan with case-insensitive substring match plus a simple
- * highlight-context view.
+ * One search box searches BOTH the recording metadata (filename / date / note)
+ * and the transcript text of every sermon. Below it sits the full recording
+ * history (the list relocated from the home page); when a text query matches a
+ * sermon's transcript, the matching snippets render inline under that recording.
+ * An empty query shows the whole history.
  *
- * Why linear scan and not a fancy library: even a 200-sermon archive with
- * ~10 000 segments fits in a few MB of memory; linear search is ~5 ms.
- * Anything fancier (lunr, MiniSearch) adds 50+ KB to the bundle for zero
- * user-visible benefit at this scale.
+ * The history list + its tools live in `history.ts`; this module owns the
+ * transcript index and the unified query that drives the render.
+ *
+ * Why linear scan and not a search library: even a 200-sermon archive with
+ * ~10 000 segments fits in a few MB; linear search is ~5 ms — a library would
+ * add 50+ KB to the bundle for no user-visible benefit at this scale.
  */
 
 import { t } from '../i18n'
 import { escHtml } from '../helpers'
-import type { TranscriptData, TranscriptSegment } from '../../types'
+import {
+  loadHistory,
+  getFullHistory,
+  renderHistoryRows,
+  updateHistoryStats,
+  setupHistoryTools,
+  baseNoExt,
+  type HistoryHit,
+} from './history'
+import type { TranscriptData } from '../../types'
 
 interface IndexEntry {
-  /** Source recording base path (without extension). Use transcriptResolveSource
-   *  to find the actual file when opening. */
+  /** Source recording base path (without extension) — the join key against a
+   *  recording's path. */
   basePath:     string
-  /** Display label — base filename without extension. */
-  displayName:  string
-  /** Transcript metadata. */
+  /** Transcript metadata (segments + timing). */
   meta:         TranscriptData
-}
-
-interface SearchHit {
-  entry:        IndexEntry
-  segIndex:     number
-  segment:      TranscriptSegment
 }
 
 let cachedIndex: IndexEntry[] | null = null
@@ -47,43 +50,31 @@ export function setupSearchPage(): void {
   })
   $('btn-search-reindex')?.addEventListener('click', () => {
     cachedIndex = null
-    void loadIndex().then(() => runSearch())
+    void loadTranscriptIndex().then(() => runSearch())
   })
+  // History maintenance tools (clear / prune / delete-errors / "⋯") re-run the
+  // current query so the list + stats refresh in place after a mutation.
+  setupHistoryTools(runSearch)
 }
 
-/** Called from showPage('search') — kicks off index load if first visit, or
- *  re-runs the current query against the cached index. */
+/** Called from showPage('search'): refresh the history (cheap — picks up new
+ *  recordings), build the transcript index on first visit, then render. */
 export function activateSearchPage(): void {
-  if (!cachedIndex && !indexLoading) {
-    void loadIndex().then(() => runSearch())
-  } else {
+  void (async () => {
+    await loadHistory()
+    if (!cachedIndex && !indexLoading) await loadTranscriptIndex()
     runSearch()
-  }
+  })()
 }
 
-async function loadIndex(): Promise<void> {
+async function loadTranscriptIndex(): Promise<void> {
   if (indexLoading) return
   indexLoading = true
-  setStatus(t('search.indexing', 'Bygger indeks…'))
   try {
     const raw = await window.api.transcriptListAll()
-    cachedIndex = raw.map(r => ({
-      basePath:    r.filePath,
-      displayName: r.filePath.split(/[/\\]/).pop() ?? '',
-      meta:        r.transcript,
-    })).sort((a, b) => b.meta.createdAt - a.meta.createdAt)
-
-    if (cachedIndex.length === 0) {
-      setStatus('')
-      showEmptyState(true)
-    } else {
-      const totalSegments = cachedIndex.reduce((sum, e) => sum + (e.meta.segments?.length ?? 0), 0)
-      setStatus(
-        `${cachedIndex.length} ${t('search.transcriptsLoaded', 'transkripsjoner indeksert')} · ` +
-        `${totalSegments} ${t('search.segments', 'segmenter')}`,
-      )
-      showEmptyState(false)
-    }
+    cachedIndex = raw
+      .map(r => ({ basePath: r.filePath, meta: r.transcript }))
+      .sort((a, b) => b.meta.createdAt - a.meta.createdAt)
   } catch (err) {
     setStatus(`✕ ${t('search.indexFailed', 'Klarte ikke laste indeks')}: ${(err as Error).message}`)
   } finally {
@@ -91,140 +82,65 @@ async function loadIndex(): Promise<void> {
   }
 }
 
+function indexStatusText(): string {
+  if (!cachedIndex || cachedIndex.length === 0) return ''
+  const totalSegments = cachedIndex.reduce((sum, e) => sum + (e.meta.segments?.length ?? 0), 0)
+  return `${cachedIndex.length} ${t('search.transcriptsLoaded', 'transkripsjoner indeksert')} · ` +
+    `${totalSegments} ${t('search.segments', 'segmenter')}`
+}
+
 function runSearch(): void {
-  const resultsEl = $('search-results')
-  if (!resultsEl) return
-  if (!cachedIndex) return
+  const tbody = $('history-tbody')
+  if (!tbody) return
 
-  const query = pendingQuery
-  if (query.length < 2) {
-    // Show recently transcribed list as default browse experience.
-    renderRecentList(cachedIndex.slice(0, 20))
+  const all = getFullHistory()
+  showEmptyState(all.length === 0)
+  if (all.length === 0) { setStatus(''); return }
+
+  const q = pendingQuery
+  if (q.length < 2) {
+    renderHistoryRows(tbody, all, true)
+    updateHistoryStats(all)
+    setStatus(indexStatusText())
     return
   }
 
-  const needle = query.toLowerCase()
-  const hits: SearchHit[] = []
-  for (const entry of cachedIndex) {
-    for (let i = 0; i < (entry.meta.segments?.length ?? 0); i++) {
-      const seg = entry.meta.segments[i]
-      if (seg.text.toLowerCase().includes(needle)) {
-        hits.push({ entry, segIndex: i, segment: seg })
-        if (hits.length > 500) break  // cap to avoid pathological renders
+  const needle = q.toLowerCase()
+
+  // Transcript hits per recording base path (capped to 3 snippets each).
+  const hitsByBase = new Map<string, HistoryHit[]>()
+  if (cachedIndex) {
+    for (const entry of cachedIndex) {
+      const segs = entry.meta.segments ?? []
+      const acc: HistoryHit[] = []
+      for (let i = 0; i < segs.length; i++) {
+        const seg = segs[i]
+        if (seg.text.toLowerCase().includes(needle)) {
+          acc.push({ start: seg.start, html: highlightMatch(seg.text, q) })
+          if (acc.length >= 3) break
+        }
       }
+      if (acc.length) hitsByBase.set(entry.basePath, acc)
     }
-    if (hits.length > 500) break
   }
 
-  renderResults(hits, query)
-}
+  // A recording matches if its metadata matches OR its transcript has a hit.
+  const matches = all.filter(r =>
+    (r.filename ?? '').toLowerCase().includes(needle) ||
+    (r.date ?? '').includes(q) ||
+    (r.note ?? '').toLowerCase().includes(needle) ||
+    hitsByBase.has(baseNoExt(r.path)))
 
-function renderRecentList(entries: IndexEntry[]): void {
-  const el = $('search-results')
-  if (!el) return
-  if (entries.length === 0) { el.innerHTML = ''; return }
-  el.innerHTML = `<div class="search-section-label">${t('search.recent', 'Nylig transkribert')}</div>`
-  for (const entry of entries) {
-    const card = document.createElement('div')
-    card.className = 'search-recent-card'
-    card.style.display = 'flex'
-    card.style.alignItems = 'center'
-    card.innerHTML = `
-      <div class="search-card-thumb-slot"></div>
-      <div>
-        <div class="search-recent-name">${escHtml(entry.displayName)}</div>
-        <div class="search-recent-meta">
-          ${formatDate(entry.meta.createdAt)} · ${entry.meta.segments?.length ?? 0} ${t('search.segments', 'segmenter')} · ${entry.meta.language ?? '—'}
-        </div>
-      </div>
-    `
-    card.addEventListener('click', () => openRecording(entry, 0))
-    el.appendChild(card)
-    attachThumbnail(card.querySelector('.search-card-thumb-slot') as HTMLElement, entry)
-  }
-}
+  renderHistoryRows(tbody, matches, true, hitsByBase)
+  updateHistoryStats(matches)
 
-/**
- * Resolve and attach a 64-px thumbnail to a search-result/recent card. Both
- * IPC calls (transcript-resolve-source + thumbnail:resolve) run after the
- * card is rendered so the list never blocks on cover-art lookups.
- */
-function attachThumbnail(slot: HTMLElement | null, entry: IndexEntry): void {
-  if (!slot) return
-  void window.api.transcriptResolveSource(entry.basePath).then(async fp => {
-    if (!fp) return
-    const r = await window.api.thumbnailResolve(fp)
-    if (!r) return
-    const img = document.createElement('img')
-    img.className = 'thumb-card-icon thumb-card-icon-search'
-    img.src = r.dataUrl
-    img.alt = ''
-    slot.appendChild(img)
-  }).catch(() => { /* swallow — thumbnail is decorative */ })
-}
-
-function renderResults(hits: SearchHit[], query: string): void {
-  const el = $('search-results')
-  if (!el) return
-  if (hits.length === 0) {
-    el.innerHTML = `<div class="search-no-hits">${t('search.noHits', 'Ingen treff for')} «${escHtml(query)}»</div>`
-    return
-  }
-
-  // Group hits by recording so a phrase that appears 5 times in one sermon
-  // doesn't drown out other sermons.
-  const byEntry = new Map<string, SearchHit[]>()
-  for (const h of hits) {
-    const key = h.entry.basePath
-    if (!byEntry.has(key)) byEntry.set(key, [])
-    byEntry.get(key)!.push(h)
-  }
-
-  el.innerHTML = `<div class="search-section-label">${hits.length} ${t('search.hitsIn', 'treff i')} ${byEntry.size} ${t('search.recordings', 'opptak')}</div>`
-
-  for (const [, groupHits] of byEntry) {
-    const entry = groupHits[0].entry
-    const card = document.createElement('div')
-    card.className = 'search-result-card'
-
-    const header = document.createElement('div')
-    header.className = 'search-result-header'
-    header.style.display = 'flex'
-    header.style.alignItems = 'center'
-    header.innerHTML = `
-      <div class="search-card-thumb-slot"></div>
-      <div>
-        <div class="search-result-name">${escHtml(entry.displayName)}</div>
-        <div class="search-result-meta">
-          ${formatDate(entry.meta.createdAt)} · ${groupHits.length} ${t('search.matches', 'treff')}
-        </div>
-      </div>
-    `
-    card.appendChild(header)
-    attachThumbnail(header.querySelector('.search-card-thumb-slot') as HTMLElement, entry)
-
-    // Show up to 3 hits per recording — user can open to see the rest.
-    const shownHits = groupHits.slice(0, 3)
-    for (const h of shownHits) {
-      const row = document.createElement('div')
-      row.className = 'search-hit-row'
-      row.innerHTML = `
-        <span class="search-hit-time">${formatTime(h.segment.start)}</span>
-        <span class="search-hit-text">${highlightMatch(h.segment.text, query)}</span>
-      `
-      row.addEventListener('click', () => openRecording(entry, h.segment.start))
-      card.appendChild(row)
-    }
-    if (groupHits.length > 3) {
-      const more = document.createElement('div')
-      more.className = 'search-hit-more'
-      more.textContent = `+ ${groupHits.length - 3} ${t('search.moreHits', 'flere treff i samme opptak')}`
-      more.addEventListener('click', () => openRecording(entry, shownHits[0].segment.start))
-      card.appendChild(more)
-    }
-
-    el.appendChild(card)
-  }
+  const hitCount = [...hitsByBase.values()].reduce((s, a) => s + a.length, 0)
+  setStatus(
+    matches.length === 0
+      ? `${t('search.noHits', 'Ingen treff for')} «${escHtml(q)}»`
+      : `${matches.length} ${t('search.recordings', 'opptak')}` +
+        (hitCount ? ` · ${hitCount} ${t('search.matches', 'treff')}` : ''),
+  )
 }
 
 function highlightMatch(text: string, query: string): string {
@@ -233,7 +149,7 @@ function highlightMatch(text: string, query: string): string {
   const lower  = text.toLowerCase()
   const idx    = lower.indexOf(needle)
   if (idx === -1) return escHtml(text)
-  // Trim long segments so we don't render 500-char rows. Show ~60 chars
+  // Trim long segments so we don't render 500-char rows — ~60 chars of context
   // around the match.
   const ctx = 60
   const start = Math.max(0, idx - ctx)
@@ -246,33 +162,6 @@ function highlightMatch(text: string, query: string): string {
   return `${prefix}${before}<mark>${match}</mark>${after}${suffix}`
 }
 
-function formatDate(ts: number): string {
-  const d = new Date(ts)
-  return `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`
-}
-
-function formatTime(sec: number): string {
-  const h = Math.floor(sec / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  const s = Math.floor(sec % 60)
-  return h > 0
-    ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
-    : `${m}:${String(s).padStart(2,'0')}`
-}
-
-async function openRecording(entry: IndexEntry, atSec: number): Promise<void> {
-  // Resolve the actual file path (with extension) via main-process probe.
-  const fp = await window.api.transcriptResolveSource(entry.basePath)
-  if (!fp) {
-    alert(t('search.fileNotFound', 'Originalfilen ble ikke funnet. Den kan ha blitt flyttet eller slettet.'))
-    return
-  }
-  // Hand off to the editor with a "seek to time" intent. The editor applies
-  // the seek as the final step of loadFile() so we don't race against
-  // peak-decode or transcript-load — see openEditorWithFile signature.
-  window.openEditorWithFile?.(fp, atSec)
-}
-
 function setStatus(s: string): void {
   const el = $('search-index-status')
   if (!el) return
@@ -282,7 +171,7 @@ function setStatus(s: string): void {
 
 function showEmptyState(show: boolean): void {
   const empty = $('search-empty')
-  const res   = $('search-results')
+  const tableWrap = $('search-history-wrap')
   if (empty) empty.style.display = show ? '' : 'none'
-  if (res)   res.style.display   = show ? 'none' : ''
+  if (tableWrap) tableWrap.style.display = show ? 'none' : ''
 }

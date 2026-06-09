@@ -13,7 +13,7 @@
     "general": "Général",
     "editor": "Éditeur",
     "live": "Direct",
-    "search": "Recherche"
+    "search": "Recherche et historique"
   },
   "status": {
     "ready": "Tout est prêt",
@@ -77,7 +77,8 @@
     },
     "cloudLabel": "SAUVEGARDE CLOUD",
     "thumbLabel": "IMAGE D'ÉPISODE",
-    "whisperLabel": "TRANSCRIPTION"
+    "whisperLabel": "TRANSCRIPTION",
+    "seeAll": "Voir tout →"
   },
   "update": {
     "available": "Nouvelle version {v} disponible — téléchargement en cours…",
@@ -930,9 +931,9 @@
     "exportVtt": "↧ VTT"
   },
   "search": {
-    "title": "Rechercher dans les sermons",
-    "subtitle": "Recherchez dans tous les enregistrements transcrits. Cliquez sur un résultat pour ouvrir l’enregistrement à ce point.",
-    "placeholder": "Rechercher des mots ou phrases…",
+    "title": "Recherche et historique",
+    "subtitle": "Recherchez dans le texte du sermon ou le nom de fichier, et parcourez tout l'historique des enregistrements. Cliquez sur un résultat pour ouvrir l'enregistrement à ce point.",
+    "placeholder": "Rechercher dans le sermon ou le nom de fichier…",
     "reindex": "↻ Actualiser l’index",
     "indexing": "Construction de l’index…",
     "recent": "Récemment transcrit",
@@ -946,7 +947,9 @@
     "noTranscriptsTitle": "Aucune transcription",
     "noTranscriptsDesc": "Ouvrez un enregistrement dans l’éditeur et cliquez sur Transcrire pour construire une archive consultable.",
     "indexFailed": "Impossible de charger l’index",
-    "fileNotFound": "Fichier source introuvable. Il a peut-être été déplacé ou supprimé."
+    "fileNotFound": "Fichier source introuvable. Il a peut-être été déplacé ou supprimé.",
+    "noRecordingsTitle": "Aucun enregistrement pour l'instant",
+    "noRecordingsDesc": "Une fois un office enregistré, il apparaît ici. Transcrivez un enregistrement dans Éditer pour rechercher dans le texte du sermon."
   },
   "thumbnail": {
     "section": {

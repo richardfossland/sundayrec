@@ -13,7 +13,7 @@
     "general": "General",
     "editor": "Edit",
     "live": "Live",
-    "search": "Search"
+    "search": "Search & history"
   },
   "status": {
     "ready": "Everything is ready",
@@ -77,7 +77,8 @@
     },
     "cloudLabel": "CLOUD BACKUP",
     "thumbLabel": "EPISODE ARTWORK",
-    "whisperLabel": "TRANSCRIPTION"
+    "whisperLabel": "TRANSCRIPTION",
+    "seeAll": "See all →"
   },
   "update": {
     "available": "New version {v} available — downloading…",
@@ -935,9 +936,9 @@
     "exportVtt": "↧ VTT"
   },
   "search": {
-    "title": "Search sermons",
-    "subtitle": "Search across all transcribed recordings. Click a hit to open the recording at that point.",
-    "placeholder": "Search for words or phrases…",
+    "title": "Search & history",
+    "subtitle": "Search sermon text or filename, and browse your full recording history. Click a text hit to open the recording at that point.",
+    "placeholder": "Search sermon text or filename…",
     "reindex": "↻ Refresh index",
     "indexing": "Building index…",
     "recent": "Recently transcribed",
@@ -951,7 +952,9 @@
     "noTranscriptsTitle": "No transcripts yet",
     "noTranscriptsDesc": "Open a recording in the Editor and click Transcribe to build a searchable archive. Once you have one or more transcripts they will appear here.",
     "indexFailed": "Could not load index",
-    "fileNotFound": "Source file not found. It may have been moved or deleted."
+    "fileNotFound": "Source file not found. It may have been moved or deleted.",
+    "noRecordingsTitle": "No recordings yet",
+    "noRecordingsDesc": "Once you record a service it shows up here. Transcribe a recording in Edit to search inside the sermon text."
   },
   "thumbnail": {
     "section": {

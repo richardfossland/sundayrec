@@ -13,7 +13,7 @@
     "general": "Allmänt",
     "editor": "Redigera",
     "live": "Live",
-    "search": "Sök"
+    "search": "Sök & historik"
   },
   "status": {
     "ready": "Allt är klart",
@@ -77,7 +77,8 @@
     },
     "cloudLabel": "MOLN-BACKUP",
     "thumbLabel": "AVSNITTSBILD",
-    "whisperLabel": "TRANSKRIBERING"
+    "whisperLabel": "TRANSKRIBERING",
+    "seeAll": "Visa alla →"
   },
   "update": {
     "available": "Ny version {v} tillgänglig — laddar ner…",
@@ -930,9 +931,9 @@
     "exportVtt": "↧ VTT"
   },
   "search": {
-    "title": "Sök i predikningar",
-    "subtitle": "Sök i alla transkriberade inspelningar. Klicka på en träff för att öppna inspelningen där.",
-    "placeholder": "Sök efter ord eller fraser…",
+    "title": "Sök & historik",
+    "subtitle": "Sök i predikotext eller filnamn och se hela inspelningshistoriken. Klicka på en textträff för att öppna inspelningen på den punkten.",
+    "placeholder": "Sök i predikan eller filnamn…",
     "reindex": "↻ Uppdatera index",
     "indexing": "Bygger index…",
     "recent": "Nyligen transkriberat",
@@ -946,7 +947,9 @@
     "noTranscriptsTitle": "Inga transkriberingar ännu",
     "noTranscriptsDesc": "Öppna en inspelning i redigeraren och klicka på Transkribera för att bygga ett sökbart arkiv.",
     "indexFailed": "Kunde inte ladda index",
-    "fileNotFound": "Källfilen hittades inte. Den kan ha flyttats eller raderats."
+    "fileNotFound": "Källfilen hittades inte. Den kan ha flyttats eller raderats.",
+    "noRecordingsTitle": "Inga inspelningar ännu",
+    "noRecordingsDesc": "När du spelat in en gudstjänst visas den här. Transkribera en inspelning i Redigera för att söka i själva predikotexten."
   },
   "thumbnail": {
     "section": {
