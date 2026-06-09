@@ -83,10 +83,12 @@ export function setupEditorPage(): void {
     document.querySelector<HTMLElement>('.inner-tab[data-tab="settings-publish"]')?.click()
   })
 
-  // Format picker pills
-  document.querySelectorAll<HTMLElement>('.export-fmt-btn').forEach(btn => {
+  // Audio format picker pills. Scoped to #export-fmt-section so it doesn't fight
+  // with the video format/codec and export-type pills (which share the
+  // .export-fmt-btn style class but have their own group handlers in export.ts).
+  document.querySelectorAll<HTMLElement>('#export-fmt-section .export-fmt-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.export-fmt-btn').forEach(b => b.classList.remove('active'))
+      document.querySelectorAll('#export-fmt-section .export-fmt-btn').forEach(b => b.classList.remove('active'))
       btn.classList.add('active')
       updateExportFormatUI(btn.dataset.fmt ?? 'mp3')
     })

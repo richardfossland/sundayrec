@@ -33,6 +33,9 @@ const VIDEO_EXT = [
   "3gp", "asf", "f4v",
 ];
 const IMAGE_EXT = ["png", "jpg", "jpeg", "webp", "gif"];
+// Everything the editor can ingest — audio OR video. The loader probes/decodes
+// per file, so the picker should be as accepting as possible.
+const MEDIA_EXT = [...AUDIO_EXT, ...VIDEO_EXT];
 
 /** A native file/folder picker that returns the chosen path (or null), never
  *  throwing — a denied permission or cancel just yields null. */
@@ -40,15 +43,21 @@ async function pickPath(opts: {
   directory?: boolean;
   name?: string;
   extensions?: string[];
+  /** Multiple filter groups (first is the default on macOS). Takes precedence
+   *  over the single name/extensions pair when present. */
+  filters?: { name: string; extensions: string[] }[];
 }): Promise<string | null> {
   try {
+    const filters =
+      opts.filters && opts.filters.length
+        ? opts.filters
+        : opts.extensions && opts.name
+          ? [{ name: opts.name, extensions: opts.extensions }]
+          : undefined;
     const res = await openDialog({
       directory: !!opts.directory,
       multiple: false,
-      filters:
-        opts.extensions && opts.name
-          ? [{ name: opts.name, extensions: opts.extensions }]
-          : undefined,
+      filters,
     });
     return typeof res === "string" ? res : null;
   } catch (e) {
@@ -893,7 +902,15 @@ const api: Record<string, unknown> = {
     return new Uint8Array(r.bytes ?? []);
   },
   editorSaveFile: async () => ({ ok: false }),
-  editorPickFile: async () => pickPath({ name: "Lyd", extensions: AUDIO_EXT }),
+  editorPickFile: async () =>
+    pickPath({
+      filters: [
+        { name: "Alle støttede medier", extensions: MEDIA_EXT },
+        { name: "Lyd", extensions: AUDIO_EXT },
+        { name: "Video", extensions: VIDEO_EXT },
+        { name: "Alle filer", extensions: ["*"] },
+      ],
+    }),
   // Map the old export params to EditorExportRequest (outputFormat→format,
   // outputBitrate→bitrate, …; drops mode/processing/metadata). NEEDS LIVE VERIFY.
   editorExportFile: async (params: unknown) => {

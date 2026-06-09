@@ -112,6 +112,9 @@ export const E = {
   // Video export container + codec (for video files).
   videoFormat: 'mp4',            // mp4 | mov | mkv
   videoCodec: 'h264',            // h264 | h265
+  // When a video file is loaded, export its audio track only (drops video) to a
+  // normal audio format instead of re-encoding the video.
+  videoExportAudioOnly: false,
 
   // Advanced vocal-chain mixer (full per-stage processing override). When
   // useMixer is true the export sends this object as `processing` (wins over the

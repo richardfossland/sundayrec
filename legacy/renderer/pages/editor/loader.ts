@@ -1,6 +1,6 @@
 import { settings } from '../../state'
 import type { RecordingMetadata } from '../../../types'
-import { E, $, clearDirty, VIDEO_EXTS, PROBE_EXTS, WEB_AUDIO_EXTS } from './state'
+import { E, $, clearDirty, VIDEO_EXTS, WEB_AUDIO_EXTS } from './state'
 import { computePeaks, computeJinglePeaks, setNormalizeUI } from './peaks'
 import { fitAll } from './viewport'
 import { clampPlayable, clampMain } from './geometry'
@@ -88,14 +88,18 @@ export async function loadFile(fp: string): Promise<void> {
 
   showState('loading')
 
-  // Determine if this is a video file
+  // Determine if this is a video file. Fast paths for known video + known
+  // browser-decodable audio; everything else (ambiguous containers, exotic
+  // audio, or an unknown extension forced through the "Alle filer" picker) is
+  // probed with ffprobe so we route by actual stream content, not the name.
   const ext = ('.' + (fp.split('.').pop()?.toLowerCase() ?? '')).toLowerCase()
-  if (PROBE_EXTS.has(ext)) {
-    // Ambiguous container: probe for a video stream
-    const streams = await window.api.editorProbeStreams(fp)
-    E.isVideoFile = !streams || streams.hasVideo
+  if (VIDEO_EXTS.has(ext)) {
+    E.isVideoFile = true
+  } else if (WEB_AUDIO_EXTS.has(ext)) {
+    E.isVideoFile = false
   } else {
-    E.isVideoFile = VIDEO_EXTS.has(ext)
+    const streams = await window.api.editorProbeStreams(fp)
+    E.isVideoFile = !!streams && streams.hasVideo
   }
 
   // Show/hide video panel and video intro/outro section

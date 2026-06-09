@@ -10,11 +10,12 @@ import { renderMixer, loadPresetIntoMixer, mixerProcessing } from './mixer'
 export function openExportModal(): void {
   if (!E.filePath) return
 
-  // Show/hide format section vs video notice
-  const fmtSection   = $('export-fmt-section')
-  const videoNotice  = $('export-video-notice')
-  if (fmtSection)  fmtSection.style.display  = E.isVideoFile ? 'none' : ''
-  if (videoNotice) videoNotice.style.display = E.isVideoFile ? '' : 'none'
+  // For a video file the user can either keep the video (re-encode) or extract
+  // the audio track only to a normal audio format. The "Eksporttype" toggle is
+  // shown only for video; audio files always use the audio format picker.
+  const typeSection = $('export-type-section')
+  if (typeSection) typeSection.style.display = E.isVideoFile ? '' : 'none'
+  applyExportSides()
 
   // Update gain summary — only shown when peak normalize has been applied.
   const procRow  = $('export-proc-row')
@@ -39,7 +40,9 @@ export function openExportModal(): void {
       if (E.includeIntroOutro && settings.editorOutroPath) {
         parts.push('Outro: ' + (settings.editorOutroPath.split(/[/\\]/).pop() ?? ''))
       }
-    } else {
+    } else if (!E.videoExportAudioOnly) {
+      // Audio-only extract from a video drops the jingles, so only show them
+      // when actually re-encoding the video.
       if (E.includeIntroOutro && E.videoIntroPath) {
         parts.push('Video-intro: ' + (E.videoIntroPath.split(/[/\\]/).pop() ?? ''))
       }
@@ -58,6 +61,30 @@ export function openExportModal(): void {
 
   const exportModal = $('editor-export-modal')
   if (exportModal) exportModal.style.display = 'flex'
+}
+
+/** Sync the export modal's audio-vs-video sides to `E.isVideoFile` +
+ *  `E.videoExportAudioOnly`. Safe to call repeatedly (on open + on toggle). */
+function applyExportSides(): void {
+  // Type pills reflect current state.
+  document.querySelectorAll<HTMLButtonElement>('.export-type-btn').forEach((b) => {
+    b.classList.toggle('active', (b.dataset.type === 'audio') === E.videoExportAudioOnly)
+  })
+
+  const showAudioSide = !E.isVideoFile || E.videoExportAudioOnly
+  const fmtSection  = $('export-fmt-section')
+  const videoNotice = $('export-video-notice')
+  if (fmtSection)  fmtSection.style.display  = showAudioSide ? '' : 'none'
+  if (videoNotice) videoNotice.style.display = showAudioSide ? 'none' : ''
+
+  if (showAudioSide) {
+    const activeFmt = document.querySelector<HTMLElement>('#export-fmt-section .export-fmt-btn.active')?.dataset.fmt ?? 'mp3'
+    updateExportFormatUI(activeFmt)
+  } else {
+    ;['export-mp3-opts', 'export-wav-opts', 'export-aac-opts'].forEach((id) => {
+      const el = $(id); if (el) el.style.display = 'none'
+    })
+  }
 }
 
 let enhanceWired = false
@@ -98,6 +125,15 @@ function setupEnhanceSection(): void {
 
   if (enhanceWired) return
   enhanceWired = true
+
+  // Export-type pills (video files only): keep video vs. extract audio only.
+  const typeBtns = document.querySelectorAll<HTMLButtonElement>('.export-type-btn')
+  typeBtns.forEach((b) => {
+    b.addEventListener('click', () => {
+      E.videoExportAudioOnly = b.dataset.type === 'audio'
+      applyExportSides()
+    })
+  })
 
   vfmtBtns.forEach((b) => {
     b.addEventListener('click', () => {
@@ -436,7 +472,7 @@ export async function runExport(): Promise<void> {
   if (progLbl) progLbl.textContent = t('editor.exportExporting') || 'Eksporterer…'
   if (resultRow) { resultRow.style.display = 'none' }
 
-  const fmt = (document.querySelector<HTMLElement>('.export-fmt-btn.active')?.dataset.fmt ?? 'mp3') as 'mp3'|'wav'|'flac'|'aac'
+  const fmt = (document.querySelector<HTMLElement>('#export-fmt-section .export-fmt-btn.active')?.dataset.fmt ?? 'mp3') as 'mp3'|'wav'|'flac'|'aac'
   const dest = document.querySelector<HTMLElement>('.export-dest-btn.active')?.dataset.dest ?? 'same'
   const bitrate   = parseInt((($('export-bitrate')    as HTMLSelectElement)?.value  ?? '192'))
   const bitDepth  = parseInt((($('export-bitdepth')   as HTMLSelectElement)?.value  ?? '16')) as 16|24
@@ -458,7 +494,7 @@ export async function runExport(): Promise<void> {
   const processing = E.useMixer ? mixerProcessing() : undefined
   const vocalChainPreset = E.useMixer ? undefined : (E.vocalChainPreset || undefined)
 
-  if (E.isVideoFile) {
+  if (E.isVideoFile && !E.videoExportAudioOnly) {
     result = await window.api.editorExportVideo({
       inputPath:    E.filePath,
       cutRegions:   E.cuts,
@@ -487,8 +523,10 @@ export async function runExport(): Promise<void> {
       outputBitrate:  bitrate,
       outputBitDepth: bitDepth,
       gainDb:     E.audioGainDb || undefined,
-      introPath:  (E.includeIntroOutro && settings.editorIntroPath) ? settings.editorIntroPath : undefined,
-      outroPath:  (E.includeIntroOutro && settings.editorOutroPath) ? settings.editorOutroPath : undefined,
+      // Audio intro/outro jingles apply only to native audio files — when
+      // extracting audio out of a video we export the bare track.
+      introPath:  (!E.isVideoFile && E.includeIntroOutro && settings.editorIntroPath) ? settings.editorIntroPath : undefined,
+      outroPath:  (!E.isVideoFile && E.includeIntroOutro && settings.editorOutroPath) ? settings.editorOutroPath : undefined,
       metadata:   E.meta,
       masterPreset:     E.masterPreset || undefined,
       vocalChainPreset,

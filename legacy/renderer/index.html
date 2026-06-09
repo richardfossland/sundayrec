@@ -2471,7 +2471,16 @@
 <!-- Editor export modal -->
 <div id="editor-export-modal" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true" data-no-escape>
   <div class="modal export-modal">
-    <h2 data-i18n="editor.exportTitle">Eksporter lydfil</h2>
+    <h2 data-i18n="editor.exportTitle">Eksporter</h2>
+
+    <!-- Export type — only for video files: keep video, or extract audio only. -->
+    <div id="export-type-section" style="display:none">
+      <div class="export-section-label" data-i18n="editor.exportType">Eksporttype</div>
+      <div class="export-fmt-row">
+        <button class="export-fmt-btn export-type-btn active" data-type="video" data-i18n="editor.exportTypeVideo">Video (med lyd)</button>
+        <button class="export-fmt-btn export-type-btn" data-type="audio" data-i18n="editor.exportTypeAudio">Kun lyd</button>
+      </div>
+    </div>
 
     <!-- Video export notice (shown instead of format picker for video files) -->
     <div id="export-video-notice" class="export-video-notice" style="display:none">
