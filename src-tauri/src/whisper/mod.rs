@@ -405,7 +405,18 @@ fn read_wav_f32(path: &std::path::Path) -> AppResult<Vec<f32>> {
             }
             return Ok(out);
         }
-        i += 8 + size + (size & 1); // chunks are word-aligned
+        // Chunks are word-aligned. `size` comes from untrusted file bytes, so use
+        // a checked advance: a corrupt size near usize::MAX would overflow on a
+        // 32-bit target, and a non-advancing step would loop forever — bail to the
+        // "no data chunk" error instead.
+        let next = i
+            .checked_add(8)
+            .and_then(|v| v.checked_add(size))
+            .and_then(|v| v.checked_add(size & 1));
+        match next {
+            Some(n) if n > i => i = n,
+            _ => break,
+        }
     }
     Err(AppError::Internal("WAV has no data chunk".into()))
 }

@@ -126,7 +126,12 @@ pub fn fft(re: &mut [f64], im: &mut [f64]) {
 }
 
 /// Hann window of `size` samples (`0.5*(1-cos(2πi/(size-1)))`). Ports `hannWindow`.
+/// `size <= 1` would divide by `size-1 == 0` → NaN; a 1-sample window is just 1.0
+/// (the conventional degenerate case), so guard it.
 pub fn hann_window(size: usize) -> Vec<f64> {
+    if size <= 1 {
+        return vec![1.0; size];
+    }
     (0..size)
         .map(|i| 0.5 * (1.0 - (2.0 * std::f64::consts::PI * i as f64 / (size as f64 - 1.0)).cos()))
         .collect()
@@ -702,6 +707,19 @@ pub fn detect_segments(segments: &[AnalysisSegment]) -> Vec<DetectedSegment> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hann_window_handles_degenerate_sizes_without_nan() {
+        assert_eq!(hann_window(0).len(), 0);
+        // size 1 would divide by (size-1)=0 → NaN; must be a finite 1.0.
+        let w1 = hann_window(1);
+        assert_eq!(w1.len(), 1);
+        assert!(w1[0].is_finite());
+        // Normal sizes are unchanged: endpoints ~0, centre ~1.
+        let w = hann_window(8);
+        assert!(w.iter().all(|x| x.is_finite()));
+        assert!(w[0].abs() < 1e-9);
+    }
 
     // ── FFT ──────────────────────────────────────────────────────────────────
 

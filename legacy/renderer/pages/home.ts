@@ -595,7 +595,17 @@ export function setupHome(): void {
         status.textContent = `${signalLabel} (${sizeKb} KB)`
         status.style.color = r.signal === 'normal' ? 'var(--green)' : 'var(--orange, #ffb46b)'
       } else {
-        status.textContent = `❌ ${r.detail ?? r.error ?? t('home.testUnknownError', 'Ukjent feil')}`
+        // run_test_recording returns a machine code in `r.error`
+        // (device_not_found / device_permission_denied / ffmpeg_error / no_audio);
+        // localize it rather than print the raw code (there is no `r.detail`).
+        const testErrMap: Record<string, string> = {
+          device_not_found: t('recording.errorDeviceNotFound', 'Lydenheten ble ikke funnet — sjekk lydkort og tillatelser'),
+          device_permission_denied: t('recording.errorPermission', 'Tilgang til lydenheten ble nektet — sjekk systeminnstillingene'),
+          ffmpeg_error: t('home.testFfmpegError', 'Feil i opptaksmotoren — prøv igjen'),
+          no_audio: t('home.testSignalSilent', '⚠️ Stillhet — mikser av?'),
+        }
+        const detail = (r.error && testErrMap[r.error]) ?? r.error ?? t('home.testUnknownError', 'Ukjent feil')
+        status.textContent = `❌ ${detail}`
         status.style.color = 'var(--red)'
       }
     } catch (err) {

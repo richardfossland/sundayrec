@@ -101,19 +101,22 @@ function ipcErrText(e: unknown): string {
 
 /** Editor/mastering commands return BARE Rust result structs (e.g. `{outputPath}`),
  *  but the ported Electron consumers expect the old `{ ok, …, error }` envelope —
- *  they all branch on `result.ok`. Wrap a success with `ok: true`; a failure (the
- *  invoke threw → the `{ ok: false }` fallback) stays `ok: false`. Without this,
- *  every editor export / mastering step reads `ok === undefined` (falsy) and shows
- *  "failed" even when the file was written. (Found by the IPC-seam audit.) */
+ *  they all branch on `result.ok` and show `result.error` on failure. Wrap a
+ *  success with `ok: true`; on failure surface the REAL reason (`ipcErrText` →
+ *  the AppError message, which carries the granular code consumers switch on, e.g.
+ *  "no_audio_remaining"/"disk_full"). Previously a failure returned a bare
+ *  `{ ok: false }` with NO error, so every friendly editor/export/mastering error
+ *  message was dead code ("✕ Feil" with no detail). (IPC-seam audit.) */
 async function editorCall<T extends object>(
   cmd: string,
   args: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  const r = await call<T | { ok: false }>(cmd, args, { ok: false } as { ok: false });
-  if (r && typeof r === "object" && (r as { ok?: unknown }).ok === false) {
-    return { ok: false };
+  try {
+    const r = await invoke<T>(cmd, args);
+    return { ok: true, ...(r as object) };
+  } catch (e) {
+    return { ok: false, error: ipcErrText(e) };
   }
-  return { ok: true, ...(r as object) };
 }
 
 // Old Electron `on(channel)` → Tauri event name. Channels with no Rust emitter
@@ -598,7 +601,17 @@ const api: Record<string, unknown> = {
     return call("recordings_delete", { id }, false).then(() => true);
   },
   clearHistory: async () => call("recordings_clear", undefined, false).then(() => true),
-  pruneHistory: async () => call("recordings_prune", undefined, 0),
+  // recordings_prune returns a PruneSummary object; the consumer compares the
+  // result to 0 ("Ingen å rydde"), so return the numeric deleted count, not the
+  // object (an object is never === 0, so that hint never showed).
+  pruneHistory: async () => {
+    const r = await call<{ deleted?: number }>(
+      "recordings_prune",
+      undefined,
+      { deleted: 0 },
+    );
+    return r && typeof r === "object" ? (r.deleted ?? 0) : 0;
+  },
   // recording_update_note(id, note) — map the renderer's timestamp key back to the
   // Rust row id (same map deleteHistoryEntry uses).
   updateHistoryNote: async (ts: number, note: string) => {
@@ -631,12 +644,18 @@ const api: Record<string, unknown> = {
       await invoke("start_recording", { opts: planned });
       return { ok: true };
     } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      // AppError serializes to {code,message} (NOT an Error), so the old
+      // `String(e)` produced "[object Object]". Surface the message — it carries
+      // the granular code `translateNativeError` localizes (e.g. "no_save_folder").
+      return { ok: false, error: ipcErrText(e) };
     }
   },
   stopRecordingNow: async () => call("stop_recording", undefined, true).then(() => true),
+  // run_test_recording returns { ok, signal, sizeBytes, error }. The fallback
+  // must match that shape ({ ok: false }) — the old { level, message } fallback
+  // didn't match what the consumer reads.
   runTestRecording: async () =>
-    call("run_test_recording", undefined, { ok: false, level: null, message: "" }),
+    call("run_test_recording", undefined, { ok: false }),
   // run_preflight returns Vec<PreflightFinding> directly; old code reads { findings }.
   runPreflight: async () => ({
     findings: await call<unknown[]>("run_preflight", undefined, []),

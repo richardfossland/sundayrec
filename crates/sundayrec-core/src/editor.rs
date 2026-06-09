@@ -542,11 +542,17 @@ pub fn ffmetadata(meta: &RecordingMetadata, duration: f64) -> Option<String> {
     if let Some(d) = &meta.description {
         lines.push(format!("comment={d}"));
     }
-    for (i, ch) in meta.chapters.iter().enumerate() {
+    // Chapters MUST be time-sorted before deriving each END from the next START —
+    // ffmpeg silently mishandles a `[CHAPTER]` whose END < START. The renderer
+    // doesn't guarantee order, so sort a clone here (mirrors how cut regions are
+    // sorted before use). `end.max(start)` is a final defensive clamp.
+    let mut chapters = meta.chapters.clone();
+    chapters.sort_by(|a, b| a.time.total_cmp(&b.time));
+    for (i, ch) in chapters.iter().enumerate() {
         let start = (ch.time * 1000.0).round() as i64;
-        let end = match meta.chapters.get(i + 1) {
-            Some(next) => (next.time * 1000.0).round() as i64 - 1,
-            None => (duration * 1000.0).round() as i64,
+        let end = match chapters.get(i + 1) {
+            Some(next) => ((next.time * 1000.0).round() as i64 - 1).max(start),
+            None => ((duration * 1000.0).round() as i64).max(start),
         };
         lines.push("[CHAPTER]".to_string());
         lines.push("TIMEBASE=1/1000".to_string());
@@ -1437,6 +1443,48 @@ mod tests {
         assert!(out.contains("START=0\nEND=59999\ntitle=Intro"));
         // Last chapter ends at duration.
         assert!(out.contains("START=60000\nEND=120000\ntitle=Sermon"));
+    }
+
+    #[test]
+    fn ffmetadata_sorts_unsorted_chapters() {
+        // Renderer sends chapters out of order — output must be time-sorted so no
+        // block has END < START (ffmpeg silently drops those).
+        let meta = RecordingMetadata {
+            title: None,
+            speaker: None,
+            description: None,
+            chapters: vec![
+                Chapter {
+                    time: 60.0,
+                    title: "Sermon".into(),
+                },
+                Chapter {
+                    time: 0.0,
+                    title: "Intro".into(),
+                },
+            ],
+        };
+        let out = ffmetadata(&meta, 120.0).unwrap();
+        // Intro (0→59999) must come BEFORE Sermon (60000→120000) despite input order.
+        let intro = out.find("START=0\nEND=59999\ntitle=Intro").unwrap();
+        let sermon = out.find("START=60000\nEND=120000\ntitle=Sermon").unwrap();
+        assert!(intro < sermon, "chapters must be emitted in time order");
+        // No block may have END < START.
+        for block in out.split("[CHAPTER]").skip(1) {
+            let start: i64 = block
+                .lines()
+                .find_map(|l| l.strip_prefix("START="))
+                .unwrap()
+                .parse()
+                .unwrap();
+            let end: i64 = block
+                .lines()
+                .find_map(|l| l.strip_prefix("END="))
+                .unwrap()
+                .parse()
+                .unwrap();
+            assert!(end >= start, "END {end} < START {start}");
+        }
     }
 
     #[test]

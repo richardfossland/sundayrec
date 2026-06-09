@@ -169,12 +169,23 @@ async fn upload_file(
         match drive::chunk_status_outcome(put.status().as_u16()) {
             drive::ChunkOutcome::Complete => return Ok(()),
             drive::ChunkOutcome::Incomplete => {
-                offset = put
+                let next = put
                     .headers()
                     .get("range")
                     .and_then(|h| h.to_str().ok())
                     .and_then(drive::parse_resume_offset)
                     .unwrap_or(plan.offset + plan.len);
+                // The new offset MUST advance past what we just sent. A server
+                // that replays an old/short Range would otherwise make us re-send
+                // the same chunk forever (until the 10-min deadline). Fail fast
+                // (retryable) instead of spinning.
+                if next <= plan.offset {
+                    return Err(AppError::Internal(format!(
+                        "resumable upload did not advance (offset {} after sending from {})",
+                        next, plan.offset
+                    )));
+                }
+                offset = next;
             }
             drive::ChunkOutcome::Error => {
                 return Err(AppError::Internal(format!(
