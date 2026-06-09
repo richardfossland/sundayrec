@@ -91,7 +91,9 @@ use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use ts_rs::TS;
 
-use crate::audio::device_enum::enumerate_ffmpeg_devices;
+use crate::audio::device_enum::{
+    enumerate_ffmpeg_devices, enumerate_ffmpeg_devices_within, RECORD_START_ENUM_MAX_AGE,
+};
 use crate::db::store::{insert_recording, RecordingRow};
 use crate::error::{AppError, AppResult};
 use crate::media::ffmpeg::spawn_ffmpeg;
@@ -511,9 +513,14 @@ impl RecorderEngine {
         // Bound the device probe: `ffmpeg -list_devices` (avfoundation) can stall
         // if the mic is momentarily contended (e.g. the VU cpal stream hasn't
         // released yet), and a stalled start is worse than a clear error.
+        //
+        // R4: reuse a very-recent enumeration (warmed when the record modal opened)
+        // instead of always re-spawning ffmpeg — saves 50–500 ms off the felt start.
+        // The window is short (RECORD_START_ENUM_MAX_AGE); past it we enumerate
+        // fresh, preserving the "don't decide on a stale list" intent.
         let inv = match tokio::time::timeout(
             std::time::Duration::from_secs(8),
-            enumerate_ffmpeg_devices(),
+            enumerate_ffmpeg_devices_within(RECORD_START_ENUM_MAX_AGE),
         )
         .await
         {

@@ -58,33 +58,37 @@ but with caveats:
   tested; the hardware path is not. **This is the honest answer: we don't yet _know_
   the 30 s works on real hardware — it needs a rig test.**
 
-## Fixes applied in this change (safe, gracefully-degrading)
+## Fixes applied (safe, gracefully-degrading)
 
-- **R2 — Parallelize preview-release ‖ pre-roll-harvest.** They touch different
-  devices (camera vs mic), so there's no reason to serialize them. Now run
-  concurrently via `tokio::join!`; when both apply (video + pre-roll + a live
-  preview), start is shorter by roughly the smaller of the two waits.
-- **R3 — Cache the camera mode probe per device.** A 2-minute TTL cache keyed by the
-  device token skips the 200–1500 ms `ffmpeg -framerate 1000` re-probe on repeat video
-  records of the same camera (modes are stable for a device). Misses fall back to a
-  fresh probe; empty results aren't cached (so a transient failure retries).
+- **R1 — Pre-roll _trim re-encode_ moved OFF the critical path.** `harvest` still
+  does the fast stop+measure synchronously (which frees the mic, a hard requirement
+  before the recorder opens it), but the slow trim re-encode now runs in a
+  **background task**: it writes a `.part` file and atomically renames it to the
+  final clip on success. `start_recording` returns immediately — the full ~0.1–1 s
+  pre-roll penalty is gone from the felt start. The clip is consumed only at
+  deliverable finalisation (minutes later), and `finalize_deliverable` already
+  **guards on the clip existing + non-empty**, so if a recording is stopped before
+  the trim finishes — or the re-encode fails — the prepend is simply skipped (the
+  recording itself is untouched). The atomic rename means concat never sees a
+  half-written clip. _No engine signature changes; contained to `preroll.rs`._
+- **R2 — Parallelize preview-release ‖ pre-roll-harvest** (`tokio::join!`) — different
+  devices (camera vs mic), no reason to serialize.
+- **R3 — Cache the camera mode probe per device** (2-min TTL) — repeat video records
+  skip the 200–1500 ms `ffmpeg -framerate 1000` re-probe; empty results aren't cached.
+- **R4 — Reuse a freshly-warmed device enumeration on start.** The record modal warms
+  the backend enumeration on open (`list_devices`); the recorder start now reuses it
+  if it's younger than `RECORD_START_ENUM_MAX_AGE` (4 s) instead of re-spawning
+  `ffmpeg -list_devices` (50–500 ms). Past the window it enumerates fresh, preserving
+  the "don't decide on a stale list" intent — the staleness risk is bounded to a
+  device plugged/unplugged in those few seconds, which the fuzzy device-match + the
+  start-path timeout already tolerate.
 
-Both are gated/graceful and keep the deliberate safety choices intact. **Not yet
-rig-verified** — they touch the recording-start path, which can only be confirmed on
-real hardware.
+All four are gated/graceful and keep the deliberate safety choices intact (the concat
+existence-guard, the bounded freshness window). **Not yet rig-verified** — they touch
+the recording-start path, which can only be confirmed on real hardware.
 
-## Recommended next (need your go + a rig test)
+## Still open (needs a rig test — only you can)
 
-- **R1 — Move the pre-roll _trim re-encode_ off the critical path.** Do the fast
-  stop+release synchronously (frees the mic), start the recorder immediately, and run
-  the trim re-encode in the background; hand the finished clip to the concat step at
-  finalization (where it's already consumed). This removes the full ~0.1–1 s pre-roll
-  penalty from the felt start time. Touches the finalization/concat data flow, so it
-  must be rig-tested before shipping ("recording is sacred").
-- **R4 — Warm device enumeration on recording-screen entry.** The recorder
-  _deliberately_ uses an uncached `ffmpeg -list_devices` on start so the device
-  decision is never stale. Pre-warming when the user opens the record modal (a few
-  hundred ms before the press) could let the start reuse a _fresh_ enumeration without
-  weakening that guarantee — needs a small cache-with-warming design.
 - **R5 — Rig-verify pre-roll end to end** (the 30 s harvest/trim against a real mic) —
-  the single biggest open question on pre-roll quality.
+  the single biggest open question on pre-roll quality, and now also the place to
+  confirm R1's background-trim + R4's warmed-enumeration behave on real hardware.

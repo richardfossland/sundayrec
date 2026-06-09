@@ -214,6 +214,12 @@ async function openManualModal(): Promise<void> {
   const modal = document.getElementById('modal-manual')
   if (!modal) return
   modal.style.display = 'flex'
+
+  // R4: warm the backend ffmpeg device enumeration now, while the user is picking
+  // options in the modal, so the recorder's start path reuses it (within its short
+  // freshness window) instead of paying another `ffmpeg -list_devices` on the
+  // record press. Fire-and-forget; the recorder re-enumerates if this is stale.
+  void window.api.listVideoDevices().catch(() => {})
   const nameEl  = document.getElementById('manual-filename') as HTMLInputElement | null
   if (nameEl) nameEl.value = ''
 

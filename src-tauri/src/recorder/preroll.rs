@@ -244,9 +244,19 @@ impl PrerollEngine {
         };
         let start_offset_ms = preroll_start_offset_ms(captured_ms, trim_ms);
 
-        // Re-encode the kept window with the recording's codec + container so it
-        // can concat with the recording via a lossless `-c copy` (F3.3a).
+        // The mic is already freed (graceful_stop above); the only remaining work
+        // is the trim RE-ENCODE, which the prepend doesn't need until the
+        // deliverable is finalised (at stop, typically minutes later). Running it
+        // on the record-start path was pure wasted wait (~0.1–1 s), so do it in the
+        // BACKGROUND: write to a `.part` file and atomically rename to the final
+        // `out` only on success. `finalize_deliverable` guards on the clip existing
+        // + being non-empty, so if the recording is stopped before this finishes —
+        // or the re-encode fails — the prepend is simply skipped (no breakage).
+        //
+        // Re-encode with the recording's codec + container so the F3.3a concat is a
+        // lossless `-c copy` (Fase 3.3a).
         let out = temp.with_extension(container_ext);
+        let out_part = temp.with_extension(format!("{container_ext}.part"));
         let trim_args = build_preroll_trim_args(
             &temp.to_string_lossy(),
             start_offset_ms,
@@ -255,23 +265,35 @@ impl PrerollEngine {
             channels,
             audio_codec,
             bitrate_kbps,
-            &out.to_string_lossy(),
+            &out_part.to_string_lossy(),
         );
-        let trimmed_ok = run_to_completion(&trim_args, HARVEST_TRIM_TIMEOUT).await;
-        // The raw WAV is consumed either way.
-        let _ = tokio::fs::remove_file(&temp).await;
-        if !trimmed_ok {
-            let _ = tokio::fs::remove_file(&out).await;
-            tracing::warn!("preroll: trim re-encode failed; no clip produced");
-            return None;
-        }
+        let out_for_task = out.clone();
+        tauri::async_runtime::spawn(async move {
+            let trimmed_ok = run_to_completion(&trim_args, HARVEST_TRIM_TIMEOUT).await;
+            // The raw WAV is consumed either way.
+            let _ = tokio::fs::remove_file(&temp).await;
+            if trimmed_ok {
+                // Atomic publish: concat never sees a half-written clip.
+                if let Err(e) = tokio::fs::rename(&out_part, &out_for_task).await {
+                    let _ = tokio::fs::remove_file(&out_part).await;
+                    tracing::warn!(error = %e, "preroll: clip publish (rename) failed; no clip");
+                } else {
+                    tracing::info!(
+                        trim_ms,
+                        start_offset_ms,
+                        clip = %out_for_task.display(),
+                        "preroll: harvested clip (background trim)"
+                    );
+                }
+            } else {
+                let _ = tokio::fs::remove_file(&out_part).await;
+                tracing::warn!("preroll: trim re-encode failed; no clip produced");
+            }
+        });
 
-        tracing::info!(
-            trim_ms,
-            start_offset_ms,
-            clip = %out.display(),
-            "preroll: harvested clip"
-        );
+        // Return immediately with the EVENTUAL clip path; the background task
+        // publishes it before finalisation. The concat existence-guard covers the
+        // (rare) case where it isn't ready in time.
         Some(PrerollClip {
             raw_path: out.to_string_lossy().into_owned(),
             trim_ms,

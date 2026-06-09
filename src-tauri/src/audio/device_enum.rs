@@ -139,14 +139,24 @@ type EnumCache = std::sync::Mutex<Option<(std::time::Instant, DeviceInventory)>>
 static ENUM_CACHE: EnumCache = std::sync::Mutex::new(None);
 
 /// Enumerate ffmpeg devices for the UI device picker, reusing a result from the
-/// last [`ENUM_CACHE_TTL`] if available. ONLY for the informational picker path —
-/// the recorder's `start()`, diagnostics, and the test-recording all call the
-/// uncached [`enumerate_ffmpeg_devices`] so the record-critical decision is never
-/// made on a stale list.
+/// last [`ENUM_CACHE_TTL`] if available. The recorder `start()` uses
+/// [`enumerate_ffmpeg_devices_within`] with a short [`RECORD_START_ENUM_MAX_AGE`]
+/// window (warmed when the record modal opens), and diagnostics / test-recording
+/// still call the uncached [`enumerate_ffmpeg_devices`].
 pub async fn enumerate_ffmpeg_devices_cached() -> AppResult<DeviceInventory> {
+    enumerate_ffmpeg_devices_within(ENUM_CACHE_TTL).await
+}
+
+/// Enumerate, reusing the cache only if its entry is younger than `max_age`,
+/// otherwise doing a fresh spawn (and refreshing the cache). Shared by the UI
+/// picker (1.5 s) and the record-start path (a few seconds, warmed when the record
+/// modal opens — see below).
+pub async fn enumerate_ffmpeg_devices_within(
+    max_age: std::time::Duration,
+) -> AppResult<DeviceInventory> {
     if let Ok(guard) = ENUM_CACHE.lock() {
         if let Some((at, inv)) = guard.as_ref() {
-            if at.elapsed() < ENUM_CACHE_TTL {
+            if at.elapsed() < max_age {
                 return Ok(inv.clone());
             }
         }
@@ -157,6 +167,16 @@ pub async fn enumerate_ffmpeg_devices_cached() -> AppResult<DeviceInventory> {
     }
     Ok(inv)
 }
+
+/// How fresh the cached enumeration must be for the RECORDER START to reuse it
+/// (R4). The record modal warms the cache on open (via `list_devices`), so the
+/// press that follows seconds later reuses that result instead of paying another
+/// `ffmpeg -list_devices` (50–500 ms). The window is deliberately short: a device
+/// plugged/unplugged within these few seconds is the only staleness risk, and the
+/// recorder's fuzzy device-match + the start-path timeout already tolerate a miss.
+/// Beyond the window the start falls back to a fresh enumeration (the old
+/// always-uncached behaviour).
+pub const RECORD_START_ENUM_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(4);
 
 #[cfg(test)]
 mod tests {
