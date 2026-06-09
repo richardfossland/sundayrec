@@ -25,14 +25,17 @@ interface EnvPoint {
   t: number // performance.now() ms
 }
 
-// Palette (deep blue base so the gold pops; cream-gold core for depth).
-const BG_TOP = '#163A6E'
-const BG_BOTTOM = '#102C52'
-const RGB_PEAK = '240,187,71' // #F0BB47
-const RGB_CORE_CENTER = '255,230,168' // #FFE6A8
-const RGB_CORE_EDGE = '240,187,71' // #F0BB47
-const RGB_PLAYHEAD = '255,230,168' // #FFE6A8
-const RGB_GLOW = '255,238,196'
+// Palette — matte amber-gold on a deep, slightly darker blue. Deliberately NO
+// near-white anywhere (the core used to read as a glossy cream highlight, and the
+// additive bloom blew out to white); the core tops out at a muted amber so loud
+// moments stay warm and matte instead of shiny.
+const BG_TOP = '#12305C'
+const BG_BOTTOM = '#0B2142'
+const RGB_PEAK = '198,148,58' // muted gold
+const RGB_CORE_CENTER = '226,178,96' // amber (not cream-white)
+const RGB_CORE_EDGE = '176,128,54' // darker gold edge
+const RGB_PLAYHEAD = '224,184,108' // soft amber, not white
+const RGB_GLOW = '224,176,92' // gold haze for the (now subtle) bloom
 
 export class RecordingWaveform {
   private readonly canvas: HTMLCanvasElement
@@ -48,7 +51,7 @@ export class RecordingWaveform {
   private readonly growMs = 100
   private readonly minStepCss = 0.9 // light decimation of the outline
   private readonly idleEnter = 0.07 // rms below this → idle breath fades in
-  private readonly bloomThresh = 0.5 // core level above which bloom kicks in
+  private readonly bloomThresh = 0.62 // core level above which the (subtle) bloom kicks in
 
   // Ring buffer of envelope points.
   private readonly cap = 4096
@@ -163,18 +166,19 @@ export class RecordingWaveform {
 
     // Peak halo gradient — soft, strongest at the centre line, fading to edges.
     const pg = this.ctx.createLinearGradient(0, 0, 0, h)
-    pg.addColorStop(0, `rgba(${RGB_PEAK},0.04)`)
-    pg.addColorStop(0.5, `rgba(${RGB_PEAK},0.34)`)
-    pg.addColorStop(1, `rgba(${RGB_PEAK},0.04)`)
+    pg.addColorStop(0, `rgba(${RGB_PEAK},0.03)`)
+    pg.addColorStop(0.5, `rgba(${RGB_PEAK},0.24)`)
+    pg.addColorStop(1, `rgba(${RGB_PEAK},0.03)`)
     this.peakGrad = pg
 
-    // RMS core gradient — cream-gold centre → gold edges, high opacity.
+    // RMS core gradient — amber centre → darker gold edges. Lower opacity + no
+    // white so it reads matte rather than as a glossy highlight.
     const cg = this.ctx.createLinearGradient(0, 0, 0, h)
-    cg.addColorStop(0, `rgba(${RGB_CORE_EDGE},0.72)`)
-    cg.addColorStop(0.42, `rgba(${RGB_CORE_CENTER},0.98)`)
-    cg.addColorStop(0.5, `rgba(${RGB_CORE_CENTER},1)`)
-    cg.addColorStop(0.58, `rgba(${RGB_CORE_CENTER},0.98)`)
-    cg.addColorStop(1, `rgba(${RGB_CORE_EDGE},0.72)`)
+    cg.addColorStop(0, `rgba(${RGB_CORE_EDGE},0.58)`)
+    cg.addColorStop(0.42, `rgba(${RGB_CORE_CENTER},0.82)`)
+    cg.addColorStop(0.5, `rgba(${RGB_CORE_CENTER},0.86)`)
+    cg.addColorStop(0.58, `rgba(${RGB_CORE_CENTER},0.82)`)
+    cg.addColorStop(1, `rgba(${RGB_CORE_EDGE},0.58)`)
     this.coreGrad = cg
 
     // Edge fades — cached strips of the bg with a horizontal alpha ramp, stamped
@@ -192,8 +196,8 @@ export class RecordingWaveform {
     const gx = glow.getContext('2d')
     if (gx) {
       const rg = gx.createRadialGradient(gr, gr, 0, gr, gr, gr)
-      rg.addColorStop(0, `rgba(${RGB_GLOW},0.9)`)
-      rg.addColorStop(0.35, `rgba(${RGB_GLOW},0.35)`)
+      rg.addColorStop(0, `rgba(${RGB_GLOW},0.45)`)
+      rg.addColorStop(0.4, `rgba(${RGB_GLOW},0.14)`)
       rg.addColorStop(1, `rgba(${RGB_GLOW},0)`)
       gx.fillStyle = rg
       gx.fillRect(0, 0, gr * 2, gr * 2)
@@ -341,8 +345,10 @@ export class RecordingWaveform {
           const v = colCore[c]
           if (v < this.bloomThresh) continue
           const intensity = (v - this.bloomThresh) / (1 - this.bloomThresh)
-          const s = gw * (0.5 + intensity * 0.9)
-          ctx.globalAlpha = 0.18 + intensity * 0.4
+          // Much smaller + dimmer than before: a faint warm haze on loud moments,
+          // not a white blow-out.
+          const s = gw * (0.35 + intensity * 0.45)
+          ctx.globalAlpha = 0.05 + intensity * 0.13
           ctx.drawImage(this.glow, colX[c] - s / 2, cy - s / 2, s, s)
         }
         ctx.globalAlpha = 1
@@ -351,7 +357,7 @@ export class RecordingWaveform {
     }
 
     // Centre line.
-    ctx.strokeStyle = 'rgba(255,216,119,0.30)'
+    ctx.strokeStyle = 'rgba(214,172,98,0.22)'
     ctx.lineWidth = Math.max(1, this.dpr * 0.6)
     ctx.beginPath()
     ctx.moveTo(0, cy + 0.5)
@@ -364,14 +370,14 @@ export class RecordingWaveform {
 
     // Playhead — crisp line + soft glow.
     if (this.glow) {
-      const gw = this.glow.width * 0.7
+      const gw = this.glow.width * 0.6
       ctx.globalCompositeOperation = 'lighter'
-      ctx.globalAlpha = 0.45
+      ctx.globalAlpha = 0.2
       ctx.drawImage(this.glow, playheadX - gw / 2, 0, gw, h)
       ctx.globalAlpha = 1
       ctx.globalCompositeOperation = 'source-over'
     }
-    ctx.strokeStyle = `rgba(${RGB_PLAYHEAD},0.95)`
+    ctx.strokeStyle = `rgba(${RGB_PLAYHEAD},0.85)`
     ctx.lineWidth = Math.max(1.5, this.dpr * 1.1)
     ctx.beginPath()
     ctx.moveTo(playheadX, h * 0.06)

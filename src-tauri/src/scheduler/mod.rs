@@ -469,7 +469,13 @@ pub(crate) fn build_opts(
         bitrate_kbps: settings.bitrate_kbps(),
         split_minutes: settings.split_minutes.max(0) as u32,
         manual_max_minutes: max_minutes,
-        // The level meter is always on so users can confirm signal.
+        // ON: the overlay L/R meters + waveform are now driven by THIS backend
+        // `astats` telemetry (`recording://levels`) instead of a second
+        // getUserMedia mic stream. Opening the mic twice (ffmpeg + getUserMedia)
+        // made macOS re-mux the shared device and drop samples → choppy capture;
+        // ffmpeg's own astats reads the already-captured signal, so the mic is
+        // opened exactly once. The engine reader drains stderr, so the astats
+        // lines don't back-pressure the capture.
         live_levels: true,
         keep_separate_audio: settings.keep_separate_audio,
         separate_audio_format: format_ext(settings.separate_audio_format).to_string(),

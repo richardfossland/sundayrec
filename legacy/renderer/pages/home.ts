@@ -92,6 +92,13 @@ function relocateVuForVideoMode(enabled: boolean): void {
     for (const card of ordered) {
       if (card) move(card, cardSlot)
     }
+
+    // «Siste opptak» fills the empty space UNDER the cards in the right column
+    // (it spans the full column width via CSS). When the window is narrow / the
+    // video is large, the whole column stacks below the preview and carries the
+    // history with it — so no extra scroll in the roomy case, graceful in the
+    // cramped one.
+    move(document.getElementById('home-lower'), cardSlot)
   } else {
     if (!_videoLayoutActive) return
     _videoLayoutActive = false

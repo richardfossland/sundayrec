@@ -49,9 +49,10 @@ use crate::settings::ChannelMode;
 /// Depth of avfoundation's input `-thread_queue_size` on mac/linux. A TUNABLE
 /// KNOB: avfoundation's internal capture buffer is tiny, so under scheduling
 /// jitter it silently DROPS samples → choppy ("hakkete") audio. A deeper queue
-/// absorbs the jitter. Raised from the old `1024` to `4096` after a USB Behringer
-/// mixer recorded choppy at the smaller depth.
-const MAC_INPUT_QUEUE: &str = "4096";
+/// absorbs the jitter. Raised 1024 → 4096 (a choppy USB Behringer), then 4096 →
+/// 8192 after the built-in MacBook mic still stuttered "when speaking" — louder
+/// passages produce denser packets, so the queue needs more headroom.
+const MAC_INPUT_QUEUE: &str = "8192";
 
 /// The audio codec selected from an output container extension. The ONE place
 /// extension→codec is decided, so the main recorder and the pre-roll harvest can
@@ -1148,7 +1149,7 @@ mod tests {
             "/tmp/x.mp3",
             &CaptureOpts::default(),
         );
-        assert!(has_pair(&a, "-thread_queue_size", "4096"));
+        assert!(has_pair(&a, "-thread_queue_size", "8192"));
         assert!(has_pair(&a, "-fflags", "+genpts"));
         assert!(
             !a.iter().any(|x| x == "-framerate"),
@@ -1171,7 +1172,7 @@ mod tests {
             "/tmp/x.mp4",
             &CaptureOpts::default(),
         );
-        assert!(has_pair(&a, "-thread_queue_size", "4096"));
+        assert!(has_pair(&a, "-thread_queue_size", "8192"));
         assert!(has_pair(&a, "-framerate", "30"));
         // The camera must be opened with a supported capture mode (avfoundation
         // rejects a bare framerate → "Input/output error", zero frames).

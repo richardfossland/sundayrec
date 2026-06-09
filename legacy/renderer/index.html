@@ -919,7 +919,7 @@
             <input type="radio" name="sampleRate" value="auto" id="sr-auto" checked />
             <div class="option-card-name" data-i18n="audio.sampleRateAuto">Automatisk</div>
             <div class="option-card-badge" data-i18n="audio.recommended">Anbefalt</div>
-            <div class="option-card-desc" data-i18n="audio.sampleRateAutoDesc">Følger lydkortet — ingen resampling</div>
+            <div class="option-card-desc"><span data-i18n="audio.sampleRateAutoDesc">Følger lydkortet</span><span id="sr-auto-actual"></span></div>
           </label>
           <label class="option-card">
             <input type="radio" name="sampleRate" value="r44100" id="sr-44" />
@@ -2627,7 +2627,6 @@
 
 <!-- Recording overlay -->
 <div id="recording-overlay" class="recording-overlay" style="display:none">
-  <div class="rec-pulse-ring"></div>
   <div class="rec-layout">
 
     <!-- Full-width VU section -->

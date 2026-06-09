@@ -46,6 +46,9 @@ export function setupAudioPage(): void {
   document.getElementById('channel-select-l')?.addEventListener('change', autoSave)
   document.getElementById('channel-select-r')?.addEventListener('change', autoSave)
 
+  // Show the actual rate «Automatisk» resolves to (the hardware's native rate).
+  void showAutoSampleRate()
+
   // Windows-only "classic DirectShow" escape hatch: reveal the card on Windows and
   // persist the toggle. On macOS the card stays hidden (no DirectShow there).
   if (/win/i.test(navigator.userAgent)) {
@@ -69,6 +72,39 @@ export function setupAudioPage(): void {
 
   document.getElementById('btn-audio-save')?.addEventListener('click', saveAudioSettings)
   document.getElementById('btn-audio-cancel')?.addEventListener('click', () => applyAudioSettingsToUI())
+}
+
+/** Fill the «Automatisk» card with the actual sample rate it will use — the
+ *  audio hardware's native rate (what ffmpeg captures at with no `-ar`). Detected
+ *  via a throwaway AudioContext, whose `sampleRate` is the system audio rate (on
+ *  the Mac built-in mic this matches the capture rate, e.g. 48 000 Hz). */
+async function showAutoSampleRate(): Promise<void> {
+  const el = document.getElementById('sr-auto-actual')
+  if (!el) return
+  try {
+    const Ctx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    const ctx = new Ctx()
+    const hz = ctx.sampleRate
+    void ctx.close()
+    el.textContent = hz ? ` · ${hz.toLocaleString('nb-NO')} Hz` : ''
+  } catch {
+    el.textContent = ''
+  }
+}
+
+/** A 1-channel input device (the Mac built-in mic, most USB lavaliers) can't
+ *  produce stereo — recording it as stereo gives a dead right channel. So when a
+ *  mono device is active, switch the recording to MonoL (full-level mono from the
+ *  live channel; a clean mono file plays on both speakers). Only ever auto-set
+ *  mono — never auto-revert a 2-channel device, so a real stereo interface keeps
+ *  the user's choice. */
+function autoMonoForDevice(count: number): void {
+  if (count === 1 && settings.channels !== "monoL") {
+    setRadio("channels", "monoL")
+    void saveAudioSettings()
+  }
 }
 
 export function applyAudioSettingsToUI(): void {
@@ -216,6 +252,7 @@ export async function renderDeviceList(containerId: string): Promise<void> {
       patchSettings({ deviceId: d.deviceId, deviceName: d.label })
       _markAudioDirty()
       const count = await detectDeviceChannels(d.deviceId)
+      autoMonoForDevice(count)
       const subEl = card.querySelector('.device-sub') as HTMLElement | null
       if (subEl) subEl.textContent = `${subBase} · ${count} ${t('audio.channelCount', 'kanaler')}`
       const stored = settings.deviceChannels?.[d.deviceId]
@@ -243,6 +280,7 @@ export async function renderDeviceList(containerId: string): Promise<void> {
   const devId = settings.deviceId ?? (devices[0]?.deviceId ?? null)
   if (devId && !devId.startsWith('asio::')) {
     detectDeviceChannels(devId).then(count => {
+      autoMonoForDevice(count)
       const stored = settings.deviceChannels?.[devId]
       updateChannelSelector(count, stored?.channelL ?? 0, stored?.channelR ?? 1)
       const selCard = container.querySelector('.device-card.selected') as HTMLElement | null

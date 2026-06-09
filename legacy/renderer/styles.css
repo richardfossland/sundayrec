@@ -1183,12 +1183,6 @@ select.form-input {
   padding-top: 36px;  /* clear macOS traffic-light buttons (hiddenInset titlebar) */
   overflow-y: auto;   /* allow scroll if window is shorter than content */
 }
-.rec-pulse-ring {
-  position: absolute; width: 140px; height: 140px; border-radius: 50%;
-  border: 2px solid rgba(239,68,68,.6);
-  animation: ring 2s ease-out infinite; opacity: 0;
-}
-@keyframes ring { 0% { transform: scale(.7); opacity: .7 } 100% { transform: scale(1.8); opacity: 0 } }
 
 /* Full-width vertical layout */
 .rec-layout {
@@ -3509,6 +3503,43 @@ body.platform-win32  #wake-instructions-win { display: block; }
 }
 .video-mode-layout .info-card-column .info-card {
   width: 100%; box-sizing: border-box;
+}
+
+/* «Siste opptak» relocated under the cards in the right column (video mode).
+   Spans the full column width — across both the flex (default / vsize-m) and the
+   responsive grid (vsize-s / vsize-l) column layouts — and renders discreetly so
+   it fits in the empty space below the cards without forcing a scroll. */
+.video-mode-layout .info-card-column > #home-lower {
+  grid-column: 1 / -1;     /* span all columns when the column is a grid */
+  width: 100%;
+  min-width: 0;
+  margin-top: 6px;
+}
+.video-mode-layout .info-card-column > #home-lower .section-header {
+  margin-bottom: 6px;
+}
+.video-mode-layout .info-card-column > #home-lower .section-header h2 {
+  font-size: 13px;
+}
+.video-mode-layout .info-card-column > #home-lower .rec-table td {
+  padding-top: 7px;
+  padding-bottom: 7px;
+  font-size: 12px;
+}
+/* Filename never blows out the narrow column — ellipsis instead. */
+.video-mode-layout .info-card-column > #home-lower .rec-table {
+  table-layout: fixed;
+}
+.video-mode-layout .info-card-column > #home-lower .rec-table td:nth-child(3) {
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+@media (max-width: 900px) {
+  /* Column stacks below the preview as a wrapping row — give history its own
+     full-width line so it sits below the cards, not squeezed beside them. */
+  .video-mode-layout .info-card-column > #home-lower { flex-basis: 100%; }
 }
 
 /* VU is now appended INSIDE the .video-preview-card by home.ts, so the

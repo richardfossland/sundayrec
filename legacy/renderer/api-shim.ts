@@ -81,6 +81,24 @@ async function call<T>(
   }
 }
 
+/** Human-readable message from a rejected `invoke`. Tauri serializes our
+ *  `AppError` to `{ code, message }` (NOT an `Error` instance), so pull `message`
+ *  out of the object; fall back to `code`, a string, or JSON. */
+function ipcErrText(e: unknown): string {
+  if (typeof e === "string") return e;
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === "object") {
+    const o = e as Record<string, unknown>;
+    if (typeof o.message === "string" && o.message) return o.message;
+    if (typeof o.code === "string" && o.code) return o.code;
+  }
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return String(e);
+  }
+}
+
 /** Editor/mastering commands return BARE Rust result structs (e.g. `{outputPath}`),
  *  but the ported Electron consumers expect the old `{ ok, …, error }` envelope —
  *  they all branch on `result.ok`. Wrap a success with `ok: true`; a failure (the
@@ -106,6 +124,7 @@ const EVENT_MAP: Record<string, string> = {
   "recording-finished": "recording://finished",
   "recording-error": "recording://error",
   "recording-progress": "recording://progress",
+  "recording-levels": "recording://levels",
   "recording-reconnecting": "recording://reconnecting",
   "recording-reconnected": "recording://reconnected",
   "video-preview-frame": "preview://frame",
@@ -1099,9 +1118,17 @@ const api: Record<string, unknown> = {
     binaryAvailable: true,
     available: true,
   }),
-  // whisper_* commands take `id`, not `model_id`.
-  whisperDownloadModel: async (modelId: string) =>
-    call("whisper_download_model", { id: modelId }, { ok: false }),
+  // whisper_* commands take `id`, not `model_id`. The command returns `()` on
+  // success and an AppError on failure; surface a real {ok,error} shape (the
+  // generic `call` fallback would hide the reason → "feilet: undefined").
+  whisperDownloadModel: async (modelId: string) => {
+    try {
+      await invoke("whisper_download_model", { id: modelId });
+      return { ok: true as const };
+    } catch (e) {
+      return { ok: false as const, error: ipcErrText(e) };
+    }
+  },
   whisperCancelDownload: async (modelId: string) =>
     call("whisper_cancel_download", { id: modelId }, true).then(() => true),
   whisperDeleteModel: async (modelId: string) =>

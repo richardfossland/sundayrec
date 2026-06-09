@@ -17,9 +17,8 @@
  */
 import { t } from '../i18n'
 import { settings } from '../state'
-import { startMonitorStream, stopMonitorStream, reconnectMonitorStream, getAudioDevices } from '../audio/capture'
-import type { MonitorSession } from '../audio/capture'
-import { makeVuState, tickVU, stopVuState } from '../audio/vu'
+import { getAudioDevices } from '../audio/capture'
+import { setVUBar } from '../audio/vu'
 import { RecordingWaveform } from '../audio/waveform'
 import { fmtCountdown, flashMsg, isoDate } from '../helpers'
 import { stopVU as stopHomeVU } from './home-vu'
@@ -28,7 +27,6 @@ import { renderRecentRecordings, stopVideoPreview, startVideoPreview } from './h
 import { showEditorPrompt } from './editor-page'
 import type { RecordingOpts } from '../../types'
 
-let monitorSession:    MonitorSession | null = null
 let recTimerIval:      ReturnType<typeof setInterval> | null = null
 let signalCheckTimer:  ReturnType<typeof setTimeout>  | null = null
 export let isRecording = false
@@ -65,10 +63,8 @@ let stopOverridden  = false
 let schedStopTimer: ReturnType<typeof setTimeout>  | null = null
 let schedCntTimer:  ReturnType<typeof setInterval> | null = null
 
-const recVu = makeVuState()
-
-// Premium scrolling waveform for the recording overlay (driven by the same VU
-// pipeline, tapped once — see startMonitoring's tickVU onSignal callback).
+// Premium scrolling waveform for the recording overlay, driven by the
+// recording's own level telemetry (see startLevelsMeter).
 let recWaveform: RecordingWaveform | null = null
 
 /** dBFS (−60..0) → 0..1 envelope height (matches the VU bar mapping). */
@@ -76,16 +72,19 @@ function dbToEnvHeight(db: number): number {
   return (Math.max(-60, Math.min(0, db)) + 60) / 60
 }
 
-/** Instantaneous linear peak (max |sample|) from a reused VU time-domain buffer. */
-function bufferPeak(buf: Float32Array | null): number {
-  if (!buf) return 0
-  let m = 0
-  for (let i = 0; i < buf.length; i++) {
-    const a = buf[i] < 0 ? -buf[i] : buf[i]
-    if (a > m) m = a
-  }
-  return m
+// ── Level meter driven by the recording's own `recording://levels` (ffmpeg
+//    astats) — NOT a second getUserMedia mic stream. Opening the built-in mic
+//    twice (ffmpeg capture + a getUserMedia monitor) made macOS re-configure the
+//    shared device and drop samples → choppy ("hakkete") recordings. Reading the
+//    already-captured signal's levels means the mic is opened EXACTLY once. ──────
+const meter = {
+  tL: -60, tR: -60,   // latest target dBFS from the last event
+  smL: -60, smR: -60, // smoothed (rise instant, fall eased)
+  pkL: -60, pkR: -60, pkTL: 0, pkTR: 0, // peak-hold
+  mono: false,        // right channel was null → collapse to one bar
 }
+let levelsUnsub: (() => void) | undefined
+let meterRaf = 0
 
 // ── Setup ────────────────────────────────────────────────────────────────────
 
@@ -422,70 +421,30 @@ export function showGlobalError(msg: string): void {
 
 // ── Monitoring stream (VU only) ──────────────────────────────────────────────
 
-async function startMonitoring(opts: RecordingOpts): Promise<void> {
+async function startMonitoring(_opts: RecordingOpts): Promise<void> {
   stopHomeVU()
   stopAudioPageMonitoring()
+  recStartTime = Date.now()
+  recBytes     = 0
 
-  const deviceId    = opts.deviceId ?? settings.deviceId ?? null
-  const devChannels = deviceId ? (settings.deviceChannels?.[deviceId] ?? null) : null
-  const resolvedOpts: RecordingOpts = {
-    ...opts,
-    channelL: opts.channelL ?? devChannels?.channelL ?? 0,
-    channelR: opts.channelR ?? devChannels?.channelR ?? 1
-  }
-
-  monitorSession = await startMonitorStream(resolvedOpts)
-  recStartTime   = Date.now()
-  recBytes       = 0
-
-  // Attach disconnect handler — for monitoring stream reconnect (VU display)
-  attachMonitorDisconnectHandler(monitorSession, resolvedOpts)
-
-  // VU meter
-  const vuL   = document.getElementById('rec-vu-l')
-  const vuPkL = document.getElementById('rec-vu-peak-l')
-  const vuDbL = document.getElementById('rec-vu-db-l')
-  const vuR   = document.getElementById('rec-vu-r')
-  const vuPkR = document.getElementById('rec-vu-peak-r')
-  const vuDbR = document.getElementById('rec-vu-db-r')
-  const cL    = document.getElementById('rec-vu-clip-l')
-  const cR    = document.getElementById('rec-vu-clip-r')
-
-  Object.assign(recVu, {
-    analyserL: monitorSession.vuAnalyserL,
-    analyserR: monitorSession.vuAnalyserR
-  })
-
-  // Premium scrolling waveform — same source as the VU meter, tapped once.
+  // Premium scrolling waveform — driven by the recording's own level telemetry.
   const wfCanvas = document.getElementById('rec-waveform') as HTMLCanvasElement | null
   if (wfCanvas) {
     recWaveform = new RecordingWaveform(wfCanvas)
     recWaveform.start()
   }
 
-  tickVU(recVu, vuL, vuPkL, vuDbL, vuR, vuPkR, vuDbR, (dbL, dbR) => {
-    updateRecSignalStatus(dbL, dbR)
-    if (cL && recVu.smL > -0.5) cL.classList.add('clip')
-    if (cR && recVu.smR > -0.5) cR.classList.add('clip')
-    if (recWaveform) {
-      // PEAK halo = instantaneous transient (from raw PCM); RMS core = the
-      // smoothed body. Both as 0..1 perceptual heights; combine L/R (louder).
-      const pk = Math.max(bufferPeak(recVu.bufL), bufferPeak(recVu.bufR))
-      const peakH = dbToEnvHeight(pk > 0 ? 20 * Math.log10(pk) : -60)
-      const rmsH = Math.max(dbToEnvHeight(dbL), dbToEnvHeight(dbR))
-      recWaveform.push(peakH, rmsH)
-    }
-  })
+  // Meter + waveform from `recording://levels` (the recording's OWN ffmpeg
+  // astats), so the mic is opened exactly once (ffmpeg) — no second getUserMedia
+  // stream to make macOS drop samples. A mono take collapses to one bar.
+  startLevelsMeter()
 
-  // Signal check — warn if input is near-silent 15 s into recording
-  const analyserRef = monitorSession.vuAnalyserL
+  // Signal check — warn if the input is near-silent 15 s into recording.
   signalCheckTimer = setTimeout(() => {
     signalCheckTimer = null
-    if (!isRecording || !analyserRef) return
-    const buf = new Uint8Array(analyserRef.frequencyBinCount)
-    analyserRef.getByteFrequencyData(buf)
-    const avg = buf.reduce((a, b) => a + b, 0) / buf.length
-    if (avg < 3) window.api.notifyWeakSignal()
+    if (!isRecording) return
+    const quietR = meter.mono || meter.smR <= -55
+    if (meter.smL <= -55 && quietR) window.api.notifyWeakSignal()
   }, 15000)
 
   // Elapsed timer + size display
@@ -507,46 +466,103 @@ async function startMonitoring(opts: RecordingOpts): Promise<void> {
   }, 1000)
 }
 
+/** Animate the overlay meters + waveform from `recording://levels` (per-channel
+ *  peak dBFS from the recording's ffmpeg astats). Rise is instant, fall is eased;
+ *  a null right channel hides the R row and labels the bar "Mono". */
+function startLevelsMeter(): void {
+  const fillL = document.getElementById('rec-vu-l')
+  const pkElL = document.getElementById('rec-vu-peak-l')
+  const dbElL = document.getElementById('rec-vu-db-l')
+  const fillR = document.getElementById('rec-vu-r')
+  const pkElR = document.getElementById('rec-vu-peak-r')
+  const dbElR = document.getElementById('rec-vu-db-r')
+  const cL    = document.getElementById('rec-vu-clip-l')
+  const cR    = document.getElementById('rec-vu-clip-r')
+  const rRow  = fillR?.closest('.vu-bar-row') as HTMLElement | null
+  const lLbl  = fillL?.closest('.vu-bar-row')?.querySelector('.vu-bar-lbl') as HTMLElement | null
+
+  meter.tL = meter.tR = meter.smL = meter.smR = meter.pkL = meter.pkR = -60
+  meter.pkTL = meter.pkTR = 0
+  meter.mono = false
+
+  levelsUnsub = window.api.on?.('recording-levels', (payload: unknown) => {
+    const d = payload as { peak_db_left?: number; peak_db_right?: number | null } | undefined
+    meter.tL = typeof d?.peak_db_left === 'number' ? d.peak_db_left : -60
+    const r = d?.peak_db_right
+    if (r === null || r === undefined) {
+      if (!meter.mono) {
+        meter.mono = true
+        if (rRow) rRow.style.display = 'none'
+        if (lLbl) lLbl.textContent = 'Mono'
+      }
+      meter.tR = -60
+    } else {
+      if (meter.mono) {
+        meter.mono = false
+        if (rRow) rRow.style.display = ''
+        if (lLbl) lLbl.textContent = 'L'
+      }
+      meter.tR = r
+    }
+  })
+
+  const PEAK_HOLD = 1500, PEAK_FALL = 25
+  const hold = (sm: number, pk: number, pt: number, now: number): { p: number; t: number } => {
+    if (sm >= pk) return { p: sm, t: now }
+    const age = now - pt
+    return age > PEAK_HOLD
+      ? { p: Math.max(-60, pk - ((age - PEAK_HOLD) / 1000) * PEAK_FALL), t: pt }
+      : { p: pk, t: pt }
+  }
+
+  const loop = (): void => {
+    if (!isRecording) { meterRaf = 0; return }
+    const now = Date.now()
+    // Rise instant, fall eased — same feel as the old analyser meter.
+    meter.smL = meter.tL > meter.smL ? meter.tL : meter.smL * 0.8 + meter.tL * 0.2
+    meter.smR = meter.tR > meter.smR ? meter.tR : meter.smR * 0.8 + meter.tR * 0.2
+    const a = hold(meter.smL, meter.pkL, meter.pkTL, now); meter.pkL = a.p; meter.pkTL = a.t
+    const b = hold(meter.smR, meter.pkR, meter.pkTR, now); meter.pkR = b.p; meter.pkTR = b.t
+
+    setVUBar(fillL, pkElL, dbElL, meter.smL, meter.pkL)
+    if (cL && meter.smL > -0.5) cL.classList.add('clip')
+    if (!meter.mono) {
+      setVUBar(fillR, pkElR, dbElR, meter.smR, meter.pkR)
+      if (cR && meter.smR > -0.5) cR.classList.add('clip')
+    }
+
+    updateRecSignalStatus(meter.smL, meter.mono ? meter.smL : meter.smR)
+    if (recWaveform) {
+      const rmsH  = dbToEnvHeight(Math.max(meter.smL, meter.mono ? -60 : meter.smR))
+      const peakH = dbToEnvHeight(Math.max(meter.pkL, meter.mono ? -60 : meter.pkR))
+      recWaveform.push(peakH, rmsH)
+    }
+    meterRaf = requestAnimationFrame(loop)
+  }
+  meterRaf = requestAnimationFrame(loop)
+}
+
+function stopLevelsMeter(): void {
+  if (meterRaf) { cancelAnimationFrame(meterRaf); meterRaf = 0 }
+  if (levelsUnsub) { levelsUnsub(); levelsUnsub = undefined }
+}
+
 async function stopMonitoring(): Promise<void> {
-  stopVuState(recVu)
+  stopLevelsMeter()
   if (recWaveform) { recWaveform.destroy(); recWaveform = null }
   if (recTimerIval)     { clearInterval(recTimerIval);     recTimerIval     = null }
   if (signalCheckTimer) { clearTimeout(signalCheckTimer);  signalCheckTimer = null }
-
-  if (!monitorSession) return
-  const s = monitorSession; monitorSession = null
-  await Promise.race([
-    stopMonitorStream(s),
-    new Promise<void>(resolve => setTimeout(resolve, 5000))
-  ])
+  // Restore the R meter row + label for the next take (mono may have hidden it).
+  const rRow = document.getElementById('rec-vu-r')?.closest('.vu-bar-row') as HTMLElement | null
+  if (rRow) rRow.style.display = ''
+  const lLbl = document.getElementById('rec-vu-l')?.closest('.vu-bar-row')?.querySelector('.vu-bar-lbl') as HTMLElement | null
+  if (lLbl) lLbl.textContent = 'L'
 }
 
 async function doStopRecording(): Promise<void> {
   window.api.stopRecordingNow()
   try { await stopMonitoring() } catch (err) { console.error('[recording] stopMonitoring error:', err) }
   hideOverlay()
-}
-
-// ── Monitoring stream reconnect (for VU continuity) ─────────────────────────
-
-function attachMonitorDisconnectHandler(session: MonitorSession, opts: RecordingOpts): void {
-  session.stream.getAudioTracks().forEach(track => {
-    track.onended = () => {
-      if (!isRecording || !monitorSession || monitorSession !== session) return
-      tryReconnectMonitor(session, opts)
-    }
-  })
-}
-
-async function tryReconnectMonitor(session: MonitorSession, opts: RecordingOpts): Promise<void> {
-  // Try for 30 s to reconnect the monitoring stream (main handles actual recording reconnect)
-  for (let i = 0; i < 30 && isRecording; i++) {
-    await new Promise<void>(r => setTimeout(r, 1000))
-    if (await reconnectMonitorStream(session)) {
-      attachMonitorDisconnectHandler(session, opts)
-      return
-    }
-  }
 }
 
 // ── Overlay / UI state ───────────────────────────────────────────────────────
