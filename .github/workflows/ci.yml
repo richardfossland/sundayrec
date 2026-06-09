@@ -60,8 +60,11 @@ jobs:
           npm run format:check
           npm run typecheck
 
-      - name: Frontend unit tests
-        run: npm run test
+      # No "Frontend unit tests" step: the legacy vanilla-TS renderer (the
+      # verbatim Electron port) ships no JS test runner, so there is no
+      # `npm run test` script — the previous step referenced a missing script and
+      # failed every run. The renderer is exercised manually; the Rust suite
+      # below is the automated gate. Re-add a step here if a frontend runner lands.
 
       # The Rust suite is deliberately device-INDEPENDENT (device enumeration
       # tolerates zero devices; the cpal/ffmpeg streams are not opened in tests;
