@@ -100,9 +100,11 @@ sundayrec-core = { path = "../crates/sundayrec-core" }
 # Shared Sunday Account (SSO) primitives — PKCE, Supabase GoTrue request/response
 # shaping, the cross-app shared session file, OAuth-callback parsing. The pure,
 # unit-tested half of "one Sunday login for the whole suite"; this crate only
-# adds the impure loopback/reqwest shell over it (src/account.rs). Path dep for
-# local dev; switch to the git-tag form for release (see sunday-platform README).
-sunday-auth = { path = "../../sunday-platform/crates/sunday-auth" }
+# adds the impure loopback/reqwest shell over it (src/account.rs). Distributed by
+# git tag (see sunday-platform README) so each app builds standalone in CI — a
+# path dep would break the single-repo checkout. For local sunday-auth co-dev,
+# override with a `[patch]` in .cargo/config.toml.
+sunday-auth = { git = "https://github.com/richardfossland/sunday-platform.git", tag = "v0.2.0" }
 
 tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-opener = "2"
