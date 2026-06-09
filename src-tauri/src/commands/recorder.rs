@@ -87,20 +87,22 @@ pub async fn start_recording(
     db: State<'_, Db>,
     opts: RecordingOpts,
 ) -> AppResult<()> {
-    // Release the camera preview BEFORE the engine opens the camera. On macOS a
-    // camera has a single owner: while the HOME-screen preview's ffmpeg child
-    // still holds it, the recorder's avfoundation video input can't open it and
-    // video silently fails to record. This awaits the preview's full release
-    // (process exit), mirroring how the pre-roll/VU mic is freed below.
-    preview.stop_and_release().await;
-    // Pre-roll harvest (F3.2): if the rolling capture loop is running, stop it and
-    // grab the trimmed clip of audio captured BEFORE this press, so the recorder
-    // can prepend it. Honours the persisted `pre_roll_seconds` window. Harvesting
-    // also releases the mic before the recorder opens it (one device owner on
-    // macOS). A `None` window / inactive loop / nothing-captured → no clip.
-    let clip = {
-        let settings = crate::settings::load(&db.pool).await?;
-        match (settings.pre_roll_seconds, preroll.is_active()) {
+    // Two independent device hand-offs must finish before the engine opens its
+    // devices: (1) release the camera preview, and (2) harvest the pre-roll clip
+    // (which also frees the mic). They touch DIFFERENT devices (camera vs mic), so
+    // we run them CONCURRENTLY instead of back-to-back — when both apply (video +
+    // pre-roll + a live preview), this shaves off roughly the smaller of the two
+    // waits from the felt start time.
+    //
+    // - Preview release: on macOS a camera has a single owner; while the HOME
+    //   preview's ffmpeg child still holds it, the recorder's avfoundation video
+    //   input can't open it and video silently fails. We await its full release.
+    // - Pre-roll harvest (F3.2): stop the rolling capture loop and grab the trimmed
+    //   clip of audio captured BEFORE this press, honouring `pre_roll_seconds`.
+    //   `None` window / inactive loop / nothing-captured → no clip.
+    let pre_roll_seconds = crate::settings::load(&db.pool).await?.pre_roll_seconds;
+    let harvest = async {
+        match (pre_roll_seconds, preroll.is_active()) {
             (secs, true) if secs > 0 => {
                 // Match the recording's REAL codec + container so the F3.3a prepend
                 // concat is a lossless `-c copy`. The codec is derived from the
@@ -147,6 +149,7 @@ pub async fn start_recording(
             _ => None,
         }
     };
+    let (_, clip) = tokio::join!(preview.stop_and_release(), harvest);
     engine.start(app, Some(db.pool.clone()), opts, clip).await
 }
 
