@@ -83,6 +83,16 @@ pub enum DeepLinkAction {
         path: String,
         return_to: Option<String>,
     },
+    /// `sundayrec://captions?path=<srt>[&recording=<video>]` — SundayEdit
+    /// finished captioning a recording we sent it and is handing the subtitle
+    /// file back. `path` is the SRT/VTT sidecar; `recording` is the original
+    /// recording the captions belong to (so we can write its `.transcript.json`
+    /// next to it). `recording` is optional for forward-compatibility — a caller
+    /// that omits it leaves the app to resolve which recording to attach to.
+    Captions {
+        path: String,
+        recording: Option<String>,
+    },
     /// A recognised scheme but an action we don't route — surface for logging.
     Unknown { host: String },
 }
@@ -102,22 +112,28 @@ pub fn parse_deep_link(url: &str) -> Option<DeepLinkAction> {
     match host {
         "oauth" | "oauth-callback" => Some(DeepLinkAction::OAuthCallback { query: pairs }),
         "import" => {
-            let path = pairs
-                .iter()
-                .find(|(k, _)| k == "path")
-                .map(|(_, v)| v.clone())
-                .unwrap_or_default();
-            let return_to = pairs
-                .iter()
-                .find(|(k, _)| k == "returnTo")
-                .map(|(_, v)| v.clone())
-                .filter(|s| !s.is_empty());
+            let path = pick(&pairs, "path").unwrap_or_default();
+            let return_to = pick(&pairs, "returnTo");
             Some(DeepLinkAction::Import { path, return_to })
+        }
+        "captions" => {
+            let path = pick(&pairs, "path").unwrap_or_default();
+            let recording = pick(&pairs, "recording");
+            Some(DeepLinkAction::Captions { path, recording })
         }
         other => Some(DeepLinkAction::Unknown {
             host: other.to_string(),
         }),
     }
+}
+
+/// Find the first non-empty value for `key` in decoded query `pairs`.
+fn pick(pairs: &[(String, String)], key: &str) -> Option<String> {
+    pairs
+        .iter()
+        .find(|(k, _)| k == key)
+        .map(|(_, v)| v.clone())
+        .filter(|s| !s.is_empty())
 }
 
 /// Percent-decode an `application/x-www-form-urlencoded` query string into key/
@@ -277,6 +293,52 @@ mod tests {
         assert_eq!(
             parse_deep_link("sundayrec://wat?x=1"),
             Some(DeepLinkAction::Unknown { host: "wat".into() })
+        );
+    }
+
+    #[test]
+    fn parses_captions_hand_back_with_recording() {
+        // SundayEdit hands the SRT back with the original recording path so we
+        // can write its `.transcript.json` sidecar.
+        let action =
+            parse_deep_link("sundayrec://captions?path=%2FUsers%2Fola%2Ftale.srt&recording=%2FUsers%2Fola%2Ftale.mp4")
+                .unwrap();
+        assert_eq!(
+            action,
+            DeepLinkAction::Captions {
+                path: "/Users/ola/tale.srt".into(),
+                recording: Some("/Users/ola/tale.mp4".into()),
+            }
+        );
+    }
+
+    #[test]
+    fn parses_captions_without_recording() {
+        // A caller may omit the recording; the app resolves which one to attach.
+        let action = parse_deep_link("sundayrec://captions?path=%2Fa.srt").unwrap();
+        assert_eq!(
+            action,
+            DeepLinkAction::Captions {
+                path: "/a.srt".into(),
+                recording: None,
+            }
+        );
+    }
+
+    #[test]
+    fn captions_with_spaces_and_non_ascii_round_trip() {
+        // %20 for spaces and %C3%B8 for 'ø' must decode (SundayEdit encodes both).
+        let action = parse_deep_link(
+            "sundayrec://captions?path=%2FUsers%2Fola%2FB%C3%B8nn%20m%C3%B8te.srt\
+             &recording=%2FUsers%2Fola%2FB%C3%B8nn%20m%C3%B8te.mp4",
+        )
+        .unwrap();
+        assert_eq!(
+            action,
+            DeepLinkAction::Captions {
+                path: "/Users/ola/Bønn møte.srt".into(),
+                recording: Some("/Users/ola/Bønn møte.mp4".into()),
+            }
         );
     }
 

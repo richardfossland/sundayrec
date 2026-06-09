@@ -29,6 +29,10 @@ use sundayrec_core::tray::{build_menu as build_model, TrayAction, TrayItem, Tray
 pub const TRAY_ACTION_EVENT: &str = "tray://action";
 /// The event emitted when an inbound deep link is an import hand-off.
 pub const DEEP_LINK_IMPORT_EVENT: &str = "deeplink://import";
+/// The event emitted after a captions hand-back (`sundayrec://captions`) has
+/// been applied — the renderer can toast + refresh transcript search. The
+/// payload is `{ ok, recording, transcriptPath?, error? }`.
+pub const DEEP_LINK_CAPTIONS_EVENT: &str = "deeplink://captions";
 
 /// The stable string id for a [`TrayAction`], used as the menu-item id and the
 /// emitted event payload so the shell can route a click without re-deriving it.
@@ -153,6 +157,50 @@ pub fn dispatch_deep_link<R: Runtime>(app: &AppHandle<R>, url: &str) -> Option<D
                 DEEP_LINK_IMPORT_EVENT,
                 serde_json::json!({ "path": path, "returnTo": return_to }),
             );
+        }
+        DeepLinkAction::Captions { path, recording } => {
+            // SundayEdit finished captioning and handed the SRT back. When it
+            // told us which recording the captions belong to, apply them right
+            // now via the same importer the manual flow uses — this closes the
+            // Rec → Edit → Rec round-trip with no further clicks. Without a
+            // recording path we can't know which sidecar to write, so we surface
+            // it to the renderer to resolve.
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.show();
+                let _ = win.set_focus();
+            }
+            let payload = match recording {
+                Some(rec) => {
+                    let result = crate::commands::integrations::integrations_sundayedit_import(
+                        rec.clone(),
+                        path.clone(),
+                        None,
+                    );
+                    match result {
+                        Ok(op) if op.ok => serde_json::json!({
+                            "ok": true,
+                            "recording": rec,
+                            "transcriptPath": op.transcript_path,
+                        }),
+                        Ok(op) => serde_json::json!({
+                            "ok": false,
+                            "recording": rec,
+                            "error": op.error,
+                        }),
+                        Err(e) => serde_json::json!({
+                            "ok": false,
+                            "recording": rec,
+                            "error": e.to_string(),
+                        }),
+                    }
+                }
+                None => serde_json::json!({
+                    "ok": false,
+                    "path": path,
+                    "error": "missing_recording",
+                }),
+            };
+            let _ = app.emit(DEEP_LINK_CAPTIONS_EVENT, payload);
         }
         DeepLinkAction::OAuthCallback { .. } | DeepLinkAction::Unknown { .. } => {
             // OAuth-via-scheme is delivered to the cloud flow elsewhere; Unknown
