@@ -97,6 +97,12 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 # Pure, GUI-free domain core — the recorder behaviour distilled from Electron.
 sundayrec-core = { path = "../crates/sundayrec-core" }
+# Shared Sunday Account (SSO) primitives — PKCE, Supabase GoTrue request/response
+# shaping, the cross-app shared session file, OAuth-callback parsing. The pure,
+# unit-tested half of "one Sunday login for the whole suite"; this crate only
+# adds the impure loopback/reqwest shell over it (src/account.rs). Path dep for
+# local dev; switch to the git-tag form for release (see sunday-platform README).
+sunday-auth = { path = "../../sunday-platform/crates/sunday-auth" }
 
 tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-opener = "2"

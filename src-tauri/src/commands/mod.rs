@@ -4,6 +4,7 @@
 //! delegate to `sundayrec-core` (and, later, the `services` modules) and return
 //! `Result<T, AppError>`. Naming convention: `entity_verb` (e.g. `app_info`).
 
+pub mod account;
 pub mod app;
 pub mod audio;
 pub mod bridge;

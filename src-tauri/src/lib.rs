@@ -15,6 +15,10 @@
 //!   error     centralised `AppError` (serialises to `{ code, message }`)
 //!   media     bundled ffmpeg sidecar — resolution + tokio spawn primitive
 
+// Sunday Account (SSO) — the desktop login over the shared `sunday-auth` crate.
+// The browser loopback PKCE shell + shared-session persistence; the pure
+// decisions live in `sunday_auth::{pkce,supabase,session}`. NETWORK-UNVERIFIED.
+pub mod account;
 pub mod audio;
 // Bridge Integration #2 — the Rec-side live cue-bridge consumer. The
 // channel-name + LiveEvent→chapter fold live in `sundayrec_core`; this seam
@@ -247,6 +251,11 @@ pub fn run() {
             commands::app::app_info,
             commands::app::set_launch_at_login,
             commands::app::get_launch_at_login,
+            commands::account::sunday_account_configured,
+            commands::account::sunday_account_status,
+            commands::account::sunday_sign_in,
+            commands::account::sunday_sign_out,
+            commands::account::sunday_whoami_song,
             commands::audio::list_input_devices,
             commands::audio::list_audio_devices,
             commands::audio::list_audio_input_channels,
