@@ -150,8 +150,9 @@ mod tests {
     #[test]
     fn secure_api_base_requires_https_with_a_host() {
         assert!(is_secure_api_base("https://api.sundaysong.com"));
-        assert!(is_secure_api_base("https://api.sundaysong.com/v1/usage/log"));
-        assert!(is_secure_api_base("  HTTPS://API.SUNDAYSONG.COM  ")); // trim + case
+        assert!(is_secure_api_base("https://api.sundaysong.com/v1/usage"));
+        // Trimmed + case-insensitive scheme.
+        assert!(is_secure_api_base("  HTTPS://API.SUNDAYSONG.COM  "));
         // Rejected: plaintext, scheme-less, and https with no host.
         assert!(!is_secure_api_base("http://api.sundaysong.com"));
         assert!(!is_secure_api_base("api.sundaysong.com"));
