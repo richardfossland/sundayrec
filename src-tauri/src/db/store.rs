@@ -141,6 +141,18 @@ pub async fn insert_recording(pool: &SqlitePool, mut row: RecordingRow) -> AppRe
     Ok(row)
 }
 
+/// Whether a history row already exists for `file_path`. Crash recovery uses
+/// this to stay idempotent: a deliverable that was finalised *live* (its row
+/// already inserted at a split boundary) must not be inserted a second time when
+/// a manifest that survived a non-clean session end is replayed on next launch.
+pub async fn recording_exists_for_path(pool: &SqlitePool, file_path: &str) -> AppResult<bool> {
+    let n: i64 = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM recording WHERE file_path = ?1)")
+        .bind(file_path)
+        .fetch_one(pool)
+        .await?;
+    Ok(n != 0)
+}
+
 /// List recordings, newest first.
 pub async fn list_recordings(pool: &SqlitePool) -> AppResult<Vec<RecordingRow>> {
     let rows = sqlx::query(

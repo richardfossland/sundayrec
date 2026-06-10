@@ -129,6 +129,18 @@ async fn recover_session(pool: &SqlitePool, manifest: &SessionManifest) -> usize
             continue;
         }
 
+        // Idempotency: a deliverable finalised live (e.g. a split closed before
+        // the device failed) already has a history row. A non-clean session end
+        // doesn't delete the manifest, so this replay would otherwise insert a
+        // DUPLICATE row pointing at the same file. Skip anything already recorded.
+        if crate::db::store::recording_exists_for_path(pool, &final_path)
+            .await
+            .unwrap_or(false)
+        {
+            tracing::info!(file = %final_path, "recovery: history row already exists — skipping duplicate");
+            continue;
+        }
+
         let byte_size = tokio::fs::metadata(&final_path)
             .await
             .map(|m| m.len() as i64)
@@ -267,6 +279,55 @@ mod tests {
         let rows = list_recordings(&pool).await.unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].file_path, m.deliverables[1].primary_path);
+    }
+
+    #[tokio::test]
+    async fn recover_session_is_idempotent_for_already_recorded_deliverables() {
+        // Regression: a split finalised LIVE already wrote its history row. A
+        // non-clean session end (e.g. reconnect GiveUp) doesn't delete the
+        // manifest, so the next-launch replay must NOT insert a duplicate row
+        // for that deliverable — only the not-yet-recorded one.
+        let (pool, _db) = temp_pool().await;
+        let dir = tempfile::tempdir().unwrap();
+        let m = manifest_in(dir.path());
+        write_fragment(Path::new(&m.deliverables[0].primary_path)).await;
+        write_fragment(Path::new(&m.deliverables[1].primary_path)).await;
+
+        // Deliverable 0 was already recorded live (a row exists for its path).
+        crate::db::store::insert_recording(
+            &pool,
+            crate::db::store::RecordingRow {
+                id: String::new(),
+                file_path: m.deliverables[0].primary_path.clone(),
+                device_name: Some("Soundcraft USB".into()),
+                started_at: m.deliverables[0].started_at_ms as f64,
+                duration_ms: Some(600_000.0),
+                byte_size: Some(1234),
+                created_at: 0.0,
+                note: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let recovered = recover_session(&pool, &m).await;
+        assert_eq!(
+            recovered, 1,
+            "only the not-yet-recorded deliverable is added"
+        );
+
+        let rows = list_recordings(&pool).await.unwrap();
+        assert_eq!(
+            rows.len(),
+            2,
+            "no duplicate row for the already-recorded file"
+        );
+        let d0 = &m.deliverables[0].primary_path;
+        assert_eq!(
+            rows.iter().filter(|r| &r.file_path == d0).count(),
+            1,
+            "the already-recorded deliverable must not be re-inserted"
+        );
     }
 
     #[tokio::test]
