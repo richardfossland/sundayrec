@@ -23,7 +23,7 @@ use sundayrec_core::integrations::plan::{
     service_to_metadata, service_to_schedule, PlanMetadata, PlanSchedule, PlanService,
 };
 use sundayrec_core::integrations::settings::{
-    merge_patch_json, parse_settings, IntegrationSettings,
+    is_secure_api_base, merge_patch_json, parse_settings, IntegrationSettings,
 };
 use sundayrec_core::integrations::song::build_usage_payloads;
 use sundayrec_core::integrations::sundayedit::{
@@ -154,6 +154,16 @@ pub async fn integrations_song_submit_usage(
         .song_api_url
         .clone()
         .unwrap_or_else(|| "https://api.sundaysong.com".into());
+    // Refuse to send the bearer API key over a non-HTTPS (or scheme-less) base —
+    // the URL is user-configurable, so an http:// value would leak the key.
+    if !is_secure_api_base(&base_url) {
+        return Ok(OpResult {
+            ok: false,
+            error: Some("insecure_api_url".into()),
+            hint: Some("The Song API URL must use https://.".into()),
+            ..Default::default()
+        });
+    }
     let api_key = secrets::get(SecretProvider::SongApiKey);
 
     // NETWORK-UNVERIFIED: best-effort POST per payload; a 409 (duplicate

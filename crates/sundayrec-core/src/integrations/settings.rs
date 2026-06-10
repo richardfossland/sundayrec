@@ -131,9 +131,35 @@ pub fn parse_settings(json: Option<&str>) -> IntegrationSettings {
         .unwrap_or_default()
 }
 
+/// Whether an integration API base URL is safe to attach a bearer key to: it
+/// must be `https://` (case-insensitive) with a non-empty host. The Song/Plan
+/// base URL is user-configurable, so a misconfigured `http://` (or scheme-less)
+/// value would otherwise leak the API key over plaintext on the first request.
+pub fn is_secure_api_base(url: &str) -> bool {
+    let lower = url.trim().to_ascii_lowercase();
+    let Some(rest) = lower.strip_prefix("https://") else {
+        return false;
+    };
+    !rest.split(['/', '?', '#']).next().unwrap_or("").is_empty()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn secure_api_base_requires_https_with_a_host() {
+        assert!(is_secure_api_base("https://api.sundaysong.com"));
+        assert!(is_secure_api_base("https://api.sundaysong.com/v1/usage"));
+        // Trimmed + case-insensitive scheme.
+        assert!(is_secure_api_base("  HTTPS://API.SUNDAYSONG.COM  "));
+        // Rejected: plaintext, scheme-less, and https with no host.
+        assert!(!is_secure_api_base("http://api.sundaysong.com"));
+        assert!(!is_secure_api_base("api.sundaysong.com"));
+        assert!(!is_secure_api_base("https://"));
+        assert!(!is_secure_api_base("https:///v1/usage"));
+        assert!(!is_secure_api_base(""));
+    }
 
     #[test]
     fn parse_settings_defaults_to_disabled() {
