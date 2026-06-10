@@ -654,13 +654,16 @@ impl TranscriptExportFormat {
 }
 
 /// Format `sec` as an `HH:MM:SS,mmm` SubRip timestamp. Ports the
-/// `editor-transcript.ts` `srtTimestamp` (floor h/m/s, rounded ms).
+/// `editor-transcript.ts` `srtTimestamp`, but rounds once to whole milliseconds
+/// first and derives h/m/s/ms from that — so a `sec` whose fractional part
+/// rounds up (e.g. `2.9996`) carries into the seconds instead of emitting an
+/// out-of-range, four-digit field like `00:00:02,1000`.
 fn srt_timestamp(sec: f64) -> String {
-    let total = sec.max(0.0);
-    let h = (total / 3600.0).floor() as u64;
-    let m = ((total % 3600.0) / 60.0).floor() as u64;
-    let s = (total % 60.0).floor() as u64;
-    let ms = ((total - total.floor()) * 1000.0).round() as u64;
+    let total_ms = (sec.max(0.0) * 1000.0).round() as u64;
+    let h = total_ms / 3_600_000;
+    let m = (total_ms % 3_600_000) / 60_000;
+    let s = (total_ms % 60_000) / 1000;
+    let ms = total_ms % 1000;
     format!("{h:02}:{m:02}:{s:02},{ms:03}")
 }
 
@@ -1059,6 +1062,18 @@ mod tests {
         assert_eq!(srt_timestamp(2.5), "00:00:02,500");
         // 3725.5s = 1h 2m 5.5s
         assert_eq!(srt_timestamp(3725.5), "01:02:05,500");
+    }
+
+    #[test]
+    fn srt_timestamp_carries_a_rounded_up_fraction() {
+        // A fraction that rounds to a full second must carry into the seconds,
+        // never emit a 4-digit ms field like `02,1000`.
+        assert_eq!(srt_timestamp(2.9996), "00:00:03,000");
+        // Carry can ripple across the minute/hour boundary too.
+        assert_eq!(srt_timestamp(59.9996), "00:01:00,000");
+        assert_eq!(srt_timestamp(3599.9999), "01:00:00,000");
+        // Integer-millisecond inputs (the real whisper pipeline) are unchanged.
+        assert_eq!(srt_timestamp(2.999), "00:00:02,999");
     }
 
     #[test]
