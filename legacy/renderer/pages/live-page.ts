@@ -335,7 +335,9 @@ function startPreviewInterval(): void {
     }
     img.style.display = ''
     if (placeholder) placeholder.style.display = 'none'
-    img.src = `file://${previewPathCached}?t=${Date.now()}`
+    // asset:// via the shim — WKWebView blocks file:// (same fix as the editor
+    // previews); the query string still cache-busts the refetch.
+    img.src = `${window.api.toAssetUrl(previewPathCached)}?t=${Date.now()}`
   }, 2000)
 }
 

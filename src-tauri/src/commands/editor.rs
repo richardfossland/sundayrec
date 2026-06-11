@@ -127,10 +127,14 @@ pub async fn editor_probe_streams(input_path: String) -> AppResult<EditorStreamI
 }
 
 /// Stat a recording and either return its bytes inline (≤400 MB) or signal
-/// `tooLarge` so the renderer streams it via the peaks-extract path.
+/// `tooLarge` so the renderer streams it via the peaks-extract path. Async +
+/// spawn_blocking: a sync command runs on the main thread, and reading a
+/// hundreds-of-MB recording there froze the whole UI for the duration.
 #[tauri::command]
-pub fn editor_read_file(media_path: String) -> AppResult<EditorFileRead> {
-    editor::read_file_guarded(&media_path)
+pub async fn editor_read_file(media_path: String) -> AppResult<EditorFileRead> {
+    tokio::task::spawn_blocking(move || editor::read_file_guarded(&media_path))
+        .await
+        .map_err(|e| crate::error::AppError::Internal(format!("editor read join: {e}")))?
 }
 
 /// Sweep the given folders for crashed-edit temp/backup leftovers. Returns the

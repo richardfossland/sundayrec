@@ -1320,6 +1320,85 @@ void syncBackendRecordingSettings(loadSettings());
 // (re-registers if the OS dropped it; idempotent otherwise).
 void syncLaunchAtLogin(loadSettings());
 
+// ── Native drag-drop bridge ───────────────────────────────────────────────
+// Tauri intercepts OS file drags (dragDropEnabled defaults to true), so the
+// legacy pages' HTML5 dragover/drop handlers never fire — and even if they
+// did, Electron's non-standard `File.path` doesn't exist here. Bridge the
+// native stream back into the DOM: re-dispatch synthetic DragEvents at the
+// drop position with File objects carrying a real `path` property, so the
+// editor's load/intro/outro zones and the thumbnail drop work unmodified.
+void (async () => {
+  try {
+    const { getCurrentWebview } = await import("@tauri-apps/api/webview");
+    let lastTarget: Element | null = null;
+
+    const dispatch = (
+      type: string,
+      el: Element | null,
+      x: number,
+      y: number,
+      paths?: string[],
+    ): void => {
+      if (!el) return;
+      const ev = new DragEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        clientX: x,
+        clientY: y,
+      });
+      try {
+        const dt = new DataTransfer();
+        for (const p of paths ?? []) {
+          const name = p.split(/[\\/]/).pop() ?? p;
+          const f = new File([], name);
+          // The legacy handlers read Electron's non-standard `File.path`.
+          Object.defineProperty(f, "path", { value: p });
+          dt.items.add(f);
+        }
+        // DragEvent's init dict ignores dataTransfer in some WebKit builds —
+        // defineProperty works everywhere.
+        Object.defineProperty(ev, "dataTransfer", { value: dt });
+      } catch (e) {
+        console.warn("[api-shim] drag-drop dataTransfer synth failed", e);
+      }
+      el.dispatchEvent(ev);
+    };
+
+    await getCurrentWebview().onDragDropEvent((event) => {
+      const payload = event.payload as {
+        type: string;
+        position?: { x: number; y: number };
+        paths?: string[];
+      };
+      // Native positions are physical pixels; the DOM wants logical.
+      const scale = window.devicePixelRatio || 1;
+      const x = (payload.position?.x ?? 0) / scale;
+      const y = (payload.position?.y ?? 0) / scale;
+      if (payload.type === "enter" || payload.type === "over") {
+        const el = document.elementFromPoint(x, y);
+        if (lastTarget && lastTarget !== el) {
+          dispatch("dragleave", lastTarget, x, y);
+        }
+        lastTarget = el;
+        dispatch("dragover", el, x, y);
+      } else if (payload.type === "drop") {
+        const el = document.elementFromPoint(x, y);
+        if (lastTarget && lastTarget !== el) {
+          dispatch("dragleave", lastTarget, x, y);
+        }
+        dispatch("drop", el, x, y, payload.paths);
+        lastTarget = null;
+      } else {
+        // "leave" / cancelled.
+        dispatch("dragleave", lastTarget, 0, 0);
+        lastTarget = null;
+      }
+    });
+  } catch (e) {
+    console.warn("[api-shim] native drag-drop bridge unavailable", e);
+  }
+})();
+
 // Mark this file as a module (loaded via <script type="module">) so its
 // top-level helpers (loadSettings, api, …) stay module-scoped and don't collide
 // with the renderer's global declarations. Phase 3 adds real imports here.

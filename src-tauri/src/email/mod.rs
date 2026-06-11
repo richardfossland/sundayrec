@@ -213,8 +213,11 @@ async fn gmail_access_token(config: &GoogleOAuthConfig) -> AppResult<String> {
     let status = resp.status();
     let text = resp.text().await.unwrap_or_default();
     if !status.is_success() {
+        // Cap what we surface: an error page can be arbitrarily large, and the
+        // raw body has no business in logs beyond a diagnostic snippet.
+        let snippet: String = text.chars().take(300).collect();
         return Err(AppError::Internal(format!(
-            "gmail token refresh {status}: {text}"
+            "gmail token refresh {status}: {snippet}"
         )));
     }
     oauth::parse_token_response(&text, now_ms())

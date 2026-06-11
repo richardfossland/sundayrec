@@ -694,6 +694,10 @@ pub struct EditorMasterProgress {
 /// same booleans the Electron `Map.has/.delete` did. The `children` field is only
 /// used feature-on (the ffmpeg handles) but the struct compiles either way — the
 /// same idiom as `StreamEngine`.
+/// Both mutexes are locked with `unwrap_or_else(|e| e.into_inner())`: they guard
+/// plain maps with no invariant a panic could half-break, so recovering a
+/// poisoned guard is correct — one panicked mastering job must not crash every
+/// later apply/cancel (same idiom as the whisper guards).
 pub struct MasterEngine {
     /// Pure legitimacy bookkeeping — register/cancel/complete.
     registry: std::sync::Mutex<sundayrec_core::mastering::JobRegistry>,
@@ -765,7 +769,7 @@ pub async fn master_cancel(engine: &MasterEngine, job_id: &str) -> AppResult<boo
     let was_live = engine
         .registry
         .lock()
-        .expect("master registry mutex")
+        .unwrap_or_else(|e| e.into_inner())
         .cancel(job_id);
     // Then kill the real child if we are holding one (feature-on).
     #[cfg(feature = "editor")]
@@ -773,7 +777,7 @@ pub async fn master_cancel(engine: &MasterEngine, job_id: &str) -> AppResult<boo
         let child = engine
             .children
             .lock()
-            .expect("master children mutex")
+            .unwrap_or_else(|e| e.into_inner())
             .remove(job_id);
         if let Some(mut c) = child {
             let _ = c.kill().await;
@@ -1165,7 +1169,7 @@ where
     if !engine
         .registry
         .lock()
-        .expect("master registry mutex")
+        .unwrap_or_else(|e| e.into_inner())
         .register(&req.job_id)
     {
         return Err(AppError::Validation("job_already_running".into()));
@@ -1176,12 +1180,12 @@ where
     engine
         .registry
         .lock()
-        .expect("master registry mutex")
+        .unwrap_or_else(|e| e.into_inner())
         .complete(&req.job_id);
     engine
         .children
         .lock()
-        .expect("master children mutex")
+        .unwrap_or_else(|e| e.into_inner())
         .remove(&req.job_id);
     result
 }
@@ -1245,7 +1249,7 @@ where
     engine
         .children
         .lock()
-        .expect("master children mutex")
+        .unwrap_or_else(|e| e.into_inner())
         .insert(req.job_id.clone(), child);
 
     // Stream -progress; total duration is unknown without a probe, so we report
@@ -1276,7 +1280,7 @@ where
     let child = engine
         .children
         .lock()
-        .expect("master children mutex")
+        .unwrap_or_else(|e| e.into_inner())
         .remove(&req.job_id);
     let status = match child {
         Some(mut c) => c
