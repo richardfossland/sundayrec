@@ -14,7 +14,16 @@ use sundayrec_core::whisper::{
 
 use crate::db::store::now_ms;
 use crate::error::{AppError, AppResult};
-use crate::whisper::{self as seam, DownloadGuard};
+use crate::whisper::{self as seam, DownloadGuard, TranscribeGuard};
+
+/// Payload for `whisper://progress` — shaped for the legacy renderer, which
+/// filters on `jobId` and drives the modal's percent bar.
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TranscribeProgress {
+    job_id: String,
+    percent: i32,
+}
 
 /// The curated whisper model registry, in display order.
 #[tauri::command]
@@ -65,25 +74,68 @@ pub fn whisper_delete_model(app: tauri::AppHandle, id: String) -> AppResult<bool
     Ok(seam::delete_model(&dir, &id))
 }
 
-/// Transcribe a recording. HARDWARE-UNVERIFIED behind `--features whisper`;
-/// returns `feature_disabled` in the default build.
+/// Transcribe a recording. Streams `whisper://progress` events ({jobId,
+/// percent}) while inference runs; `whisper_cancel_transcribe` with the same
+/// `job_id` aborts it. Returns `feature_disabled` in a `--no-default-features`
+/// build.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // mirrors the renderer's flat IPC params
 pub async fn whisper_transcribe(
     app: tauri::AppHandle,
     _db: State<'_, crate::db::Db>,
+    guard: State<'_, TranscribeGuard>,
     input_path: String,
     model_id: String,
     language: Option<String>,
     translate: Option<bool>,
     subtitle_style: Option<bool>,
+    job_id: Option<String>,
 ) -> AppResult<TranscriptData> {
+    use tauri::Emitter;
+
     let dir = whisper_models_dir(&app)?;
     let opts = TranscribeOptions {
         language: language.unwrap_or_else(|| "auto".into()),
         translate: translate.unwrap_or(false),
         subtitle_style: subtitle_style.unwrap_or(true),
     };
-    seam::transcribe(&dir, &input_path, &model_id, opts, now_ms() as i64).await
+    let job_id = job_id
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| format!("whisper-{}", now_ms()));
+    let Some(cancel) = guard.register(&job_id) else {
+        return Err(AppError::Validation("already_transcribing".into()));
+    };
+    let emit_app = app.clone();
+    let emit_job = job_id.clone();
+    let progress = move |percent: i32| {
+        let _ = emit_app.emit(
+            "whisper://progress",
+            TranscribeProgress {
+                job_id: emit_job.clone(),
+                percent,
+            },
+        );
+    };
+    let result = seam::transcribe(
+        &dir,
+        &input_path,
+        &model_id,
+        opts,
+        now_ms() as i64,
+        progress,
+        cancel,
+    )
+    .await;
+    guard.clear(&job_id);
+    result
+}
+
+/// Abort an in-flight transcription for `job_id` (the user pressed cancel).
+/// Returns whether a job was registered to cancel. Works in every build (it's
+/// just the flag; inference itself is feature-gated).
+#[tauri::command]
+pub fn whisper_cancel_transcribe(guard: State<'_, TranscribeGuard>, job_id: String) -> bool {
+    guard.cancel(&job_id)
 }
 
 /// Render a transcript to a subtitle/text file at `path` (the renderer picks the

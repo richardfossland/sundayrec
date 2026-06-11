@@ -43,10 +43,11 @@ publish = []
 editor = []
 # PU-5: whisper.cpp transcription. Pulls `whisper-rs` (binds libwhisper) for the
 # actual inference; the model registry/argv/normalise decisions are in
-# `sundayrec-core::whisper`. DEFAULT-OFF — the C/C++ build + model download are
-# HARDWARE-UNVERIFIED, so the shipping build + CI gate stay lean. When the
-# feature is OFF, the seam still compiles and `transcribe_*` returns a clear
-# "feature disabled" error (same idiom as SundayPaper's `pdf` feature).
+# `sundayrec-core::whisper`. In `default` and the macOS release build; the
+# Metal path + progress + cancel are verified on a real M1 Pro (see the
+# `live_transcribe_*` tests in src/whisper/mod.rs). When the feature is OFF,
+# the seam still compiles and `transcribe_*` returns a clear "feature disabled"
+# error (same idiom as SundayPaper's `pdf` feature).
 whisper = ["dep:whisper-rs", "dep:tempfile", "dep:sha2"]
 # R3: live RTMP streaming (multi-destination tee + lower-third overlays). NO new
 # native dep — ffmpeg is a sidecar — so the gate only compiles the spawn seam
@@ -210,9 +211,10 @@ tauri-plugin-deep-link = { version = "2", optional = true }
 # reboot. Always compiled — auto-start is core to the unattended-recorder use case.
 tauri-plugin-autostart = "2"
 # PU-5 whisper.cpp bindings (transcription). Pulled only under `--features
-# whisper`; the build compiles libwhisper from source (a C/C++ toolchain),
-# HARDWARE-UNVERIFIED, so it stays out of the default build + CI gate.
-whisper-rs = { version = "0.14", optional = true }
+# whisper`; the build compiles libwhisper from source (a C/C++ toolchain).
+# Declared per-target below so macOS gets the `metal` GPU backend (CPU-only
+# inference made the medium model take hours on an M1 Pro — with Metal the same
+# hardware runs ~30× realtime, verified with whisper-cli on the rig 2026-06-11).
 # Bridge #2 WebSocket client for the Supabase Realtime subscription. rustls (no
 # system OpenSSL); pulled only under `--features bridge`. INFRA-UNVERIFIED.
 tokio-tungstenite = { version = "0.24", default-features = false, features = [
@@ -277,6 +279,15 @@ dispatch2 = { version = "0.3", default-features = false, features = ["std"] }
 # runtime and `msg_send!` `authorizationStatusForMediaType:`). Same objc2 0.6
 # lineage as the AppKit bindings above.
 objc2 = { version = "0.6", default-features = false, features = ["std"] }
+# whisper.cpp with the Metal GPU backend (GGML_METAL_EMBED_LIBRARY — the shader
+# blob is embedded, no .metallib to bundle). Same crate as the non-mac variant
+# below; only the backend differs.
+whisper-rs = { version = "0.16", optional = true, features = ["metal"] }
+
+# whisper.cpp CPU-only everywhere else (CUDA/Vulkan would each need an SDK on
+# the build host; CPU is the portable baseline).
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+whisper-rs = { version = "0.16", optional = true }
 
 [dev-dependencies]
 # Throwaway temp databases for the storage tests — no app, no device.

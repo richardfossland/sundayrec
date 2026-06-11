@@ -40,26 +40,30 @@ jobs:
           # ffmpeg sidecar matches. Intel/universal is a follow-up (needs both
           # ffmpeg arches + a universal target).
           #
-          # `--no-default-features --features editor` ships the recorder + editor
-          # but NOT whisper transcription: whisper-rs-sys bundles a whisper.cpp
-          # whose ggml fails to build on the M1 (arm64) GitHub runner — it emits
-          # the i8mm intrinsic `vmmlaq_s32` while cmake detects i8mm as
-          # unsupported on M1 ("always_inline ... requires target feature
-          # 'i8mm'"). Transcription is an optional, hardware-unverified feature
-          # and its commands degrade to a clear `feature_disabled` error, so it's
-          # dropped from the installer until the whisper.cpp arm build is sorted.
+          # macOS ships `whisper` (transcription) with the Metal GPU backend
+          # (Cargo.toml's macOS target gives whisper-rs the `metal` feature) —
+          # without it the installed app could neither download a model nor
+          # transcribe (everything degraded to `feature_disabled`).
+          # History: an earlier release hit a ggml i8mm-intrinsic compile error
+          # (`vmmlaq_s32` vs "requires target feature 'i8mm'") on the M1 runner
+          # and whisper was dropped. The crate builds cleanly on a local M1 Pro
+          # (same arch as the runner), so it's re-enabled; if the runner's
+          # toolchain still trips, drop `whisper` from this line only and fall
+          # back to shipping whisper-cli as a sidecar (the Electron approach).
           # The leading `--` forwards the rest to cargo (tauri-action runs
           # `tauri build <args>`, and tauri-cli only passes args after `--` on).
           # `tray` ships the menubar/tray icon (+ sundayrec:// deep-link). It
           # builds on both runners and degrades gracefully (install failure only
           # logs a warning), so it's safe to ship.
           - platform: macos-latest
-            args: "-- --no-default-features --features editor,tray,updater"
+            args: "-- --no-default-features --features editor,tray,updater,whisper"
           # Windows adds `asio`: a low-latency, single-device multichannel audio
           # backend for pro interfaces (the dshow path splits them into stereo
           # pairs). It needs the Steinberg ASIO SDK + LLVM + MSVC at build time —
           # set up by the windows-only steps below (see docs/BUILD_ASIO.md). The
           # recorder falls back to WASAPI automatically when no ASIO driver exists.
+          # `whisper` stays OFF here until the MSVC whisper.cpp build is verified
+          # on a Windows runner (separate follow-up; CPU-only when it lands).
           - platform: windows-latest
             args: "-- --no-default-features --features editor,tray,asio,updater"
 

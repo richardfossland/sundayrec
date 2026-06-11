@@ -1177,15 +1177,35 @@ const api: Record<string, unknown> = {
   // ── Transcripts / whisper ───────────────────────────────────────────────
   transcriptListAll: async () => [],
   transcriptResolveSource: async () => null,
-  // whisper_list_models gives the catalogue; the build ships the whisper feature
-  // so the binary is available. (Per-model installed flags come from the list.)
-  whisperStatus: async () => ({
-    models: await call("whisper_list_models", undefined, []),
-    installed: [],
-    active: null,
-    binaryAvailable: true,
-    available: true,
-  }),
+  // whisper_list_models gives the catalogue; whisper_model_status the per-model
+  // on-disk {installed, sizeOk}. The renderer's model picker needs both merged
+  // (the old Electron whisper-status did this server-side) — without the
+  // installed flags every transcription re-downloaded the model from scratch.
+  whisperStatus: async () => {
+    const models = await call<Array<Record<string, unknown>>>(
+      "whisper_list_models",
+      undefined,
+      [],
+    );
+    const merged = await Promise.all(
+      models.map(async (m) => ({
+        ...m,
+        ...(await call(
+          "whisper_model_status",
+          { id: m.id },
+          { installed: false, sizeOk: false },
+        )),
+        id: m.id,
+      })),
+    );
+    return {
+      models: merged,
+      installed: merged.filter((m) => m.installed).map((m) => m.id),
+      active: null,
+      binaryAvailable: true,
+      available: true,
+    };
+  },
   // whisper_* commands take `id`, not `model_id`. The command returns `()` on
   // success and an AppError on failure; surface a real {ok,error} shape (the
   // generic `call` fallback would hide the reason → "feilet: undefined").
@@ -1194,7 +1214,12 @@ const api: Record<string, unknown> = {
       await invoke("whisper_download_model", { id: modelId });
       return { ok: true as const };
     } catch (e) {
-      return { ok: false as const, error: ipcErrText(e) };
+      const msg = ipcErrText(e);
+      // The renderer suppresses the alert only for the exact "cancelled".
+      return {
+        ok: false as const,
+        error: msg.endsWith("cancelled") ? "cancelled" : msg,
+      };
     }
   },
   whisperCancelDownload: async (modelId: string) =>
@@ -1202,22 +1227,33 @@ const api: Record<string, unknown> = {
   whisperDeleteModel: async (modelId: string) =>
     call("whisper_delete_model", { id: modelId }, true).then(() => true),
   // old { filePath, modelId, language, translate, jobId } → whisper_transcribe
-  // (input_path, model_id, language, translate, subtitle_style). NEEDS LIVE VERIFY.
+  // (input_path, model_id, language, translate, subtitle_style, job_id). The
+  // command returns the TranscriptData itself on success — wrap it in the
+  // {ok, transcript} envelope the legacy renderer pattern-matches on, and map a
+  // rejected invoke to {ok:false, error} (the renderer suppresses the alert for
+  // the exact string "cancelled", so strip thiserror's "validation: " prefix).
   whisperTranscribe: async (params: unknown) => {
     const o = (params ?? {}) as Record<string, unknown>;
-    return call(
-      "whisper_transcribe",
-      {
+    try {
+      const transcript = await invoke("whisper_transcribe", {
         inputPath: o.filePath,
         modelId: o.modelId,
         language: o.language ?? null,
         translate: o.translate ?? null,
         subtitleStyle: null,
-      },
-      { ok: false },
-    );
+        jobId: o.jobId ?? null,
+      });
+      return { ok: true as const, transcript };
+    } catch (e) {
+      const msg = ipcErrText(e);
+      return {
+        ok: false as const,
+        error: msg.endsWith("cancelled") ? "cancelled" : msg,
+      };
+    }
   },
-  whisperCancelTranscribe: async () => true, // TODO Phase 3: no cancel command
+  whisperCancelTranscribe: async (jobId: string) =>
+    call("whisper_cancel_transcribe", { jobId }, false),
 
   // ── Review queue ────────────────────────────────────────────────────────
   reviewQueueList: async () => [],
