@@ -12,9 +12,10 @@ use serde::{Deserialize, Serialize};
 
 use super::{ChapterMarker, ServiceLink, ServiceLinkSource, SongUsage};
 
-/// Song identifiers carried on a manifest item. Mirrors `stage.ts`
-/// `StageManifestSong`.
-// mirrors sunday-contracts; converge once published
+/// Song identifiers carried on a manifest item. FIELD-IDENTICAL mirror of the
+/// canonical `StageManifestSong` (sunday-platform `sunday-contracts` v0.4.0,
+/// crates/sunday-contracts/src/stage.rs); converge onto the published crate
+/// once apps can depend on it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct StageManifestSong {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -27,9 +28,9 @@ pub struct StageManifestSong {
     pub sundaysong_id: Option<String>,
 }
 
-/// One cue in the manifest. `at_ms`/`end_ms` are absolute unix ms. Mirrors
-/// `stage.ts` `StageManifestItem`.
-// mirrors sunday-contracts; converge once published
+/// One cue in the manifest. `at_ms`/`end_ms` are absolute unix ms.
+/// FIELD-IDENTICAL mirror of the canonical `StageManifestItem`
+/// (sunday-contracts v0.4.0, stage.rs).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StageManifestItem {
     pub at_ms: i64,
@@ -43,8 +44,9 @@ pub struct StageManifestItem {
     pub song: Option<StageManifestSong>,
 }
 
-/// A Stage cue log. Mirrors `stage.ts` `StageManifest`.
-// mirrors sunday-contracts; converge once published
+/// A Stage cue log. FIELD-IDENTICAL mirror of the canonical `StageManifest`
+/// (sunday-contracts v0.4.0, stage.rs): camelCase wire keys, no
+/// `schema_version` envelope, absent options omitted (never `null`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StageManifest {
     #[serde(default, skip_serializing_if = "Option::is_none")]

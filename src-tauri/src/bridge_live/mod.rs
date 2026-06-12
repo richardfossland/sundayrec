@@ -123,7 +123,11 @@ pub async fn subscribe(
             .or_else(|| serde_json::from_str::<LiveEvent>(&text).ok());
         let Some(event) = event else { continue };
         let effect = live_bridge::apply_event(&mut state, &event);
-        tracing::debug!(?effect, seq = event.seq(), "live cue event folded");
+        tracing::debug!(
+            ?effect,
+            sequence = event.sequence(),
+            "live cue event folded"
+        );
         if matches!(effect, live_bridge::BridgeEffect::Ended) {
             break;
         }
@@ -146,10 +150,12 @@ mod tests {
 
     #[test]
     fn decode_event_parses_stage_wire_shape() {
-        let json = r#"{"type":"now_playing","church_id":"c","service_id":"s",
-            "seq":1,"at":10,"song_id":null,"variant_id":null,"title":"Hymn"}"#;
+        // The canonical LiveEvent shape (sunday-contracts v0.4.0) Stage emits.
+        let json = r#"{"type":"now_playing","schema_version":1,"service_id":"s",
+            "emitted_at":"2026-05-31T09:00:00Z","sequence":1,
+            "song_ref":null,"item_position":null,"title":"Hymn"}"#;
         let e = decode_event(json).unwrap();
-        assert_eq!(e.seq(), 1);
+        assert_eq!(e.sequence(), 1);
         assert!(decode_event("garbage").is_err());
     }
 
