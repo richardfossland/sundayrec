@@ -55,6 +55,10 @@ export function setupEditorPage(): void {
   $('editor-io-chevron')?.addEventListener('click', () => {
     document.getElementById('editor-io-panel')?.classList.toggle('editor-io-panel--collapsed')
   })
+  // Keep clicks on the "Inkluder ved eksport" toggle from bubbling up to the
+  // collapsible panel header (externalized from an inline onclick attribute,
+  // which the strict CSP — script-src 'self' — would block).
+  document.querySelector('.editor-io-include-label')?.addEventListener('click', (e) => e.stopPropagation())
   $('btn-editor-play')?.addEventListener('click',    () => togglePlay(false))
   $('btn-editor-preview')?.addEventListener('click', () => togglePlay(true))
   $('btn-zoom-in')?.addEventListener('click',   () => zoomBy(0.5))

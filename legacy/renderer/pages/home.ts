@@ -1323,10 +1323,15 @@ function renderThumbCard(): boolean {
   }
   // Swap the placeholder SVG for an actual <img> preview via the asset://
   // protocol (WKWebView blocks file://). Falling back to the icon keeps the slot
-  // from collapsing if the file disappeared (onerror).
+  // from collapsing if the file disappeared (error listener — NOT an inline
+  // onerror attribute, which the strict CSP (script-src 'self') would block).
   if (iconSlot) {
-    const src = window.api.toAssetUrl(path)
-    iconSlot.innerHTML = `<img class="thumb-card-icon thumb-card-icon-home" src="${src}" alt="" onerror="this.style.display='none'" />`
+    const img = document.createElement('img')
+    img.className = 'thumb-card-icon thumb-card-icon-home'
+    img.alt = ''
+    img.addEventListener('error', () => { img.style.display = 'none' })
+    img.src = window.api.toAssetUrl(path)
+    iconSlot.replaceChildren(img)
   }
   return true
 }
