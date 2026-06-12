@@ -104,7 +104,7 @@ sundayrec-core = { path = "../crates/sundayrec-core" }
 # git tag (see sunday-platform README) so each app builds standalone in CI — a
 # path dep would break the single-repo checkout. For local sunday-auth co-dev,
 # override with a `[patch]` in .cargo/config.toml.
-sunday-auth = { git = "https://github.com/richardfossland/sunday-platform.git", tag = "v0.2.0" }
+sunday-auth = { git = "https://github.com/richardfossland/sunday-platform.git", tag = "v0.3.0" }
 
 tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-opener = "2"
