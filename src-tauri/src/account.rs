@@ -45,6 +45,16 @@ const CLAIMS_GRACE_MS: i64 = 30 * 24 * 60 * 60 * 1000; // 30 days
 /// have Google Workspace / Gmail, so Google is the one-button default.
 const LOGIN_PROVIDER: &str = "google";
 
+/// Production Sunday issuer (the shared Supabase project that is also
+/// SundayPlan's backend) — the zero-config default a stock build signs in
+/// against. Canonical home is `sunday_auth::SUNDAY_PROD_SUPABASE_URL` /
+/// `SUNDAY_PROD_SUPABASE_ANON_KEY` (added after tag v0.2.0); switch to those
+/// and delete these twins when the dep moves past that tag. The anon key is
+/// public by design — every Sunday web bundle ships it to browsers; RLS and
+/// the access token are the trust boundary, never this key.
+const PROD_SUPABASE_URL: &str = "https://rkiahljrkormwzogghpc.supabase.co";
+const PROD_SUPABASE_ANON_KEY: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJraWFobGpya29ybXd6b2dnaHBjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMjY2NjQsImV4cCI6MjA5NjYwMjY2NH0.FzJUHvDqShIgHk8OLiT0Rm9QBR1kAd3lDkyCn8GjS8I";
+
 /// The resolved Supabase project this build authenticates against. `base_url` is
 /// the issuer origin (the alias `https://auth.sundaysuite.app` once the custom
 /// domain is live, or the raw `*.supabase.co` until then); `anon_key` is the
@@ -58,16 +68,20 @@ pub struct SupabaseConfig {
 
 impl SupabaseConfig {
     /// Resolve from the runtime env (`SUNDAY_SUPABASE_URL` /
-    /// `SUNDAY_SUPABASE_ANON_KEY`), falling back to values baked in at build time
-    /// via the same names. Suite-wide names (not `SUNDAYREC_*`) so every Sunday
-    /// app points at the same issuer. `None` if either is blank/missing.
+    /// `SUNDAY_SUPABASE_ANON_KEY`), then values baked in at build time via the
+    /// same names, then the production Sunday project compiled into
+    /// `sunday-auth` — so a stock build signs in with zero configuration while
+    /// an override (staging, local stack) still wins. Suite-wide names (not
+    /// `SUNDAYREC_*`) so every Sunday app points at the same issuer.
     pub fn resolve() -> Option<Self> {
         let url = std::env::var("SUNDAY_SUPABASE_URL")
             .ok()
-            .or_else(|| option_env!("SUNDAY_SUPABASE_URL").map(str::to_string));
+            .or_else(|| option_env!("SUNDAY_SUPABASE_URL").map(str::to_string))
+            .or_else(|| Some(PROD_SUPABASE_URL.to_string()));
         let key = std::env::var("SUNDAY_SUPABASE_ANON_KEY")
             .ok()
-            .or_else(|| option_env!("SUNDAY_SUPABASE_ANON_KEY").map(str::to_string));
+            .or_else(|| option_env!("SUNDAY_SUPABASE_ANON_KEY").map(str::to_string))
+            .or_else(|| Some(PROD_SUPABASE_ANON_KEY.to_string()));
         Self::normalize(url, key)
     }
 
@@ -372,6 +386,19 @@ async fn send_json(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resolve_defaults_to_the_prod_issuer_with_no_env() {
+        // A stock build must be able to sign in with zero configuration.
+        // (Env overrides still win — exercised implicitly by CI builds that
+        // set SUNDAY_SUPABASE_URL; here we only assert the fallback exists.)
+        if std::env::var("SUNDAY_SUPABASE_URL").is_ok() {
+            return; // an explicit override is configured; nothing to assert
+        }
+        let c = SupabaseConfig::resolve().expect("prod fallback");
+        assert_eq!(c.base_url, PROD_SUPABASE_URL);
+        assert_eq!(c.anon_key, PROD_SUPABASE_ANON_KEY);
+    }
 
     #[test]
     fn config_normalize_requires_both_fields() {
