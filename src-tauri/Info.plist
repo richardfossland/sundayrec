@@ -18,5 +18,24 @@
     <string>SundayRec records the microphone so you can capture the audio of your church service.</string>
     <key>NSCameraUsageDescription</key>
     <string>SundayRec uses the camera to preview and record the video of your church service.</string>
+    <!--
+      PU-2 deep-link: register the `sundayrec://` URL scheme so macOS routes
+      `sundayrec://…` links (OAuth / Plan import) back into the app. The Rust
+      handler (`tauri_plugin_deep_link::on_open_url` → `tray::dispatch_deep_link`
+      in src-tauri/src/lib.rs) is gated behind the default-off `tray` feature,
+      which release builds include. Mirrors `plugins.deep-link.desktop.schemes`
+      in tauri.conf.json. GUI-UNVERIFIED — confirm routing at rig-test.
+    -->
+    <key>CFBundleURLTypes</key>
+    <array>
+      <dict>
+        <key>CFBundleURLName</key>
+        <string>no.sundayrec.app</string>
+        <key>CFBundleURLSchemes</key>
+        <array>
+          <string>sundayrec</string>
+        </array>
+      </dict>
+    </array>
   </dict>
 </plist>

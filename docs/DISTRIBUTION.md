@@ -21,12 +21,12 @@ provide**. This doc is the checklist.
 
 ## Phase status
 
-| Capability                   | State                                                         |
-| ---------------------------- | ------------------------------------------------------------- |
-| Build macOS + Windows on tag | ✅ wired (`release.yml`)                                      |
-| macOS signing + notarization | 🔑 activates when the Apple secrets below are added           |
-| Windows signing              | ⏳ deferred (unsigned installer works; SmartScreen warns)     |
-| Auto-update (`latest.json`)  | ⏳ Phase 9 — needs the updater plugin + keypair (steps below) |
+| Capability                   | State                                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------------- |
+| Build macOS + Windows on tag | ✅ wired (`release.yml`)                                                              |
+| macOS signing + notarization | 🔑 activates when the Apple secrets below are added                                   |
+| Windows signing              | ⏳ deferred (unsigned installer works; SmartScreen warns)                             |
+| Auto-update (`latest.json`)  | ✅ plugin + pubkey + `includeUpdaterJson` wired; needs only `TAURI_SIGNING_*` secrets |
 
 Until the Apple secrets are added, the workflow still runs and produces
 **unsigned** installers (tauri-action skips signing when the secrets are

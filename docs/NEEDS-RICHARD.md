@@ -39,16 +39,12 @@ notes (2026-06-01); confirm before acting.
    new one**, and store it only as the `APPLE_PASSWORD` GitHub secret. Plugs into
    `release.yml` env (lines 83–85).
 
-4. **Tauri updater keypair + `plugins.updater` config.** Auto-update is **not
-   wired** yet: `tauri.conf.json` has **no `plugins.updater` block** and
-   `release.yml` sets `includeUpdaterJson: false`. To enable:
-   (a) `npm run tauri signer generate -- -w ~/.tauri/sundayrec_updater.key` (ONCE;
-   back it up — losing it breaks auto-update for installed users);
-   (b) add the **public** key + an `endpoints` array to `tauri.conf.json`
-   `plugins.updater`;
-   (c) add the `TAURI_SIGNING_PRIVATE_KEY` (+ `…_PASSWORD`) secrets (env already
-   wired in `release.yml` lines 76–77) and flip `includeUpdaterJson: true`.
-   See the R7 section below + DISTRIBUTION.md "Auto-update signing".
+4. **Tauri updater — now wired in config; only the secrets remain.** _(updated:
+   the `plugins.updater` block (pubkey + endpoints) is in `tauri.conf.json`,
+   `includeUpdaterJson: true` is set in `release.yml`, and the keypair exists —
+   key-id `4f08a2f48edd9a17`, backup `~/.tauri/sundayrec_updater.key`.)_ The only
+   outstanding step is adding the `TAURI_SIGNING_PRIVATE_KEY` (+ `…_PASSWORD`)
+   secrets (env already wired in `release.yml`). See `docs/RELEASE-CHECKLIST.md`.
 
 5. **Google OAuth console client (Desktop app type).** Cloud connect/upload +
    the cloud-Gmail email path need a Google OAuth client of type **Desktop app**
