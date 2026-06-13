@@ -150,10 +150,65 @@ pub fn status() -> AppResult<AccountStatus> {
     }
 }
 
-/// Local sign-out: clear the shared session so every Sunday app is logged out.
-/// (Global "sign out of all devices" is a server-side revocation — see the plan.)
-pub fn sign_out() -> AppResult<()> {
+/// GoTrue logout endpoint. `scope=global` revokes EVERY refresh token this user
+/// holds (sign out of all devices — the single-logout backbone); `local` would
+/// drop only this session. `base` is the issuer origin, like the other endpoints.
+fn logout_endpoint(base: &str, scope: &str) -> String {
+    format!(
+        "{}/auth/v1/logout?scope={}",
+        base.trim_end_matches('/'),
+        scope
+    )
+}
+
+/// Best-effort server-side revocation: POST GoTrue `/logout?scope=global` with
+/// the user's own access token as the Bearer (the anon key stays the `apikey`).
+/// `Ok` on 2xx; any other status / network failure is an error the caller
+/// deliberately ignores so a logout is never blocked by being offline.
+async fn revoke_all_sessions(config: &SupabaseConfig, access_token: &str) -> AppResult<()> {
+    let url = logout_endpoint(&config.base_url, "global");
+    let resp = http_client()
+        .post(&url)
+        .header("apikey", &config.anon_key)
+        .header("authorization", format!("Bearer {access_token}"))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("logout request: {e}")))?;
+    let status = resp.status();
+    if status.is_success() {
+        Ok(())
+    } else {
+        Err(AppError::Internal(format!(
+            "logout returned HTTP {}",
+            status.as_u16()
+        )))
+    }
+}
+
+/// Sign out everywhere. Two halves, mirroring the SSO plan's single-logout
+/// design:
+///   1. AUTHORITATIVE — when a config + live session are available, mint a fresh
+///      access token and ask GoTrue to revoke ALL of this user's refresh tokens
+///      (`scope=global`). Every other Sunday session — other devices, web tabs —
+///      then fails its next refresh (`refresh_token_revoked`) and falls back to
+///      signed-out within one access-token lifetime.
+///   2. LOCAL — always clear the shared session file so every Sunday app on THIS
+///      machine is logged out immediately.
+///
+/// Best-effort + offline-safe: step 1 is skipped (never failed) when there is no
+/// config or the device is offline, so the local clear in step 2 always wins.
+/// `config` is optional because the renderer may sign out before the project is
+/// configured (or with no network) — the local clear still has to work.
+pub async fn sign_out(config: Option<&SupabaseConfig>) -> AppResult<()> {
     let path = session_path()?;
+    if let Some(config) = config {
+        // `access_token` refreshes against the live session; on a dead refresh
+        // token it already clears the session for us, so either way we fall
+        // through to the local clear below. Revocation errors are ignored.
+        if let Ok(token) = access_token(config).await {
+            let _ = revoke_all_sessions(config, &token).await;
+        }
+    }
     session::clear(&path).map_err(|e| AppError::Internal(e.to_string()))
 }
 
@@ -388,6 +443,18 @@ mod tests {
         let c = SupabaseConfig::resolve().expect("prod fallback");
         assert_eq!(c.base_url, sunday_auth::SUNDAY_PROD_SUPABASE_URL);
         assert_eq!(c.anon_key, sunday_auth::SUNDAY_PROD_SUPABASE_ANON_KEY);
+    }
+
+    #[test]
+    fn logout_endpoint_targets_global_scope_and_trims_base() {
+        assert_eq!(
+            logout_endpoint("https://auth.sundaysuite.app/", "global"),
+            "https://auth.sundaysuite.app/auth/v1/logout?scope=global"
+        );
+        assert_eq!(
+            logout_endpoint("https://proj.supabase.co", "local"),
+            "https://proj.supabase.co/auth/v1/logout?scope=local"
+        );
     }
 
     #[test]

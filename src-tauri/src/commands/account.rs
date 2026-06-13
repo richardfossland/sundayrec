@@ -43,11 +43,13 @@ pub async fn sunday_sign_in(app: AppHandle) -> AppResult<AccountStatus> {
     account::sign_in(&app, &require_config()?, None).await
 }
 
-/// Local sign-out: clear the shared session (logs out every Sunday app on this
-/// machine). Network-free.
+/// Sign out everywhere: best-effort GLOBAL server-side revocation (all devices /
+/// web tabs) when configured + online, then always clear the shared session so
+/// every Sunday app on this machine is logged out too. Offline-safe — config is
+/// optional, so an unconfigured project (or no network) still clears locally.
 #[tauri::command]
 pub async fn sunday_sign_out() -> AppResult<()> {
-    account::sign_out()
+    account::sign_out(require_config().ok().as_ref()).await
 }
 
 /// Pilot end-to-end probe: refresh a live access token and call SundaySong's
