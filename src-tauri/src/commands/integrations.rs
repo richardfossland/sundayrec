@@ -248,6 +248,15 @@ pub async fn integrations_plan_fetch_services(
             services: None,
         });
     };
+    // Refuse to attach the bearer key to a non-HTTPS (or scheme-less) base — the
+    // Plan API URL is user-configurable, so an http:// value would leak the key.
+    if !is_secure_api_base(&base_url) {
+        return Ok(PlanFetchResult {
+            ok: false,
+            error: Some("insecure_api_url".into()),
+            services: None,
+        });
+    }
 
     let from = from_iso.unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
     let url = format!(
@@ -264,7 +273,25 @@ pub async fn integrations_plan_fetch_services(
         req = req.bearer_auth(key);
     }
     let services: Vec<PlanService> = match req.send().await {
-        Ok(r) if r.status().is_success() => r.json().await.unwrap_or_default(),
+        Ok(r) if r.status().is_success() => {
+            // Read the body as text first so an unparseable 2xx becomes a real
+            // error (not a silent `ok=true, services=[]`); the classification is
+            // the pure, unit-tested `parse_plan_services_body`.
+            let body = match r.text().await {
+                Ok(b) => b,
+                Err(e) => {
+                    return Ok(PlanFetchResult {
+                        ok: false,
+                        error: Some(e.to_string()),
+                        services: None,
+                    })
+                }
+            };
+            match parse_plan_services_body(&body) {
+                Ok(parsed) => parsed,
+                Err(result) => return Ok(result),
+            }
+        }
         Ok(r) => {
             return Ok(PlanFetchResult {
                 ok: false,
@@ -323,6 +350,11 @@ pub async fn integrations_plan_update_service(
     }
     if service_id.is_empty() {
         return Ok(OpResult::err("invalid_id"));
+    }
+    // Refuse to attach the bearer key to a non-HTTPS (or scheme-less) base — the
+    // Plan API URL is user-configurable, so an http:// value would leak the key.
+    if !is_secure_api_base(&base_url) {
+        return Ok(OpResult::err("insecure_api_url"));
     }
     let mut body = serde_json::Map::new();
     if let Some(s) = was_streamed {
@@ -423,6 +455,19 @@ pub fn integrations_sundayedit_import(
     })
 }
 
+/// Parse a 2xx Plan-API response body into the service list. A body that does
+/// not deserialize into `Vec<PlanService>` is a real failure (`ok=false` with a
+/// parse error), **not** a silent `ok=true, services=[]` — so a backend that
+/// returns an error envelope or HTML with a 200 status can't be mistaken for an
+/// empty (but successful) fetch. Pure + unit-tested.
+fn parse_plan_services_body(body: &str) -> Result<Vec<PlanService>, PlanFetchResult> {
+    serde_json::from_str::<Vec<PlanService>>(body).map_err(|e| PlanFetchResult {
+        ok: false,
+        error: Some(format!("Plan API parse error: {e}")),
+        services: None,
+    })
+}
+
 /// Minimal percent-encoding for the Supabase REST query values (church/service
 /// id). Keeps the RFC-3986 unreserved set; everything else `%XX`.
 fn urlencoding(s: &str) -> String {
@@ -436,4 +481,70 @@ fn urlencoding(s: &str) -> String {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── Item 3: Bearer-over-HTTPS guard for the Plan API paths ───────────────
+    // Both `integrations_plan_fetch_services` and `integrations_plan_update_service`
+    // now gate the request behind `is_secure_api_base(&base_url)` before attaching
+    // the bearer key. These assert the exact predicate the commands consult, so an
+    // http:// (or scheme-less) Plan base can never receive the key.
+    #[test]
+    fn plan_https_base_is_accepted() {
+        assert!(is_secure_api_base("https://plan.example.org"));
+        assert!(is_secure_api_base("https://plan.example.org/rest/v1"));
+        // Trimmed + case-insensitive scheme.
+        assert!(is_secure_api_base("  HTTPS://plan.example.org  "));
+    }
+
+    #[test]
+    fn plan_insecure_base_is_rejected() {
+        // Plaintext, scheme-less, and empty-host values must all fail the guard —
+        // these are the inputs that would otherwise leak the bearer key.
+        assert!(!is_secure_api_base("http://plan.example.org"));
+        assert!(!is_secure_api_base("plan.example.org"));
+        assert!(!is_secure_api_base("https://"));
+        assert!(!is_secure_api_base(""));
+    }
+
+    // ── Item 4: a 2xx with an unparseable body is a real failure ─────────────
+    #[test]
+    fn parses_a_valid_services_array() {
+        let body = r#"[{"id":"svc-1","name":"Morning","starts_at_utc":"2026-06-14T09:00:00Z","state":"scheduled"}]"#;
+        let parsed = parse_plan_services_body(body).expect("valid array parses");
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].id, "svc-1");
+    }
+
+    #[test]
+    fn empty_array_parses_as_empty_ok() {
+        // A genuinely empty 2xx ([]) is still a success with zero services.
+        let parsed = parse_plan_services_body("[]").expect("empty array parses");
+        assert!(parsed.is_empty());
+    }
+
+    #[test]
+    fn unparseable_2xx_body_is_an_error_not_empty_ok() {
+        // An error envelope, HTML, or garbage body returned with a 200 status must
+        // surface as ok=false (not the old silent unwrap_or_default → ok=true, []).
+        for body in [
+            r#"{"error":"unauthorized"}"#, // object, not the expected array
+            "<html>maintenance</html>",    // a proxy/error page
+            "not json at all",
+            "",
+        ] {
+            let result = parse_plan_services_body(body)
+                .expect_err("an unparseable 2xx body must be an error");
+            assert!(!result.ok);
+            assert!(result.services.is_none());
+            assert!(result
+                .error
+                .as_deref()
+                .unwrap_or_default()
+                .contains("parse error"));
+        }
+    }
 }
