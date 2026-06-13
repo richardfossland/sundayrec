@@ -89,7 +89,11 @@ pub fn write_feed(
 ) -> AppResult<PathBuf> {
     let xml = build_podcast_xml(channel, episodes, Utc::now().naive_utc());
     let path = save_folder.join(RSS_FILENAME);
-    std::fs::write(&path, xml)?;
+    // Write-to-temp + rename so a crash/disk-full mid-write can never leave a
+    // truncated podcast.xml where a working feed used to be.
+    let tmp = save_folder.join(format!("{RSS_FILENAME}.tmp"));
+    std::fs::write(&tmp, xml)?;
+    std::fs::rename(&tmp, &path)?;
     Ok(path)
 }
 

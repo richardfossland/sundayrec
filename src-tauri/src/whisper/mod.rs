@@ -1,4 +1,4 @@
-//! Whisper transcription plumbing (PU-5 P2b) — **HARDWARE-UNVERIFIED**.
+//! Whisper transcription plumbing (PU-5 P2b).
 //!
 //! The impure half of transcription. Every decision (the model registry, the
 //! whisper-cli argv + thread heuristic, the ffmpeg convert argv, the progress/
@@ -10,18 +10,22 @@
 //!
 //! ## Feature flag
 //!
-//! Transcription is behind the **default-off `whisper`** cargo feature, which
-//! pulls `whisper-rs` (libwhisper compiled from C/C++ source). The default build
-//! and the headless CI gate carry NO whisper dep — the public entry points below
-//! compile either way, and when the feature is OFF [`transcribe`] returns a clear
-//! `feature_disabled` error (mirrors SundayPaper's `pdf`-feature idiom).
+//! Transcription is behind the `whisper` cargo feature (in `default` and the
+//! macOS release build), which pulls `whisper-rs` (libwhisper compiled from
+//! C/C++ source; the macOS target adds the `metal` GPU backend — CPU-only
+//! inference ran the medium model slower than realtime on an M1 Pro, Metal runs
+//! it ~30× realtime). The public entry points below compile either way, and
+//! when the feature is OFF [`transcribe`] returns a clear `feature_disabled`
+//! error (mirrors SundayPaper's `pdf`-feature idiom).
 //!
-//! ## ⚠️ HARDWARE-UNVERIFIED
+//! ## Hardware verification
 //!
-//! Under `--features whisper` the model download (SHA-verified), the ffmpeg
-//! conversion, and the actual inference are wired but unproven — they need a real
-//! model file, a real audio file, and (ideally) a GPU/Metal backend. Only the
-//! `sundayrec-core::whisper` decisions are unit-tested. See docs/SMOKE-TEST.md.
+//! The full convert → Metal inference → normalise path, the progress callback,
+//! and the abort-flag cancel are verified on a real M1 Pro with the downloaded
+//! ggml-medium model by the two `live_transcribe_*` tests below (`#[ignore]`d —
+//! they need a model + audio file on the machine; invocation in their doc
+//! comments). The model download (SHA-verified) was proven by a real 1.5 GB
+//! download on the rig 2026-06-09.
 
 #[cfg(feature = "whisper")]
 use sundayrec_core::whisper::model_meta;
@@ -117,6 +121,55 @@ fn guard_lock<T>(m: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+/// Tracks in-flight transcriptions so `whisper_cancel_transcribe` can abort one.
+/// The flag is read by whisper's abort callback between encoder/decoder steps
+/// (an [`std::sync::atomic::AtomicBool`], not a Notify — inference is synchronous
+/// C++ on a blocking thread, so a poll-on-step flag is the only abort channel
+/// whisper.cpp offers). Managed as Tauri state, mirrors [`DownloadGuard`].
+#[derive(Default)]
+pub struct TranscribeGuard {
+    flags: std::sync::Mutex<
+        std::collections::HashMap<String, std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    >,
+}
+
+impl TranscribeGuard {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Register a transcription job, returning its cancel flag. Returns `None`
+    /// when the job id is already in flight (the renderer mints unique ids, so a
+    /// duplicate means a double-submit — refuse the second).
+    pub fn register(&self, job_id: &str) -> Option<std::sync::Arc<std::sync::atomic::AtomicBool>> {
+        let mut map = guard_lock(&self.flags);
+        if map.contains_key(job_id) {
+            return None;
+        }
+        let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        map.insert(job_id.to_string(), flag.clone());
+        Some(flag)
+    }
+
+    /// Raise the cancel flag for `job_id`'s in-flight transcription, if any.
+    /// Returns whether a job was registered to cancel.
+    pub fn cancel(&self, job_id: &str) -> bool {
+        match guard_lock(&self.flags).get(job_id) {
+            Some(flag) => {
+                flag.store(true, std::sync::atomic::Ordering::Relaxed);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Drop `job_id`'s flag once its transcription finished (success, error, or
+    /// cancel).
+    pub fn clear(&self, job_id: &str) {
+        guard_lock(&self.flags).remove(job_id);
+    }
+}
+
 /// Transcribe `input_path` with `model_id` + `opts`. The pure decisions come
 /// from `sundayrec-core::whisper`; the I/O is feature-gated.
 ///
@@ -130,14 +183,19 @@ pub async fn transcribe(
     _model_id: &str,
     _opts: TranscribeOptions,
     _now_ms: i64,
+    _progress: impl Fn(i32) + Send + Sync + 'static,
+    _cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
 ) -> AppResult<TranscriptData> {
     Err(AppError::Validation(
         "feature_disabled: transcription requires a build with `--features whisper`".into(),
     ))
 }
 
-/// Transcribe `input_path` with `model_id` + `opts`. HARDWARE-UNVERIFIED: the
-/// ffmpeg conversion + whisper-rs inference are wired but unproven on a device.
+/// Transcribe `input_path` with `model_id` + `opts`. `progress` is called with
+/// 0–100 from whisper's progress callback (the command layer forwards it to the
+/// renderer as `whisper://progress`); `cancel` is polled by whisper's abort
+/// callback between encoder/decoder steps, so a raised flag stops inference
+/// within a step or two.
 #[cfg(feature = "whisper")]
 pub async fn transcribe(
     models_dir: &std::path::Path,
@@ -145,8 +203,11 @@ pub async fn transcribe(
     model_id: &str,
     opts: TranscribeOptions,
     now_ms: i64,
+    progress: impl Fn(i32) + Send + Sync + 'static,
+    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
 ) -> AppResult<TranscriptData> {
     use std::path::PathBuf;
+    use std::sync::atomic::Ordering;
     use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
     // 0. The core decides the model must be present + the right size first.
@@ -183,62 +244,93 @@ pub async fn transcribe(
             "whisper convert failed (ffmpeg non-zero / no output)".into(),
         ));
     }
+    if cancel.load(Ordering::Relaxed) {
+        return Err(AppError::Validation("cancelled".into()));
+    }
 
     // 2. Read the 16-bit PCM WAV into f32 samples whisper-rs wants.
     let samples = read_wav_f32(&wav_path)?;
 
-    // 3. Run inference. The argv heuristic (`thread_count`) is the core's; here
-    //    we map onto whisper-rs's typed params.
+    // 3. Run inference on a blocking thread — whisper.cpp is synchronous C++
+    //    that can run for many minutes on a long service recording, and it must
+    //    not occupy a tokio worker for that long. The argv heuristic
+    //    (`thread_count`) is the core's; here we map onto whisper-rs's typed
+    //    params. The model path / opts move into the closure.
     let cpu = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
-    let ctx = WhisperContext::new_with_params(
-        &model_path.to_string_lossy(),
-        WhisperContextParameters::default(),
-    )
-    .map_err(|e| AppError::Internal(format!("whisper context: {e}")))?;
-    let mut state = ctx
-        .create_state()
-        .map_err(|e| AppError::Internal(format!("whisper state: {e}")))?;
-    let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-    params.set_n_threads(whisper::thread_count(cpu) as i32);
-    params.set_translate(opts.translate);
-    if opts.language != "auto" {
-        params.set_language(Some(&opts.language));
-    }
-    state
-        .full(params, &samples)
-        .map_err(|e| AppError::Internal(format!("whisper inference: {e}")))?;
+    let model_path_str = model_path.to_string_lossy().into_owned();
+    let infer_opts = opts.clone();
+    let infer_cancel = cancel.clone();
+    let raw = tokio::task::spawn_blocking(move || -> AppResult<whisper::WhisperRawOutput> {
+        let ctx =
+            WhisperContext::new_with_params(&model_path_str, WhisperContextParameters::default())
+                .map_err(|e| AppError::Internal(format!("whisper context: {e}")))?;
+        let mut state = ctx
+            .create_state()
+            .map_err(|e| AppError::Internal(format!("whisper state: {e}")))?;
+        let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+        params.set_n_threads(whisper::thread_count(cpu) as i32);
+        params.set_translate(infer_opts.translate);
+        if infer_opts.language != "auto" {
+            params.set_language(Some(&infer_opts.language));
+        }
+        if infer_opts.subtitle_style {
+            // Electron parity (`-ml 100 -sow`): caption-sized segments split on
+            // word boundaries. max_len only takes effect with token timestamps.
+            params.set_token_timestamps(true);
+            params.set_max_len(100);
+            params.set_split_on_word(true);
+        }
+        params.set_progress_callback_safe(move |pct: i32| progress(pct));
+        // UPSTREAM BUG (whisper-rs ≤0.16): set_abort_callback_safe's C trampoline
+        // is instantiated with the caller's closure type F, but user_data points
+        // at a `Box<dyn FnMut() -> bool>` — for any other F the cast is UB and
+        // the garbage return aborted EVERY run ("failed to encode", code -6).
+        // Passing an already-boxed dyn closure makes F == Box<dyn FnMut() ->
+        // bool>, so the trampoline's cast is exact. Don't "simplify" this back
+        // to a bare closure.
+        let abort_cancel = infer_cancel.clone();
+        let abort_cb: Box<dyn FnMut() -> bool> =
+            Box::new(move || abort_cancel.load(Ordering::Relaxed));
+        params.set_abort_callback_safe(abort_cb);
+        if let Err(e) = state.full(params, &samples) {
+            // An abort surfaces as a generic inference error — report the cancel
+            // as the renderer-recognised "cancelled" instead of a scary failure.
+            if infer_cancel.load(Ordering::Relaxed) {
+                return Err(AppError::Validation("cancelled".into()));
+            }
+            return Err(AppError::Internal(format!("whisper inference: {e}")));
+        }
 
-    // 4. Build the raw-shape the core normaliser consumes (ms offsets).
-    let n = state
-        .full_n_segments()
-        .map_err(|e| AppError::Internal(format!("whisper segments: {e}")))?;
-    let mut transcription = Vec::new();
-    for i in 0..n {
-        let text = state
-            .full_get_segment_text(i)
-            .map_err(|e| AppError::Internal(format!("whisper text: {e}")))?;
-        // whisper t is centiseconds → ms. saturating_mul defends against a
-        // pathological timestamp wrapping i64 (impossible for real audio, but
-        // free insurance rather than a silent wrap).
-        let from = state
-            .full_get_segment_t0(i)
-            .map_err(|e| AppError::Internal(format!("whisper t0: {e}")))?
-            .saturating_mul(10);
-        let to = state
-            .full_get_segment_t1(i)
-            .map_err(|e| AppError::Internal(format!("whisper t1: {e}")))?
-            .saturating_mul(10);
-        transcription.push(whisper::WhisperRawSegment {
-            offsets: whisper::WhisperOffsets { from, to },
-            text,
-        });
-    }
-    let raw = whisper::WhisperRawOutput {
-        result: None,
-        transcription,
-    };
+        // Build the raw-shape the core normaliser consumes (ms offsets).
+        let n = state.full_n_segments();
+        let mut transcription = Vec::new();
+        for i in 0..n {
+            let seg = state
+                .get_segment(i)
+                .ok_or_else(|| AppError::Internal(format!("whisper segment {i} out of bounds")))?;
+            let text = seg
+                .to_str_lossy()
+                .map_err(|e| AppError::Internal(format!("whisper text: {e}")))?
+                .into_owned();
+            // whisper t is centiseconds → ms. saturating_mul defends against a
+            // pathological timestamp wrapping i64 (impossible for real audio, but
+            // free insurance rather than a silent wrap).
+            let from = seg.start_timestamp().saturating_mul(10);
+            let to = seg.end_timestamp().saturating_mul(10);
+            transcription.push(whisper::WhisperRawSegment {
+                offsets: whisper::WhisperOffsets { from, to },
+                text,
+            });
+        }
+        Ok(whisper::WhisperRawOutput {
+            result: None,
+            transcription,
+        })
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("whisper task join: {e}")))??;
     Ok(whisper::normalize_output(&raw, model_id, &opts, now_ms))
 }
 
@@ -526,10 +618,100 @@ mod tests {
             "ggml-base",
             TranscribeOptions::default(),
             0,
+            |_pct| {},
+            std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         )
         .await
         .unwrap_err();
         assert_eq!(err.code(), "validation");
         assert!(err.to_string().contains("feature_disabled"));
+    }
+
+    /// Live end-to-end inference — needs a real model + audio file + ffmpeg, so
+    /// it's `#[ignore]`d (run explicitly). Drives the EXACT production path:
+    /// ffmpeg convert → whisper-rs Metal inference → normalised transcript.
+    ///
+    /// ```sh
+    /// SUNDAYREC_FFMPEG=$(which ffmpeg) \
+    /// SUNDAYREC_TEST_MODELS_DIR="$HOME/Library/Application Support/no.sundayrec.app/whisper-models" \
+    /// SUNDAYREC_TEST_INPUT=/tmp/wtest.wav \
+    /// cargo test --features whisper live_transcribe -- --ignored --nocapture
+    /// ```
+    #[cfg(feature = "whisper")]
+    #[tokio::test]
+    #[ignore = "needs a downloaded model + audio file + ffmpeg on the machine"]
+    async fn live_transcribe_runs_inference_and_reports_progress() {
+        let models_dir = std::path::PathBuf::from(
+            std::env::var("SUNDAYREC_TEST_MODELS_DIR").expect("set SUNDAYREC_TEST_MODELS_DIR"),
+        );
+        let input = std::env::var("SUNDAYREC_TEST_INPUT").expect("set SUNDAYREC_TEST_INPUT");
+        let model_id = std::env::var("SUNDAYREC_TEST_MODEL").unwrap_or("ggml-medium".into());
+
+        let seen = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let seen_in_cb = seen.clone();
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let data = transcribe(
+            &models_dir,
+            &input,
+            &model_id,
+            TranscribeOptions::default(),
+            12345,
+            move |pct| {
+                println!("progress = {pct}%");
+                seen_in_cb.store(true, std::sync::atomic::Ordering::Relaxed);
+            },
+            cancel,
+        )
+        .await
+        .expect("live transcription succeeds");
+        println!("segments: {:?}", data.segments);
+        assert!(!data.segments.is_empty(), "expected at least one segment");
+        assert!(
+            seen.load(std::sync::atomic::Ordering::Relaxed),
+            "progress callback never fired"
+        );
+    }
+
+    /// Live cancel — a pre-raised flag must abort inference and surface the
+    /// renderer-recognised "cancelled" error, not a generic failure.
+    #[cfg(feature = "whisper")]
+    #[tokio::test]
+    #[ignore = "needs a downloaded model + audio file + ffmpeg on the machine"]
+    async fn live_transcribe_cancel_aborts_with_cancelled() {
+        let models_dir = std::path::PathBuf::from(
+            std::env::var("SUNDAYREC_TEST_MODELS_DIR").expect("set SUNDAYREC_TEST_MODELS_DIR"),
+        );
+        let input = std::env::var("SUNDAYREC_TEST_INPUT").expect("set SUNDAYREC_TEST_INPUT");
+        let model_id = std::env::var("SUNDAYREC_TEST_MODEL").unwrap_or("ggml-medium".into());
+
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let err = transcribe(
+            &models_dir,
+            &input,
+            &model_id,
+            TranscribeOptions::default(),
+            12345,
+            |_pct| {},
+            cancel,
+        )
+        .await
+        .expect_err("pre-cancelled transcription must error");
+        assert!(
+            err.to_string().contains("cancelled"),
+            "expected cancelled, got: {err}"
+        );
+    }
+
+    #[test]
+    fn transcribe_guard_rejects_duplicate_job_and_cancel_raises_the_flag() {
+        let guard = TranscribeGuard::new();
+        let flag = guard.register("job-1").expect("first register succeeds");
+        assert!(guard.register("job-1").is_none(), "duplicate id refused");
+        assert!(!flag.load(std::sync::atomic::Ordering::Relaxed));
+        assert!(guard.cancel("job-1"));
+        assert!(flag.load(std::sync::atomic::Ordering::Relaxed));
+        assert!(!guard.cancel("job-2"));
+        guard.clear("job-1");
+        assert!(guard.register("job-1").is_some());
     }
 }

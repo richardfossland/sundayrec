@@ -168,6 +168,9 @@ pub fn run() {
         // Tracks in-flight whisper model downloads so `whisper_cancel_download`
         // can abort one (one entry per active model id).
         .manage(whisper::DownloadGuard::new())
+        // Tracks in-flight transcriptions so `whisper_cancel_transcribe` can
+        // abort one (one entry per active job id).
+        .manage(whisper::TranscribeGuard::new())
         .setup(|app| {
             use tauri::Manager;
 
@@ -366,6 +369,7 @@ pub fn run() {
             commands::whisper::whisper_cancel_download,
             commands::whisper::whisper_delete_model,
             commands::whisper::whisper_transcribe,
+            commands::whisper::whisper_cancel_transcribe,
             commands::whisper::whisper_export_transcript,
             // PU-6 episode prep + review queue + Stage import.
             commands::review::prep_build_episode,
