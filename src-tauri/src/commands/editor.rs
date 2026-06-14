@@ -8,11 +8,10 @@
 
 use crate::editor::{
     self, EditorAudioExtract, EditorAutoProcess, EditorChannelDiagnosis, EditorChapter,
-    EditorExportRequest,
-    EditorExportResult, EditorFileRead, EditorLoudness, EditorMasterApplyRequest,
-    EditorMasterApplyResult, EditorMasterPreviewRequest, EditorMasterPreviewResult,
-    EditorMasterProgress, EditorMediaInfo, EditorPeaks, EditorSegment, EditorSidecar,
-    EditorStreamInfo, EditorTranscriptLine, MasterEngine,
+    EditorExportRequest, EditorExportResult, EditorFileRead, EditorLoudness,
+    EditorMasterApplyRequest, EditorMasterApplyResult, EditorMasterPreviewRequest,
+    EditorMasterPreviewResult, EditorMasterProgress, EditorMediaInfo, EditorPeaks, EditorSegment,
+    EditorSidecar, EditorStreamInfo, EditorTranscriptLine, MasterEngine,
 };
 use crate::error::AppResult;
 use tauri::{Emitter, State};
