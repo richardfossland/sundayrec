@@ -29,7 +29,7 @@ export async function pickAndLoad(): Promise<void> {
  * peaks, duration. Returns false if the load failed.
  */
 export async function loadViaFfmpegExtract(fp: string, seq: number): Promise<boolean> {
-  const result = await window.api.editorExtractAudioPeaks(fp) as { data: Uint8Array | ArrayBuffer; duration: number } | null
+  const result = await window.api.editorExtractAudioWav(fp) as { data: Uint8Array | ArrayBuffer; duration: number } | null
   if (seq !== E.loadSeq) return false
   if (!result) { showState('empty'); return false }
 
@@ -203,7 +203,7 @@ export async function loadFile(fp: string): Promise<void> {
     // Browser cannot decode these — extract via ffmpeg at 8 kHz mono.
     // The resulting WAV is decodable by Web Audio API and serves as both
     // waveform source and playback buffer (phone-call quality, adequate for cut-finding).
-    const result = await window.api.editorExtractAudioPeaks(fp) as { data: Uint8Array | ArrayBuffer; duration: number } | null
+    const result = await window.api.editorExtractAudioWav(fp) as { data: Uint8Array | ArrayBuffer; duration: number } | null
     if (seq !== E.loadSeq) return
     if (!result) { showState('empty'); return }
 

@@ -1015,11 +1015,23 @@ const api: Record<string, unknown> = {
     call("companion_clear_llm_key", undefined, false).then(() => true),
   editorSetVideoPath: async (fp: string) =>
     call("editor_load_recording", { inputPath: fp }, { ok: false }),
-  // editor_peaks → { peaks, sampleRate }; old too-large path wants { data,
-  // duration }. The normal path uses editorReadFile (Web Audio) instead, so this
-  // fallback is best-effort for very large files only.
+  // editor_peaks → { peaks, sampleRate } — the VIDEO loader uses this for the
+  // waveform (playback is via the <video> asset:// element).
   editorExtractAudioPeaks: async (fp: string) =>
     call("editor_peaks", { inputPath: fp }, null),
+  // editor_extract_audio → { bytes, duration }: a small decodable 8 kHz mono WAV
+  // for AUDIO files too large for inline Web Audio decode (> EDITOR_INLINE_LIMIT)
+  // or in a codec the browser can't decode. Mapped to the loader's
+  // { data, duration } shape (cuts/export still run on the original file).
+  editorExtractAudioWav: async (fp: string) => {
+    const r = await call<{ bytes?: number[] | null; duration?: number } | null>(
+      "editor_extract_audio",
+      { inputPath: fp },
+      null,
+    );
+    if (!r || !r.bytes) return null;
+    return { data: new Uint8Array(r.bytes), duration: r.duration ?? 0 };
+  },
   editorPickVideoFile: async () =>
     pickPath({ name: "Video", extensions: VIDEO_EXT }),
   editorSaveVideo: async () => ({ ok: false }),
