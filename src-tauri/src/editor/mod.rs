@@ -68,6 +68,21 @@ pub struct EditorPeaks {
     pub sample_rate: u32,
 }
 
+/// A small, decodable 8 kHz mono WAV for a recording the renderer can't inline-
+/// decode (over `EDITOR_INLINE_LIMIT`, or an exotic codec the browser rejects).
+/// The renderer decodes this via Web Audio for the waveform + scrub preview;
+/// cuts are applied to the ORIGINAL file at export, so this low-rate buffer never
+/// affects output quality.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "../../src/lib/bindings/EditorAudioExtract.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct EditorAudioExtract {
+    /// 8 kHz mono PCM-WAV bytes (decodable by the renderer's Web Audio API).
+    pub bytes: Vec<u8>,
+    /// Duration in seconds (from the extracted 8 kHz sample count).
+    pub duration: f64,
+}
+
 /// One content-detected segment for the editor timeline. Reuses the core
 /// `SegmentType` lowercase strings (or `"sermon"` for the promoted block), the
 /// same shape `detectSegments` returned to the Electron renderer.
@@ -798,6 +813,12 @@ pub async fn peaks(_input_path: &str) -> AppResult<EditorPeaks> {
     disabled("peaks")
 }
 
+/// Extract a large/exotic recording to a small decodable 8 kHz mono WAV.
+#[cfg(not(feature = "editor"))]
+pub async fn extract_audio(_input_path: &str) -> AppResult<EditorAudioExtract> {
+    disabled("extractAudio")
+}
+
 /// Content-detect segments (silence/speech/music + promoted sermon block).
 #[cfg(not(feature = "editor"))]
 pub async fn segments(_input_path: &str) -> AppResult<Vec<EditorSegment>> {
@@ -892,6 +913,34 @@ pub async fn peaks(input_path: &str) -> AppResult<EditorPeaks> {
         peaks,
         sample_rate: 8000,
     })
+}
+
+/// Extract the audio to a small 8 kHz mono WAV and return its bytes + duration —
+/// the renderer's preview/scrub buffer for files too large for inline Web Audio
+/// decode (over `EDITOR_INLINE_LIMIT`) or in a codec the browser can't decode.
+/// Reuses the same 8 kHz extract as `peaks`; export still runs on the original
+/// file, so quality is untouched. HARDWARE-UNVERIFIED.
+#[cfg(feature = "editor")]
+pub async fn extract_audio(input_path: &str) -> AppResult<EditorAudioExtract> {
+    use sundayrec_core::editor::peaks_extract_args;
+
+    if !std::path::Path::new(input_path).exists() {
+        return Err(AppError::Validation("file_not_found".into()));
+    }
+    let tmp = tempdir()?;
+    let wav_path = tmp.join("preview.wav");
+    let wav_str = wav_path.to_string_lossy().into_owned();
+    let args = peaks_extract_args(input_path, &wav_str);
+    run_ffmpeg(&args).await?;
+    if !wav_path.exists() {
+        return Err(AppError::Recording("audio extract produced no WAV".into()));
+    }
+    // Duration from the 8 kHz mono sample count; bytes are the WAV file itself.
+    let duration = read_wav_s16_f32(&wav_path)?.len() as f64 / 8000.0;
+    let bytes = tokio::fs::read(&wav_path)
+        .await
+        .map_err(|e| AppError::Recording(format!("read extracted wav: {e}")))?;
+    Ok(EditorAudioExtract { bytes, duration })
 }
 
 /// Decode to 16 kHz mono PCM, classify + group with the core, promote the

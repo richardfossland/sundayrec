@@ -7,7 +7,8 @@
 //! handles gracefully (the panel shows a "not built into this build" hint).
 
 use crate::editor::{
-    self, EditorAutoProcess, EditorChannelDiagnosis, EditorChapter, EditorExportRequest,
+    self, EditorAudioExtract, EditorAutoProcess, EditorChannelDiagnosis, EditorChapter,
+    EditorExportRequest,
     EditorExportResult, EditorFileRead, EditorLoudness, EditorMasterApplyRequest,
     EditorMasterApplyResult, EditorMasterPreviewRequest, EditorMasterPreviewResult,
     EditorMasterProgress, EditorMediaInfo, EditorPeaks, EditorSegment, EditorSidecar,
@@ -26,6 +27,14 @@ pub async fn editor_load_recording(input_path: String) -> AppResult<EditorMediaI
 #[tauri::command]
 pub async fn editor_peaks(input_path: String) -> AppResult<EditorPeaks> {
     editor::peaks(&input_path).await
+}
+
+/// Extract a large/exotic recording to a small decodable 8 kHz mono WAV (bytes +
+/// duration) — the renderer's preview buffer when the file is over the inline
+/// limit or in a codec the browser can't decode.
+#[tauri::command]
+pub async fn editor_extract_audio(input_path: String) -> AppResult<EditorAudioExtract> {
+    editor::extract_audio(&input_path).await
 }
 
 /// Content-detect timeline segments (silence/speech/music + promoted sermon).
